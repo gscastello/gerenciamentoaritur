@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-core.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "reporters": ["html", "clear-text", "progress"],
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/domain/**/*.js",
+    "!src/domain/**/*.test.js",
+    "!src/domain/index.js",
+    "!src/domain/precos.js"
+  ],
+  "thresholds": { "high": 90, "low": 80, "break": 75 },
+  "comment": "precos.js é excluído do mutate por ser majoritariamente tabela de dados (bairros); a lógica dele é coberta por precos.test.js."
+}

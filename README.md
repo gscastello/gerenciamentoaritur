@@ -8,11 +8,6 @@ WhatsApp/GPS planejadas para as próximas etapas.
 
 ```
 .
-├── app/
-│   └── App.jsx              # Protótipo funcional (React) — agenda, reservas,
-│                             # passageiros/CRM, financeiro, operação, dashboard.
-│                             # Hoje persiste em window.storage; ver frontend/
-│                             # para a versão conectada ao Supabase.
 ├── database/
 │   ├── DATABASE.md          # Arquitetura de dados, decisões e migração V2→V3
 │   ├── 01-schema.sql        # Tabelas, enums, índices, triggers (rodar 1º)
@@ -20,14 +15,22 @@ WhatsApp/GPS planejadas para as próximas etapas.
 │   ├── 03-rpc-functions.sql # Funções atômicas (criar/confirmar/mover reserva) (rodar 3º)
 │   ├── 04-frontend-views.sql# View de leitura no formato que o frontend espera (rodar 4º)
 │   └── 05-seed.sql          # Veículos, pontos de embarque, bairros, config (rodar 5º)
-├── frontend/
+├── frontend/                # App (Vite + React). Ver AGENTS.md §2.
+│   ├── package.json         # scripts: dev, build, lint, test, test:e2e…
 │   ├── INTEGRATION.md       # O que foi criado/removido e como o fluxo de reserva funciona
-│   ├── .env.example         # Variáveis de ambiente do Supabase
+│   ├── .env.example         # Variáveis de ambiente (Supabase, Sentry, OTel, RUM…)
+│   ├── e2e/                 # Testes end-to-end (Playwright)
 │   └── src/
-│       ├── lib/             # Cliente Supabase único
+│       ├── app/App.jsx      # Protótipo funcional — agenda, reservas, CRM,
+│       │                      financeiro, operação, dashboard (migração p/
+│       │                      services/hooks = issue #10)
+│       ├── domain/          # Regras puras + testes (vagas, preços, diagnóstico)
+│       ├── lib/             # Cliente Supabase único, storageShim (dev)
 │       ├── services/        # 8 services (reservations, trips, customers, payments,
 │       │                     finance, operation, vehicles, users)
 │       ├── hooks/            # Hooks React (loading/error/retry/tempo real)
+│       ├── observability/   # Sentry + OpenTelemetry + RUM + eventos nomeados
+│       ├── ui/motion/       # Sistema de movimento reutilizável (issue #2)
 │       └── INTEGRATION-EXAMPLE.jsx  # Exemplo real de integração (Reservar → Agenda)
 ├── docs/
 │   └── ISSUES-INICIAIS.md   # Backlog inicial pronto para virar Issues do GitHub
@@ -42,10 +45,16 @@ WhatsApp/GPS planejadas para as próximas etapas.
    → `04-frontend-views.sql` → `05-seed.sql`.
 3. Copiar `frontend/.env.example` para `frontend/.env` e preencher com a
    URL e a `anon key` do projeto (Project Settings → API no Supabase).
-4. Instalar a dependência do cliente Supabase no seu projeto React:
-   `npm install @supabase/supabase-js`.
-5. Seguir `frontend/INTEGRATION.md` para trocar a persistência local do
-   `app/App.jsx` pelos services/hooks de `frontend/src/`.
+4. Instalar e rodar o app:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+5. Antes de abrir um PR, rodar os gates (ver `AGENTS.md §0`):
+   `npm run lint && npm run knip && npm run arch && npm run test && npm run build`.
+6. Seguir `frontend/INTEGRATION.md` para trocar a persistência local do
+   `src/app/App.jsx` pelos services/hooks de `frontend/src/`.
 
 ## Estado atual
 
@@ -56,8 +65,11 @@ WhatsApp/GPS planejadas para as próximas etapas.
   com tempo real e retry seguro.
 - ⏳ Integração com WhatsApp Business API — planejada, não iniciada.
 - ⏳ GPS/rastreamento contínuo de viagem — planejada, não iniciada.
-- ⏳ Aplicar os hooks dentro de `app/App.jsx` aba por aba (o padrão já
-  está demonstrado em `frontend/src/INTEGRATION-EXAMPLE.jsx`).
+- ⏳ Aplicar os hooks dentro de `src/app/App.jsx` aba por aba (o padrão já
+  está demonstrado em `frontend/src/INTEGRATION-EXAMPLE.jsx`) — issue #10.
+- 🏗️ Fundação de build/lint/testes/CI e observabilidade — em andamento
+  (issues #1, #3, #4); sistema de motion unificado — issue #2.
 
-Veja `AGENTS.md` para o padrão de Issues/PRs e `docs/ISSUES-INICIAIS.md`
-para o backlog já redigido.
+Veja `AGENTS.md` para o padrão de Issues/PRs, qualidade, testes,
+observabilidade e motion. O backlog está em `docs/ISSUES-INICIAIS.md` e
+nas Issues #1–#15 do GitHub.

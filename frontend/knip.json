@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/main.jsx", "e2e/**/*.spec.js", "stryker.config.json"],
+  "project": ["src/**/*.{js,jsx}"],
+  "ignore": ["src/app/App.jsx"],
+  "ignoreBinaries": ["depcruise", "stryker"],
+  "vite": { "config": "vite.config.js" },
+  "vitest": { "config": "vite.config.js" },
+  "playwright": { "config": "playwright.config.js" }
+}

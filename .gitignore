@@ -1,2 +1,17 @@
 frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 node_modules/
+
+# build / caches
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.stryker-tmp/
+reports/
+*.tsbuildinfo
+
+# ferramentas
+.DS_Store
+*.log
