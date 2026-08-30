@@ -128,6 +128,10 @@ Nomes no AGENTS antigo → ferramenta real:
 Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 `npm run prepare`.
 
+> `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
+> do Knip — é código denso legado que entra na régua durante a migração
+> para services/hooks (issue #10). Todo arquivo novo entra normal.
+
 ---
 
 ## 4. Observabilidade

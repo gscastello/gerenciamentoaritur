@@ -1,10 +1,25 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/main.jsx", "e2e/**/*.spec.js", "stryker.config.json"],
+  "entry": [
+    "src/main.jsx",
+    "src/domain/index.js",
+    "src/ui/motion/index.js",
+    "src/observability/index.js"
+  ],
   "project": ["src/**/*.{js,jsx}"],
   "ignore": ["src/app/App.jsx"],
-  "ignoreBinaries": ["depcruise", "stryker"],
-  "vite": { "config": "vite.config.js" },
-  "vitest": { "config": "vite.config.js" },
-  "playwright": { "config": "playwright.config.js" }
+  "ignoreBinaries": ["depcruise"],
+  "ignoreDependencies": [
+    "@types/react",
+    "@types/react-dom",
+    "typescript",
+    "@stryker-mutator/vitest-runner"
+  ],
+  "vite": { "config": ["vite.config.js"] },
+  "vitest": {
+    "config": ["vite.config.js"],
+    "entry": ["src/**/*.{test,spec}.{js,jsx}", "vitest.setup.js"]
+  },
+  "playwright": { "config": ["playwright.config.js"], "entry": ["e2e/**/*.spec.js"] },
+  "stryker": { "config": ["stryker.config.json"] }
 }

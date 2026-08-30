@@ -31,7 +31,10 @@ export default defineConfig({
         "src/**/*.{test,spec}.{js,jsx}",
         "src/main.jsx",
         "src/**/__tests__/**",
+        "src/app/**", // protótipo legado — migração na issue #10
         "src/observability/**", // instrumentação: coberta por e2e, não unit
+        "src/ui/skeletons/**", // visual — coberto por e2e
+        "src/ui/charts/**", // visual — coberto por e2e
       ],
       // Gate global. O gate mais rígido dos módulos críticos (motor de
       // vagas, financeiro) fica no codecov.yml.

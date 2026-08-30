@@ -1,0 +1,53 @@
+/* Tokens de movimento. Importado uma vez em main.jsx.
+ * Três lentes (github.com/kylezantos/design-principles):
+ *  - Emil Kowalski  -> restrição e velocidade: durações curtas, poucas props.
+ *  - Jakub Krehel   -> polimento de entrada/saída: easings distintos.
+ *  - Jhey Tompkins  -> experimentação pontual: só onde tem função.
+ */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 240ms;
+  --motion-slow: 360ms;
+
+  /* entrada: desacelera no fim (conteúdo "assenta") */
+  --ease-out-quart: cubic-bezier(0.16, 1, 0.3, 1);
+  /* saída: acelera (some rápido, sem chamar atenção) */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* microinteração com leve overshoot (check, toggle) */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --skeleton-base: #1c222b;
+  --skeleton-shine: rgba(255, 255, 255, 0.06);
+}
+
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes motion-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes motion-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes motion-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes motion-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Regra inegociável (AGENTS.md §5): ninguém pode ignorar isto. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
