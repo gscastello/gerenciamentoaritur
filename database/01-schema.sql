@@ -12,8 +12,9 @@
 -- (as policies de RLS já fazem isso por padrão — ver supabase-rls-policies.sql).
 -- =====================================================================
 
-create extension if not exists "pgcrypto";   -- gen_random_uuid()
-create extension if not exists "citext";     -- e-mail/telefone case-insensitive
+create extension if not exists "pgcrypto" with schema public;   -- gen_random_uuid()
+create extension if not exists "citext" with schema public;      -- e-mail/telefone case-insensitive
+create extension if not exists "pg_trgm" with schema public;     -- busca de clientes por nome (índice de customers.name)
 
 -- =====================================================================
 -- 1. ENUMS
@@ -609,6 +610,5 @@ where t.deleted_at is null
 group by t.id;
 
 -- =====================================================================
--- EXTENSÕES OPCIONAIS (para busca de clientes por nome com acentos/erros de digitação)
+-- FIM DO SCHEMA — extensões necessárias já habilitadas no topo do arquivo.
 -- =====================================================================
--- create extension if not exists pg_trgm;   -- necessária para o índice gin usado em customers.name acima
