@@ -17,7 +17,7 @@ import {
   Home as HomeIcon, ArrowRight, ArrowLeft, Sunrise, CreditCard, Truck,
   Headset, AlertTriangle, ClipboardList, ShieldCheck, Download, Bot, UserCog,
   RefreshCw, Save, ArrowLeftRight, Wifi, Settings2, Trash2, X as XIcon,
-  Receipt, PlayCircle, StopCircle, Megaphone, History, UserX, Hourglass,
+  Receipt, PlayCircle, StopCircle, Megaphone, UserX, Hourglass,
   Package, Sparkles,
 } from "lucide-react";
 
@@ -617,12 +617,14 @@ function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras,
     if (!r.pontoId) { setAcaoErro("Defina o ponto de embarque ao mover da lista de espera (edite a reserva)."); return; }
     return acao(R.confirmReservation(r.id, { routePointCode: r.pontoId }), "Ainda não há vaga suficiente na viagem.");
   };
-  const salvarEdicao = async ({ id, move, details, cancel }) => {
+  const salvarEdicao = async ({ id, move, details, quantidade, contato, cancel }) => {
     setAcaoErro("");
     try {
       if (cancel) { await R.cancelReservation(id); setEditando(null); return; }
       if (move) await R.moveReservation(id, move);
       if (details && Object.keys(details).length > 0) await R.editReservation(id, details);
+      if (quantidade) await R.setQuantity(id, quantidade.qty);
+      if (contato) await R.updateContact(contato.customerId, contato.fields);
       setEditando(null);
     } catch (e) { setAcaoErro(e?.message || "Não foi possível salvar a edição."); }
   };
@@ -782,7 +784,17 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     set("reference_point", f.referencia, reserva.referencia);
     if (campoDetalhe === "bairro") set("pickup_neighborhood", f.bairro, reserva.bairro);
     if (campoDetalhe && campoDetalhe !== "bairro") set("pickup_detail", f[campoDetalhe], reserva.localExato);
-    await onSave({ id: reserva.id, move, details });
+
+    const novaQtd = parseInt(f.quantidade, 10) || 1;
+    const quantidade = novaQtd !== reserva.quantidade ? { qty: novaQtd } : null;
+    const contatoFields = {};
+    if ((f.nome || "") !== (reserva.nome || "")) contatoFields.name = f.nome || null;
+    if ((f.telefone || "") !== (reserva.telefone || "")) contatoFields.phone = f.telefone || null;
+    const contato = reserva.customer_id && Object.keys(contatoFields).length > 0
+      ? { customerId: reserva.customer_id, fields: contatoFields }
+      : null;
+
+    await onSave({ id: reserva.id, move, details, quantidade, contato });
     setSalvando(false);
   };
 
@@ -790,9 +802,10 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     <div className="fixed inset-0 z-30 flex items-center justify-center p-4 anim-fadeIn" style={{ background: "rgba(0,0,0,.65)" }} onClick={onClose}>
       <div className="anim-pop w-full max-w-lg rounded-xl border p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.panel, borderColor: C.border }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4"><div className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Editar reserva</div><button type="button" onClick={onClose}><X size={16} style={{ color: C.inkSoft }} /></button></div>
-        <div className="text-xs mb-3 flex items-center gap-1.5" style={{ color: C.inkFaint }}><Clock size={12} /> {f.nome} · {f.telefone} · {f.quantidade}P{f.criadoEm ? ` · reservado ${fmtHora(f.criadoEm)}` : ""}</div>
+        <div className="text-xs mb-3 flex items-center gap-1.5" style={{ color: C.inkFaint }}><Clock size={12} /> {f.quantidade}P{f.criadoEm ? ` · reservado ${fmtHora(f.criadoEm)}` : ""}</div>
+        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Nome"><TextInput value={f.nome || ""} onChange={e => setF({ ...f, nome: e.target.value })} /></Field><Field label="Telefone"><TextInput value={f.telefone || ""} onChange={e => setF({ ...f, telefone: e.target.value })} /></Field></div>
         <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Direção"><Select value={f.direcao || "ida"} onChange={e => setF({ ...f, direcao: e.target.value, pontoId: trips[e.target.value].pontos[0].id })}><option value="ida">Ida</option><option value="volta">Volta</option></Select></Field><Field label="Local de embarque"><Select value={f.pontoId || ""} onChange={e => setF({ ...f, pontoId: e.target.value })}><option value="">—</option>{viagem.pontos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</Select></Field></div>
-        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Data"><TextInput type="date" value={f.data || ""} onChange={e => setF({ ...f, data: e.target.value })} /></Field><Field label="Quantidade"><TextInput type="number" value={f.quantidade} disabled title="Mudança de quantidade: fase 2" style={{ opacity: 0.6 }} /></Field></div>
+        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Data"><TextInput type="date" value={f.data || ""} onChange={e => setF({ ...f, data: e.target.value })} /></Field><Field label="Quantidade"><TextInput type="number" min={1} value={f.quantidade} onChange={e => setF({ ...f, quantidade: e.target.value })} /></Field></div>
         {campoDetalhe === "bairro" && <Field label="Bairro"><TextInput value={f.bairro || ""} onChange={e => setF({ ...f, bairro: e.target.value })} /></Field>}
         {campoDetalhe && campoDetalhe !== "bairro" && <Field label={ponto.campoLabel}><TextInput value={f[campoDetalhe] || ""} onChange={e => setF({ ...f, [campoDetalhe]: e.target.value })} /></Field>}
         {f.direcao === "volta" && <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Rua"><TextInput value={f.rua || ""} onChange={e => setF({ ...f, rua: e.target.value })} /></Field><Field label="Referência"><TextInput value={f.referencia || ""} onChange={e => setF({ ...f, referencia: e.target.value })} /></Field></div>}

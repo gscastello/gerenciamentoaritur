@@ -170,7 +170,7 @@ export const reservationsService = {
     return data;
   },
 
-  /** Edição de campos que NÃO afetam ocupação (nome, telefone, desembarque, forma de pagamento). */
+  /** Edição de campos que NÃO afetam ocupação (desembarque, forma de pagamento, rua…). */
   async updateDetails(reservationId, fields) {
     const actor = await getCurrentUserId();
     return handle(
@@ -181,6 +181,35 @@ export const reservationsService = {
         .select()
         .single(),
       { context: "updateDetails" }
+    );
+  },
+
+  /**
+   * Muda a quantidade de passageiros. Passa pela trigger de capacidade
+   * (via rpc_set_reservation_quantity) — se aumentar além da vaga, a RPC
+   * devolve success:false e nada é gravado.
+   */
+  async setQuantity(reservationId, quantity) {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase.rpc("rpc_set_reservation_quantity", {
+      p_reservation_id: reservationId,
+      p_quantity: quantity,
+      p_actor: actor,
+    });
+    if (error) throw new ServiceError(`setQuantity: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível mudar a quantidade (viagem pode estar lotada).", { retryable: false });
+    return data;
+  },
+
+  /** Atualiza nome/telefone do cliente da reserva (tabela customers). */
+  async updateCustomerContact(customerId, { name, phone }) {
+    const actor = await getCurrentUserId();
+    const patch = { updated_by: actor };
+    if (name != null) patch.name = name;
+    if (phone != null) patch.phone = phone;
+    return handle(
+      supabase.from("customers").update(patch).eq("id", customerId).select().single(),
+      { context: "updateCustomerContact" }
     );
   },
 };

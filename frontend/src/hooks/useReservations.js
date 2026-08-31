@@ -131,6 +131,8 @@ export function useReservationsWindow(fromDate, toDate) {
   const setPassengersStatus = useAsyncAction(reservationsService.setPassengersStatus);
   const move = useAsyncAction(reservationsService.move);
   const updateDetails = useAsyncAction(reservationsService.updateDetails);
+  const setQty = useAsyncAction(reservationsService.setQuantity);
+  const updateContact = useAsyncAction(reservationsService.updateCustomerContact);
   const setPaid = useAsyncAction(paymentsService.setPaidForReservation);
   const setProof = useAsyncAction(paymentsService.setProofForReservation);
 
@@ -148,6 +150,8 @@ export function useReservationsWindow(fromDate, toDate) {
     markPassengers: useCallback((id, status) => after(setPassengersStatus.run(id, status)), [after, setPassengersStatus]),
     moveReservation: useCallback((id, target) => after(move.run(id, target)), [after, move]),
     editReservation: useCallback((id, fields) => after(updateDetails.run(id, fields)), [after, updateDetails]),
+    setQuantity: useCallback((id, qty) => after(setQty.run(id, qty)), [after, setQty]),
+    updateContact: useCallback((customerId, fields) => after(updateContact.run(customerId, fields)), [after, updateContact]),
     setPaid: useCallback((args) => after(setPaid.run(args)), [after, setPaid]),
     setProof: useCallback((args) => after(setProof.run(args)), [after, setProof]),
 
