@@ -16,7 +16,10 @@
     "@types/react",
     "@types/react-dom",
     "typescript",
-    "@stryker-mutator/vitest-runner"
+    "@stryker-mutator/vitest-runner",
+    "dependency-cruiser",
+    "lefthook",
+    "@commitlint/config-conventional"
   ],
   "vite": { "config": ["vite.config.js"] },
   "vitest": {

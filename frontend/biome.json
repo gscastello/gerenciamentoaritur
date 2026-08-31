@@ -23,7 +23,10 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "a11y": { "recommended": true },
+      "a11y": {
+        "recommended": true,
+        "useFocusableInteractive": "off"
+      },
       "complexity": { "noForEach": "off" },
       "correctness": {
         "noUnusedVariables": "error",
