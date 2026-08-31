@@ -37,7 +37,30 @@ supabase secrets set WHATSAPP_TOKEN=seu-token-da-meta
 supabase secrets set WHATSAPP_PHONE_NUMBER_ID=seu-phone-number-id
 supabase secrets set WHATSAPP_VERIFY_TOKEN=escolha-uma-string-qualquer-só-sua
 supabase secrets set DISPATCH_SECRET=escolha-outra-string-qualquer-só-sua
+supabase secrets set ANTHROPIC_API_KEY=sua-chave-da-api-da-anthropic
 ```
+
+## 4.1 Sobre a camada de entendimento de linguagem natural (nluService)
+
+Mensagens de texto livre (não clique de botão) agora passam pelo
+`nluService.ts` antes de cair na máquina de estados. Ele usa a API da
+Anthropic com **saída estruturada forçada** (`tool_choice` obrigando uma
+chamada de ferramenta) — o modelo nunca devolve texto livre, só um JSON
+com os campos que conseguiu identificar (intenção, direção, data,
+quantidade, ponto de embarque, bairro, forma de pagamento).
+
+Isso preserva a garantia central do sistema: **o modelo nunca decide
+preço, vaga ou confirmação** — ele só entende "o cliente quer ir na
+sexta, são 3 pessoas, vai sair da Rodoviária" e devolve isso como dados.
+Cada campo extraído passa pela mesma consulta ao banco que passaria se o
+cliente tivesse clicado botão por botão (`checkAvailability`,
+`listRoutePoints`, `getNeighborhoodPrice`) — o `conversationEngine` só
+pula a *pergunta* de um campo que já foi dito, nunca pula a *validação*
+desse campo.
+
+Se o cliente mandar uma mensagem confusa ou fora do previsto, o campo
+`confidence` volta `"baixa"` e o bot mostra o menu de novo em vez de
+adivinhar — a extração é usada para **acelerar**, nunca para **arriscar**.
 
 (`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já existem automaticamente dentro de toda Edge Function — não precisa configurar.)
 
@@ -54,6 +77,8 @@ A Meta faz uma chamada `GET` na hora de salvar — se o `whatsapp-webhook/index.
 
 - [ ] Mandar "oi" pelo número de teste → deve chegar o menu com as opções.
 - [ ] Escolher "Ida" → informar uma data válida → deve mostrar os pontos de embarque reais (os que estão em `route_points`, editáveis pela aba Sistema do painel).
+- [ ] Mandar uma mensagem só de texto, tipo "quero 2 passagens de ida dia 10/09 saindo da rodoviária" → o bot deve pular direto para perguntar só o que faltou (quantidade e ponto já preenchidos), não repetir perguntas já respondidas.
+- [ ] Mandar uma mensagem ambígua/fora do assunto ("oi, vocês vendem passagem para outra cidade?") → o bot deve mostrar o menu, nunca inventar uma resposta.
 - [ ] Completar uma reserva de teste → conferir que ela aparece na Agenda do painel React em tempo real.
 - [ ] Conferir em `audit_logs` que a criação foi registrada com `performed_by` = usuário "Bot WhatsApp".
 - [ ] No painel, mudar o modo de atendimento para "Manual" (aba Sistema) → mandar outra mensagem de teste → confirmar que a IA **não** responde nada (fica só logado em `whatsapp_messages`).
