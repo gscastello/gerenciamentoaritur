@@ -26,6 +26,22 @@ export function useFinanceDay(entryDate) {
 
 export function useFinanceMonth(year, month) {
   const query = useSupabaseQuery(() => financeService.listByMonth(year, month), [year, month], { enabled: !!year && !!month });
-  useRealtimeTable(["financial_entries"], () => query.refetch());
-  return { entries: query.data ?? [], loading: query.loading, error: query.error };
+  // financial_entries também recebe as despesas de combustível/manutenção
+  // via trigger do banco — escutamos as três tabelas para o calendário
+  // reagir sem refresh.
+  useRealtimeTable(["financial_entries", "fuel_records", "maintenance"], () => query.refetch());
+
+  const add = useAsyncAction(financeService.addManualEntry);
+  const update = useAsyncAction(financeService.update);
+  const remove = useAsyncAction(financeService.softDelete);
+
+  return {
+    entries: query.data ?? [],
+    loading: query.loading,
+    error: query.error,
+    refetch: query.refetch,
+    addEntry: async (fields) => { const r = await add.run(fields); await query.refetch(); return r; },
+    updateEntry: async (id, fields) => { const r = await update.run(id, fields); await query.refetch(); return r; },
+    removeEntry: async (id) => { const r = await remove.run(id); await query.refetch(); return r; },
+  };
 }

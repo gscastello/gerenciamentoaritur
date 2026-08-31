@@ -3,6 +3,7 @@ import { Presence } from "../ui/motion/index.js";
 import { TabSkeleton, ChartsSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useReservationsWindow } from "../hooks/useReservations.js";
+import { useFinanceMonth } from "../hooks/useFinance.js";
 import {
   Calendar, Users, Wallet, Bus, LayoutDashboard, MapPin,
   CheckCircle2, Clock, Fuel, Wrench, TrendingUp, Plus, X, ChevronRight,
@@ -324,7 +325,8 @@ function AppInner() {
   const reservas = R.reservations;
 
   // --- operação / config / CRM: ainda em localStorage (fase 2) ----------
-  const [financeiro, setFinanceiro] = useState([]);
+  // Financeiro já migrou para o Postgres (fase 2 — FinanceiroTab/Dashboard
+  // usam useFinanceMonth direto).
   const [operacao, setOperacao] = useState(DEFAULT_OPERACAO);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [crm, setCrm] = useState({});
@@ -332,17 +334,16 @@ function AppInner() {
 
   useEffect(() => {
     (async () => {
-      const [f, o, cfg, crmData] = await Promise.all([
-        loadKey("financeiro_v5", []), loadKey("operacao_v5", DEFAULT_OPERACAO),
+      const [o, cfg, crmData] = await Promise.all([
+        loadKey("operacao_v5", DEFAULT_OPERACAO),
         loadKey("config_v5", DEFAULT_CONFIG), loadKey("crm_v5", {}),
       ]);
-      setFinanceiro(f); setOperacao({ ...DEFAULT_OPERACAO, ...o });
+      setOperacao({ ...DEFAULT_OPERACAO, ...o });
       setConfig({ ...DEFAULT_CONFIG, ...cfg }); setCrm(crmData);
       setLocalPronto(true);
     })();
   }, []);
 
-  const persistFinanceiro = useCallback((next) => { setFinanceiro(next); saveKey("financeiro_v5", next); }, []);
   const persistOperacao = useCallback((next) => { setOperacao(next); saveKey("operacao_v5", next); }, []);
   const persistConfig = useCallback((next) => { setConfig(next); saveKey("config_v5", next); }, []);
   const persistCrm = useCallback((next) => { setCrm(next); saveKey("crm_v5", next); }, []);
@@ -392,10 +393,10 @@ function AppInner() {
             {tab === "agenda" && <AgendaTab reservas={reservas} R={R} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
             {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={config.trips} usuario={usuario} />}
             {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={config.trips} crm={crm} setCrm={persistCrm} />}
-            {tab === "financeiro" && <FinanceiroTab financeiro={financeiro} setFinanceiro={persistFinanceiro} operacao={operacao} />}
+            {tab === "financeiro" && <FinanceiroTab operacao={operacao} />}
             {tab === "operacao" && <OperacaoTab operacao={operacao} setOperacao={persistOperacao} trips={config.trips} />}
-            {tab === "dashboard" && <DashboardTab reservas={reservas} financeiro={financeiro} capacidade={capacidadeAtiva} operacao={operacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "sistema" && <SistemaTab reservas={reservas} financeiro={financeiro} operacao={operacao} setOperacao={persistOperacao} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} />}
+            {tab === "dashboard" && <DashboardTab reservas={reservas} capacidade={capacidadeAtiva} operacao={operacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
+            {tab === "sistema" && <SistemaTab reservas={reservas} operacao={operacao} setOperacao={persistOperacao} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} />}
           </div>
         )}
       </div>
@@ -948,17 +949,51 @@ function PassageirosTab({ reservas, trips, crm, setCrm }) {
 }
 
 /* ============================= 5. FINANCEIRO (com lucro real) ============================= */
-function FinanceiroTab({ financeiro, setFinanceiro, operacao }) {
+// Mapeia a linha do banco (financial_entries) para o formato que a tela usa.
+function mapEntry(e) {
+  return {
+    id: e.id,
+    data: e.entry_date,
+    tipo: e.type,
+    valor: Number(e.amount) || 0,
+    descricao: e.description || "",
+    categoria: e.category || null,
+    // lançamentos gerados por trigger (combustível/manutenção) não são editáveis aqui
+    auto: !!(e.fuel_record_id || e.maintenance_id),
+  };
+}
+
+function FinanceiroTab({ operacao }) {
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
   const [novo, setNovo] = useState({ tipo: "receita", valor: "", descricao: "" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
-  const add = () => { if (!novo.valor) return; setFinanceiro([...financeiro, { id: uid(), data: diaSel, ...novo, valor: parseFloat(novo.valor) }]); setNovo({ tipo: "receita", valor: "", descricao: "" }); };
-  const remove = (id) => setFinanceiro(financeiro.filter(f => f.id !== id));
-  const iniciarEdicao = (f) => { setEditId(f.id); setEditVal({ ...f }); };
-  const salvarEdicao = () => { setFinanceiro(financeiro.map(f => f.id === editId ? { ...editVal, valor: parseFloat(editVal.valor) } : f)); setEditId(null); };
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
   const ano = mesRef.getFullYear(), mes = mesRef.getMonth();
+
+  const fin = useFinanceMonth(ano, mes + 1);
+  const financeiro = useMemo(() => (fin.entries || []).map(mapEntry), [fin.entries]);
+
+  const run = async (fn) => {
+    setErro(""); setSalvando(true);
+    try { await fn(); } catch (e) { setErro(e?.message || "Não foi possível salvar."); }
+    finally { setSalvando(false); }
+  };
+  const add = () => {
+    if (!novo.valor) return;
+    run(async () => {
+      await fin.addEntry({ entryDate: diaSel, type: novo.tipo, amount: parseFloat(novo.valor), description: novo.descricao || null });
+      setNovo({ tipo: "receita", valor: "", descricao: "" });
+    });
+  };
+  const remove = (id) => run(() => fin.removeEntry(id));
+  const iniciarEdicao = (f) => { setEditId(f.id); setEditVal({ ...f }); };
+  const salvarEdicao = () => run(async () => {
+    await fin.updateEntry(editId, { type: editVal.tipo, amount: parseFloat(editVal.valor), description: editVal.descricao || null });
+    setEditId(null);
+  });
   const primeiroDia = new Date(ano, mes, 1); const diasNoMes = new Date(ano, mes + 1, 0).getDate(); const offset = primeiroDia.getDay();
   const cells = [...Array(offset).fill(null), ...Array.from({ length: diasNoMes }, (_, i) => i + 1)];
   const lucroPorDia = useCallback((diaNum) => { const ds = `${ano}-${String(mes + 1).padStart(2, "0")}-${String(diaNum).padStart(2, "0")}`; const receitas = financeiro.filter(f => f.data === ds && f.tipo === "receita").reduce((s, f) => s + f.valor, 0); const despesas = financeiro.filter(f => f.data === ds && f.tipo === "despesa").reduce((s, f) => s + f.valor, 0); return { ds, lucro: receitas - despesas, temMovimento: receitas > 0 || despesas > 0 }; }, [financeiro, ano, mes]);
@@ -971,7 +1006,8 @@ function FinanceiroTab({ financeiro, setFinanceiro, operacao }) {
   const lucroReal = receitaDia - despesaDia - combustivelDia - manutencaoDia;
   return (
     <div>
-      <Header title="Financeiro" subtitle="Faturamento, despesas e lucro real do dia — combustível e manutenção entram automaticamente." />
+      <Header title="Financeiro" subtitle="Faturamento, despesas e lucro real do dia — combustível e manutenção entram automaticamente." right={fin.loading ? <span className="text-xs" style={{ color: C.inkFaint }}>carregando…</span> : null} />
+      {(erro || fin.error) && <div className="mx-6 md:mx-10 mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {erro || "Erro ao carregar lançamentos (só admin/financeiro têm acesso)."}</span>{erro && <button onClick={() => setErro("")}><X size={13} /></button>}</div>}
       <div className="px-6 md:px-10 pb-10 grid lg:grid-cols-[340px_1fr] gap-6">
         <Card className="anim-fadeUp">
           <div className="flex items-center justify-between mb-3"><button onClick={() => setMesRef(new Date(ano, mes - 1, 1))} className="btn-press p-1 rounded" style={{ color: C.inkSoft }}><ChevronLeft size={16} /></button><div className="text-sm font-semibold capitalize">{mesRef.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</div><button onClick={() => setMesRef(new Date(ano, mes + 1, 1))} className="btn-press p-1 rounded" style={{ color: C.inkSoft }}><ChevronRight size={16} /></button></div>
@@ -980,9 +1016,9 @@ function FinanceiroTab({ financeiro, setFinanceiro, operacao }) {
         </Card>
         <div className="space-y-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><StatCard label={`Faturamento ${fmtDate(diaSel)}`} value={fmtBRL(receitaDia)} icon={Wallet} accent={C.green} /><StatCard label="Despesas" value={fmtBRL(despesaDia)} icon={TrendingUp} accent={C.red} /><StatCard label="Lucro simples" value={fmtBRL(receitaDia - despesaDia)} icon={CheckCircle2} accent={C.amber} /><StatCard label="Lucro real (c/ operação)" value={fmtBRL(lucroReal)} icon={Route} accent={lucroReal >= 0 ? C.blue : C.red} /></div>
-          <Card><div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div><div className="grid sm:grid-cols-4 gap-2"><Select value={novo.tipo} onChange={e => setNovo({ ...novo, tipo: e.target.value })}><option value="receita">Receita</option><option value="despesa">Despesa</option></Select><TextInput placeholder="Valor" type="number" value={novo.valor} onChange={e => setNovo({ ...novo, valor: e.target.value })} /><TextInput placeholder="Descrição" className="sm:col-span-2" value={novo.descricao} onChange={e => setNovo({ ...novo, descricao: e.target.value })} /></div><button onClick={add} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: C.amber, color: "#20180A" }}><Plus size={14} /> Lançar</button></Card>
+          <Card><div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div><div className="grid sm:grid-cols-4 gap-2"><Select value={novo.tipo} onChange={e => setNovo({ ...novo, tipo: e.target.value })}><option value="receita">Receita</option><option value="despesa">Despesa</option></Select><TextInput placeholder="Valor" type="number" value={novo.valor} onChange={e => setNovo({ ...novo, valor: e.target.value })} /><TextInput placeholder="Descrição" className="sm:col-span-2" value={novo.descricao} onChange={e => setNovo({ ...novo, descricao: e.target.value })} /></div><button onClick={add} disabled={salvando || !novo.valor} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: salvando || !novo.valor ? C.border : C.amber, color: salvando || !novo.valor ? C.inkFaint : "#20180A" }}><Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}</button></Card>
           <Card style={{ padding: 0, overflow: "hidden" }}><table className="w-full text-sm"><thead><tr style={{ background: C.panel2, color: C.inkSoft }}><th className="text-left px-4 py-2.5 font-medium">Tipo</th><th className="text-left px-4 py-2.5 font-medium">Valor</th><th className="text-left px-4 py-2.5 font-medium">Descrição</th><th></th></tr></thead>
-            <tbody>{[...doDia].reverse().map(f => editId === f.id ? (<tr key={f.id} className="border-t anim-slideDown" style={{ borderColor: C.borderSoft, background: C.panel2 }}><td className="px-2 py-2"><Select value={editVal.tipo} onChange={e => setEditVal({ ...editVal, tipo: e.target.value })} className="text-xs py-1"><option value="receita">Receita</option><option value="despesa">Despesa</option></Select></td><td className="px-2 py-2"><TextInput type="number" value={editVal.valor} onChange={e => setEditVal({ ...editVal, valor: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><TextInput value={editVal.descricao} onChange={e => setEditVal({ ...editVal, descricao: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><button onClick={salvarEdicao}><Save size={13} style={{ color: C.green }} /></button></td></tr>) : (<tr key={f.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}><td className="px-4 py-2"><Pill color={f.tipo === "receita" ? C.green : C.red} bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}>{f.tipo}</Pill></td><td className="px-4 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtBRL(f.valor)}</td><td className="px-4 py-2" style={{ color: C.inkSoft }}>{f.descricao}</td><td className="px-4 py-2"><div className="flex gap-2"><button onClick={() => iniciarEdicao(f)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => remove(f.id)}><X size={13} style={{ color: C.inkFaint }} /></button></div></td></tr>))}
+            <tbody>{[...doDia].reverse().map(f => editId === f.id ? (<tr key={f.id} className="border-t anim-slideDown" style={{ borderColor: C.borderSoft, background: C.panel2 }}><td className="px-2 py-2"><Select value={editVal.tipo} onChange={e => setEditVal({ ...editVal, tipo: e.target.value })} className="text-xs py-1"><option value="receita">Receita</option><option value="despesa">Despesa</option></Select></td><td className="px-2 py-2"><TextInput type="number" value={editVal.valor} onChange={e => setEditVal({ ...editVal, valor: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><TextInput value={editVal.descricao} onChange={e => setEditVal({ ...editVal, descricao: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><button onClick={salvarEdicao}><Save size={13} style={{ color: C.green }} /></button></td></tr>) : (<tr key={f.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}><td className="px-4 py-2"><Pill color={f.tipo === "receita" ? C.green : C.red} bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}>{f.tipo}</Pill></td><td className="px-4 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtBRL(f.valor)}</td><td className="px-4 py-2" style={{ color: C.inkSoft }}>{f.descricao}{f.auto ? <span className="ml-1.5 text-[10px]" style={{ color: C.inkFaint }}>· automático</span> : ""}</td><td className="px-4 py-2">{f.auto ? <span className="text-[10px]" style={{ color: C.inkFaint }}>da operação</span> : <div className="flex gap-2"><button onClick={() => iniciarEdicao(f)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => remove(f.id)}><X size={13} style={{ color: C.inkFaint }} /></button></div>}</td></tr>))}
               {doDia.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-xs" style={{ color: C.inkFaint }}>Nenhum lançamento neste dia.</td></tr>}</tbody></table></Card>
         </div>
       </div>
@@ -1068,8 +1104,17 @@ function OperacaoTab({ operacao, setOperacao, trips }) {
 }
 
 /* ============================= 7. DASHBOARD ============================= */
-function DashboardTab({ reservas, financeiro, capacidade, operacao, trips }) {
+function DashboardTab({ reservas, capacidade, operacao, trips }) {
   const hoje = todayStr();
+  // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
+  const now = new Date();
+  const finThis = useFinanceMonth(now.getFullYear(), now.getMonth() + 1);
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const finPrev = useFinanceMonth(prevMonth.getFullYear(), prevMonth.getMonth() + 1);
+  const financeiro = useMemo(
+    () => [...(finPrev.entries || []), ...(finThis.entries || [])].map(mapEntry),
+    [finThis.entries, finPrev.entries],
+  );
   const insights = useMemo(() => gerarInsightsIA(reservas, operacao, capacidade, trips), [reservas, operacao, capacidade, trips]);
   const demanda = useMemo(() => previsaoDemanda(reservas), [reservas]);
   const confirmadas = reservas.filter(r => OCUPA_VAGA.includes(r.status) && !["frete","encomenda"].includes(r.tipo));
@@ -1109,7 +1154,7 @@ function DashboardTab({ reservas, financeiro, capacidade, operacao, trips }) {
 }
 
 /* ============================= 8. SISTEMA ============================= */
-function SistemaTab({ reservas, financeiro, operacao, setOperacao, capacidade, config, setConfig }) {
+function SistemaTab({ reservas, operacao, setOperacao, capacidade, config, setConfig }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
@@ -1117,7 +1162,7 @@ function SistemaTab({ reservas, financeiro, operacao, setOperacao, capacidade, c
   // capacidade) e quantidade inválida (check). Aqui só listamos o que a
   // heurística local encontraria — sem reescrever nada. (issue #10)
   const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { issues, fixed } = runDiagnostics(reservas, capacidade, config.trips); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
-  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, financeiro, operacao, config }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
+  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, operacao, config, nota: "Financeiro e reservas ficam no Postgres — este backup cobre o snapshot local (operação/config) + a janela de reservas carregada." }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
   const atualizarPonto = (direcao, pontoId, campo, valor) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.map(p => p.id === pontoId ? { ...p, [campo]: campo === "valor" ? parseFloat(valor) || 0 : valor } : p) } }; setConfig({ ...config, trips }); };
   const addPontoOutro = (direcao) => { if (!novoPontoNome.trim()) return; const id = "custom-" + fnv(novoPontoNome + Date.now()); const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: [...config.trips[direcao].pontos, { id, nome: novoPontoNome.trim(), horaBase: config.trips[direcao].pontos[0].horaBase, valor: 60, core: false }] } }; setConfig({ ...config, trips }); setNovoPontoNome(""); };
   const removerPonto = (direcao, pontoId) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.filter(p => p.id !== pontoId) } }; setConfig({ ...config, trips }); };
