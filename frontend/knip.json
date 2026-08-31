@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    "src/main.jsx",
     "src/domain/index.js",
     "src/ui/motion/index.js",
     "src/ui/skeletons/*.jsx",
@@ -13,7 +12,6 @@
   ],
   "project": ["src/**/*.{js,jsx}"],
   "ignore": ["src/app/App.jsx", "src/INTEGRATION-EXAMPLE.jsx"],
-  "ignoreDependencies": ["tailwindcss", "postcss", "autoprefixer"],
   "vite": { "config": ["vite.config.js"] },
   "vitest": {
     "config": ["vite.config.js"],
