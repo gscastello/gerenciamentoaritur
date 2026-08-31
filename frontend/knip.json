@@ -13,6 +13,7 @@
   ],
   "project": ["src/**/*.{js,jsx}"],
   "ignore": ["src/app/App.jsx", "src/INTEGRATION-EXAMPLE.jsx"],
+  "ignoreDependencies": ["tailwindcss", "postcss", "autoprefixer"],
   "vite": { "config": ["vite.config.js"] },
   "vitest": {
     "config": ["vite.config.js"],

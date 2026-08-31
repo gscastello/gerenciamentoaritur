@@ -1,3 +1,7 @@
+// Tailwind (base/components/utilities) — carregado antes de tudo para que
+// tokens.css e os estilos inline dos componentes tenham precedência.
+import "./index.css";
+
 // storageShim mantém o protótipo (app/App.jsx) funcionando enquanto as
 // abas ainda não foram migradas para os services do Supabase (issue #10).
 // Remover quando App.jsx não usar mais window.storage.
