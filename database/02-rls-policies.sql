@@ -20,29 +20,44 @@
 -- ---------------------------------------------------------------------
 -- Helpers
 -- ---------------------------------------------------------------------
-create or replace function fn_current_role() returns user_role as $$
+create or replace function fn_current_role() returns user_role
+  language sql stable security definer set search_path = public, pg_temp as $$
   select role from users where id = auth.uid() and deleted_at is null
-$$ language sql stable security definer;
+$$;
 
-create or replace function fn_current_driver_id() returns uuid as $$
+create or replace function fn_current_driver_id() returns uuid
+  language sql stable security definer set search_path = public, pg_temp as $$
   select driver_id from users where id = auth.uid() and deleted_at is null
-$$ language sql stable security definer;
+$$;
 
-create or replace function fn_has_role(roles user_role[]) returns boolean as $$
+create or replace function fn_has_role(roles user_role[]) returns boolean
+  language sql stable set search_path = public, pg_temp as $$
   select fn_current_role() = any(roles)
-$$ language sql stable;
+$$;
 
 -- ---------------------------------------------------------------------
 -- USERS
 -- ---------------------------------------------------------------------
 alter table users enable row level security;
 
-create policy users_select_self_or_admin on users for select
-  using (id = auth.uid() or fn_has_role(array['admin']::user_role[]));
+-- Uma policy por ação (evita "multiple permissive policies" no SELECT) e
+-- auth.uid()/fn_has_role() dentro de (select ...) para serem avaliados uma
+-- vez por query, não por linha (advisor 0003_auth_rls_initplan).
+create policy users_select on users for select
+  using (
+    id = (select auth.uid())
+    or (select fn_has_role(array['admin']::user_role[]))
+  );
 
-create policy users_admin_manage on users for all
-  using (fn_has_role(array['admin']::user_role[]))
-  with check (fn_has_role(array['admin']::user_role[]));
+create policy users_admin_insert on users for insert
+  with check ((select fn_has_role(array['admin']::user_role[])));
+
+create policy users_admin_update on users for update
+  using      ((select fn_has_role(array['admin']::user_role[])))
+  with check ((select fn_has_role(array['admin']::user_role[])));
+
+create policy users_admin_delete on users for delete
+  using ((select fn_has_role(array['admin']::user_role[])));
 
 -- ---------------------------------------------------------------------
 -- CUSTOMERS  — admin/atendente/financeiro leem e editam; motorista só lê

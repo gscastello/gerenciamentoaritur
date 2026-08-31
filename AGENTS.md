@@ -29,8 +29,9 @@ npm run build         # Vite
 ```
 
 Tudo isso roda no CI (`.github/workflows/ci.yml`) em todo PR. **Merge
-bloqueado** se qualquer job falhar. **Deploy = merge na `main`** (job
-`deploy`), nunca push direto.
+bloqueado** se qualquer job falhar. **O deploy é do host** (Vercel/Netlify,
+via integração Git): push na `main` → produção, cada PR → preview. Nunca
+por push direto na `main`. Ver `frontend/DEPLOY.md`.
 
 Além disso, toda tela nova ou alterada precisa passar no **checklist de
 motion (§5)** e toda função crítica alterada precisa emitir **evento de

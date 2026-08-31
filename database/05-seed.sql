@@ -32,7 +32,7 @@ insert into route_points (direction, code, name, base_time, price, requires_deta
   ('ida', 'postocarone', 'Posto Carone',              '05:55', 60,   false, null,                                    true, 4),
   ('ida', 'br',          'BR',                         '06:00', 60,   true,  'Local exato na BR (km, referência)',   true, 5),
   ('ida', 'outro',       'Outro local de embarque',   '05:40', 60,   true,  'Descreva o local de embarque',         true, 6)
-on conflict (direction, code) do nothing;
+on conflict (direction, code) where deleted_at is null do nothing;
 
 -- ---------------------------------------------------------------------
 -- Pontos de embarque — Volta (com janela de busca porta-a-porta)
@@ -40,7 +40,7 @@ on conflict (direction, code) do nothing;
 insert into route_points (direction, code, name, base_time, price, is_core, display_order, boarding_window) values
   ('volta', 'pirapemas',  'Pirapemas',  '12:00', 60, true, 1, '12:00 – 13:00'),
   ('volta', 'cantanhede', 'Cantanhede', '13:00', 60, true, 2, '13:00 – 14:00')
-on conflict (direction, code) do nothing;
+on conflict (direction, code) where deleted_at is null do nothing;
 
 -- ---------------------------------------------------------------------
 -- Precificação por bairro — "Buscar em Casa" (R$80)
@@ -110,4 +110,4 @@ values
      extract(dow from current_date) = 1, 'agendada'),
   (current_date, 'volta', '11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', 31,
      false, 'agendada')
-on conflict (trip_date, direction) do nothing;
+on conflict (trip_date, direction) where deleted_at is null do nothing;

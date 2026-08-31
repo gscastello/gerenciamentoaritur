@@ -96,30 +96,11 @@ jobs:
         env:
           VITE_RELEASE: ${{ github.sha }}
 
-  # Deploy só depois que todos os gates passam, e só em push na main
-  # (ou seja, após o merge do PR — nunca por push direto).
-  deploy:
-    name: Deploy (produção)
-    needs: [quality, test, mutation, e2e, build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run build
-        env:
-          VITE_RELEASE: ${{ github.sha }}
-          VITE_OBSERVABILITY_ENV: production
-          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          VITE_OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          VITE_DATADOG_APPLICATION_ID: ${{ secrets.DATADOG_APPLICATION_ID }}
-          VITE_DATADOG_CLIENT_TOKEN: ${{ secrets.DATADOG_CLIENT_TOKEN }}
-      # TODO(#3): passo real de publicação (Vercel/Netlify/S3) + upload de
-      # source maps para o Sentry com SENTRY_AUTH_TOKEN e a release do commit.
-      - run: echo "Adicionar publicação real e upload de source maps — issue #3."
+  # O DEPLOY é feito pelo host (Vercel/Netlify) via integração com o Git:
+  #   - push na `main`  -> deploy de produção
+  #   - cada PR         -> deploy de preview
+  # Ver frontend/DEPLOY.md. O CI aqui só roda os gates de qualidade.
+  #
+  # TODO(#3): quando o Sentry estiver configurado, adicionar aqui um job
+  # `release` (só em push na main) que faz o upload dos source maps com
+  # SENTRY_AUTH_TOKEN e marca a release = ${{ github.sha }}.

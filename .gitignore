@@ -12,6 +12,10 @@ frontend/.stryker-tmp/
 reports/
 *.tsbuildinfo
 
+# deploy (dirs locais das CLIs de host)
+.vercel/
+.netlify/
+
 # ferramentas
 .DS_Store
 *.log

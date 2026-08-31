@@ -1,0 +1,14 @@
+# Alternativa ao Vercel. No Netlify, "Base directory" = frontend.
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA: qualquer rota cai no index.html (o app é client-side).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
