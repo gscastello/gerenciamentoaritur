@@ -40,6 +40,8 @@ create table whatsapp_conversations (
 );
 create unique index uq_wa_conversations_phone on whatsapp_conversations (phone) where deleted_at is null;
 create index idx_wa_conversations_mode on whatsapp_conversations (attendance_mode) where deleted_at is null;
+create index idx_wa_conversations_customer on whatsapp_conversations (customer_id) where deleted_at is null;
+create index idx_wa_conversations_assigned on whatsapp_conversations (assigned_user_id) where deleted_at is null;
 create trigger trg_wa_conversations_updated_at before update on whatsapp_conversations
   for each row execute function fn_set_updated_at();
 
@@ -113,7 +115,8 @@ begin
   return jsonb_build_object('success', true);
 end;
 $$;
-grant execute on function rpc_transfer_to_human to authenticated, service_role;
+revoke execute on function rpc_transfer_to_human(uuid, text, uuid) from public, anon;
+grant  execute on function rpc_transfer_to_human(uuid, text, uuid) to authenticated, service_role;
 
 create or replace function rpc_return_to_ai(p_conversation_id uuid, p_actor uuid default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -126,4 +129,5 @@ begin
   return jsonb_build_object('success', true);
 end;
 $$;
-grant execute on function rpc_return_to_ai to authenticated, service_role;
+revoke execute on function rpc_return_to_ai(uuid, uuid) from public, anon;
+grant  execute on function rpc_return_to_ai(uuid, uuid) to authenticated, service_role;
