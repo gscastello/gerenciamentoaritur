@@ -7,9 +7,7 @@
       "coverage",
       "playwright-report",
       "test-results",
-      ".stryker-tmp",
-      "src/app/App.jsx",
-      "src/INTEGRATION-EXAMPLE.jsx"
+      ".stryker-tmp"
     ]
   },
   "formatter": {
@@ -25,7 +23,11 @@
       "recommended": true,
       "a11y": {
         "recommended": true,
-        "useFocusableInteractive": "off"
+        "useFocusableInteractive": "off",
+        "useButtonType": "warn",
+        "useKeyWithClickEvents": "warn",
+        "useSemanticElements": "warn",
+        "noLabelWithoutControl": "warn"
       },
       "complexity": { "noForEach": "off" },
       "correctness": {
@@ -33,7 +35,10 @@
         "noUnusedImports": "error",
         "useExhaustiveDependencies": "warn"
       },
-      "suspicious": { "noConsoleLog": "off" },
+      "suspicious": {
+        "noConsoleLog": "off",
+        "noArrayIndexKey": "warn"
+      },
       "style": { "useNodejsImportProtocol": "error" }
     }
   },

@@ -48,11 +48,15 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true } = {}) {
   useEffect(() => {
     aliveRef.current = true;
     run();
-    return () => { aliveRef.current = false; };
+    return () => {
+      aliveRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run]);
 
   return { data, loading, error, refetch: run };
 }
 
-function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
