@@ -1,2 +1,7 @@
 frontend/.env
 node_modules/
+
+# Supabase CLI (Edge Functions)
+supabase/.branches/
+supabase/.temp/
+supabase/.env
