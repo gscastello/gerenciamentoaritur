@@ -55,12 +55,16 @@ export const financeService = {
     );
   },
 
+  /**
+   * Soft-delete via RPC SECURITY DEFINER: um UPDATE direto de `deleted_at`
+   * é recusado pela RLS desta instância (a policy de SELECT vira WITH
+   * CHECK no UPDATE). Ver database/retrofit-soft-delete-rpc.sql.
+   */
   async softDelete(entryId) {
-    const actor = await getCurrentUserId();
-    return handle(
-      supabase.from("financial_entries").update({ deleted_at: new Date().toISOString(), updated_by: actor }).eq("id", entryId),
-      "softDelete"
-    );
+    const { data, error } = await supabase.rpc("rpc_soft_delete_financial_entry", { p_id: entryId });
+    if (error) throw new ServiceError(`softDelete: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover o lançamento.", { retryable: false });
+    return data;
   },
 
   /** Lucro real do dia = receitas − despesas manuais − combustível − manutenção (tudo já em financial_entries). */
