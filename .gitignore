@@ -24,3 +24,6 @@ supabase/.env
 # ferramentas
 .DS_Store
 *.log
+
+# lefthook cria um exemplo na raiz ao rodar `lefthook install` — o real fica em frontend/
+/lefthook.yml
