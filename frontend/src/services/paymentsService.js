@@ -86,7 +86,7 @@ export const paymentsService = {
 
   async setPaidForReservation({ reservationId, paid, amount, method }) {
     const actor = await getCurrentUserId();
-    const row = await this._ensureForReservation({ reservationId, amount, method });
+    const row = await paymentsService._ensureForReservation({ reservationId, amount, method });
     return handle(
       supabase
         .from("payments")
@@ -104,7 +104,7 @@ export const paymentsService = {
 
   async setProofForReservation({ reservationId, received, amount, method }) {
     const actor = await getCurrentUserId();
-    const row = await this._ensureForReservation({ reservationId, amount, method });
+    const row = await paymentsService._ensureForReservation({ reservationId, amount, method });
     return handle(
       supabase.from("payments").update({ proof_received: received, updated_by: actor }).eq("id", row.id).select().single(),
       "setProofForReservation"
