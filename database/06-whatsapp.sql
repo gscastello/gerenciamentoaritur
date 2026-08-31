@@ -84,7 +84,7 @@ create policy wa_messages_select on whatsapp_messages for select
 -- global OU o da conversa estiver em HUMANO.
 -- ---------------------------------------------------------------------
 create or replace function fn_effective_attendance_mode(p_conversation_id uuid)
-returns wa_attendance_mode language sql stable as $$
+returns wa_attendance_mode language sql stable set search_path = public, pg_temp as $$
   select case
     when (select (value->>'mode') from settings where key = 'attendance_mode') = 'manual' then 'humano'::wa_attendance_mode
     when (select attendance_mode from whatsapp_conversations where id = p_conversation_id) = 'humano' then 'humano'::wa_attendance_mode

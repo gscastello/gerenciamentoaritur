@@ -18,7 +18,9 @@
 //   — o modelo é instruído a nunca inventar um código fora dessa lista.
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const MODEL = "claude-sonnet-4-6";
+// Sonnet 5: mais capaz e mais barato que o 4-6 ($2/$10 vs $3/$15 por 1M tokens)
+// e suficiente de sobra para extração estruturada de campos.
+const MODEL = "claude-sonnet-5";
 
 if (!ANTHROPIC_API_KEY) {
   throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");

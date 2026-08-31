@@ -4,6 +4,9 @@ Sistema de agendamento, agenda operacional, financeiro e operação para
 empresa de transporte, com backend PostgreSQL/Supabase e integração de
 WhatsApp/GPS planejadas para as próximas etapas.
 
+> **Vai colocar no ar?** Comece por [`SETUP.md`](SETUP.md) — o checklist
+> mestre do que falta fazer, na ordem.
+
 ## Estrutura do repositório
 
 ```

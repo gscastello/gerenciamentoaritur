@@ -10,7 +10,8 @@ create extension if not exists pg_net with schema extensions;
 -- ---------------------------------------------------------------------
 -- 1) "Motorista a caminho" — dispara sozinho quando rpc_start_trip roda
 -- ---------------------------------------------------------------------
-create or replace function fn_enqueue_driver_en_route() returns trigger as $$
+create or replace function fn_enqueue_driver_en_route() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 begin
   if NEW.status = 'em_andamento' and (OLD.status is distinct from 'em_andamento') then
     insert into notifications (customer_id, reservation_id, trip_id, channel, template_key, payload, status)
@@ -23,7 +24,7 @@ begin
   end if;
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger trg_enqueue_driver_en_route after update of status on trips
   for each row execute function fn_enqueue_driver_en_route();
@@ -33,7 +34,8 @@ create trigger trg_enqueue_driver_en_route after update of status on trips
 -- lembrete para viagens que partem entre 45 e 75 minutos a partir de
 -- agora (janela de 30 min de folga para não perder nem duplicar o aviso)
 -- ---------------------------------------------------------------------
-create or replace function fn_enqueue_trip_reminders() returns void as $$
+create or replace function fn_enqueue_trip_reminders() returns void
+language plpgsql set search_path = public, pg_temp as $$
 begin
   insert into notifications (customer_id, reservation_id, trip_id, channel, template_key, payload, status)
   select r.customer_id, r.id, t.id, 'whatsapp', 'lembrete_viagem',
@@ -53,7 +55,7 @@ begin
     and (t.trip_date::timestamp + coalesce(rp.base_time, '00:00'::time))
         between (now() + interval '45 minutes') and (now() + interval '75 minutes');
 end;
-$$ language plpgsql;
+$$;
 
 select cron.schedule('enqueue-trip-reminders', '*/10 * * * *', 'select fn_enqueue_trip_reminders();');
 
