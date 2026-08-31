@@ -23,5 +23,11 @@ export default defineConfig({
     url: "http://localhost:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // placeholders só para o build embutir algo — o e2e sem sessão só
+    // testa a tela de login. Fluxos autenticados = issue #4.
+    env: {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || "https://e2e-placeholder.supabase.co",
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || "e2e-placeholder-key",
+    },
   },
 });

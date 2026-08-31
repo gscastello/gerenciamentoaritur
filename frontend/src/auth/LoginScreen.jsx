@@ -72,25 +72,29 @@ export function LoginScreen() {
           Entre com sua conta da equipe.
         </p>
 
-        <label style={{ display: "block", fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>E-mail</label>
-        <input
-          type="email"
-          required
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={inputStyle}
-        />
+        <label style={{ display: "block", fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>
+          E-mail
+          <input
+            type="email"
+            required
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ ...inputStyle, marginTop: 4 }}
+          />
+        </label>
 
-        <label style={{ display: "block", fontSize: 12, color: C.inkSoft, margin: "14px 0 4px" }}>Senha</label>
-        <input
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={inputStyle}
-        />
+        <label style={{ display: "block", fontSize: 12, color: C.inkSoft, marginTop: 14 }}>
+          Senha
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...inputStyle, marginTop: 4 }}
+          />
+        </label>
 
         {error && (
           <div style={{ color: C.red, fontSize: 12, marginTop: 12 }}>{error}</div>

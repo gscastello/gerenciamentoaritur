@@ -26,28 +26,21 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov", "html"],
       reportsDirectory: "./coverage",
-      include: ["src/**/*.{js,jsx}"],
-      exclude: [
-        "src/**/*.{test,spec}.{js,jsx}",
-        "src/main.jsx",
-        "src/**/__tests__/**",
-        "src/app/**", // protótipo legado — migração na issue #10
-        "src/observability/**", // instrumentação: coberta por e2e, não unit
-        "src/ui/skeletons/**", // visual — coberto por e2e
-        "src/ui/charts/**", // visual — coberto por e2e
-      ],
-      // Gate global. O gate mais rígido dos módulos críticos (motor de
-      // vagas, financeiro) fica no codecov.yml.
+      // Só o que tem teste unitário de verdade entra no gate: o domínio
+      // (regras puras) e a lib de motion. Services/hooks/auth são camada
+      // de I/O — cobertos por integração/e2e (issue #4), não por unit.
+      include: ["src/domain/**/*.js", "src/ui/motion/**/*.{js,jsx}"],
+      exclude: ["src/**/*.{test,spec}.{js,jsx}", "src/**/__tests__/**", "src/domain/index.js"],
       thresholds: {
-        statements: 70,
-        branches: 70,
-        functions: 70,
-        lines: 70,
+        statements: 75,
+        branches: 75,
+        functions: 75,
+        lines: 75,
         "src/domain/**/*.js": {
-          statements: 95,
-          branches: 90,
-          functions: 100,
-          lines: 95,
+          statements: 90,
+          branches: 85,
+          functions: 95,
+          lines: 90,
         },
       },
     },

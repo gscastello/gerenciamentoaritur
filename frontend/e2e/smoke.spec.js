@@ -1,22 +1,18 @@
 import { expect, test } from "@playwright/test";
 
-// Smoke da fundação. Os fluxos completos de cliente/motorista entram na
-// issue #4 (testing).
+// Smoke da fundação. O app agora é fechado por login (Supabase Auth), então
+// sem sessão o que carrega é a tela de login. Os fluxos autenticados
+// (Agenda, Reservar, etc.) precisam de um projeto Supabase de teste —
+// entram na issue #4 (testing).
 
-test("o app carrega e mostra a navegação principal", async ({ page }) => {
+test("carrega a tela de login", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Rota Pirapemas")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Agenda/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
 });
 
-test("skeleton some e o conteúdo da aba aparece", async ({ page }) => {
+test("a tela de login tem os campos de e-mail e senha", async ({ page }) => {
   await page.goto("/");
-  // A aba inicial ("Reservar") renderiza um cabeçalho depois do skeleton.
-  await expect(page.getByText(/Atendimento automático/i)).toBeVisible({ timeout: 10_000 });
-});
-
-test("navegar para Agenda troca o conteúdo", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /Agenda/ }).first().click();
-  await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(page.locator('input[type="password"]')).toBeVisible();
 });

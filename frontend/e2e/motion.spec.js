@@ -1,40 +1,33 @@
 import { expect, test } from "@playwright/test";
 
-// Cobre os itens do checklist de motion (AGENTS.md §5) que dá para
-// verificar de fora.
+// Sem sessão, o que renderiza é a tela de login. O que dá para verificar
+// de fora aqui é a regra inegociável do AGENTS.md §5: com
+// prefers-reduced-motion, nada anima. Os testes de skeleton/lazy por aba
+// precisam de um usuário autenticado — entram na issue #4.
 
-test("mostra skeleton antes do conteúdo da aba", async ({ page }) => {
-  await page.goto("/");
-  // O skeleton marca aria-busy; o conteúdo real chega depois.
-  const busy = page.locator('[aria-busy="true"]');
-  await expect(busy.first()).toBeVisible();
-  await expect(page.getByText(/Atendimento automático/i)).toBeVisible({ timeout: 10_000 });
-  await expect(busy).toHaveCount(0);
-});
-
-test("navegar entre abas troca o conteúdo com o skeleton no meio", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByText(/Atendimento automático/i)).toBeVisible({ timeout: 10_000 });
-
-  await page.getByRole("button", { name: /Dashboard/ }).first().click();
-  // A aba pesada (Dashboard/Recharts) passa pelo skeleton antes de montar.
-  await expect(page.locator('[aria-busy="true"]').first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible({ timeout: 10_000 });
-});
-
-test("prefers-reduced-motion desliga as transições longas", async ({ browser }) => {
+test("prefers-reduced-motion desliga as animações", async ({ browser }) => {
   const context = await browser.newContext({ reducedMotion: "reduce" });
   const page = await context.newPage();
   await page.goto("/");
-  await expect(page.getByText(/Atendimento automático/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Rota Pirapemas")).toBeVisible();
 
-  // Com reduced-motion, elementos animados não devem ter animação ativa.
-  const anyAnimating = await page.evaluate(() => {
-    return [...document.querySelectorAll("*")].some((el) => {
+  const anyAnimating = await page.evaluate(() =>
+    [...document.querySelectorAll("*")].some((el) => {
       const d = getComputedStyle(el).animationDuration;
       return d && d !== "0s" && Number.parseFloat(d) > 0.05;
-    });
-  });
+    }),
+  );
   expect(anyAnimating).toBe(false);
   await context.close();
+});
+
+test("sem reduced-motion, os tokens de movimento estão carregados", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Rota Pirapemas")).toBeVisible();
+  // tokens.css define --motion-base; se está definido, a lib de motion
+  // foi importada corretamente.
+  const base = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--motion-base").trim(),
+  );
+  expect(base).toBe("240ms");
 });
