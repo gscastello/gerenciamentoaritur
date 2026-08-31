@@ -36,9 +36,14 @@ export const operationService = {
     return handle(supabase.from("fuel_records").update({ ...fields, updated_by: actor }).eq("id", id).select().single(), "updateFuelRecord");
   },
 
+  /** Soft-delete via RPC SECURITY DEFINER (UPDATE direto de deleted_at é
+   *  recusado pela RLS — ver database/retrofit-soft-delete-rpc.sql). A
+   *  despesa correspondente em financial_entries some junto. */
   async removeFuelRecord(id) {
-    const actor = await getCurrentUserId();
-    return handle(supabase.from("fuel_records").update({ deleted_at: new Date().toISOString(), updated_by: actor }).eq("id", id), "removeFuelRecord");
+    const { data, error } = await supabase.rpc("rpc_soft_delete_fuel_record", { p_id: id });
+    if (error) throw new ServiceError(`removeFuelRecord: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover o abastecimento.", { retryable: false });
+    return data;
   },
 
   /** Consumo médio (km/L) e custo/km calculados no banco, não somando arrays no cliente. */
@@ -75,9 +80,12 @@ export const operationService = {
     );
   },
 
+  /** Soft-delete via RPC SECURITY DEFINER (ver removeFuelRecord). */
   async removeMaintenance(id) {
-    const actor = await getCurrentUserId();
-    return handle(supabase.from("maintenance").update({ deleted_at: new Date().toISOString(), updated_by: actor }).eq("id", id), "removeMaintenance");
+    const { data, error } = await supabase.rpc("rpc_soft_delete_maintenance", { p_id: id });
+    if (error) throw new ServiceError(`removeMaintenance: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover a manutenção.", { retryable: false });
+    return data;
   },
 
   /** % do intervalo já rodado desde a última manutenção, somando fuel_records do mesmo veículo após a data. */

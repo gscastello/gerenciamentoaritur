@@ -54,8 +54,12 @@ export const vehiclesService = {
     return handle(supabase.from("drivers").update({ ...fields, updated_by: actor }).eq("id", driverId).select().single(), "updateDriver");
   },
 
+  /** Soft-delete via RPC SECURITY DEFINER (UPDATE direto de deleted_at é
+   *  recusado pela RLS — ver database/retrofit-soft-delete-rpc.sql). */
   async removeDriver(driverId) {
-    const actor = await getCurrentUserId();
-    return handle(supabase.from("drivers").update({ deleted_at: new Date().toISOString(), updated_by: actor }).eq("id", driverId), "removeDriver");
+    const { data, error } = await supabase.rpc("rpc_soft_delete_driver", { p_id: driverId });
+    if (error) throw new ServiceError(`removeDriver: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover o motorista.", { retryable: false });
+    return data;
   },
 };
