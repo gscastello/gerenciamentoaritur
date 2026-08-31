@@ -4,6 +4,9 @@ import { TabSkeleton, ChartsSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useFinanceMonth } from "../hooks/useFinance.js";
+import { useSettings } from "../hooks/useSettings.js";
+import { useVehicles, useDrivers } from "../hooks/useVehicles.js";
+import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import {
   Calendar, Users, Wallet, Bus, LayoutDashboard, MapPin,
   CheckCircle2, Clock, Fuel, Wrench, TrendingUp, Plus, X, ChevronRight,
@@ -324,9 +327,14 @@ function AppInner() {
   const R = useReservationsWindow(janela.from, janela.to);
   const reservas = R.reservations;
 
-  // --- operação / config / CRM: ainda em localStorage (fase 2) ----------
-  // Financeiro já migrou para o Postgres (fase 2 — FinanceiroTab/Dashboard
-  // usam useFinanceMonth direto).
+  // --- Postgres: settings (modo de atendimento) + veículos -------------
+  const cfgSettings = useSettings();
+  const { defaultVehicle } = useVehicles();
+  const modoAtendimento = cfgSettings.attendanceMode;
+  const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
+
+  // --- config (trips/pontos) e CRM: ainda em localStorage (fase 2d) -----
+  // viagensAtivas (Agenda "iniciar viagem") também fica local até a 2c.
   const [operacao, setOperacao] = useState(DEFAULT_OPERACAO);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [crm, setCrm] = useState({});
@@ -349,7 +357,6 @@ function AppInner() {
   const persistCrm = useCallback((next) => { setCrm(next); saveKey("crm_v5", next); }, []);
 
   const usuario = profile?.name || "—";
-  const capacidadeAtiva = operacao.veiculos[operacao.veiculoAtivo].capacidade;
 
   const NAV = [
     { id: "reservar", label: "Reservar", icon: MessageCircle },
@@ -372,7 +379,7 @@ function AppInner() {
         <div className="px-5 pt-6 pb-5 border-b" style={{ borderColor: C.border }}>
           <div className="flex items-center gap-2" style={{ color: C.amber }}><Route size={20} strokeWidth={2.3} /><span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.05rem" }}>Rota Pirapemas</span></div>
           <div className="text-xs mt-1" style={{ color: C.inkFaint }}>São Luís ⇄ Pirapemas</div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: C.inkSoft }}>{operacao.modoAtendimento === "ia" ? <Bot size={12} style={{ color: C.green }} /> : <UserCog size={12} style={{ color: C.amber }} />}{operacao.modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}</div>
+          <div className="mt-3 flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: C.inkSoft }}>{modoAtendimento === "ia" ? <Bot size={12} style={{ color: C.green }} /> : <UserCog size={12} style={{ color: C.amber }} />}{modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}</div>
           <div className="mt-2 flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: R.error ? C.red : C.inkSoft }}><Wifi size={12} className={R.loading ? "pulse-dot" : ""} style={{ color: R.error ? C.red : C.green }} />{R.error ? "Sem conexão — tentando…" : "Sincronizado em tempo real"}</div>
           <div className="mt-2 text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.panel2, color: C.inkSoft }}><UserCog size={12} style={{ color: C.inkFaint }} /><span className="truncate">{usuario}{profile?.role ? ` · ${profile.role}` : ""}</span></div>
         </div>
@@ -389,14 +396,14 @@ function AppInner() {
         {R.error && !loading && (<div className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3" style={{ borderColor: C.red, background: C.redSoft }}><div className="flex items-center gap-2 text-xs" style={{ color: C.red }}><AlertTriangle size={14} className="shrink-0" /><span>Não foi possível carregar as reservas do servidor.</span></div><button onClick={R.refetch} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.red, color: "#20180A" }}>Tentar de novo</button></div>)}
         {loading || !ready ? <TabSkeleton tab={tab} /> : (
           <div className="anim-fadeIn">
-            {tab === "reservar" && <ReservarTab reservas={reservas} R={R} capacidade={capacidadeAtiva} modoAtendimento={operacao.modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
+            {tab === "reservar" && <ReservarTab reservas={reservas} R={R} capacidade={capacidadeAtiva} modoAtendimento={modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
             {tab === "agenda" && <AgendaTab reservas={reservas} R={R} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
             {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={config.trips} usuario={usuario} />}
             {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={config.trips} crm={crm} setCrm={persistCrm} />}
-            {tab === "financeiro" && <FinanceiroTab operacao={operacao} />}
-            {tab === "operacao" && <OperacaoTab operacao={operacao} setOperacao={persistOperacao} trips={config.trips} />}
-            {tab === "dashboard" && <DashboardTab reservas={reservas} capacidade={capacidadeAtiva} operacao={operacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "sistema" && <SistemaTab reservas={reservas} operacao={operacao} setOperacao={persistOperacao} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} />}
+            {tab === "financeiro" && <FinanceiroTab />}
+            {tab === "operacao" && <OperacaoTab />}
+            {tab === "dashboard" && <DashboardTab reservas={reservas} capacidade={capacidadeAtiva} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
+            {tab === "sistema" && <SistemaTab reservas={reservas} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} modoAtendimento={modoAtendimento} onSetModo={cfgSettings.setAttendanceMode} />}
           </div>
         )}
       </div>
@@ -963,7 +970,7 @@ function mapEntry(e) {
   };
 }
 
-function FinanceiroTab({ operacao }) {
+function FinanceiroTab() {
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
   const [novo, setNovo] = useState({ tipo: "receita", valor: "", descricao: "" });
@@ -1000,10 +1007,10 @@ function FinanceiroTab({ operacao }) {
   const doDia = financeiro.filter(f => f.data === diaSel);
   const receitaDia = doDia.filter(f => f.tipo === "receita").reduce((s, f) => s + f.valor, 0);
   const despesaDia = doDia.filter(f => f.tipo === "despesa").reduce((s, f) => s + f.valor, 0);
-  const regsDoDia = (operacao.registros || []).filter(r => r.data === diaSel);
-  const combustivelDia = regsDoDia.reduce((s, r) => s + (r.combustivel || 0), 0);
-  const manutencaoDia = regsDoDia.reduce((s, r) => s + (r.manutencao || 0), 0);
-  const lucroReal = receitaDia - despesaDia - combustivelDia - manutencaoDia;
+  // combustível e manutenção já entram como 'despesa' via trigger do banco —
+  // então despesaDia já é o total real; "lucro real" = receita − despesa.
+  const despesaAutoDia = doDia.filter(f => f.tipo === "despesa" && f.auto).reduce((s, f) => s + f.valor, 0);
+  const lucroReal = receitaDia - despesaDia;
   return (
     <div>
       <Header title="Financeiro" subtitle="Faturamento, despesas e lucro real do dia — combustível e manutenção entram automaticamente." right={fin.loading ? <span className="text-xs" style={{ color: C.inkFaint }}>carregando…</span> : null} />
@@ -1015,7 +1022,7 @@ function FinanceiroTab({ operacao }) {
           <div className="grid grid-cols-7 gap-1">{cells.map((d, i) => { if (!d) return <div key={i} />; const { ds, lucro, temMovimento } = lucroPorDia(d); const sel = ds === diaSel; return (<button key={i} onClick={() => setDiaSel(ds)} className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs" style={{ background: sel ? C.amber : C.panel2, color: sel ? "#20180A" : C.ink, border: ds === todayStr() && !sel ? `1px solid ${C.amber}` : "1px solid transparent" }}>{d}{temMovimento && <span className="w-1 h-1 rounded-full mt-0.5" style={{ background: sel ? "#20180A" : (lucro >= 0 ? C.green : C.red) }} />}</button>); })}</div>
         </Card>
         <div className="space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><StatCard label={`Faturamento ${fmtDate(diaSel)}`} value={fmtBRL(receitaDia)} icon={Wallet} accent={C.green} /><StatCard label="Despesas" value={fmtBRL(despesaDia)} icon={TrendingUp} accent={C.red} /><StatCard label="Lucro simples" value={fmtBRL(receitaDia - despesaDia)} icon={CheckCircle2} accent={C.amber} /><StatCard label="Lucro real (c/ operação)" value={fmtBRL(lucroReal)} icon={Route} accent={lucroReal >= 0 ? C.blue : C.red} /></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><StatCard label={`Faturamento ${fmtDate(diaSel)}`} value={fmtBRL(receitaDia)} icon={Wallet} accent={C.green} /><StatCard label="Despesas (total)" value={fmtBRL(despesaDia)} icon={TrendingUp} accent={C.red} /><StatCard label="Combustível + manut." value={fmtBRL(despesaAutoDia)} icon={Fuel} accent={C.amber} /><StatCard label="Lucro do dia" value={fmtBRL(lucroReal)} icon={Route} accent={lucroReal >= 0 ? C.blue : C.red} /></div>
           <Card><div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div><div className="grid sm:grid-cols-4 gap-2"><Select value={novo.tipo} onChange={e => setNovo({ ...novo, tipo: e.target.value })}><option value="receita">Receita</option><option value="despesa">Despesa</option></Select><TextInput placeholder="Valor" type="number" value={novo.valor} onChange={e => setNovo({ ...novo, valor: e.target.value })} /><TextInput placeholder="Descrição" className="sm:col-span-2" value={novo.descricao} onChange={e => setNovo({ ...novo, descricao: e.target.value })} /></div><button onClick={add} disabled={salvando || !novo.valor} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: salvando || !novo.valor ? C.border : C.amber, color: salvando || !novo.valor ? C.inkFaint : "#20180A" }}><Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}</button></Card>
           <Card style={{ padding: 0, overflow: "hidden" }}><table className="w-full text-sm"><thead><tr style={{ background: C.panel2, color: C.inkSoft }}><th className="text-left px-4 py-2.5 font-medium">Tipo</th><th className="text-left px-4 py-2.5 font-medium">Valor</th><th className="text-left px-4 py-2.5 font-medium">Descrição</th><th></th></tr></thead>
             <tbody>{[...doDia].reverse().map(f => editId === f.id ? (<tr key={f.id} className="border-t anim-slideDown" style={{ borderColor: C.borderSoft, background: C.panel2 }}><td className="px-2 py-2"><Select value={editVal.tipo} onChange={e => setEditVal({ ...editVal, tipo: e.target.value })} className="text-xs py-1"><option value="receita">Receita</option><option value="despesa">Despesa</option></Select></td><td className="px-2 py-2"><TextInput type="number" value={editVal.valor} onChange={e => setEditVal({ ...editVal, valor: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><TextInput value={editVal.descricao} onChange={e => setEditVal({ ...editVal, descricao: e.target.value })} className="text-xs py-1" /></td><td className="px-2 py-2"><button onClick={salvarEdicao}><Save size={13} style={{ color: C.green }} /></button></td></tr>) : (<tr key={f.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}><td className="px-4 py-2"><Pill color={f.tipo === "receita" ? C.green : C.red} bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}>{f.tipo}</Pill></td><td className="px-4 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtBRL(f.valor)}</td><td className="px-4 py-2" style={{ color: C.inkSoft }}>{f.descricao}{f.auto ? <span className="ml-1.5 text-[10px]" style={{ color: C.inkFaint }}>· automático</span> : ""}</td><td className="px-4 py-2">{f.auto ? <span className="text-[10px]" style={{ color: C.inkFaint }}>da operação</span> : <div className="flex gap-2"><button onClick={() => iniciarEdicao(f)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => remove(f.id)}><X size={13} style={{ color: C.inkFaint }} /></button></div>}</td></tr>))}
@@ -1027,76 +1034,117 @@ function FinanceiroTab({ operacao }) {
 }
 
 /* ============================= 6. OPERAÇÃO (combustível + manutenção preventiva) ============================= */
-function OperacaoTab({ operacao, setOperacao, trips }) {
-  const [reg, setReg] = useState({ data: todayStr(), direcao: "ida", km: "", combustivel: "", litros: "", manutencao: "" });
+// mapeamentos banco -> formato da tela
+const mapFuel = (r) => ({ id: r.id, data: r.record_date, direcao: r.direction, km: Number(r.km) || 0, litros: Number(r.liters) || 0, combustivel: Number(r.cost) || 0 });
+const mapManut = (m) => ({ id: m.id, tipo: m.type, data: m.performed_at, kmAtual: Number(m.odometer_km) || 0, intervaloKm: Number(m.interval_km) || 5000, custo: Number(m.cost) || 0, notas: m.notes || "" });
+
+function OperacaoTab() {
+  const { vehicles, defaultVehicle, setDefault, updateVehicle } = useVehicles();
+  const { drivers, addDriver, updateDriver, removeDriver } = useDrivers();
+  const veiculoId = defaultVehicle?.id ?? null;
+  const fuel = useFuelRecords(veiculoId);
+  const manut = useMaintenance(veiculoId);
+
+  const [reg, setReg] = useState({ data: todayStr(), direcao: "ida", km: "", combustivel: "", litros: "" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [periodo, setPeriodo] = useState("dia");
   const [editandoVeiculo, setEditandoVeiculo] = useState(null);
   const [editandoMotorista, setEditandoMotorista] = useState(null);
   const [novaManut, setNovaManut] = useState({ tipo: "", intervaloKm: 5000, kmAtual: "", custo: "", data: todayStr() });
+  const [erro, setErro] = useState("");
 
-  const trocarVeiculo = (tipo) => setOperacao({ ...operacao, veiculoAtivo: tipo });
-  const addRegistro = () => { if (!reg.km) return; setOperacao({ ...operacao, registros: [...operacao.registros, { id: uid(), ...reg, km: parseFloat(reg.km), combustivel: parseFloat(reg.combustivel || 0), litros: parseFloat(reg.litros || 0), manutencao: parseFloat(reg.manutencao || 0) }] }); setReg({ ...reg, km: "", combustivel: "", litros: "", manutencao: "" }); };
-  const removerRegistro = (id) => setOperacao({ ...operacao, registros: operacao.registros.filter(r => r.id !== id) });
+  const registros = useMemo(() => (fuel.records || []).map(mapFuel), [fuel.records]);
+  const manutencoes = useMemo(() => (manut.records || []).map(mapManut), [manut.records]);
+  const motoristas = useMemo(() => (drivers || []).map(d => ({ id: d.id, nome: d.name, telefone: d.phone || "" })), [drivers]);
+  const run = async (fn, msg) => { setErro(""); try { await fn(); } catch (e) { setErro(e?.message || msg); } };
+
+  const salvarVeiculo = (id, campos) => run(() => updateVehicle(id, campos).then(() => setEditandoVeiculo(null)), "Não foi possível salvar o veículo.");
+  const addRegistro = () => { if (!reg.km || !veiculoId) return; run(async () => {
+    await fuel.addRecord({ vehicleId: veiculoId, recordDate: reg.data, direction: reg.direcao, km: parseFloat(reg.km), liters: parseFloat(reg.litros || 0), cost: parseFloat(reg.combustivel || 0) });
+    setReg({ ...reg, km: "", combustivel: "", litros: "" });
+  }, "Não foi possível registrar."); };
+  const removerRegistro = (id) => run(() => fuel.removeRecord(id), "Não foi possível remover o abastecimento.");
   const iniciarEdicaoReg = (r) => { setEditId(r.id); setEditVal({ ...r }); };
-  const salvarEdicaoReg = () => { setOperacao({ ...operacao, registros: operacao.registros.map(r => r.id === editId ? { ...editVal, km: parseFloat(editVal.km), combustivel: parseFloat(editVal.combustivel), litros: parseFloat(editVal.litros || 0), manutencao: parseFloat(editVal.manutencao) } : r) }); setEditId(null); };
-  const salvarMotorista = (id, dados) => { setOperacao({ ...operacao, motoristas: operacao.motoristas.map(m => m.id === id ? dados : m) }); setEditandoMotorista(null); };
-  const removerMotorista = (id) => setOperacao({ ...operacao, motoristas: operacao.motoristas.filter(m => m.id !== id) });
-  const addManutencao = () => { if (!novaManut.tipo) return; setOperacao({ ...operacao, manutencoes: [...(operacao.manutencoes || []), { id: uid(), ...novaManut, intervaloKm: parseFloat(novaManut.intervaloKm) || 5000, kmAtual: parseFloat(novaManut.kmAtual) || 0, custo: parseFloat(novaManut.custo) || 0 }] }); setNovaManut({ tipo: "", intervaloKm: 5000, kmAtual: "", custo: "", data: todayStr() }); };
-  const removerManutencao = (id) => setOperacao({ ...operacao, manutencoes: operacao.manutencoes.filter(m => m.id !== id) });
+  const salvarEdicaoReg = () => run(async () => {
+    await fuel.updateRecord(editId, { record_date: editVal.data, direction: editVal.direcao, km: parseFloat(editVal.km), liters: parseFloat(editVal.litros || 0), cost: parseFloat(editVal.combustivel || 0) });
+    setEditId(null);
+  }, "Não foi possível salvar.");
+  const salvarMotorista = (id, dados) => run(() => updateDriver(id, { name: dados.nome, phone: dados.telefone || null }).then(() => setEditandoMotorista(null)), "Não foi possível salvar o motorista.");
+  const removerMotorista = (id) => run(() => removeDriver(id), "Não foi possível remover o motorista.");
+  const addMotorista = () => run(() => addDriver({ name: "Novo motorista", phone: null }), "Não foi possível adicionar.");
+  const addManutencao = () => { if (!novaManut.tipo || !veiculoId) return; run(async () => {
+    await manut.addRecord({ vehicleId: veiculoId, type: novaManut.tipo, performedAt: novaManut.data, odometerKm: parseFloat(novaManut.kmAtual) || 0, intervalKm: parseFloat(novaManut.intervaloKm) || 5000, cost: parseFloat(novaManut.custo) || 0 });
+    setNovaManut({ tipo: "", intervaloKm: 5000, kmAtual: "", custo: "", data: todayStr() });
+  }, "Não foi possível registrar a manutenção."); };
+  const removerManutencao = (id) => run(() => manut.removeRecord(id), "Não foi possível remover a manutenção.");
 
   const hoje = todayStr();
-  const dentroDoPeriodo = (ds) => { if (periodo === "dia") return ds === hoje; if (periodo === "mes") return ds.slice(0, 7) === hoje.slice(0, 7); return ds.slice(0, 4) === hoje.slice(0, 4); };
-  const registrosFiltrados = operacao.registros.filter(r => dentroDoPeriodo(r.data));
+  const dentroDoPeriodo = (ds) => { if (!ds) return false; if (periodo === "dia") return ds === hoje; if (periodo === "mes") return ds.slice(0, 7) === hoje.slice(0, 7); return ds.slice(0, 4) === hoje.slice(0, 4); };
+  const registrosFiltrados = registros.filter(r => dentroDoPeriodo(r.data));
   const totalKm = registrosFiltrados.reduce((s, r) => s + r.km, 0);
   const totalCombustivel = registrosFiltrados.reduce((s, r) => s + r.combustivel, 0);
-  const totalManutencao = registrosFiltrados.reduce((s, r) => s + r.manutencao, 0);
-  const totalLitros = registrosFiltrados.reduce((s, r) => s + (r.litros || 0), 0);
+  const totalManutencao = manutencoes.filter(m => dentroDoPeriodo(m.data)).reduce((s, m) => s + m.custo, 0);
+  const totalLitros = registrosFiltrados.reduce((s, r) => s + r.litros, 0);
   const consumoMedio = totalLitros > 0 ? (totalKm / totalLitros).toFixed(1) : null;
   const custoPorKm = totalKm > 0 ? (totalCombustivel / totalKm) : 0;
-  const mediaHistorica = useCallback((antesId) => { const anteriores = operacao.registros.filter(r => r.id !== antesId && r.km > 0); if (anteriores.length === 0) return null; const soma = anteriores.reduce((s, r) => s + (r.combustivel / r.km), 0); return soma / anteriores.length; }, [operacao.registros]);
-  const kmAcumuladoDesde = (data) => operacao.registros.filter(r => r.data >= data).reduce((s, r) => s + r.km, 0);
+  const mediaHistorica = (antesId) => { const anteriores = registros.filter(r => r.id !== antesId && r.km > 0); if (anteriores.length === 0) return null; return anteriores.reduce((s, r) => s + (r.combustivel / r.km), 0) / anteriores.length; };
+  const kmAcumuladoDesde = (data) => registros.filter(r => r.data >= data).reduce((s, r) => s + r.km, 0);
 
   return (
     <div>
-      <Header title="Operação" subtitle="Veículo, motorista, combustível (consumo/alerta) e manutenção preventiva — tudo editável." />
+      <Header title="Operação" subtitle="Veículo, motorista, combustível (consumo/alerta) e manutenção preventiva." right={(fuel.loading || manut.loading) ? <span className="text-xs" style={{ color: C.inkFaint }}>carregando…</span> : null} />
       <div className="px-6 md:px-10 pb-10 space-y-5">
+        {(erro || fuel.error || manut.error) && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {erro || "Erro ao carregar dados de operação (só admin/financeiro têm acesso a combustível/manutenção)."}</span>{erro && <button onClick={() => setErro("")}><X size={13} /></button>}</div>}
         <Card className="anim-fadeUp">
-          <div className="text-sm font-semibold mb-3">Veículo em operação hoje</div>
+          <div className="text-sm font-semibold mb-3">Veículo em operação</div>
           <div className="grid sm:grid-cols-2 gap-3">
-            {["onibus", "van"].map(tipo => { const v = operacao.veiculos[tipo]; const ativo = operacao.veiculoAtivo === tipo; const editando = editandoVeiculo === tipo;
-              return editando ? (<div key={tipo} className="border rounded-lg px-3 py-3 anim-pop" style={{ borderColor: C.amber, background: C.panel2 }}><TextInput value={v.nome} onChange={e => setOperacao({ ...operacao, veiculos: { ...operacao.veiculos, [tipo]: { ...v, nome: e.target.value } } })} className="mb-2" placeholder="Nome" /><div className="grid grid-cols-2 gap-2"><TextInput value={v.placa} onChange={e => setOperacao({ ...operacao, veiculos: { ...operacao.veiculos, [tipo]: { ...v, placa: e.target.value } } })} placeholder="Placa" /><TextInput type="number" value={v.capacidade} onChange={e => setOperacao({ ...operacao, veiculos: { ...operacao.veiculos, [tipo]: { ...v, capacidade: parseInt(e.target.value) || 1 } } })} placeholder="Capacidade" /></div><button onClick={() => setEditandoVeiculo(null)} className="btn-press mt-2 text-xs px-3 py-1.5 rounded-md" style={{ background: C.amber, color: "#20180A" }}>Salvar</button></div>) : (<button key={tipo} onClick={() => trocarVeiculo(tipo)} className="btn-press border rounded-lg px-4 py-3 text-left relative" style={{ borderColor: ativo ? C.amber : C.border, background: ativo ? C.amberSoft : C.panel2 }}><span onClick={(e) => { e.stopPropagation(); setEditandoVeiculo(tipo); }} className="absolute top-2 right-2"><Pencil size={12} style={{ color: C.inkFaint }} /></span><div className="flex items-center justify-between"><div><div className="text-sm font-medium flex items-center gap-1.5"><Bus size={14} style={{ color: ativo ? C.amber : C.inkSoft }} /> {v.nome} {tipo === "onibus" && <Pill color={C.blue}>padrão</Pill>}</div><div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{v.placa} · {v.capacidade} lugares</div></div>{ativo && <CheckCircle2 size={16} style={{ color: C.amber }} />}</div></button>);
+            {vehicles.map(v => { const ativo = v.is_default; const editando = editandoVeiculo === v.id;
+              return editando ? (
+                <div key={v.id} className="border rounded-lg px-3 py-3 anim-pop" style={{ borderColor: C.amber, background: C.panel2 }}>
+                  <TextInput defaultValue={v.name} onChange={e => v._nome = e.target.value} className="mb-2" placeholder="Nome" />
+                  <div className="grid grid-cols-2 gap-2"><TextInput defaultValue={v.plate} onChange={e => v._placa = e.target.value} placeholder="Placa" /><TextInput type="number" defaultValue={v.capacity} onChange={e => v._cap = e.target.value} placeholder="Capacidade" /></div>
+                  <button onClick={() => salvarVeiculo(v.id, { name: v._nome ?? v.name, plate: v._placa ?? v.plate, capacity: parseInt(v._cap ?? v.capacity, 10) || 1 })} className="btn-press mt-2 text-xs px-3 py-1.5 rounded-md" style={{ background: C.amber, color: "#20180A" }}>Salvar</button>
+                </div>
+              ) : (
+                <button key={v.id} onClick={() => run(() => setDefault(v.id), "Não foi possível trocar o veículo padrão.")} className="btn-press border rounded-lg px-4 py-3 text-left relative" style={{ borderColor: ativo ? C.amber : C.border, background: ativo ? C.amberSoft : C.panel2 }}>
+                  <span onClick={(e) => { e.stopPropagation(); setEditandoVeiculo(v.id); }} className="absolute top-2 right-2"><Pencil size={12} style={{ color: C.inkFaint }} /></span>
+                  <div className="flex items-center justify-between"><div><div className="text-sm font-medium flex items-center gap-1.5"><Bus size={14} style={{ color: ativo ? C.amber : C.inkSoft }} /> {v.name} {ativo && <Pill color={C.blue}>padrão</Pill>}</div><div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{v.plate} · {v.capacity} lugares</div></div>{ativo && <CheckCircle2 size={16} style={{ color: C.amber }} />}</div>
+                </button>
+              );
             })}
           </div>
-          {operacao.veiculoAtivo !== "onibus" && <div className="text-xs mt-3 flex items-center justify-between rounded-lg px-3 py-2" style={{ background: C.panel2, color: C.inkSoft }}>Van reserva ativa — lotação ajustada para {operacao.veiculos.van.capacidade} lugares.<button onClick={() => trocarVeiculo("onibus")} className="btn-press underline" style={{ color: C.amber }}>Voltar ao padrão</button></div>}
+          <div className="text-xs mt-3" style={{ color: C.inkFaint }}>Trocar o veículo padrão só afeta viagens criadas a partir de agora — a capacidade das viagens já agendadas é um "retrato" e não muda.</div>
         </Card>
 
         <div className="flex items-center gap-2"><span className="text-xs" style={{ color: C.inkSoft }}>Ver totais por:</span>{["dia", "mes", "ano"].map(p => (<button key={p} onClick={() => setPeriodo(p)} className="btn-press text-xs px-3 py-1.5 rounded-full" style={{ background: periodo === p ? C.amber : C.panel2, color: periodo === p ? "#20180A" : C.inkSoft }}>{p === "dia" ? "Hoje" : p === "mes" ? "Este mês" : "Este ano"}</button>))}</div>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3"><StatCard label={`Km (${periodo})`} value={totalKm.toLocaleString("pt-BR")} icon={Route} /><StatCard label="Combustível" value={fmtBRL(totalCombustivel)} icon={Fuel} accent={C.amber} /><StatCard label="Manutenção" value={fmtBRL(totalManutencao)} icon={Wrench} accent={C.red} /><StatCard label="Consumo médio" value={consumoMedio ? `${consumoMedio} km/L` : "—"} icon={TrendingUp} accent={C.blue} /><StatCard label="Custo por km" value={fmtBRL(custoPorKm)} icon={Wallet} accent={C.green} /></div>
 
         <Card><div className="text-sm font-semibold mb-3">Motoristas</div>
-          {operacao.motoristas.map(m => editandoMotorista === m.id ? (<div key={m.id} className="flex gap-2 items-center border-b py-2 anim-pop" style={{ borderColor: C.borderSoft }}><TextInput defaultValue={m.nome} onChange={e => m._nome = e.target.value} placeholder="Nome" /><TextInput defaultValue={m.telefone} onChange={e => m._tel = e.target.value} placeholder="Telefone" /><button onClick={() => salvarMotorista(m.id, { ...m, nome: m._nome ?? m.nome, telefone: m._tel ?? m.telefone })} className="btn-press"><Save size={14} style={{ color: C.green }} /></button></div>) : (<div key={m.id} className="flex justify-between items-center text-sm border-b py-2" style={{ borderColor: C.borderSoft }}><span>{m.nome}</span><div className="flex items-center gap-2"><span style={{ color: C.inkSoft }}>{m.telefone || "sem telefone"}</span><button onClick={() => setEditandoMotorista(m.id)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => removerMotorista(m.id)}><X size={13} style={{ color: C.red }} /></button></div></div>))}
-          <button onClick={() => setOperacao({ ...operacao, motoristas: [...operacao.motoristas, { id: uid(), nome: "Novo motorista", telefone: "" }] })} className="btn-press mt-3 text-xs flex items-center gap-1" style={{ color: C.amber }}><Plus size={12} /> Adicionar motorista</button>
+          {motoristas.map(m => editandoMotorista === m.id ? (<div key={m.id} className="flex gap-2 items-center border-b py-2 anim-pop" style={{ borderColor: C.borderSoft }}><TextInput defaultValue={m.nome} onChange={e => m._nome = e.target.value} placeholder="Nome" /><TextInput defaultValue={m.telefone} onChange={e => m._tel = e.target.value} placeholder="Telefone" /><button onClick={() => salvarMotorista(m.id, { nome: m._nome ?? m.nome, telefone: m._tel ?? m.telefone })} className="btn-press"><Save size={14} style={{ color: C.green }} /></button></div>) : (<div key={m.id} className="flex justify-between items-center text-sm border-b py-2" style={{ borderColor: C.borderSoft }}><span>{m.nome}</span><div className="flex items-center gap-2"><span style={{ color: C.inkSoft }}>{m.telefone || "sem telefone"}</span><button onClick={() => setEditandoMotorista(m.id)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => removerMotorista(m.id)}><X size={13} style={{ color: C.red }} /></button></div></div>))}
+          <button onClick={addMotorista} className="btn-press mt-3 text-xs flex items-center gap-1" style={{ color: C.amber }}><Plus size={12} /> Adicionar motorista</button>
         </Card>
 
-        <Card><div className="text-sm font-semibold mb-3">Registrar viagem realizada</div>
-          <div className="grid sm:grid-cols-6 gap-2"><TextInput type="date" value={reg.data} onChange={e => setReg({ ...reg, data: e.target.value })} /><Select value={reg.direcao} onChange={e => setReg({ ...reg, direcao: e.target.value })}><option value="ida">Ida</option><option value="volta">Volta</option></Select><TextInput placeholder="Km rodados" type="number" value={reg.km} onChange={e => setReg({ ...reg, km: e.target.value })} /><TextInput placeholder="Combustível R$" type="number" value={reg.combustivel} onChange={e => setReg({ ...reg, combustivel: e.target.value })} /><TextInput placeholder="Litros" type="number" value={reg.litros} onChange={e => setReg({ ...reg, litros: e.target.value })} /><TextInput placeholder="Manutenção R$" type="number" value={reg.manutencao} onChange={e => setReg({ ...reg, manutencao: e.target.value })} /></div>
-          <button onClick={addRegistro} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: C.amber, color: "#20180A" }}><Plus size={14} /> Registrar</button>
-          <div className="mt-4 space-y-1.5">{[...operacao.registros].reverse().slice(0, 15).map(r => { const media = mediaHistorica(r.id); const custoAtual = r.km > 0 ? r.combustivel / r.km : 0; const alerta = media && custoAtual > media * 1.2;
-            return editId === r.id ? (<div key={r.id} className="grid sm:grid-cols-6 gap-2 rounded-lg px-2 py-2 anim-pop" style={{ background: C.panel2 }}><TextInput type="date" value={editVal.data} onChange={e => setEditVal({ ...editVal, data: e.target.value })} className="text-xs py-1" /><Select value={editVal.direcao} onChange={e => setEditVal({ ...editVal, direcao: e.target.value })} className="text-xs py-1"><option value="ida">Ida</option><option value="volta">Volta</option></Select><TextInput type="number" value={editVal.km} onChange={e => setEditVal({ ...editVal, km: e.target.value })} className="text-xs py-1" /><TextInput type="number" value={editVal.combustivel} onChange={e => setEditVal({ ...editVal, combustivel: e.target.value })} className="text-xs py-1" /><TextInput type="number" value={editVal.litros} onChange={e => setEditVal({ ...editVal, litros: e.target.value })} className="text-xs py-1" /><div className="flex gap-2"><TextInput type="number" value={editVal.manutencao} onChange={e => setEditVal({ ...editVal, manutencao: e.target.value })} className="text-xs py-1" /><button onClick={salvarEdicaoReg}><Save size={14} style={{ color: C.green }} /></button></div></div>) : (
-              <div key={r.id} className="row-hover flex items-center justify-between text-xs rounded-lg px-2 py-1.5" style={{ background: C.panel2 }}><span>{fmtDate(r.data)} · {trips[r.direcao]?.nome} · {r.km}km · {fmtBRL(r.combustivel)}{r.litros ? ` (${r.litros}L)` : ""} · manut. {fmtBRL(r.manutencao)} {alerta && <span style={{ color: C.red }}>⚠ consumo acima do normal</span>}</span><div className="flex gap-2"><button onClick={() => iniciarEdicaoReg(r)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => removerRegistro(r.id)}><X size={12} style={{ color: C.red }} /></button></div></div>
+        <Card><div className="text-sm font-semibold mb-3">Registrar abastecimento / viagem</div>
+          <div className="text-xs mb-3" style={{ color: C.inkFaint }}>A despesa de combustível entra sozinha no Financeiro do dia.</div>
+          <div className="grid sm:grid-cols-5 gap-2"><TextInput type="date" value={reg.data} onChange={e => setReg({ ...reg, data: e.target.value })} /><Select value={reg.direcao} onChange={e => setReg({ ...reg, direcao: e.target.value })}><option value="ida">Ida</option><option value="volta">Volta</option></Select><TextInput placeholder="Km rodados" type="number" value={reg.km} onChange={e => setReg({ ...reg, km: e.target.value })} /><TextInput placeholder="Litros" type="number" value={reg.litros} onChange={e => setReg({ ...reg, litros: e.target.value })} /><TextInput placeholder="Combustível R$" type="number" value={reg.combustivel} onChange={e => setReg({ ...reg, combustivel: e.target.value })} /></div>
+          <button onClick={addRegistro} disabled={!reg.km || !veiculoId} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: !reg.km || !veiculoId ? C.border : C.amber, color: !reg.km || !veiculoId ? C.inkFaint : "#20180A" }}><Plus size={14} /> Registrar</button>
+          <div className="mt-4 space-y-1.5">{registros.slice(0, 20).map(r => { const media = mediaHistorica(r.id); const custoAtual = r.km > 0 ? r.combustivel / r.km : 0; const alerta = media && custoAtual > media * 1.2;
+            return editId === r.id ? (<div key={r.id} className="grid sm:grid-cols-5 gap-2 rounded-lg px-2 py-2 anim-pop" style={{ background: C.panel2 }}><TextInput type="date" value={editVal.data} onChange={e => setEditVal({ ...editVal, data: e.target.value })} className="text-xs py-1" /><Select value={editVal.direcao} onChange={e => setEditVal({ ...editVal, direcao: e.target.value })} className="text-xs py-1"><option value="ida">Ida</option><option value="volta">Volta</option></Select><TextInput type="number" value={editVal.km} onChange={e => setEditVal({ ...editVal, km: e.target.value })} className="text-xs py-1" /><TextInput type="number" value={editVal.litros} onChange={e => setEditVal({ ...editVal, litros: e.target.value })} className="text-xs py-1" /><div className="flex gap-2"><TextInput type="number" value={editVal.combustivel} onChange={e => setEditVal({ ...editVal, combustivel: e.target.value })} className="text-xs py-1" /><button onClick={salvarEdicaoReg}><Save size={14} style={{ color: C.green }} /></button></div></div>) : (
+              <div key={r.id} className="row-hover flex items-center justify-between text-xs rounded-lg px-2 py-1.5" style={{ background: C.panel2 }}><span>{fmtDate(r.data)} · {r.direcao === "ida" ? "Ida" : "Volta"} · {r.km}km · {fmtBRL(r.combustivel)}{r.litros ? ` (${r.litros}L)` : ""} {alerta && <span style={{ color: C.red }}>⚠ consumo acima do normal</span>}</span><div className="flex gap-2"><button onClick={() => iniciarEdicaoReg(r)}><Pencil size={12} style={{ color: C.inkFaint }} /></button><button onClick={() => removerRegistro(r.id)}><X size={12} style={{ color: C.red }} /></button></div></div>
             );
-          })}</div>
+          })}
+          {registros.length === 0 && <div className="text-xs" style={{ color: C.inkFaint }}>Nenhum abastecimento registrado.</div>}</div>
         </Card>
 
         <Card><div className="text-sm font-semibold mb-3 flex items-center gap-2"><Wrench size={15} style={{ color: C.amber }} /> Manutenção preventiva</div>
+          <div className="text-xs mb-3" style={{ color: C.inkFaint }}>A despesa da manutenção entra sozinha no Financeiro do dia.</div>
           <div className="grid sm:grid-cols-5 gap-2"><TextInput placeholder="Tipo (ex.: troca de óleo)" value={novaManut.tipo} onChange={e => setNovaManut({ ...novaManut, tipo: e.target.value })} /><TextInput type="date" value={novaManut.data} onChange={e => setNovaManut({ ...novaManut, data: e.target.value })} /><TextInput placeholder="Intervalo (km)" type="number" value={novaManut.intervaloKm} onChange={e => setNovaManut({ ...novaManut, intervaloKm: e.target.value })} /><TextInput placeholder="Km na manutenção" type="number" value={novaManut.kmAtual} onChange={e => setNovaManut({ ...novaManut, kmAtual: e.target.value })} /><TextInput placeholder="Custo R$" type="number" value={novaManut.custo} onChange={e => setNovaManut({ ...novaManut, custo: e.target.value })} /></div>
-          <button onClick={addManutencao} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: C.amber, color: "#20180A" }}><Plus size={14} /> Registrar manutenção</button>
-          <div className="mt-4 space-y-1.5">{(operacao.manutencoes || []).map(m => { const kmDesde = kmAcumuladoDesde(m.data); const pct = Math.min(100, Math.round((kmDesde / m.intervaloKm) * 100)); const vencida = pct >= 100; const proxima = pct >= 80 && !vencida;
-            return (<div key={m.id} className="rounded-lg px-3 py-2" style={{ background: C.panel2 }}><div className="flex items-center justify-between text-xs"><span className="font-medium">{m.tipo} · última em {fmtDate(m.data)} ({m.kmAtual}km) · a cada {m.intervaloKm}km</span><div className="flex items-center gap-2">{vencida ? <Pill color={C.red} bg={C.redSoft}>🔴 vencida</Pill> : proxima ? <Pill color={C.amber} bg={C.amberSoft}>🟡 em breve</Pill> : <Pill color={C.green} bg={C.greenSoft}>🟢 em dia</Pill>}<button onClick={() => removerManutencao(m.id)}><X size={12} style={{ color: C.red }} /></button></div></div><div className="w-full h-1 rounded-full mt-2" style={{ background: C.border }}><div className="h-1 rounded-full bar-fill" style={{ width: `${pct}%`, background: vencida ? C.red : proxima ? C.amber : C.green }} /></div></div>);
+          <button onClick={addManutencao} disabled={!novaManut.tipo || !veiculoId} className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: !novaManut.tipo || !veiculoId ? C.border : C.amber, color: !novaManut.tipo || !veiculoId ? C.inkFaint : "#20180A" }}><Plus size={14} /> Registrar manutenção</button>
+          <div className="mt-4 space-y-1.5">{manutencoes.map(m => { const kmDesde = kmAcumuladoDesde(m.data); const pct = Math.min(100, Math.round((kmDesde / m.intervaloKm) * 100)); const vencida = pct >= 100; const proxima = pct >= 80 && !vencida;
+            return (<div key={m.id} className="rounded-lg px-3 py-2" style={{ background: C.panel2 }}><div className="flex items-center justify-between text-xs"><span className="font-medium">{m.tipo} · última em {fmtDate(m.data)} ({m.kmAtual}km) · a cada {m.intervaloKm}km · {fmtBRL(m.custo)}</span><div className="flex items-center gap-2">{vencida ? <Pill color={C.red} bg={C.redSoft}>🔴 vencida</Pill> : proxima ? <Pill color={C.amber} bg={C.amberSoft}>🟡 em breve</Pill> : <Pill color={C.green} bg={C.greenSoft}>🟢 em dia</Pill>}<button onClick={() => removerManutencao(m.id)}><X size={12} style={{ color: C.red }} /></button></div></div><div className="w-full h-1 rounded-full mt-2" style={{ background: C.border }}><div className="h-1 rounded-full bar-fill" style={{ width: `${pct}%`, background: vencida ? C.red : proxima ? C.amber : C.green }} /></div></div>);
           })}
-          {(!operacao.manutencoes || operacao.manutencoes.length === 0) && <div className="text-xs" style={{ color: C.inkFaint }}>Nenhuma manutenção preventiva cadastrada.</div>}</div>
+          {manutencoes.length === 0 && <div className="text-xs" style={{ color: C.inkFaint }}>Nenhuma manutenção preventiva cadastrada.</div>}</div>
         </Card>
       </div>
     </div>
@@ -1104,7 +1152,7 @@ function OperacaoTab({ operacao, setOperacao, trips }) {
 }
 
 /* ============================= 7. DASHBOARD ============================= */
-function DashboardTab({ reservas, capacidade, operacao, trips }) {
+function DashboardTab({ reservas, capacidade, trips }) {
   const hoje = todayStr();
   // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
   const now = new Date();
@@ -1114,6 +1162,14 @@ function DashboardTab({ reservas, capacidade, operacao, trips }) {
   const financeiro = useMemo(
     () => [...(finPrev.entries || []), ...(finThis.entries || [])].map(mapEntry),
     [finThis.entries, finPrev.entries],
+  );
+  // combustível/manutenção do veículo padrão — só para os alertas de "IA Operacional"
+  const { defaultVehicle } = useVehicles();
+  const fuel = useFuelRecords(defaultVehicle?.id ?? null);
+  const manut = useMaintenance(defaultVehicle?.id ?? null);
+  const operacao = useMemo(
+    () => ({ registros: (fuel.records || []).map(mapFuel), manutencoes: (manut.records || []).map(mapManut) }),
+    [fuel.records, manut.records],
   );
   const insights = useMemo(() => gerarInsightsIA(reservas, operacao, capacidade, trips), [reservas, operacao, capacidade, trips]);
   const demanda = useMemo(() => previsaoDemanda(reservas), [reservas]);
@@ -1154,15 +1210,17 @@ function DashboardTab({ reservas, capacidade, operacao, trips }) {
 }
 
 /* ============================= 8. SISTEMA ============================= */
-function SistemaTab({ reservas, operacao, setOperacao, capacidade, config, setConfig }) {
+function SistemaTab({ reservas, capacidade, config, setConfig, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
+  const [modoErro, setModoErro] = useState("");
   // Diagnóstico só-leitura: o banco já impede overbooking (trigger de
   // capacidade) e quantidade inválida (check). Aqui só listamos o que a
   // heurística local encontraria — sem reescrever nada. (issue #10)
   const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { issues, fixed } = runDiagnostics(reservas, capacidade, config.trips); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
-  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, operacao, config, nota: "Financeiro e reservas ficam no Postgres — este backup cobre o snapshot local (operação/config) + a janela de reservas carregada." }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
+  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, config, nota: "Reservas, financeiro, operação e settings ficam no Postgres. Este backup cobre só o config local (pontos/valores) + a janela de reservas carregada." }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
+  const trocarModo = (v) => { setModoErro(""); onSetModo(v).catch(e => setModoErro(e?.message || "Não foi possível trocar o modo (só admin).")); };
   const atualizarPonto = (direcao, pontoId, campo, valor) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.map(p => p.id === pontoId ? { ...p, [campo]: campo === "valor" ? parseFloat(valor) || 0 : valor } : p) } }; setConfig({ ...config, trips }); };
   const addPontoOutro = (direcao) => { if (!novoPontoNome.trim()) return; const id = "custom-" + fnv(novoPontoNome + Date.now()); const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: [...config.trips[direcao].pontos, { id, nome: novoPontoNome.trim(), horaBase: config.trips[direcao].pontos[0].horaBase, valor: 60, core: false }] } }; setConfig({ ...config, trips }); setNovoPontoNome(""); };
   const removerPonto = (direcao, pontoId) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.filter(p => p.id !== pontoId) } }; setConfig({ ...config, trips }); };
@@ -1186,7 +1244,9 @@ function SistemaTab({ reservas, operacao, setOperacao, capacidade, config, setCo
 
         <Card>
           <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
-          <div className="grid sm:grid-cols-2 gap-3">{[{ v: "ia", icon: Bot, label: "IA automática", desc: "O bot conduz o roteiro completo e confirma sozinho." }, { v: "manual", icon: UserCog, label: "Manual (você/equipe)", desc: "A IA para de confirmar sozinha; a equipe assume as conversas." }].map(o => (<button key={o.v} onClick={() => setOperacao({ ...operacao, modoAtendimento: o.v })} className="btn-press border rounded-lg px-4 py-3 text-left" style={{ borderColor: operacao.modoAtendimento === o.v ? C.amber : C.border, background: operacao.modoAtendimento === o.v ? C.amberSoft : C.panel2 }}><div className="flex items-center gap-2 text-sm font-medium"><o.icon size={15} style={{ color: operacao.modoAtendimento === o.v ? C.amber : C.inkSoft }} />{o.label}</div><div className="text-xs mt-1" style={{ color: C.inkSoft }}>{o.desc}</div></button>))}</div>
+          {modoErro && <div className="text-xs mb-2 rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.redSoft, color: C.red }}><AlertTriangle size={12} /> {modoErro}</div>}
+          <div className="grid sm:grid-cols-2 gap-3">{[{ v: "ia", icon: Bot, label: "IA automática", desc: "O bot conduz o roteiro completo e confirma sozinho." }, { v: "manual", icon: UserCog, label: "Manual (você/equipe)", desc: "A IA para de confirmar sozinha; a equipe assume as conversas." }].map(o => (<button key={o.v} onClick={() => trocarModo(o.v)} className="btn-press border rounded-lg px-4 py-3 text-left" style={{ borderColor: modoAtendimento === o.v ? C.amber : C.border, background: modoAtendimento === o.v ? C.amberSoft : C.panel2 }}><div className="flex items-center gap-2 text-sm font-medium"><o.icon size={15} style={{ color: modoAtendimento === o.v ? C.amber : C.inkSoft }} />{o.label}</div><div className="text-xs mt-1" style={{ color: C.inkSoft }}>{o.desc}</div></button>))}</div>
+          <div className="text-xs mt-2" style={{ color: C.inkFaint }}>Vale para todos os sócios em tempo real.</div>
         </Card>
 
         <Card>
