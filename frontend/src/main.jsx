@@ -2,11 +2,6 @@
 // tokens.css e os estilos inline dos componentes tenham precedência.
 import "./index.css";
 
-// storageShim mantém o protótipo (app/App.jsx) funcionando enquanto as
-// abas ainda não foram migradas para os services do Supabase (issue #10).
-// Remover quando App.jsx não usar mais window.storage.
-import "./lib/storageShim.js";
-
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { initObservability, reportError } from "./observability/index.js";
