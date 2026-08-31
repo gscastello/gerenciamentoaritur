@@ -12,9 +12,12 @@
 -- (as policies de RLS já fazem isso por padrão — ver supabase-rls-policies.sql).
 -- =====================================================================
 
-create extension if not exists "pgcrypto" with schema public;   -- gen_random_uuid()
-create extension if not exists "citext" with schema public;      -- e-mail/telefone case-insensitive
-create extension if not exists "pg_trgm" with schema public;     -- busca de clientes por nome (índice de customers.name)
+-- Extensões no schema "extensions" (padrão Supabase) — mantém o schema
+-- public limpo (o advisor 0014_extension_in_public reclama de extensão em public).
+create schema if not exists extensions;
+create extension if not exists "pgcrypto" with schema extensions;   -- gen_random_uuid()
+create extension if not exists "citext"   with schema extensions;   -- e-mail/telefone case-insensitive
+create extension if not exists "pg_trgm"  with schema extensions;   -- busca de clientes por nome (índice de customers.name)
 
 -- =====================================================================
 -- 1. ENUMS
@@ -39,12 +42,13 @@ create type audit_action         as enum ('create', 'update', 'status_change', '
 -- =====================================================================
 -- 2. FUNÇÕES DE APOIO (updated_at automático)
 -- =====================================================================
-create or replace function fn_set_updated_at() returns trigger as $$
+create or replace function fn_set_updated_at() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 begin
   NEW.updated_at = now();
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 
 -- =====================================================================
 -- 3. USERS  (perfil de aplicação — 1:1 com auth.users do Supabase)
@@ -67,12 +71,19 @@ create trigger trg_users_updated_at before update on users
   for each row execute function fn_set_updated_at();
 
 -- provisiona automaticamente uma linha em "users" quando alguém se cadastra no Supabase Auth
-create or replace function fn_handle_new_auth_user() returns trigger as $$
+create or replace function fn_handle_new_auth_user() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  insert into users (id, name, role) values (NEW.id, coalesce(NEW.raw_user_meta_data->>'name', NEW.email), 'atendente');
+  -- 1º usuário do sistema entra como 'admin' (bootstrap); os seguintes como 'atendente'.
+  insert into users (id, name, role)
+  values (
+    NEW.id,
+    coalesce(NEW.raw_user_meta_data->>'name', NEW.email),
+    case when (select count(*) from users) = 0 then 'admin'::user_role else 'atendente'::user_role end
+  );
   return NEW;
 end;
-$$ language plpgsql security definer;
+$$;
 create trigger trg_on_auth_user_created
   after insert on auth.users
   for each row execute function fn_handle_new_auth_user();
@@ -401,23 +412,25 @@ create trigger trg_financial_entries_updated_at before update on financial_entri
   for each row execute function fn_set_updated_at();
 
 -- gera automaticamente o lançamento de despesa quando um abastecimento/manutenção é criado
-create or replace function fn_fuel_to_financial_entry() returns trigger as $$
+create or replace function fn_fuel_to_financial_entry() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 begin
   insert into financial_entries (entry_date, type, category, amount, description, fuel_record_id, created_by)
   values (NEW.record_date, 'despesa', 'combustivel', NEW.cost, 'Abastecimento — ' || NEW.km || ' km', NEW.id, NEW.created_by);
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 create trigger trg_fuel_financial_entry after insert on fuel_records
   for each row execute function fn_fuel_to_financial_entry();
 
-create or replace function fn_maintenance_to_financial_entry() returns trigger as $$
+create or replace function fn_maintenance_to_financial_entry() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 begin
   insert into financial_entries (entry_date, type, category, amount, description, maintenance_id, created_by)
   values (NEW.performed_at, 'despesa', 'manutencao', NEW.cost, NEW.type, NEW.id, NEW.created_by);
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 create trigger trg_maintenance_financial_entry after insert on maintenance
   for each row execute function fn_maintenance_to_financial_entry();
 
@@ -486,7 +499,8 @@ create index idx_audit_performed_at on audit_logs (performed_at);
 -- =====================================================================
 -- 21. TRIGGER GENÉRICO DE AUDITORIA (aplicado às tabelas mais sensíveis)
 -- =====================================================================
-create or replace function fn_audit_trigger() returns trigger as $$
+create or replace function fn_audit_trigger() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 declare
   v_action audit_action;
   v_actor uuid;
@@ -506,7 +520,7 @@ begin
           v_actor);
   return coalesce(NEW, OLD);
 end;
-$$ language plpgsql;
+$$;
 
 create trigger trg_audit_reservations after insert or update on reservations
   for each row execute function fn_audit_trigger();
@@ -529,7 +543,8 @@ create trigger trg_audit_financial_entries after insert or update on financial_e
 --   2) conta quantos lugares já estão ocupados nessa viagem.
 --   3) se ultrapassar a capacidade (congelada em trips.capacity), a transação inteira
 --      é revertida (raise exception) — a reserva NUNCA é gravada acima da lotação.
-create or replace function fn_check_trip_capacity() returns trigger as $$
+create or replace function fn_check_trip_capacity() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 declare
   v_trip_id  uuid;
   v_capacity int;
@@ -565,14 +580,15 @@ begin
 
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger trg_capacity_check
   before insert or update of status, reservation_id on reservation_passengers
   for each row execute function fn_check_trip_capacity();
 
 -- mantém reservations.quantity sempre sincronizado com a contagem real de passageiros
-create or replace function fn_sync_reservation_quantity() returns trigger as $$
+create or replace function fn_sync_reservation_quantity() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
 begin
   update reservations
     set quantity = greatest(1, (
@@ -583,7 +599,7 @@ begin
     where id = coalesce(NEW.reservation_id, OLD.reservation_id);
   return null;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger trg_sync_quantity
   after insert or update or delete on reservation_passengers
@@ -594,7 +610,10 @@ create trigger trg_sync_quantity
 --     ANTES de tentar inserir, para responder rápido ao bot/app sem esperar
 --     o erro da trigger; a trigger continua sendo a garantia final)
 -- =====================================================================
-create or replace view v_trip_occupancy as
+-- security_invoker: a view respeita o RLS de quem consulta, não do dono
+-- (advisor 0010_security_definer_view). Só papéis com acesso a trips/
+-- reservation_passengers enxergam as linhas.
+create or replace view v_trip_occupancy with (security_invoker = on) as
 select
   t.id as trip_id,
   t.trip_date,

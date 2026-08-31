@@ -11,7 +11,10 @@
 -- supabase-rpc-functions.sql), nunca direto nesta view.
 -- =====================================================================
 
-create or replace view v_reservations_flat as
+-- security_invoker: a view aplica o RLS de QUEM consulta (não do dono).
+-- Sem isto, a view (dona = postgres) expõe nome/telefone de TODAS as
+-- reservas a qualquer um com a anon key — advisor 0010_security_definer_view.
+create or replace view v_reservations_flat with (security_invoker = on) as
 select
   r.id,
   t.trip_date                    as data,
@@ -54,3 +57,24 @@ where r.deleted_at is null;
 
 comment on view v_reservations_flat is
   'Projeção de leitura para o frontend — mantém o formato de objeto que a UI já consome. Nunca usar para escrita; escritas passam pelas funções RPC.';
+
+-- Leitura só para usuário autenticado (com RLS de reservations por baixo);
+-- 'anon' não lê PII de reserva.
+revoke all    on v_reservations_flat from anon;
+grant  select on v_reservations_flat to authenticated;
+
+-- =====================================================================
+-- ÍNDICES DE COBERTURA PARA CHAVES ESTRANGEIRAS (advisor 0001_unindexed_foreign_keys)
+-- Só as FKs que são caminho real de join/filtro. As colunas de auditoria
+-- (created_by/updated_by) ficam de fora — ninguém filtra por elas e as
+-- tabelas usam soft delete (não há DELETE em cascata a partir de users).
+-- =====================================================================
+create index if not exists idx_drivers_user_id               on drivers (user_id) where deleted_at is null;
+create index if not exists idx_users_driver_id               on users (driver_id) where deleted_at is null;
+create index if not exists idx_trips_vehicle                 on trips (vehicle_id) where deleted_at is null;
+create index if not exists idx_reservations_route_point      on reservations (route_point_id) where deleted_at is null;
+create index if not exists idx_fuel_trip                     on fuel_records (trip_id) where deleted_at is null;
+create index if not exists idx_financial_entries_reservation on financial_entries (reservation_id) where deleted_at is null;
+create index if not exists idx_notifications_customer        on notifications (customer_id);
+create index if not exists idx_notifications_reservation     on notifications (reservation_id);
+create index if not exists idx_occurrences_vehicle          on operational_occurrences (vehicle_id) where deleted_at is null;

@@ -293,13 +293,29 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
--- Permissões: usuários autenticados podem executar; a validação de QUEM
--- pode fazer O QUÊ continua sendo aplicada pela RLS das tabelas por baixo.
+-- Permissões
 -- ---------------------------------------------------------------------
-grant execute on function rpc_create_reservation to authenticated;
-grant execute on function rpc_confirm_reservation to authenticated;
-grant execute on function rpc_cancel_reservation to authenticated;
-grant execute on function rpc_set_passengers_status to authenticated;
-grant execute on function rpc_move_reservation to authenticated;
-grant execute on function rpc_start_trip to authenticated;
-grant execute on function rpc_finish_trip to authenticated;
+-- ATENÇÃO: estas funções são SECURITY DEFINER — rodam como o dono e
+-- IGNORAM o RLS das tabelas por baixo. Portanto a barreira de acesso é
+-- QUEM pode executá-las:
+--   - 'anon' (chave pública do site/bot no navegador): NÃO pode. Sem isso,
+--     qualquer pessoa com a anon key criaria/cancelaria reservas.
+--   - 'authenticated' (funcionário logado no painel): pode.
+--   - 'service_role' (backend do bot do WhatsApp, chave de servidor): pode.
+-- A distinção fina de papel (atendente x financeiro x motorista) é feita
+-- na aplicação e reforçada pelo RLS nas LEITURAS (views/tabelas).
+-- ---------------------------------------------------------------------
+do $$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'rpc_create_reservation','rpc_confirm_reservation','rpc_cancel_reservation',
+      'rpc_set_passengers_status','rpc_move_reservation','rpc_start_trip','rpc_finish_trip')
+  loop
+    execute format('revoke execute on function %s from public, anon', r.sig);
+    execute format('grant  execute on function %s to authenticated, service_role', r.sig);
+  end loop;
+end $$;

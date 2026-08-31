@@ -18,8 +18,10 @@ WhatsApp/GPS planejadas para as próximas etapas.
 │   ├── 01-schema.sql        # Tabelas, enums, índices, triggers (rodar 1º)
 │   ├── 02-rls-policies.sql  # Row Level Security por papel (rodar 2º)
 │   ├── 03-rpc-functions.sql # Funções atômicas (criar/confirmar/mover reserva) (rodar 3º)
-│   ├── 04-frontend-views.sql# View de leitura no formato que o frontend espera (rodar 4º)
-│   └── 05-seed.sql          # Veículos, pontos de embarque, bairros, config (rodar 5º)
+│   ├── 04-frontend-views.sql# View de leitura + índices de FK (rodar 4º)
+│   ├── 05-seed.sql          # Veículos, pontos de embarque, bairros, config (rodar 5º)
+│   └── 06-security-hardening.sql # Correções dos advisors do Supabase (rodar
+│                             # 1x se o banco foi criado antes deste arquivo)
 ├── frontend/
 │   ├── INTEGRATION.md       # O que foi criado/removido e como o fluxo de reserva funciona
 │   ├── .env.example         # Variáveis de ambiente do Supabase
@@ -40,6 +42,9 @@ WhatsApp/GPS planejadas para as próximas etapas.
 2. No SQL Editor do projeto, rodar nesta ordem exata:
    `database/01-schema.sql` → `02-rls-policies.sql` → `03-rpc-functions.sql`
    → `04-frontend-views.sql` → `05-seed.sql`.
+   Bancos criados antes de 30/08/2026 devem rodar também
+   `database/06-security-hardening.sql` (uma vez) para aplicar as correções
+   de segurança dos advisors do Supabase.
 3. Copiar `frontend/.env.example` para `frontend/.env` e preencher com a
    URL e a `anon key` do projeto (Project Settings → API no Supabase).
 4. Instalar a dependência do cliente Supabase no seu projeto React:
