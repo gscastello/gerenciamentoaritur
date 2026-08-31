@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-core.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "reporters": ["html", "clear-text", "progress"],
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/domain/**/*.js",
+    "!src/domain/**/*.test.js",
+    "!src/domain/index.js",
+    "!src/domain/precos.js"
+  ],
+  "thresholds": { "high": 90, "low": 70, "break": 60 },
+  "comment": "break=60 é o piso da 1a leva de testes (score atual ~71%). A issue #4 aperta de volta para 75+. precos.js fica fora do mutate por ser majoritariamente tabela de dados (bairros) — a lógica dele é coberta por precos.test.js."
+}

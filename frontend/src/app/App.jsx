@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
+import { Presence } from "../ui/motion/index.js";
+import { TabSkeleton, ChartsSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import {
   Calendar, Users, Wallet, Bus, LayoutDashboard, MapPin,
   CheckCircle2, Clock, Fuel, Wrench, TrendingUp, Plus, X, ChevronRight,
@@ -11,8 +9,12 @@ import {
   Headset, AlertTriangle, ClipboardList, ShieldCheck, Download, Bot, UserCog,
   RefreshCw, Save, ArrowLeftRight, Wifi, Settings2, Trash2, Bell, X as XIcon,
   Receipt, PlayCircle, StopCircle, Megaphone, History, UserX, Hourglass,
-  Package, Sparkles, TrendingDown, AlertOctagon,
+  Package, Sparkles,
 } from "lucide-react";
+
+// Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
+// do bundle inicial (ver vite.config.js manualChunks). Issue #2.
+const SevenDayCharts = React.lazy(() => import("../ui/charts/SevenDayCharts.jsx"));
 
 /* ============================= tokens ============================= */
 const C = {
@@ -179,10 +181,7 @@ function GlobalStyles() {
     `}</style>
   );
 }
-function Skeleton({ className = "", style }) { return <div className={`skel rounded-md ${className}`} style={style} />; }
-function SkeletonBlock() {
-  return (<div className="px-6 md:px-10 py-8 space-y-5"><Skeleton className="h-7 w-56" /><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div><div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div></div>);
-}
+/* Skeletons por aba: ../ui/skeletons/TabSkeleton.jsx (sistema de motion, issue #2). */
 
 /* ============================= shared UI ============================= */
 function Header({ title, subtitle, right }) {
@@ -394,7 +393,7 @@ function AppInner() {
 
       <div className="flex-1 min-w-0 pb-16 md:pb-0 overflow-x-hidden">
         {alerta && !alertaFechado && (<div className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-start justify-between gap-3" style={{ borderColor: C.red, background: C.redSoft }}><div className="flex items-start gap-2 text-xs" style={{ color: C.red }}><Bell size={14} className="mt-0.5 shrink-0" /><div><b>{alerta.issues.length} possível(is) inconsistência(s)</b> às {alerta.quando}. <button onClick={() => setTab("sistema")} className="underline">Ver no Sistema</button>.</div></div><button onClick={() => setAlertaFechado(true)}><XIcon size={14} style={{ color: C.red }} /></button></div>)}
-        {loading || !ready ? <SkeletonBlock /> : (
+        {loading || !ready ? <TabSkeleton tab={tab} /> : (
           <div className="anim-fadeIn">
             {tab === "reservar" && <ReservarTab reservas={reservas} setReservas={persistReservas} capacidade={capacidadeAtiva} modoAtendimento={operacao.modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
             {tab === "agenda" && <AgendaTab reservas={reservas} setReservas={persistReservas} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
@@ -570,6 +569,9 @@ function NextBtn({ onClick, disabled, label = "Continuar" }) { return <button on
 function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, trips, segundaAtiva, segundaHoras, usuario }) {
   const [data, setData] = useState(todayStr());
   const [editando, setEditando] = useState(null);
+  // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
+  const modalHeld = useRef(null);
+  if (editando) modalHeld.current = editando;
   const segunda = isMonday(data) && segundaAtiva;
   const doDia = reservas.filter(r => r.data === data && !["frete","encomenda"].includes(r.tipo));
   const pendentesDoDia = doDia.filter(r => r.status === "pendente");
@@ -605,7 +607,13 @@ function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, t
 
         {["ida", "volta"].map(dir => (<ViagemOperacional key={dir} direcao={dir} data={data} segunda={segunda} segundaHoras={segundaHoras} doDia={doDia} capacidade={capacidade} trips={trips} operacao={operacao} setOperacao={setOperacao} onStatus={atualizarStatus} onEditar={setEditando} onPagamento={togglePagamento} onComprovante={toggleComprovante} usuario={usuario} />))}
       </div>
-      {editando && <EditarReservaModal reserva={editando} onClose={() => setEditando(null)} onSave={(novo, resumo) => { salvarEdicao(novo, resumo); setEditando(null); }} capacidade={capacidade} reservas={reservas} trips={trips} />}
+      <Presence when={!!editando} duration={200}>
+        {(state) => modalHeld.current && (
+          <div style={{ transition: "opacity 200ms var(--ease-in)", opacity: state === "entered" ? 1 : 0 }}>
+            <EditarReservaModal reserva={modalHeld.current} onClose={() => setEditando(null)} onSave={(novo, resumo) => { salvarEdicao(novo, resumo); setEditando(null); }} capacidade={capacidade} reservas={reservas} trips={trips} />
+          </div>
+        )}
+      </Presence>
     </div>
   );
 }
@@ -972,9 +980,10 @@ function DashboardTab({ reservas, financeiro, capacidade, operacao, trips }) {
           <div className="text-xs mt-2" style={{ color: C.inkFaint }}>Média de passageiros confirmados por dia da semana, com base no histórico de reservas.</div>
         </Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger"><StatCard label="Passageiros hoje" value={passageirosHoje} icon={Users} /><StatCard label="Faturamento hoje" value={fmtBRL(receitaHoje)} icon={Wallet} accent={C.green} /><StatCard label="Faturamento do mês" value={fmtBRL(receitaMes)} icon={TrendingUp} accent={C.amber} /><StatCard label="Clientes recorrentes" value={recorrentes} icon={Repeat} accent={C.blue} /><StatCard label="Cancelamentos" value={canceladas.length} icon={Ban} accent={C.red} /><StatCard label="Não compareceu" value={naoCompareceu} icon={UserX} accent={C.gray} /><StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} /><StatCard label="Ocupação média hoje" value={`${ocupacaoMedia}%`} icon={CheckCircle2} accent={C.blue} /></div>
-        <div className="grid lg:grid-cols-2 gap-5">
-          <Card className="anim-fadeUp"><div className="text-sm font-semibold mb-3">Faturamento — últimos 7 dias</div><ResponsiveContainer width="100%" height={220}><LineChart data={ultimos7}><CartesianGrid stroke={C.borderSoft} vertical={false} /><XAxis dataKey="dia" tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={{ stroke: C.border }} tickLine={false} /><YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} width={40} /><Tooltip formatter={(v) => fmtBRL(v)} contentStyle={{ background: C.panel2, borderColor: C.border, fontSize: 12, color: C.ink }} /><Line type="monotone" dataKey="faturamento" stroke={C.amber} strokeWidth={2.5} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></Card>
-          <Card className="anim-fadeUp"><div className="text-sm font-semibold mb-3">Passageiros por dia — últimos 7 dias</div><ResponsiveContainer width="100%" height={220}><BarChart data={ultimos7}><CartesianGrid stroke={C.borderSoft} vertical={false} /><XAxis dataKey="dia" tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={{ stroke: C.border }} tickLine={false} /><YAxis tick={{ fontSize: 11, fill: C.inkSoft }} axisLine={false} tickLine={false} width={30} allowDecimals={false} /><Tooltip contentStyle={{ background: C.panel2, borderColor: C.border, fontSize: 12, color: C.ink }} /><Bar dataKey="passageiros" fill={C.blue} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></Card>
+        <div className="anim-fadeUp">
+          <Suspense fallback={<ChartsSkeleton />}>
+            <SevenDayCharts data={ultimos7} />
+          </Suspense>
         </div>
       </div>
     </div>

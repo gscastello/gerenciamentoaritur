@@ -34,6 +34,8 @@ No **SQL Editor** do Supabase (projeto `gerenciamentoaritur projeto full`):
 4. Editar `database/07-scheduling.sql` — trocar `SEU-PROJETO` pela URL real
    das Edge Functions e `COLOQUE_O_MESMO_VALOR_DO_SECRET_AQUI` pelo
    `DISPATCH_SECRET` que você vai definir no passo 4. Depois rodar.
+5. Rodar `database/08-realtime.sql` — publica as tabelas no Supabase
+   Realtime (o painel atualiza sozinho entre atendentes).
 
 > As extensões `citext`/`pg_trgm` continuam no schema `public` (WARN
 > cosmético do advisor). Se quiser limpar: rode uma vez
@@ -118,8 +120,11 @@ Passo a passo completo em [`WHATSAPP.md`](WHATSAPP.md). Resumo:
 
 ## 🔵 Depois (não bloqueia nada)
 
-- Migrar `src/app/App.jsx` de `localStorage` para os services/hooks do
-  Supabase, aba por aba — issue #10.
+- Terminar a issue #10 — `src/app/App.jsx` ⇄ Supabase, aba por aba. A
+  camada de auth e os services já estão prontos (branch
+  `feature/10-app-supabase`); falta reescrever as abas. Plano detalhado
+  em `docs/APP-INTEGRATION-PLAN.md`. Precisa do preview na Vercel rodando
+  para testar.
 - Job diário que cria as `trips` do dia (hoje o `rpc_create_reservation`
   cria sob demanda; a Agenda fica vazia em dias sem reserva) — ver
   `database/DATABASE.md §6`.

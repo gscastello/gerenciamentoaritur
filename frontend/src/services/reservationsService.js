@@ -7,8 +7,11 @@
 // Leitura é feita direto nas tabelas via SELECT (RLS decide o que cada
 // papel enxerga).
 
-import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
+import { supabase, getCurrentUserId, ServiceError, isRetryableError } from "../lib/supabaseClient";
 
+// `trip:trips!inner` é obrigatório para que `.eq("trip.trip_date", ...)`
+// funcione como filtro — sem o !inner o PostgREST ignora o filtro do
+// recurso aninhado e devolve reservas de todos os dias.
 const RESERVATION_SELECT = `
   id, trip_id, customer_id, type, status, route_point_id,
   pickup_neighborhood, pickup_detail, street, reference_point, dropoff_location,
@@ -16,26 +19,26 @@ const RESERVATION_SELECT = `
   created_at, updated_at, created_by, updated_by,
   customer:customers ( id, name, phone ),
   route_point:route_points ( id, code, name, base_time ),
-  trip:trips ( id, trip_date, direction, capacity ),
+  trip:trips!inner ( id, trip_date, direction, capacity ),
   passengers:reservation_passengers ( id, seq, passenger_name, status ),
   payments ( id, amount, method, status, paid_at, proof_received )
 `;
+
+// Para pendências (que podem não ter viagem definida ainda), o join com
+// trips não pode ser !inner — senão frete/encomenda sem trip_id somem.
+const RESERVATION_SELECT_NO_INNER = RESERVATION_SELECT.replace("trips!inner", "trips");
 
 async function handle(promise, { context }) {
   const { data, error } = await promise;
   if (error) {
     throw new ServiceError(`${context}: ${error.message}`, {
       cause: error,
-      retryable: isNetworkish(error),
+      retryable: isRetryableError(error),
       code: error.code,
     });
   }
   return data;
 }
-function isNetworkish(error) {
-  return /fetch|network|timeout/i.test(error.message || "");
-}
-
 export const reservationsService = {
   /** Lista as reservas de um dia (ambas as direções), já com joins prontos para a UI. */
   async listByDate(tripDate) {
@@ -50,12 +53,16 @@ export const reservationsService = {
     );
   },
 
-  /** Lista pendências (pendente/espera) e frete/encomenda — não amarradas necessariamente ao dia selecionado. */
+  /**
+   * Pendências (pendente/espera) — inclui frete/encomenda, que nascem
+   * com status 'pendente'. Não amarradas ao dia selecionado. Sem !inner
+   * no join de trips porque frete/encomenda podem não ter viagem ainda.
+   */
   async listPending() {
     return handle(
       supabase
         .from("reservations")
-        .select(RESERVATION_SELECT)
+        .select(RESERVATION_SELECT_NO_INNER)
         .is("deleted_at", null)
         .in("status", ["pendente", "espera"]),
       { context: "listPending" }
@@ -93,7 +100,7 @@ export const reservationsService = {
       p_created_by: actor,
     });
     if (error) {
-      throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+      throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     }
     // a função RPC nunca lança exceção de negócio pro cliente — ela devolve
     // { success:false, message } quando a capacidade foi excedida.
@@ -114,7 +121,7 @@ export const reservationsService = {
       p_route_point_code: routePointCode ?? null,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`confirm: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`confirm: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível confirmar.", { retryable: false });
     return data;
   },
@@ -125,7 +132,7 @@ export const reservationsService = {
       p_reservation_id: reservationId,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`cancel: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`cancel: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     return data;
   },
 
@@ -137,7 +144,7 @@ export const reservationsService = {
       p_status: status,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`setPassengersStatus: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`setPassengersStatus: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível atualizar o status.", { retryable: false });
     return data;
   },
@@ -152,7 +159,7 @@ export const reservationsService = {
       p_new_route_point_code: routePointCode,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`move: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`move: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não há vaga na viagem de destino.", { retryable: false });
     return data;
   },

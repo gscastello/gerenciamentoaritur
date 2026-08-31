@@ -1,0 +1,26 @@
+# Git hooks (lefthook). Instalado por `npm run prepare` (postinstall).
+# Roda a partir de frontend/ — o repo tem o app na subpasta.
+
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,jsx,json,css}"
+      run: npx biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+    knip:
+      run: npx knip --no-exit-code
+      skip:
+        - merge
+        - rebase
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit {1}
+
+pre-push:
+  commands:
+    test:
+      run: npm run test
+    arch:
+      run: npm run arch

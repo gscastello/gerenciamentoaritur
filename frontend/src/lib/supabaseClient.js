@@ -16,23 +16,36 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  // Falha alto e cedo — é melhor a tela quebrar com uma mensagem clara do
-  // que o app rodar "modo silencioso" sem persistência nenhuma.
-  throw new Error(
-    "Supabase não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY."
+/**
+ * true quando as variáveis de ambiente estão presentes. A UI (AuthGate)
+ * usa isto para mostrar uma tela de "configure o Supabase" em vez de
+ * quebrar com tela branca — importante para o primeiro deploy, quando as
+ * envs ainda não foram preenchidas no host.
+ */
+export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+if (!isSupabaseConfigured) {
+  console.error(
+    "Supabase não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY " +
+      "(no .env local ou nas variáveis de ambiente do host).",
   );
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+// createClient tolera strings inválidas na construção — o erro só aparece
+// quando uma request é feita, e aí o AuthGate já bloqueou a tela.
+export const supabase = createClient(
+  SUPABASE_URL || "https://placeholder.supabase.co",
+  SUPABASE_ANON_KEY || "placeholder-anon-key",
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+    realtime: {
+      params: { eventsPerSecond: 10 },
+    },
   },
-  realtime: {
-    params: { eventsPerSecond: 10 },
-  },
-});
+);
 
 /**
  * Uid do usuário autenticado no momento (para created_by/updated_by e

@@ -1,0 +1,40 @@
+# Gate de cobertura. O relatório vem de frontend/coverage/lcov.info.
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+  # Gate mais rígido nos módulos que não podem regredir.
+  # (Ver AGENTS.md §3 — motor de vagas e financeiro.)
+component_management:
+  individual_components:
+    - component_id: motor_vagas
+      name: Motor de vagas
+      paths:
+        - frontend/src/domain/vagas.js
+        - frontend/src/domain/diagnostics.js
+      statuses:
+        - type: project
+          target: 95%
+    - component_id: precificacao
+      name: Precificação
+      paths:
+        - frontend/src/domain/precos.js
+      statuses:
+        - type: project
+          target: 90%
+
+comment:
+  layout: "reach, diff, flags, components"
+  require_changes: false
+
+ignore:
+  - "frontend/e2e/**"
+  - "frontend/src/main.jsx"
+  - "frontend/src/app/App.jsx"
+  - "frontend/src/observability/**"
+  - "**/*.test.js"

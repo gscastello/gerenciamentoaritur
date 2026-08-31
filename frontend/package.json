@@ -1,0 +1,57 @@
+{
+  "name": "rota-pirapemas-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write .",
+    "format:check": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:mutation": "stryker run",
+    "knip": "knip",
+    "arch": "depcruise src --config .dependency-cruiser.cjs",
+    "check:all": "npm run lint && npm run knip && npm run arch && npm run test && npm run build",
+    "prepare": "lefthook install || true"
+  },
+  "dependencies": {
+    "@sentry/react": "^8.42.0",
+    "@supabase/supabase-js": "^2.47.10",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.13.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@playwright/test": "^1.49.1",
+    "@stryker-mutator/core": "^8.7.1",
+    "@stryker-mutator/vitest-runner": "^8.7.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "dependency-cruiser": "^16.8.0",
+    "jsdom": "^25.0.1",
+    "knip": "^5.41.0",
+    "lefthook": "^1.10.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,7 +1,26 @@
 frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 node_modules/
+
+# build / caches
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.stryker-tmp/
+reports/
+*.tsbuildinfo
+
+# deploy (dirs locais das CLIs de host)
+.vercel/
+.netlify/
 
 # Supabase CLI (Edge Functions)
 supabase/.branches/
 supabase/.temp/
 supabase/.env
+
+# ferramentas
+.DS_Store
+*.log
