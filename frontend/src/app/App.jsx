@@ -748,8 +748,8 @@ function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capaci
   const Icon = direcao === "ida" ? ArrowRight : ArrowLeft;
 
   const idOrdem = direcao === "ida" ? IDA_ORDEM_SECOES : VOLTA_ORDEM;
+  // já contém todos os pontos (os que não estão em idOrdem vão para o fim).
   const pontosOrdenados = [...viagem.pontos].sort((a, b) => (idOrdem.indexOf(a.id) === -1 ? 99 : idOrdem.indexOf(a.id)) - (idOrdem.indexOf(b.id) === -1 ? 99 : idOrdem.indexOf(b.id)));
-  const extras = viagem.pontos.filter(p => !idOrdem.includes(p.id));
 
   const viagemAtiva = (operacao.viagensAtivas || []).find(v => v.data === data && v.direcao === direcao && v.status === "em_andamento");
   const iniciarViagem = () => {
@@ -782,7 +782,7 @@ function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capaci
         <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
       </div>
       <div className="space-y-3">
-        {[...pontosOrdenados, ...extras].map(p => {
+        {pontosOrdenados.map(p => {
           const hora = shiftHour(p.horaBase, direcao === "ida" && segunda, segundaHoras);
           const itens = doGrupo.filter(r => r.pontoId === p.id && r.status !== "cancelada" && r.status !== "espera");
           return (
