@@ -1,5 +1,11 @@
 -- retrofit-soft-delete-rls.sql
 --
+-- ⚠️ USE database/retrofit-soft-delete-rpc.sql EM VEZ DESTE, a menos que
+-- o seu SQL Editor tenha ownership das tabelas. Este script dá
+-- "must be owner of relation ..." quando rodado por um papel que não é
+-- dono das tabelas. O retrofit-soft-delete-rpc.sql resolve o mesmo
+-- problema criando funções (só precisa de CREATE no schema).
+--
 -- PROBLEMA
 -- Neste Postgres (Supabase / PG17) a expressão USING de uma policy de
 -- SELECT é aplicada TAMBÉM como WITH CHECK na linha resultante de um
