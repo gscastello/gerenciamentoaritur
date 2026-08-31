@@ -7,7 +7,7 @@
 // Leitura é feita direto nas tabelas via SELECT (RLS decide o que cada
 // papel enxerga).
 
-import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
+import { supabase, getCurrentUserId, ServiceError, isRetryableError } from "../lib/supabaseClient";
 
 // `trip:trips!inner` é obrigatório para que `.eq("trip.trip_date", ...)`
 // funcione como filtro — sem o !inner o PostgREST ignora o filtro do
@@ -33,16 +33,12 @@ async function handle(promise, { context }) {
   if (error) {
     throw new ServiceError(`${context}: ${error.message}`, {
       cause: error,
-      retryable: isNetworkish(error),
+      retryable: isRetryableError(error),
       code: error.code,
     });
   }
   return data;
 }
-function isNetworkish(error) {
-  return /fetch|network|timeout/i.test(error.message || "");
-}
-
 export const reservationsService = {
   /** Lista as reservas de um dia (ambas as direções), já com joins prontos para a UI. */
   async listByDate(tripDate) {
@@ -104,7 +100,7 @@ export const reservationsService = {
       p_created_by: actor,
     });
     if (error) {
-      throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+      throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     }
     // a função RPC nunca lança exceção de negócio pro cliente — ela devolve
     // { success:false, message } quando a capacidade foi excedida.
@@ -125,7 +121,7 @@ export const reservationsService = {
       p_route_point_code: routePointCode ?? null,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`confirm: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`confirm: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível confirmar.", { retryable: false });
     return data;
   },
@@ -136,7 +132,7 @@ export const reservationsService = {
       p_reservation_id: reservationId,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`cancel: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`cancel: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     return data;
   },
 
@@ -148,7 +144,7 @@ export const reservationsService = {
       p_status: status,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`setPassengersStatus: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`setPassengersStatus: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível atualizar o status.", { retryable: false });
     return data;
   },
@@ -163,7 +159,7 @@ export const reservationsService = {
       p_new_route_point_code: routePointCode,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`move: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error) throw new ServiceError(`move: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não há vaga na viagem de destino.", { retryable: false });
     return data;
   },

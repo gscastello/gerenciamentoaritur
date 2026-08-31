@@ -4,6 +4,8 @@
     "src/main.jsx",
     "src/domain/index.js",
     "src/ui/motion/index.js",
+    "src/ui/skeletons/*.jsx",
+    "src/ui/charts/*.jsx",
     "src/observability/index.js",
     "src/services/*.js",
     "src/hooks/*.js",
@@ -11,16 +13,6 @@
   ],
   "project": ["src/**/*.{js,jsx}"],
   "ignore": ["src/app/App.jsx", "src/INTEGRATION-EXAMPLE.jsx"],
-  "ignoreBinaries": ["depcruise"],
-  "ignoreDependencies": [
-    "@types/react",
-    "@types/react-dom",
-    "typescript",
-    "@stryker-mutator/vitest-runner",
-    "dependency-cruiser",
-    "lefthook",
-    "@commitlint/config-conventional"
-  ],
   "vite": { "config": ["vite.config.js"] },
   "vitest": {
     "config": ["vite.config.js"],
