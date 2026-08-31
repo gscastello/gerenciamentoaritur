@@ -16,6 +16,11 @@ reports/
 .vercel/
 .netlify/
 
+# Supabase CLI (Edge Functions)
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
 # ferramentas
 .DS_Store
 *.log
