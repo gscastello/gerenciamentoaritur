@@ -1,8 +1,13 @@
+// storageShim mantém o protótipo (app/App.jsx) funcionando enquanto as
+// abas ainda não foram migradas para os services do Supabase (issue #10).
+// Remover quando App.jsx não usar mais window.storage.
 import "./lib/storageShim.js";
 
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { initObservability, reportError } from "./observability/index.js";
+import { AuthProvider } from "./auth/AuthProvider.jsx";
+import { AuthGate } from "./auth/AuthGate.jsx";
 import App from "./app/App.jsx";
 
 initObservability();
@@ -11,6 +16,10 @@ window.addEventListener("unhandledrejection", (e) => reportError(e.reason, { kin
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <AuthGate>
+        <App />
+      </AuthGate>
+    </AuthProvider>
   </React.StrictMode>,
 );

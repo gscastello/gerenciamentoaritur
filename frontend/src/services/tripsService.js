@@ -31,13 +31,15 @@ export const tripsService = {
    * chamada dentro de reservationsService.create()/confirm()/move().
    */
   async getAvailability(tripDate, direction) {
-    const rows = await handle(
-      supabase.from("v_trip_occupancy").select("*").eq("trip_date", tripDate).eq("direction", direction).maybeSingle
-        ? supabase.from("v_trip_occupancy").select("*").eq("trip_date", tripDate).eq("direction", direction)
-        : supabase.from("v_trip_occupancy").select("*").eq("trip_date", tripDate).eq("direction", direction),
+    return handle(
+      supabase
+        .from("v_trip_occupancy")
+        .select("*")
+        .eq("trip_date", tripDate)
+        .eq("direction", direction)
+        .maybeSingle(),
       "getAvailability"
     );
-    return rows?.[0] ?? null;
   },
 
   async startTrip(tripId, { km, location }) {

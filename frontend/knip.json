@@ -4,10 +4,13 @@
     "src/main.jsx",
     "src/domain/index.js",
     "src/ui/motion/index.js",
-    "src/observability/index.js"
+    "src/observability/index.js",
+    "src/services/*.js",
+    "src/hooks/*.js",
+    "src/auth/*.jsx"
   ],
   "project": ["src/**/*.{js,jsx}"],
-  "ignore": ["src/app/App.jsx"],
+  "ignore": ["src/app/App.jsx", "src/INTEGRATION-EXAMPLE.jsx"],
   "ignoreBinaries": ["depcruise"],
   "ignoreDependencies": [
     "@types/react",

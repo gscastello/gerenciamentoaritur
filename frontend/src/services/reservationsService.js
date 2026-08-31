@@ -9,6 +9,9 @@
 
 import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
 
+// `trip:trips!inner` é obrigatório para que `.eq("trip.trip_date", ...)`
+// funcione como filtro — sem o !inner o PostgREST ignora o filtro do
+// recurso aninhado e devolve reservas de todos os dias.
 const RESERVATION_SELECT = `
   id, trip_id, customer_id, type, status, route_point_id,
   pickup_neighborhood, pickup_detail, street, reference_point, dropoff_location,
@@ -16,10 +19,14 @@ const RESERVATION_SELECT = `
   created_at, updated_at, created_by, updated_by,
   customer:customers ( id, name, phone ),
   route_point:route_points ( id, code, name, base_time ),
-  trip:trips ( id, trip_date, direction, capacity ),
+  trip:trips!inner ( id, trip_date, direction, capacity ),
   passengers:reservation_passengers ( id, seq, passenger_name, status ),
   payments ( id, amount, method, status, paid_at, proof_received )
 `;
+
+// Para pendências (que podem não ter viagem definida ainda), o join com
+// trips não pode ser !inner — senão frete/encomenda sem trip_id somem.
+const RESERVATION_SELECT_NO_INNER = RESERVATION_SELECT.replace("trips!inner", "trips");
 
 async function handle(promise, { context }) {
   const { data, error } = await promise;
@@ -50,12 +57,16 @@ export const reservationsService = {
     );
   },
 
-  /** Lista pendências (pendente/espera) e frete/encomenda — não amarradas necessariamente ao dia selecionado. */
+  /**
+   * Pendências (pendente/espera) — inclui frete/encomenda, que nascem
+   * com status 'pendente'. Não amarradas ao dia selecionado. Sem !inner
+   * no join de trips porque frete/encomenda podem não ter viagem ainda.
+   */
   async listPending() {
     return handle(
       supabase
         .from("reservations")
-        .select(RESERVATION_SELECT)
+        .select(RESERVATION_SELECT_NO_INNER)
         .is("deleted_at", null)
         .in("status", ["pendente", "espera"]),
       { context: "listPending" }
