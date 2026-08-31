@@ -7,6 +7,9 @@ import { useFinanceMonth } from "../hooks/useFinance.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useVehicles, useDrivers } from "../hooks/useVehicles.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
+import { useRouteConfig } from "../hooks/useRouteConfig.js";
+import { useTrips } from "../hooks/useTrips.js";
+import { useCustomers } from "../hooks/useCustomers.js";
 import {
   Calendar, Users, Wallet, Bus, LayoutDashboard, MapPin,
   CheckCircle2, Clock, Fuel, Wrench, TrendingUp, Plus, X, ChevronRight,
@@ -38,7 +41,6 @@ const PIX_KEY = "98981012388";
 const PIX_NAME = "A O Castelo Transporte e Turismo";
 const CIDADES_INTERMEDIARIAS = ["bacabeira", "santa rita", "entroncamento", "colombo", "miranda", "matões", "matoes"];
 
-const uid = () => Math.random().toString(36).slice(2, 10);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtBRL = (n) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (d) => { const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
@@ -47,7 +49,6 @@ const isMonday = (d) => new Date(d + "T12:00:00").getDay() === 1;
 const diaSemana = (d) => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long" });
 const shiftHour = (hhmm, ativo, horas = 1) => { if (!ativo) return hhmm; let [h, m] = hhmm.split(":").map(Number); h = (h - horas + 24) % 24; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`; };
 function contemCidadeIntermediaria(texto) { if (!texto) return false; const t = texto.toLowerCase(); return CIDADES_INTERMEDIARIAS.some(c => t.includes(c)); }
-function fnv(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; }
 function normalizar(s) { return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); }
 function digitos(tel) { return (tel || "").replace(/\D/g, ""); }
 
@@ -74,46 +75,11 @@ const STATUS_META = {
 };
 const OCUPA_VAGA = ["confirmada", "embarcado"];
 
-/* pontos "core" — não podem ser removidos, mas nome/horário/valor são editáveis */
-const TRIPS_PADRAO = {
-  ida: {
-    id: "ida", nome: "Ida", direcao: "ida", label: "São Luís → Pirapemas / Cantanhede",
-    pontos: [
-      { id: "busca", nome: "Buscar em Casa", horaBase: "05:00", valor: 80, campo: "bairro", campoLabel: "Bairro", core: true },
-      { id: "rodoviaria", nome: "Rodoviária", horaBase: "05:40", valor: 60, core: true },
-      { id: "retorno", nome: "Retorno das Vans", horaBase: "05:50", valor: 60, core: true },
-      { id: "postocarone", nome: "Posto Carone", horaBase: "05:55", valor: 60, core: true },
-      { id: "br", nome: "BR", horaBase: "06:00", valor: 60, campo: "localExato", campoLabel: "Local exato na BR (km, referência)", core: true },
-      { id: "outro", nome: "Outro local de embarque", horaBase: "05:40", valor: 60, campo: "localOutro", campoLabel: "Descreva o local de embarque", core: true },
-    ],
-  },
-  volta: {
-    id: "volta", nome: "Volta", direcao: "volta", label: "Pirapemas / Cantanhede → São Luís",
-    pontos: [
-      { id: "pirapemas", nome: "Pirapemas", horaBase: "12:00", valor: 60, core: true, janela: "12:00 – 13:00" },
-      { id: "cantanhede", nome: "Cantanhede", horaBase: "13:00", valor: 60, core: true, janela: "13:00 – 14:00" },
-    ],
-  },
-};
-const DEFAULT_CONFIG = { trips: TRIPS_PADRAO, segundaAtiva: true, segundaHoras: 1 };
-/* ordem de agrupamento: Rodoviária → Retorno → Posto Carone → BR → Outros (Busca fica separada) */
+/* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
+ * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
 const IDA_PRIORIDADE = { rodoviaria: 0, retorno: 1, postocarone: 2, br: 3 };
 const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "postocarone", "br"];
 const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
-
-/* ============================= storage ============================= */
-async function loadKey(key, fallback) { try { const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : fallback; } catch { return fallback; } }
-async function saveKey(key, value) { try { await window.storage.set(key, JSON.stringify(value), true); } catch (e) { console.error(e); } }
-
-const DEFAULT_OPERACAO = {
-  veiculoAtivo: "onibus",
-  veiculos: { onibus: { nome: "Ônibus principal", placa: "PIR-2A10", capacidade: 31 }, van: { nome: "Van reserva", placa: "PIR-7B44", capacidade: 14 } },
-  motoristas: [{ id: "m1", nome: "Motorista titular", telefone: "" }],
-  registros: [],
-  manutencoes: [],
-  viagensAtivas: [],
-  modoAtendimento: "ia",
-};
 
 
 /* ============================= error boundary ============================= */
@@ -327,34 +293,13 @@ function AppInner() {
   const R = useReservationsWindow(janela.from, janela.to);
   const reservas = R.reservations;
 
-  // --- Postgres: settings (modo de atendimento) + veículos -------------
+  // --- tudo no Postgres agora ------------------------------------------
   const cfgSettings = useSettings();
   const { defaultVehicle } = useVehicles();
+  const cfg = useRouteConfig();
   const modoAtendimento = cfgSettings.attendanceMode;
   const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
-
-  // --- config (trips/pontos) e CRM: ainda em localStorage (fase 2d) -----
-  // viagensAtivas (Agenda "iniciar viagem") também fica local até a 2c.
-  const [operacao, setOperacao] = useState(DEFAULT_OPERACAO);
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [crm, setCrm] = useState({});
-  const [localPronto, setLocalPronto] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const [o, cfg, crmData] = await Promise.all([
-        loadKey("operacao_v5", DEFAULT_OPERACAO),
-        loadKey("config_v5", DEFAULT_CONFIG), loadKey("crm_v5", {}),
-      ]);
-      setOperacao({ ...DEFAULT_OPERACAO, ...o });
-      setConfig({ ...DEFAULT_CONFIG, ...cfg }); setCrm(crmData);
-      setLocalPronto(true);
-    })();
-  }, []);
-
-  const persistOperacao = useCallback((next) => { setOperacao(next); saveKey("operacao_v5", next); }, []);
-  const persistConfig = useCallback((next) => { setConfig(next); saveKey("config_v5", next); }, []);
-  const persistCrm = useCallback((next) => { setCrm(next); saveKey("crm_v5", next); }, []);
+  const trips = cfg.trips;
 
   const usuario = profile?.name || "—";
 
@@ -369,7 +314,7 @@ function AppInner() {
     { id: "sistema", label: "Sistema", icon: ShieldCheck },
   ];
   const ready = useLazyTab(tab);
-  const loading = !localPronto || (R.loading && reservas.length === 0);
+  const loading = (R.loading && reservas.length === 0) || (cfg.loading && cfg.trips.ida.pontos.length === 0);
   const pendentesCount = reservas.filter(r => r.status === "pendente" || r.status === "espera").length;
 
   return (
@@ -396,14 +341,14 @@ function AppInner() {
         {R.error && !loading && (<div className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3" style={{ borderColor: C.red, background: C.redSoft }}><div className="flex items-center gap-2 text-xs" style={{ color: C.red }}><AlertTriangle size={14} className="shrink-0" /><span>Não foi possível carregar as reservas do servidor.</span></div><button onClick={R.refetch} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.red, color: "#20180A" }}>Tentar de novo</button></div>)}
         {loading || !ready ? <TabSkeleton tab={tab} /> : (
           <div className="anim-fadeIn">
-            {tab === "reservar" && <ReservarTab reservas={reservas} R={R} capacidade={capacidadeAtiva} modoAtendimento={modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "agenda" && <AgendaTab reservas={reservas} R={R} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
-            {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={config.trips} usuario={usuario} />}
-            {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={config.trips} crm={crm} setCrm={persistCrm} />}
+            {tab === "reservar" && <ReservarTab reservas={reservas} R={R} capacidade={capacidadeAtiva} modoAtendimento={modoAtendimento} trips={trips} segundaAtiva={cfg.segundaAtiva} segundaHoras={cfg.segundaHoras} />}
+            {tab === "agenda" && <AgendaTab reservas={reservas} R={R} capacidade={capacidadeAtiva} trips={trips} segundaAtiva={cfg.segundaAtiva} segundaHoras={cfg.segundaHoras} usuario={usuario} />}
+            {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={trips} usuario={usuario} />}
+            {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={trips} />}
             {tab === "financeiro" && <FinanceiroTab />}
             {tab === "operacao" && <OperacaoTab />}
-            {tab === "dashboard" && <DashboardTab reservas={reservas} capacidade={capacidadeAtiva} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "sistema" && <SistemaTab reservas={reservas} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} modoAtendimento={modoAtendimento} onSetModo={cfgSettings.setAttendanceMode} />}
+            {tab === "dashboard" && <DashboardTab reservas={reservas} capacidade={capacidadeAtiva} trips={trips} segundaAtiva={cfg.segundaAtiva} segundaHoras={cfg.segundaHoras} />}
+            {tab === "sistema" && <SistemaTab reservas={reservas} capacidade={capacidadeAtiva} cfg={cfg} modoAtendimento={modoAtendimento} onSetModo={cfgSettings.setAttendanceMode} />}
           </div>
         )}
       </div>
@@ -639,10 +584,11 @@ function StepBlock({ icon: Icon, title, children }) { return (<div className="an
 function NextBtn({ onClick, disabled, label = "Continuar" }) { return <button onClick={onClick} disabled={disabled} className="btn-press mt-4 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: disabled ? C.border : C.amber, color: disabled ? C.inkFaint : "#20180A" }}>{label}</button>; }
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
-function AgendaTab({ reservas, R, capacidade, operacao, setOperacao, trips, segundaAtiva, segundaHoras, usuario }) {
+function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras, usuario }) {
   const [data, setData] = useState(todayStr());
   const [editando, setEditando] = useState(null);
   const [acaoErro, setAcaoErro] = useState("");
+  const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
   const modalHeld = useRef(null);
   if (editando) modalHeld.current = editando;
@@ -704,7 +650,7 @@ function AgendaTab({ reservas, R, capacidade, operacao, setOperacao, trips, segu
           </Card>
         )}
 
-        {["ida", "volta"].map(dir => (<ViagemOperacional key={dir} direcao={dir} data={data} segunda={segunda} segundaHoras={segundaHoras} doDia={doDia} capacidade={capacidade} trips={trips} operacao={operacao} setOperacao={setOperacao} onStatus={atualizarStatus} onEditar={setEditando} onPagamento={togglePagamento} onComprovante={toggleComprovante} usuario={usuario} />))}
+        {["ida", "volta"].map(dir => (<ViagemOperacional key={dir} direcao={dir} data={data} segunda={segunda} segundaHoras={segundaHoras} doDia={doDia} capacidade={capacidade} trips={trips} T={T} onStatus={atualizarStatus} onEditar={setEditando} onPagamento={togglePagamento} onComprovante={toggleComprovante} usuario={usuario} />))}
       </div>
       <Presence when={!!editando} duration={200}>
         {(state) => modalHeld.current && (
@@ -745,7 +691,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onPagamento, onComprov
     </div>
   );
 }
-function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capacidade, trips, operacao, setOperacao, onStatus, onEditar, onPagamento, onComprovante, usuario }) {
+function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capacidade, trips, T, onStatus, onEditar, onPagamento, onComprovante, usuario }) {
   const viagem = trips[direcao];
   const doGrupo = doDia.filter(r => r.direcao === direcao);
   const confirmados = doGrupo.filter(r => OCUPA_VAGA.includes(r.status)).reduce((s, r) => s + r.quantidade, 0);
@@ -759,17 +705,18 @@ function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capaci
   // já contém todos os pontos (os que não estão em idOrdem vão para o fim).
   const pontosOrdenados = [...viagem.pontos].sort((a, b) => (idOrdem.indexOf(a.id) === -1 ? 99 : idOrdem.indexOf(a.id)) - (idOrdem.indexOf(b.id) === -1 ? 99 : idOrdem.indexOf(b.id)));
 
-  const viagemAtiva = (operacao.viagensAtivas || []).find(v => v.data === data && v.direcao === direcao && v.status === "em_andamento");
+  const trip = T?.byDirection?.[direcao] || null;
+  const viagemAtiva = trip?.status === "em_andamento" ? trip : null;
+  const viagemConcluida = trip?.status === "concluida" ? trip : null;
   const iniciarViagem = () => {
+    if (!trip?.trip_id) { alert("Ainda não há viagem para este dia/direção — crie uma reserva primeiro."); return; }
     const kmTxt = prompt("Km atual do veículo na saída?"); if (kmTxt === null) return;
-    const registrar = (loc) => { const nova = { id: uid(), data, direcao, horaSaida: new Date().toISOString(), kmSaida: parseFloat(kmTxt) || 0, localizacaoSaida: loc, status: "em_andamento" }; setOperacao({ ...operacao, viagensAtivas: [...(operacao.viagensAtivas || []), nova] }); alert("Viagem iniciada. Mensagem simulada enviada aos passageiros: \"Estamos a caminho! 🚐\""); };
-    if (navigator.geolocation) { navigator.geolocation.getCurrentPosition((pos) => registrar(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`), () => registrar("não informada")); } else registrar("não informada");
+    T.startTrip(trip.trip_id, { km: parseFloat(kmTxt) || 0 }).catch((e) => alert(e?.message || "Não foi possível iniciar a viagem."));
   };
   const finalizarViagem = () => {
+    if (!viagemAtiva?.trip_id) return;
     const kmTxt = prompt("Km atual do veículo na chegada?"); if (kmTxt === null) return;
-    const kmChegada = parseFloat(kmTxt) || 0; const agora = new Date();
-    const duracaoMin = Math.round((agora - new Date(viagemAtiva.horaSaida)) / 60000);
-    setOperacao({ ...operacao, viagensAtivas: (operacao.viagensAtivas || []).map(v => v.id === viagemAtiva.id ? { ...v, horaChegada: agora.toISOString(), kmChegada, duracaoMin, status: "concluida" } : v) });
+    T.finishTrip(viagemAtiva.trip_id, { km: parseFloat(kmTxt) || 0 }).catch((e) => alert(e?.message || "Não foi possível finalizar a viagem."));
   };
   const avisarJanela = (nomeCidade) => alert(`Mensagem simulada enviada aos passageiros de ${nomeCidade}: "Estamos a caminho para te buscar! 🚐"`);
 
@@ -778,10 +725,11 @@ function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capaci
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: C.blueSoft }}><Icon size={18} style={{ color: C.blue }} /></div><div><div className="text-sm font-semibold">🚌 {viagem.nome} — {horaPrincipal}</div><div className="text-xs" style={{ color: C.inkSoft }}>{viagem.label}</div></div></div>
         <div className="flex items-center gap-2">
-          {!viagemAtiva ? <button onClick={iniciarViagem} className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg" style={{ background: C.greenSoft, color: C.green }}><PlayCircle size={13} /> Iniciar viagem</button> : <button onClick={finalizarViagem} className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg" style={{ background: C.redSoft, color: C.red }}><StopCircle size={13} /> Finalizar viagem</button>}
+          {viagemConcluida ? <span className="text-xs px-2 py-1.5 rounded-lg" style={{ background: C.greenSoft, color: C.green }}>✓ Viagem concluída</span> : !viagemAtiva ? <button onClick={iniciarViagem} className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg" style={{ background: C.greenSoft, color: C.green }}><PlayCircle size={13} /> Iniciar viagem</button> : <button onClick={finalizarViagem} className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg" style={{ background: C.redSoft, color: C.red }}><StopCircle size={13} /> Finalizar viagem</button>}
         </div>
       </div>
-      {viagemAtiva && <div className="text-xs mb-3 rounded-lg px-3 py-2 flex items-center gap-1.5" style={{ background: C.blueSoft, color: C.blue }}><Route size={12} /> Em andamento desde {fmtHora(viagemAtiva.horaSaida)} · km saída {viagemAtiva.kmSaida}</div>}
+      {viagemAtiva && <div className="text-xs mb-3 rounded-lg px-3 py-2 flex items-center gap-1.5" style={{ background: C.blueSoft, color: C.blue }}><Route size={12} /> Em andamento desde {viagemAtiva.started_at ? fmtHora(viagemAtiva.started_at) : "—"} · km saída {viagemAtiva.start_km ?? "—"}</div>}
+      {viagemConcluida && <div className="text-xs mb-3 rounded-lg px-3 py-2 flex items-center gap-1.5" style={{ background: C.greenSoft, color: C.green }}><Route size={12} /> Concluída{viagemConcluida.duration_min ? ` em ${viagemConcluida.duration_min} min` : ""}{viagemConcluida.end_km ? ` · km chegada ${viagemConcluida.end_km}` : ""}</div>}
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 rounded-lg px-3 py-3 mb-4" style={{ background: C.panel2 }}>
         <MiniStat label="Capacidade" value={capacidade} />
         <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
@@ -908,29 +856,33 @@ function MoverCompacto({ reservaId, alvos, mover }) {
 }
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
-function PassageirosTab({ reservas, trips, crm, setCrm }) {
+function PassageirosTab({ reservas, trips }) {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState(null);
+  const [erro, setErro] = useState("");
+  const { customers, updateNotes } = useCustomers();
+  const notaDe = (cid) => (customers.find(c => c.id === cid)?.notes) || "";
   const passageiros = useMemo(() => {
     const map = {};
-    reservas.filter(r => !["frete","encomenda"].includes(r.tipo)).forEach(r => { const key = r.telefone || r.nome; if (!map[key]) map[key] = { nome: r.nome, telefone: r.telefone, viagens: [] }; map[key].viagens.push(r); });
+    reservas.filter(r => !["frete","encomenda"].includes(r.tipo) && r.customer_id).forEach(r => { const key = r.customer_id; if (!map[key]) map[key] = { customer_id: key, nome: r.nome, telefone: r.telefone, viagens: [] }; map[key].viagens.push(r); });
     return Object.values(map).map(p => ({ ...p, totalPassagens: p.viagens.filter(v => OCUPA_VAGA.includes(v.status)).reduce((s, v) => s + v.quantidade, 0), viagensCount: p.viagens.filter(v => OCUPA_VAGA.includes(v.status)).length, cancelamentos: p.viagens.filter(v => v.status === "cancelada").length, naoCompareceu: p.viagens.filter(v => v.status === "nao_compareceu").length, totalGasto: p.viagens.filter(v => OCUPA_VAGA.includes(v.status)).reduce((s, v) => s + (v.valorTotal || 0), 0), ultima: p.viagens.map(v => v.data).sort().slice(-1)[0], ultimoTrajeto: [...p.viagens].sort((a, b) => a.data.localeCompare(b.data)).slice(-1)[0] })).sort((a, b) => b.totalGasto - a.totalGasto);
   }, [reservas]);
-  const filtrados = passageiros.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.telefone || "").includes(busca));
-  const salvarNota = (tel, texto) => setCrm({ ...crm, [tel]: { ...(crm[tel] || {}), notas: texto } });
+  const filtrados = passageiros.filter(p => (p.nome || "").toLowerCase().includes(busca.toLowerCase()) || (p.telefone || "").includes(busca));
+  const salvarNota = (customerId, texto) => { setErro(""); updateNotes(customerId, texto).catch(e => setErro(e?.message || "Não foi possível salvar a nota.")); };
 
   return (
     <div>
       <Header title="Passageiros · CRM" subtitle="Histórico, valor gerado e notas de atendimento por cliente." />
       <div className="px-6 md:px-10 pb-10">
+        {erro && <div className="mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {erro}</span><button onClick={() => setErro("")}><X size={13} /></button></div>}
         <TextInput placeholder="Buscar por nome ou telefone…" value={busca} onChange={e => setBusca(e.target.value)} className="max-w-sm mb-4" />
         <div className="space-y-2 stagger">
           {filtrados.length === 0 && <Card><div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>Nenhum passageiro ainda.</div></Card>}
           {filtrados.map((p, i) => {
-            const abertoAqui = aberto === (p.telefone || p.nome);
+            const abertoAqui = aberto === p.customer_id;
             return (
               <Card key={i} className="anim-fadeUp">
-                <button className="w-full flex items-center justify-between text-left" onClick={() => setAberto(abertoAqui ? null : (p.telefone || p.nome))}>
+                <button className="w-full flex items-center justify-between text-left" onClick={() => setAberto(abertoAqui ? null : p.customer_id)}>
                   <div><div className="text-sm font-medium">{p.nome} <span className="font-normal text-xs" style={{ color: C.inkSoft }}>· {p.telefone}</span></div><div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{p.ultimoTrajeto ? trips[p.ultimoTrajeto.direcao]?.label : "—"} · {fmtBRL(p.totalGasto)} gerados</div></div>
                   <div className="flex items-center gap-2">{p.viagensCount >= 5 ? <Pill color={C.amber} bg={C.amberSoft}><Repeat size={11} />Frequente</Pill> : p.viagensCount >= 2 ? <Pill>Recorrente</Pill> : <Pill color={C.inkSoft} bg={C.panel2}>Novo</Pill>}<ChevronRight size={14} style={{ color: C.inkFaint, transform: abertoAqui ? "rotate(90deg)" : "none", transition: "transform .15s" }} /></div>
                 </button>
@@ -943,7 +895,7 @@ function PassageirosTab({ reservas, trips, crm, setCrm }) {
                       <div>Última viagem: <b style={{ color: C.ink }}>{p.ultima ? fmtDate(p.ultima) : "—"}</b></div>
                       <button onClick={() => window.open(`https://wa.me/55${digitos(p.telefone)}`, "_blank")} className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg" style={{ background: C.greenSoft, color: C.green }}><MessageCircle size={12} /> Abrir WhatsApp</button>
                     </div>
-                    <div><Field label="Notas do CRM"><textarea defaultValue={crm[p.telefone]?.notas || ""} onBlur={e => salvarNota(p.telefone, e.target.value)} rows={4} className={inputCls} style={inputStyle} placeholder="Preferências, observações, combinados…" /></Field></div>
+                    <div><Field label="Notas do CRM"><textarea key={p.customer_id} defaultValue={notaDe(p.customer_id)} onBlur={e => e.target.value !== notaDe(p.customer_id) && salvarNota(p.customer_id, e.target.value)} rows={4} className={inputCls} style={inputStyle} placeholder="Preferências, observações, combinados…" /></Field></div>
                   </div>
                 )}
               </Card>
@@ -1210,54 +1162,55 @@ function DashboardTab({ reservas, capacidade, trips }) {
 }
 
 /* ============================= 8. SISTEMA ============================= */
-function SistemaTab({ reservas, capacidade, config, setConfig, modoAtendimento, onSetModo }) {
+function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
-  const [modoErro, setModoErro] = useState("");
+  const [erro, setErro] = useState("");
+  const catchErr = (p, msg) => p?.catch?.(e => setErro(e?.message || msg));
   // Diagnóstico só-leitura: o banco já impede overbooking (trigger de
-  // capacidade) e quantidade inválida (check). Aqui só listamos o que a
-  // heurística local encontraria — sem reescrever nada. (issue #10)
-  const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { issues, fixed } = runDiagnostics(reservas, capacidade, config.trips); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
-  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, config, nota: "Reservas, financeiro, operação e settings ficam no Postgres. Este backup cobre só o config local (pontos/valores) + a janela de reservas carregada." }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
-  const trocarModo = (v) => { setModoErro(""); onSetModo(v).catch(e => setModoErro(e?.message || "Não foi possível trocar o modo (só admin).")); };
-  const atualizarPonto = (direcao, pontoId, campo, valor) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.map(p => p.id === pontoId ? { ...p, [campo]: campo === "valor" ? parseFloat(valor) || 0 : valor } : p) } }; setConfig({ ...config, trips }); };
-  const addPontoOutro = (direcao) => { if (!novoPontoNome.trim()) return; const id = "custom-" + fnv(novoPontoNome + Date.now()); const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: [...config.trips[direcao].pontos, { id, nome: novoPontoNome.trim(), horaBase: config.trips[direcao].pontos[0].horaBase, valor: 60, core: false }] } }; setConfig({ ...config, trips }); setNovoPontoNome(""); };
-  const removerPonto = (direcao, pontoId) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.filter(p => p.id !== pontoId) } }; setConfig({ ...config, trips }); };
+  // capacidade) e quantidade inválida (check). Aqui só listamos.
+  const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { issues, fixed } = runDiagnostics(reservas, capacidade, cfg.trips); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
+  const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, trips: cfg.trips, nota: "Reservas, financeiro, operação, pontos e settings ficam no Postgres. Este backup é só a janela de reservas carregada + a configuração atual de pontos." }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
+  const trocarModo = (v) => { setErro(""); onSetModo(v).catch(e => setErro(e?.message || "Não foi possível trocar o modo (só admin).")); };
+  const atualizarPonto = (p, campo, valor) => { setErro(""); catchErr(cfg.atualizarPonto(p._dbId, campo, valor), "Não foi possível salvar o ponto (só admin)."); };
+  const addPontoOutro = (direcao) => { if (!novoPontoNome.trim()) return; setErro(""); catchErr(cfg.addPonto(direcao, novoPontoNome.trim()), "Não foi possível adicionar o ponto."); setNovoPontoNome(""); };
+  const removerPonto = (p) => { setErro(""); catchErr(cfg.removerPonto(p._dbId), "Não foi possível remover o ponto."); };
+  const setSegunda = (patch) => { setErro(""); catchErr(cfg.setSegunda({ active: cfg.segundaAtiva, hours: cfg.segundaHoras, ...patch }), "Não foi possível salvar o ajuste (só admin)."); };
 
   return (
     <div>
-      <Header title="Sistema" subtitle="Fluxo, valores, modo de atendimento, backup e correção automática." />
+      <Header title="Sistema" subtitle="Fluxo, valores, modo de atendimento, backup e correção automática." right={cfg.saving ? <span className="text-xs" style={{ color: C.inkFaint }}>salvando…</span> : null} />
       <div className="px-6 md:px-10 pb-10 space-y-5">
+        {erro && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {erro}</span><button onClick={() => setErro("")}><X size={13} /></button></div>}
         <Card className="anim-fadeUp">
           <div className="text-sm font-semibold mb-3 flex items-center gap-2"><Settings2 size={16} style={{ color: C.amber }} /> Fluxo de agendamento e valores</div>
-          <div className="flex items-center gap-3 mb-4 text-xs"><label className="flex items-center gap-1.5"><input type="checkbox" checked={config.segundaAtiva} onChange={e => setConfig({ ...config, segundaAtiva: e.target.checked })} /> Ajuste automático de segunda-feira</label>{config.segundaAtiva && <span className="flex items-center gap-1.5">antecipar <TextInput type="number" min={1} max={4} value={config.segundaHoras} onChange={e => setConfig({ ...config, segundaHoras: parseInt(e.target.value) || 1 })} style={{ width: 56 }} className="py-1" /> hora(s)</span>}</div>
+          <div className="flex items-center gap-3 mb-4 text-xs"><label className="flex items-center gap-1.5"><input type="checkbox" checked={cfg.segundaAtiva} onChange={e => setSegunda({ active: e.target.checked })} /> Ajuste automático de segunda-feira</label>{cfg.segundaAtiva && <span className="flex items-center gap-1.5">antecipar <TextInput type="number" min={1} max={4} defaultValue={cfg.segundaHoras} onBlur={e => setSegunda({ hours: parseInt(e.target.value, 10) || 1 })} style={{ width: 56 }} className="py-1" /> hora(s)</span>}</div>
           {["ida", "volta"].map(dir => (
             <div key={dir} className="mb-4">
-              <div className="text-xs font-semibold mb-2" style={{ color: C.inkSoft }}>{config.trips[dir].nome}</div>
-              <div className="space-y-2">{config.trips[dir].pontos.map(p => (<div key={p.id} className="grid grid-cols-[1fr_90px_90px_auto] gap-2 items-center rounded-lg px-2 py-2" style={{ background: C.panel2 }}><TextInput value={p.nome} onChange={e => atualizarPonto(dir, p.id, "nome", e.target.value)} className="py-1 text-xs" /><TextInput type="time" value={p.horaBase} onChange={e => atualizarPonto(dir, p.id, "horaBase", e.target.value)} className="py-1 text-xs" />{p.campo === "bairro" ? <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>por bairro</span> : <TextInput type="number" value={p.valor} onChange={e => atualizarPonto(dir, p.id, "valor", e.target.value)} className="py-1 text-xs" />}{p.core ? <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>fixo</span> : <button onClick={() => removerPonto(dir, p.id)}><Trash2 size={13} style={{ color: C.red }} /></button>}</div>))}</div>
-              <div className="flex gap-2 mt-2"><TextInput placeholder={`Novo ponto de ${config.trips[dir].nome.toLowerCase()}…`} value={novoPontoNome} onChange={e => setNovoPontoNome(e.target.value)} className="text-xs py-1.5" /><button onClick={() => addPontoOutro(dir)} className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ background: C.amber, color: "#20180A" }}>Adicionar</button></div>
+              <div className="text-xs font-semibold mb-2" style={{ color: C.inkSoft }}>{cfg.trips[dir].nome}</div>
+              <div className="space-y-2">{cfg.trips[dir].pontos.map(p => (<div key={p.id} className="grid grid-cols-[1fr_90px_90px_auto] gap-2 items-center rounded-lg px-2 py-2" style={{ background: C.panel2 }}><TextInput defaultValue={p.nome} onBlur={e => e.target.value !== p.nome && atualizarPonto(p, "nome", e.target.value)} className="py-1 text-xs" /><TextInput type="time" defaultValue={p.horaBase} onBlur={e => e.target.value !== p.horaBase && atualizarPonto(p, "horaBase", e.target.value)} className="py-1 text-xs" />{p.campo === "bairro" ? <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>por bairro</span> : <TextInput type="number" defaultValue={p.valor} onBlur={e => Number(e.target.value) !== p.valor && atualizarPonto(p, "valor", e.target.value)} className="py-1 text-xs" />}{p.core ? <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>fixo</span> : <button onClick={() => removerPonto(p)}><Trash2 size={13} style={{ color: C.red }} /></button>}</div>))}</div>
+              <div className="flex gap-2 mt-2"><TextInput placeholder={`Novo ponto de ${cfg.trips[dir].nome.toLowerCase()}…`} value={novoPontoNome} onChange={e => setNovoPontoNome(e.target.value)} className="text-xs py-1.5" /><button onClick={() => addPontoOutro(dir)} className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0" style={{ background: C.amber, color: "#20180A" }}>Adicionar</button></div>
             </div>
           ))}
-          <div className="text-xs mt-1" style={{ color: C.inkFaint }}>O valor de "Buscar em Casa" é calculado pelo bairro informado (lista de bairros a R$80/R$90); os demais pontos usam o valor fixo definido aqui.</div>
+          <div className="text-xs mt-1" style={{ color: C.inkFaint }}>Editar um ponto: altere e clique fora do campo. "Buscar em Casa" usa a tabela de bairros (R$80/R$90); os demais usam o valor fixo aqui. Vale para todos os sócios.</div>
         </Card>
 
         <Card>
           <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
-          {modoErro && <div className="text-xs mb-2 rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.redSoft, color: C.red }}><AlertTriangle size={12} /> {modoErro}</div>}
           <div className="grid sm:grid-cols-2 gap-3">{[{ v: "ia", icon: Bot, label: "IA automática", desc: "O bot conduz o roteiro completo e confirma sozinho." }, { v: "manual", icon: UserCog, label: "Manual (você/equipe)", desc: "A IA para de confirmar sozinha; a equipe assume as conversas." }].map(o => (<button key={o.v} onClick={() => trocarModo(o.v)} className="btn-press border rounded-lg px-4 py-3 text-left" style={{ borderColor: modoAtendimento === o.v ? C.amber : C.border, background: modoAtendimento === o.v ? C.amberSoft : C.panel2 }}><div className="flex items-center gap-2 text-sm font-medium"><o.icon size={15} style={{ color: modoAtendimento === o.v ? C.amber : C.inkSoft }} />{o.label}</div><div className="text-xs mt-1" style={{ color: C.inkSoft }}>{o.desc}</div></button>))}</div>
           <div className="text-xs mt-2" style={{ color: C.inkFaint }}>Vale para todos os sócios em tempo real.</div>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between mb-3"><div className="text-sm font-semibold flex items-center gap-2"><ShieldCheck size={16} style={{ color: C.green }} /> Diagnóstico e correção automática</div><button onClick={rodarDiagnostico} disabled={rodando} className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: C.amber, color: "#20180A" }}><RefreshCw size={12} className={rodando ? "animate-spin" : ""} /> {rodando ? "Verificando…" : "Rodar diagnóstico agora"}</button></div>
-          <p className="text-xs mb-3" style={{ color: C.inkSoft }}>Roda sozinho a cada mudança nos dados (local ou sincronizada de outro sócio) e avisa com um alerta no topo do app.</p>
-          {diag && (<div className="anim-slideDown space-y-2"><div className="text-xs" style={{ color: C.inkFaint }}>Última verificação manual: {diag.quando}</div>{diag.fixed.length === 0 && diag.issues.length === 0 && <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}><Check size={13} /> Nenhum problema encontrado.</div>}{diag.fixed.map((f, i) => <div key={i} className="text-xs rounded-md px-2 py-1.5" style={{ background: C.greenSoft, color: C.green }}>✓ Corrigido automaticamente: {f}</div>)}{diag.issues.map((f, i) => <div key={i} className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.redSoft, color: C.red }}><AlertTriangle size={12} /> {f}</div>)}</div>)}
+          <p className="text-xs mb-3" style={{ color: C.inkSoft }}>Checagem só-leitura. O banco já impede overbooking (trava de capacidade) e quantidade inválida — isto aqui é uma segunda conferência manual.</p>
+          {diag && (<div className="anim-slideDown space-y-2"><div className="text-xs" style={{ color: C.inkFaint }}>Última verificação: {diag.quando}</div>{diag.fixed.length === 0 && diag.issues.length === 0 && <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}><Check size={13} /> Nenhum problema encontrado.</div>}{diag.issues.map((f, i) => <div key={i} className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.redSoft, color: C.red }}><AlertTriangle size={12} /> {f}</div>)}</div>)}
         </Card>
 
-        <Card><div className="text-sm font-semibold mb-2 flex items-center gap-2"><Download size={15} style={{ color: C.blue }} /> Backup manual</div><p className="text-xs mb-3" style={{ color: C.inkSoft }}>O painel já salva tudo automaticamente e sincroniza entre os sócios a cada poucos segundos. Baixe um backup extra em JSON antes de mudanças grandes.</p><button onClick={baixarBackup} className="btn-press flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg" style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}><Download size={14} /> Baixar backup agora</button></Card>
+        <Card><div className="text-sm font-semibold mb-2 flex items-center gap-2"><Download size={15} style={{ color: C.blue }} /> Backup manual</div><p className="text-xs mb-3" style={{ color: C.inkSoft }}>Os dados ficam no Postgres (Supabase) com backup automático da plataforma. Baixe um extra em JSON antes de mudanças grandes.</p><button onClick={baixarBackup} className="btn-press flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg" style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}><Download size={14} /> Baixar backup agora</button></Card>
 
-        <Card style={{ borderColor: C.blueSoft }}><div className="text-sm font-semibold mb-2">Acesso compartilhado entre sócios</div><p className="text-xs" style={{ color: C.inkSoft }}>Todos que abrem este painel enxergam os mesmos dados; cada dispositivo verifica atualizações a cada 8 segundos. Para acesso instantâneo (push em tempo real) hospedado numa URL própria, o próximo passo é o backend com Supabase Realtime descrito em <code>DATABASE.md</code>. O mesmo backend é o ponto onde o bot do WhatsApp escreve e lê as reservas — nunca deixando a conversa "solta" fora do banco.</p></Card>
+        <Card style={{ borderColor: C.blueSoft }}><div className="text-sm font-semibold mb-2">Acesso compartilhado entre sócios</div><p className="text-xs" style={{ color: C.inkSoft }}>Todos que entram com sua conta enxergam os mesmos dados, atualizados em tempo real (Supabase Realtime). É o mesmo banco onde o bot do WhatsApp vai escrever e ler as reservas.</p></Card>
       </div>
     </div>
   );

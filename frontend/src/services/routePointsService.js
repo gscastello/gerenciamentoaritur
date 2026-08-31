@@ -70,12 +70,14 @@ export const routePointsService = {
     );
   },
 
+  /** Soft-delete via RPC SECURITY DEFINER (UPDATE direto de deleted_at é
+   *  recusado pela RLS — ver database/retrofit-soft-delete-rpc.sql). Só
+   *  remove pontos não-core. */
   async removeCustomPoint(pointId) {
-    const actor = await getCurrentUserId();
-    return handle(
-      supabase.from("route_points").update({ deleted_at: new Date().toISOString(), updated_by: actor }).eq("id", pointId).eq("is_core", false),
-      "removeCustomPoint",
-    );
+    const { data, error } = await supabase.rpc("rpc_soft_delete_route_point", { p_id: pointId });
+    if (error) throw new ServiceError(`removeCustomPoint: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover o ponto.", { retryable: false });
+    return data;
   },
 
   // ---- precificação por bairro (Buscar em Casa) ------------------------
