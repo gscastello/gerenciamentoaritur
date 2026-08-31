@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { Presence } from "../ui/motion/index.js";
 import { TabSkeleton, ChartsSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
+import { useAuth } from "../auth/AuthProvider.jsx";
+import { useReservationsWindow } from "../hooks/useReservations.js";
 import {
   Calendar, Users, Wallet, Bus, LayoutDashboard, MapPin,
   CheckCircle2, Clock, Fuel, Wrench, TrendingUp, Plus, X, ChevronRight,
   ChevronLeft, MessageCircle, Repeat, Ban, Route, Copy, Check, Pencil,
   Home as HomeIcon, ArrowRight, ArrowLeft, Sunrise, CreditCard, Truck,
   Headset, AlertTriangle, ClipboardList, ShieldCheck, Download, Bot, UserCog,
-  RefreshCw, Save, ArrowLeftRight, Wifi, Settings2, Trash2, Bell, X as XIcon,
+  RefreshCw, Save, ArrowLeftRight, Wifi, Settings2, Trash2, X as XIcon,
   Receipt, PlayCircle, StopCircle, Megaphone, History, UserX, Hourglass,
   Package, Sparkles,
 } from "lucide-react";
@@ -109,11 +111,6 @@ const DEFAULT_OPERACAO = {
   modoAtendimento: "ia",
 };
 
-/* histórico de alterações */
-function comHistorico(reserva, acao, funcionario, detalhe = "") {
-  const linha = { quando: new Date().toISOString(), acao, funcionario: funcionario || "—", detalhe };
-  return { ...reserva, historico: [...(reserva.historico || []), linha] };
-}
 
 /* ============================= error boundary ============================= */
 class ErrorBoundary extends React.Component {
@@ -307,55 +304,51 @@ function gerarInsightsIA(reservas, operacao, capacidade, trips) {
 }
 
 /* ============================= app shell ============================= */
+// Reservas de -JANELA_DIAS a +JANELA_DIAS ficam carregadas no painel. É o
+// suficiente para operação, agenda futura e histórico recente; Passageiros/
+// Dashboard usam a mesma janela. (issue #10 — ver APP-INTEGRATION-PLAN.md)
+const JANELA_DIAS = 120;
+
 function AppInner() {
   useEffect(() => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = FONTS; document.head.appendChild(l); }, []);
+  const { profile } = useAuth();
   const [tab, setTab] = useState("reservar");
-  const [loading, setLoading] = useState(true);
-  const [reservas, setReservas] = useState([]);
+
+  // --- Reservas: fonte de verdade = Postgres (janela + realtime) --------
+  const janela = useMemo(() => {
+    const base = new Date();
+    const iso = (delta) => { const d = new Date(base); d.setDate(d.getDate() + delta); return d.toISOString().slice(0, 10); };
+    return { from: iso(-JANELA_DIAS), to: iso(JANELA_DIAS) };
+  }, []);
+  const R = useReservationsWindow(janela.from, janela.to);
+  const reservas = R.reservations;
+
+  // --- operação / config / CRM: ainda em localStorage (fase 2) ----------
   const [financeiro, setFinanceiro] = useState([]);
   const [operacao, setOperacao] = useState(DEFAULT_OPERACAO);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [crm, setCrm] = useState({});
-  const [usuario, setUsuario] = useState("Dono");
-  const [alerta, setAlerta] = useState(null);
-  const [alertaFechado, setAlertaFechado] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
-  const [ultimaSync, setUltimaSync] = useState(null);
-  const assinaturaRef = React.useRef("");
+  const [localPronto, setLocalPronto] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [r, f, o, cfg, crmData, usr] = await Promise.all([loadKey("reservas_v5", []), loadKey("financeiro_v5", []), loadKey("operacao_v5", DEFAULT_OPERACAO), loadKey("config_v5", DEFAULT_CONFIG), loadKey("crm_v5", {}), loadKey("usuario_v5", "Dono")]);
-      setReservas(r); setFinanceiro(f); setOperacao({ ...DEFAULT_OPERACAO, ...o }); setConfig({ ...DEFAULT_CONFIG, ...cfg }); setCrm(crmData); setUsuario(usr);
-      assinaturaRef.current = JSON.stringify({ r, f, o, cfg, crmData }); setUltimaSync(new Date());
-      setLoading(false);
+      const [f, o, cfg, crmData] = await Promise.all([
+        loadKey("financeiro_v5", []), loadKey("operacao_v5", DEFAULT_OPERACAO),
+        loadKey("config_v5", DEFAULT_CONFIG), loadKey("crm_v5", {}),
+      ]);
+      setFinanceiro(f); setOperacao({ ...DEFAULT_OPERACAO, ...o });
+      setConfig({ ...DEFAULT_CONFIG, ...cfg }); setCrm(crmData);
+      setLocalPronto(true);
     })();
   }, []);
 
-  const persistReservas = useCallback((next) => { setReservas(next); saveKey("reservas_v5", next); }, []);
   const persistFinanceiro = useCallback((next) => { setFinanceiro(next); saveKey("financeiro_v5", next); }, []);
   const persistOperacao = useCallback((next) => { setOperacao(next); saveKey("operacao_v5", next); }, []);
   const persistConfig = useCallback((next) => { setConfig(next); saveKey("config_v5", next); }, []);
   const persistCrm = useCallback((next) => { setCrm(next); saveKey("crm_v5", next); }, []);
-  const persistUsuario = useCallback((next) => { setUsuario(next); saveKey("usuario_v5", next); }, []);
+
+  const usuario = profile?.name || "—";
   const capacidadeAtiva = operacao.veiculos[operacao.veiculoAtivo].capacidade;
-
-  const sincronizarAgora = useCallback(async () => {
-    setSincronizando(true);
-    const [r, f, o, cfg, crmData] = await Promise.all([loadKey("reservas_v5", reservas), loadKey("financeiro_v5", financeiro), loadKey("operacao_v5", operacao), loadKey("config_v5", config), loadKey("crm_v5", crm)]);
-    const assinatura = JSON.stringify({ r, f, o, cfg, crmData });
-    if (assinatura !== assinaturaRef.current) { assinaturaRef.current = assinatura; setReservas(r); setFinanceiro(f); setOperacao({ ...DEFAULT_OPERACAO, ...o }); setConfig({ ...DEFAULT_CONFIG, ...cfg }); setCrm(crmData); }
-    setUltimaSync(new Date()); setSincronizando(false);
-  }, [reservas, financeiro, operacao, config, crm]);
-  useEffect(() => { if (loading) return; const t = setInterval(sincronizarAgora, 8000); return () => clearInterval(t); }, [loading, sincronizarAgora]);
-
-  useEffect(() => {
-    if (loading) return;
-    const { corrigidas, issues, fixed } = runDiagnostics(reservas, capacidadeAtiva, config.trips);
-    if (fixed.length > 0) persistReservas(corrigidas);
-    if (issues.length > 0) { setAlerta({ issues, quando: new Date().toLocaleTimeString("pt-BR") }); setAlertaFechado(false); } else setAlerta(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reservas, capacidadeAtiva, loading]);
 
   const NAV = [
     { id: "reservar", label: "Reservar", icon: MessageCircle },
@@ -368,8 +361,8 @@ function AppInner() {
     { id: "sistema", label: "Sistema", icon: ShieldCheck },
   ];
   const ready = useLazyTab(tab);
+  const loading = !localPronto || (R.loading && reservas.length === 0);
   const pendentesCount = reservas.filter(r => r.status === "pendente" || r.status === "espera").length;
-  const segsAtras = ultimaSync ? Math.max(0, Math.round((Date.now() - ultimaSync.getTime()) / 1000)) : null;
 
   return (
     <div className="min-h-screen w-full flex" style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}>
@@ -379,8 +372,8 @@ function AppInner() {
           <div className="flex items-center gap-2" style={{ color: C.amber }}><Route size={20} strokeWidth={2.3} /><span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.05rem" }}>Rota Pirapemas</span></div>
           <div className="text-xs mt-1" style={{ color: C.inkFaint }}>São Luís ⇄ Pirapemas</div>
           <div className="mt-3 flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: C.inkSoft }}>{operacao.modoAtendimento === "ia" ? <Bot size={12} style={{ color: C.green }} /> : <UserCog size={12} style={{ color: C.amber }} />}{operacao.modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}</div>
-          <button onClick={sincronizarAgora} className="btn-press mt-2 w-full flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: C.inkSoft }}><Wifi size={12} className={sincronizando ? "pulse-dot" : ""} style={{ color: C.green }} />{sincronizando ? "Sincronizando…" : `Sincronizado${segsAtras !== null ? ` há ${segsAtras}s` : ""}`}</button>
-          <div className="mt-2"><TextInput value={usuario} onChange={e => persistUsuario(e.target.value)} placeholder="Seu nome (para o histórico)" className="text-xs py-1.5" /></div>
+          <div className="mt-2 flex items-center gap-1.5 text-xs rounded-md px-2 py-1" style={{ background: C.panel2, color: R.error ? C.red : C.inkSoft }}><Wifi size={12} className={R.loading ? "pulse-dot" : ""} style={{ color: R.error ? C.red : C.green }} />{R.error ? "Sem conexão — tentando…" : "Sincronizado em tempo real"}</div>
+          <div className="mt-2 text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5" style={{ background: C.panel2, color: C.inkSoft }}><UserCog size={12} style={{ color: C.inkFaint }} /><span className="truncate">{usuario}{profile?.role ? ` · ${profile.role}` : ""}</span></div>
         </div>
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {NAV.map((n) => { const Icon = n.icon; const active = tab === n.id; return (<button key={n.id} onClick={() => setTab(n.id)} className="tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style={{ background: active ? C.amberSoft : "transparent", color: active ? C.amber : C.inkSoft, fontWeight: active ? 600 : 500 }}><Icon size={16} />{n.label}{n.id === "agenda" && pendentesCount > 0 && <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.purpleSoft, color: C.purple }}>{pendentesCount}</span>}</button>); })}
@@ -392,17 +385,17 @@ function AppInner() {
       </div>
 
       <div className="flex-1 min-w-0 pb-16 md:pb-0 overflow-x-hidden">
-        {alerta && !alertaFechado && (<div className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-start justify-between gap-3" style={{ borderColor: C.red, background: C.redSoft }}><div className="flex items-start gap-2 text-xs" style={{ color: C.red }}><Bell size={14} className="mt-0.5 shrink-0" /><div><b>{alerta.issues.length} possível(is) inconsistência(s)</b> às {alerta.quando}. <button onClick={() => setTab("sistema")} className="underline">Ver no Sistema</button>.</div></div><button onClick={() => setAlertaFechado(true)}><XIcon size={14} style={{ color: C.red }} /></button></div>)}
+        {R.error && !loading && (<div className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3" style={{ borderColor: C.red, background: C.redSoft }}><div className="flex items-center gap-2 text-xs" style={{ color: C.red }}><AlertTriangle size={14} className="shrink-0" /><span>Não foi possível carregar as reservas do servidor.</span></div><button onClick={R.refetch} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.red, color: "#20180A" }}>Tentar de novo</button></div>)}
         {loading || !ready ? <TabSkeleton tab={tab} /> : (
           <div className="anim-fadeIn">
-            {tab === "reservar" && <ReservarTab reservas={reservas} setReservas={persistReservas} capacidade={capacidadeAtiva} modoAtendimento={operacao.modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "agenda" && <AgendaTab reservas={reservas} setReservas={persistReservas} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
-            {tab === "lista" && <ListaTab reservas={reservas} setReservas={persistReservas} trips={config.trips} usuario={usuario} />}
+            {tab === "reservar" && <ReservarTab reservas={reservas} R={R} capacidade={capacidadeAtiva} modoAtendimento={operacao.modoAtendimento} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
+            {tab === "agenda" && <AgendaTab reservas={reservas} R={R} capacidade={capacidadeAtiva} operacao={operacao} setOperacao={persistOperacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} usuario={usuario} />}
+            {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={config.trips} usuario={usuario} />}
             {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={config.trips} crm={crm} setCrm={persistCrm} />}
             {tab === "financeiro" && <FinanceiroTab financeiro={financeiro} setFinanceiro={persistFinanceiro} operacao={operacao} />}
             {tab === "operacao" && <OperacaoTab operacao={operacao} setOperacao={persistOperacao} trips={config.trips} />}
             {tab === "dashboard" && <DashboardTab reservas={reservas} financeiro={financeiro} capacidade={capacidadeAtiva} operacao={operacao} trips={config.trips} segundaAtiva={config.segundaAtiva} segundaHoras={config.segundaHoras} />}
-            {tab === "sistema" && <SistemaTab reservas={reservas} setReservas={persistReservas} financeiro={financeiro} operacao={operacao} setOperacao={persistOperacao} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} />}
+            {tab === "sistema" && <SistemaTab reservas={reservas} financeiro={financeiro} operacao={operacao} setOperacao={persistOperacao} capacidade={capacidadeAtiva} config={config} setConfig={persistConfig} />}
           </div>
         )}
       </div>
@@ -412,11 +405,13 @@ function AppInner() {
 export default function App() { return <ErrorBoundary><AppInner /></ErrorBoundary>; }
 
 /* ============================= 1. RESERVAR ============================= */
-function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips, segundaAtiva, segundaHoras }) {
+function ReservarTab({ reservas, R, capacidade, modoAtendimento, trips, segundaAtiva, segundaHoras }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ data: todayStr(), direcao: "", pontoId: "", quantidade: 1, bairro: "", localExato: "", localOutro: "", rua: "", referencia: "", desembarque: "", nome: "", telefone: "", pagamento: "dinheiro", encItem: "", encTipo: "", encEmbarque: "", encDesembarque: "", encRecebedorNome: "", encRecebedorTelefone: "" });
   const [done, setDone] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
   const segunda = isMonday(form.data) && segundaAtiva;
   const viagem = form.direcao && !["frete", "espera"].includes(form.direcao) ? trips[form.direcao] : null;
@@ -438,19 +433,88 @@ function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips
     if (form.direcao === "volta" && (!form.rua || !form.referencia)) return true;
     return false;
   };
-  const confirmar = () => {
-    const reserva = { id: uid(), ...form, quantidade: parseInt(form.quantidade) || 1, valorTotal: total, status: pendente ? "pendente" : "confirmada", motivoPendente: pendente ? "Embarque/desembarque fora de São Luís, Cantanhede ou Pirapemas — aguardando confirmação." : "", tipo: "passagem", historico: [{ quando: new Date().toISOString(), acao: "Reserva criada pelo WhatsApp", funcionario: "IA" }], criadoEm: new Date().toISOString() };
-    setReservas([...reservas, reserva]); setDone(reserva); setStep(9);
+  // resumo local só para as telas de sucesso — a fonte de verdade é o
+  // que o banco gravou (o realtime traz a reserva para a Agenda sozinho).
+  const resumoLocal = (status) => ({
+    data: form.data, direcao: form.direcao === "espera" ? form._direcaoOriginal : form.direcao,
+    pontoId: form.pontoId || null, bairro: form.bairro, localExato: form.localExato, localOutro: form.localOutro,
+    quantidade: parseInt(form.quantidade, 10) || 1, valorTotal: total, pagamento: form.pagamento,
+    nome: form.nome, telefone: form.telefone, status,
+  });
+  const confirmar = async () => {
+    setErroEnvio(""); setEnviando(true);
+    try {
+      const res = await R.createReservation({
+        tripDate: form.data,
+        direction: form.direcao,
+        customerName: form.nome,
+        customerPhone: form.telefone,
+        routePointCode: form.pontoId || null,
+        quantity: parseInt(form.quantidade, 10) || 1,
+        unitPrice: valorUnit,
+        paymentMethod: form.pagamento,
+        pickupNeighborhood: form.bairro || null,
+        pickupDetail: form.localExato || form.localOutro || null,
+        street: form.rua || null,
+        referencePoint: form.referencia || null,
+        dropoffLocation: form.desembarque || null,
+        pendingReason: pendente ? "Embarque/desembarque fora de São Luís, Cantanhede ou Pirapemas — aguardando confirmação." : null,
+        status: pendente ? "pendente" : "confirmada",
+      });
+      setDone(resumoLocal(res?.status || (pendente ? "pendente" : "confirmada"))); setStep(9);
+    } catch (e) {
+      if (e?.code === "CAPACITY_OR_BUSINESS_RULE") { setForm({ ...form, _direcaoOriginal: form.direcao }); setStep("espera-form"); }
+      else setErroEnvio(e?.message || "Não foi possível enviar a reserva. Tente de novo.");
+    } finally { setEnviando(false); }
   };
-  const confirmarEspera = () => {
-    const reserva = { id: uid(), data: form.data, direcao: form.direcao === "espera" ? form._direcaoOriginal : form.direcao, pontoId: form.pontoId || null, quantidade: parseInt(form.quantidade) || 1, nome: form.nome, telefone: form.telefone, status: "espera", tipo: "passagem", historico: [{ quando: new Date().toISOString(), acao: "Entrou na lista de espera", funcionario: "IA" }], criadoEm: new Date().toISOString() };
-    setReservas([...reservas, reserva]); setDone(reserva); setStep(10);
+  const confirmarEspera = async () => {
+    setErroEnvio(""); setEnviando(true);
+    try {
+      const res = await R.createReservation({
+        tripDate: form.data,
+        direction: form.direcao === "espera" ? form._direcaoOriginal : form.direcao,
+        customerName: form.nome,
+        customerPhone: form.telefone,
+        routePointCode: form.pontoId || null,
+        quantity: parseInt(form.quantidade, 10) || 1,
+        unitPrice: valorUnit,
+        paymentMethod: form.pagamento,
+        status: "espera",
+      });
+      setDone(resumoLocal(res?.status || "espera")); setStep(10);
+    } catch (e) { setErroEnvio(e?.message || "Não foi possível entrar na lista de espera."); }
+    finally { setEnviando(false); }
   };
-  const reiniciar = () => { setForm({ data: todayStr(), direcao: "", pontoId: "", quantidade: 1, bairro: "", localExato: "", localOutro: "", rua: "", referencia: "", desembarque: "", nome: "", telefone: "", pagamento: "dinheiro" }); setStep(0); setDone(null); setCopied(false); };
+  const reiniciar = () => { setForm({ data: todayStr(), direcao: "", pontoId: "", quantidade: 1, bairro: "", localExato: "", localOutro: "", rua: "", referencia: "", desembarque: "", nome: "", telefone: "", pagamento: "dinheiro" }); setStep(0); setDone(null); setCopied(false); setErroEnvio(""); };
   const copiarPix = () => { navigator.clipboard?.writeText(PIX_KEY); setCopied(true); setTimeout(() => setCopied(false), 1800); };
   const irParaAtendente = () => setStep(8);
-  const irParaFrete = () => { setReservas([...reservas, { id: uid(), data: form.data, tipo: "frete", status: "pendente", nome: form.nome || "(a coletar no atendimento)", telefone: form.telefone || "", motivoPendente: "Pedido de frete — encaminhar para atendimento humano.", historico: [], criadoEm: new Date().toISOString() }]); setStep(7); };
-  const irParaEncomenda = () => { setReservas([...reservas, { id: uid(), data: form.data, tipo: "encomenda", status: "pendente", nome: form.encRecebedorNome, telefone: form.encRecebedorTelefone, encItem: form.encItem, encTipo: form.encTipo, encEmbarque: form.encEmbarque, encDesembarque: form.encDesembarque, motivoPendente: "Encomenda — encaminhar para atendimento humano (sem valor definido no fluxo automático).", historico: [], criadoEm: new Date().toISOString() }]); setStep(11); };
+  const irParaFrete = async () => {
+    setErroEnvio(""); setEnviando(true);
+    try {
+      await R.createReservation({
+        tripDate: form.data, direction: "ida", type: "frete",
+        customerName: form.nome || "(a coletar no atendimento)", customerPhone: form.telefone || "",
+        pendingReason: "Pedido de frete — encaminhar para atendimento humano.",
+        status: "pendente", extraData: { data: form.data },
+      });
+      setStep(7);
+    } catch (e) { setErroEnvio(e?.message || "Não foi possível registrar o frete."); }
+    finally { setEnviando(false); }
+  };
+  const irParaEncomenda = async () => {
+    setErroEnvio(""); setEnviando(true);
+    try {
+      await R.createReservation({
+        tripDate: form.data, direction: "ida", type: "encomenda",
+        customerName: form.encRecebedorNome, customerPhone: form.encRecebedorTelefone,
+        pendingReason: "Encomenda — encaminhar para atendimento humano (sem valor definido no fluxo automático).",
+        status: "pendente",
+        extraData: { data: form.data, encItem: form.encItem, encTipo: form.encTipo, encEmbarque: form.encEmbarque, encDesembarque: form.encDesembarque },
+      });
+      setStep(11);
+    } catch (e) { setErroEnvio(e?.message || "Não foi possível registrar a encomenda."); }
+    finally { setEnviando(false); }
+  };
   const stepsTotal = 6; const progressPct = Math.min(100, (Math.min(typeof step === "number" ? step : 6, 6) / stepsTotal) * 100);
 
   return (
@@ -459,6 +523,7 @@ function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips
       <div className="px-6 md:px-10 pb-10 grid lg:grid-cols-[1fr_320px] gap-6">
         <Card style={{ maxWidth: 600 }}>
           {modoAtendimento === "manual" && step < 7 && <div className="text-xs rounded-lg px-3 py-2 mb-4 flex items-center gap-2" style={{ background: C.amberSoft, color: C.amber }}><UserCog size={13} /> Atendimento manual ativo — a equipe está respondendo diretamente.</div>}
+          {erroEnvio && <div className="text-xs rounded-lg px-3 py-2 mb-4 flex items-center gap-2" style={{ background: C.redSoft, color: C.red }}><AlertTriangle size={13} /> {erroEnvio}</div>}
           {typeof step === "number" && step < 6 && <div className="w-full h-1 rounded-full mb-5" style={{ background: C.panel2 }}><div className="h-1 rounded-full bar-fill" style={{ width: `${progressPct}%`, background: C.amber }} /></div>}
           {typeof step === "number" && step < 7 && <button onClick={irParaAtendente} className="text-xs mb-3 flex items-center gap-1.5" style={{ color: C.inkFaint }}><Headset size={13} /> Sair e falar com um atendente</button>}
 
@@ -488,7 +553,7 @@ function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips
               <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Local de embarque"><TextInput value={form.encEmbarque} onChange={e => setForm({ ...form, encEmbarque: e.target.value })} /></Field><Field label="Local de desembarque"><TextInput value={form.encDesembarque} onChange={e => setForm({ ...form, encDesembarque: e.target.value })} /></Field></div>
               <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Nome de quem vai receber"><TextInput value={form.encRecebedorNome} onChange={e => setForm({ ...form, encRecebedorNome: e.target.value })} /></Field><Field label="Telefone de contato de quem recebe"><TextInput value={form.encRecebedorTelefone} onChange={e => setForm({ ...form, encRecebedorTelefone: e.target.value })} /></Field></div>
               <div className="text-xs mb-2 flex items-center gap-1.5" style={{ color: C.purple }}><AlertTriangle size={13} /> O valor da encomenda é combinado direto com a equipe — não é informado aqui.</div>
-              <NextBtn onClick={irParaEncomenda} disabled={!form.encItem || !form.encEmbarque || !form.encDesembarque || !form.encRecebedorNome || !form.encRecebedorTelefone} label="Encaminhar para a equipe" />
+              <NextBtn onClick={irParaEncomenda} disabled={enviando || !form.encItem || !form.encEmbarque || !form.encDesembarque || !form.encRecebedorNome || !form.encRecebedorTelefone} label={enviando ? "Enviando…" : "Encaminhar para a equipe"} />
             </StepBlock>
           )}
 
@@ -497,11 +562,11 @@ function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips
               <p className="text-xs mb-3" style={{ color: C.purple }}>Essa viagem está lotada. Deixe seus dados que avisamos assim que abrir vaga — mover para a agenda é feito manualmente pela nossa equipe.</p>
               <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Quantidade desejada"><TextInput type="number" min={1} value={form.quantidade} onChange={e => setForm({ ...form, quantidade: e.target.value })} /></Field><Field label="Ponto de embarque preferido"><Select value={form.pontoId} onChange={e => setForm({ ...form, pontoId: e.target.value })}><option value="">Qualquer um</option>{trips[form._direcaoOriginal].pontos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</Select></Field></div>
               <div className="grid grid-cols-2 gap-2"><Field label="Nome"><TextInput value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></Field><Field label="WhatsApp"><TextInput value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} /></Field></div>
-              <NextBtn onClick={confirmarEspera} disabled={!form.nome || !form.telefone} label="Entrar na lista de espera" />
+              <NextBtn onClick={confirmarEspera} disabled={enviando || !form.nome || !form.telefone} label={enviando ? "Enviando…" : "Entrar na lista de espera"} />
             </StepBlock>
           )}
 
-          {step === 6.5 && (<StepBlock icon={Truck} title="Frete — seus dados para contato"><div className="grid grid-cols-2 gap-2"><Field label="Nome"><TextInput value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></Field><Field label="WhatsApp"><TextInput value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} /></Field></div><NextBtn onClick={irParaFrete} label="Encaminhar para a equipe" /></StepBlock>)}
+          {step === 6.5 && (<StepBlock icon={Truck} title="Frete — seus dados para contato"><div className="grid grid-cols-2 gap-2"><Field label="Nome"><TextInput value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /></Field><Field label="WhatsApp"><TextInput value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} /></Field></div><NextBtn onClick={irParaFrete} disabled={enviando} label={enviando ? "Enviando…" : "Encaminhar para a equipe"} /></StepBlock>)}
 
           {step === 2 && viagem && (
             <StepBlock icon={MapPin} title="Local de embarque">
@@ -535,7 +600,7 @@ function ReservarTab({ reservas, setReservas, capacidade, modoAtendimento, trips
             <StepBlock icon={CreditCard} title="Forma de pagamento">
               <div className="grid grid-cols-2 gap-2 mb-3">{["dinheiro", "pix"].map(p => (<button key={p} onClick={() => setForm({ ...form, pagamento: p })} className="btn-press border rounded-lg px-4 py-3 text-sm capitalize" style={{ borderColor: form.pagamento === p ? C.amber : C.border, background: form.pagamento === p ? C.amberSoft : C.panel2, color: form.pagamento === p ? C.amber : C.ink }}>{p === "pix" ? "Pix" : "Dinheiro"}</button>))}</div>
               {form.pagamento === "pix" && (<div className="anim-slideDown rounded-lg border px-3 py-3 mb-3" style={{ borderColor: C.border, background: C.panel2 }}><div className="text-xs mb-1" style={{ color: C.inkSoft }}>Chave Pix · {PIX_NAME}</div><div className="flex items-center justify-between"><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.95rem" }}>{PIX_KEY}</span><button onClick={copiarPix} className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ background: copied ? C.greenSoft : C.border, color: copied ? C.green : C.inkSoft }}>{copied ? <><Check size={12} /> Copiado</> : <><Copy size={12} /> Copiar</>}</button></div><div className="text-xs mt-2" style={{ color: C.inkFaint }}>Não é preciso pagar antes. Se pagar por Pix, envie o comprovante aqui no WhatsApp.</div></div>)}
-              <NextBtn onClick={confirmar} label="Confirmar reserva" />
+              <NextBtn onClick={confirmar} disabled={enviando} label={enviando ? "Enviando…" : "Confirmar reserva"} />
             </StepBlock>
           )}
 
@@ -566,9 +631,10 @@ function StepBlock({ icon: Icon, title, children }) { return (<div className="an
 function NextBtn({ onClick, disabled, label = "Continuar" }) { return <button onClick={onClick} disabled={disabled} className="btn-press mt-4 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: disabled ? C.border : C.amber, color: disabled ? C.inkFaint : "#20180A" }}>{label}</button>; }
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
-function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, trips, segundaAtiva, segundaHoras, usuario }) {
+function AgendaTab({ reservas, R, capacidade, operacao, setOperacao, trips, segundaAtiva, segundaHoras, usuario }) {
   const [data, setData] = useState(todayStr());
   const [editando, setEditando] = useState(null);
+  const [acaoErro, setAcaoErro] = useState("");
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
   const modalHeld = useRef(null);
   if (editando) modalHeld.current = editando;
@@ -579,12 +645,36 @@ function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, t
   const fretesPendentes = reservas.filter(r => r.tipo === "frete" && r.status === "pendente");
   const encomendasPendentes = reservas.filter(r => r.tipo === "encomenda" && r.status === "pendente");
 
-  const atualizarStatus = (id, novoStatus, detalhe) => setReservas(reservas.map(r => r.id === id ? comHistorico({ ...r, status: novoStatus }, `Status alterado para ${STATUS_META[novoStatus]?.label}`, usuario, detalhe) : r));
-  const salvarEdicao = (novo, resumo) => setReservas(reservas.map(r => r.id === novo.id ? comHistorico(novo, "Reserva editada", usuario, resumo) : r));
-  const confirmarPendente = (r) => { const vagas = vagasDisponiveis(reservas, r.data, r.direcao, capacidade); if (r.quantidade > vagas) { alert(`Só há ${vagas} vaga(s) livre(s).`); return; } atualizarStatus(r.id, "confirmada", "Pendência confirmada"); };
-  const moverDaEspera = (r) => { const vagas = vagasDisponiveis(reservas, r.data, r.direcao, capacidade); if (r.quantidade > vagas) { alert(`Ainda não há vaga suficiente (${vagas} livre(s)).`); return; } if (!r.pontoId) { alert("Defina o ponto de embarque ao mover da lista de espera (edite a reserva)."); return; } atualizarStatus(r.id, "confirmada", "Movido manualmente da lista de espera"); };
-  const togglePagamento = (r) => setReservas(reservas.map(x => x.id === r.id ? comHistorico({ ...x, pago: !x.pago }, x.pago ? "Marcado como não pago" : "Marcado como pago", usuario) : x));
-  const toggleComprovante = (r) => setReservas(reservas.map(x => x.id === r.id ? comHistorico({ ...x, comprovanteRecebido: !x.comprovanteRecebido }, x.comprovanteRecebido ? "Comprovante desmarcado" : "Comprovante recebido", usuario) : x));
+  // Toda escrita passa pelas RPCs (capacidade decidida pelo banco). Erro de
+  // regra de negócio (ex.: lotou) volta como mensagem — não reexecuta.
+  const acao = async (promise, msgFalha) => {
+    setAcaoErro("");
+    try { await promise; } catch (e) { setAcaoErro(e?.message || msgFalha); }
+  };
+  const atualizarStatus = (id, novoStatus) => {
+    if (novoStatus === "cancelada") return acao(R.cancelReservation(id), "Não foi possível cancelar.");
+    if (novoStatus === "embarcado") return acao(R.markPassengers(id, "embarcado"), "Não foi possível marcar embarque.");
+    if (novoStatus === "nao_compareceu") return acao(R.markPassengers(id, "nao_compareceu"), "Não foi possível marcar.");
+    if (novoStatus === "confirmada") return acao(R.markPassengers(id, "confirmado").then(() => R.confirmReservation(id)), "Não foi possível reverter o embarque.");
+    return Promise.resolve();
+  };
+  const confirmarPendente = (r) => acao(R.confirmReservation(r.id, { routePointCode: r.pontoId || null }), "Não foi possível confirmar (viagem pode estar lotada).");
+  const moverDaEspera = (r) => {
+    if (!r.pontoId) { setAcaoErro("Defina o ponto de embarque ao mover da lista de espera (edite a reserva)."); return; }
+    return acao(R.confirmReservation(r.id, { routePointCode: r.pontoId }), "Ainda não há vaga suficiente na viagem.");
+  };
+  const salvarEdicao = async ({ id, move, details, cancel }) => {
+    setAcaoErro("");
+    try {
+      if (cancel) { await R.cancelReservation(id); setEditando(null); return; }
+      if (move) await R.moveReservation(id, move);
+      if (details && Object.keys(details).length > 0) await R.editReservation(id, details);
+      setEditando(null);
+    } catch (e) { setAcaoErro(e?.message || "Não foi possível salvar a edição."); }
+  };
+  const togglePagamento = (r) => acao(R.setPaid({ reservationId: r.id, paid: !r.pago, amount: r.valorTotal, method: r.pagamento }), "Não foi possível atualizar o pagamento.");
+  const toggleComprovante = (r) => acao(R.setProof({ reservationId: r.id, received: !r.comprovanteRecebido, amount: r.valorTotal, method: r.pagamento }), "Não foi possível atualizar o comprovante.");
+  const dataFrete = (r) => r.data || r.extra?.data || null;
 
   return (
     <div>
@@ -592,15 +682,16 @@ function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, t
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
         <div className="text-xs" style={{ color: C.inkFaint }}>{data === todayStr() ? "Hoje" : fmtDate(data)} — {fmtDate(data)} · <span className="capitalize">{diaSemana(data)}</span></div>
         {segunda && <div className="flex items-center gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.amberSoft, color: C.amber }}><Sunrise size={14} /> Segunda-feira: horários de ida ajustados automaticamente.</div>}
+        {acaoErro && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {acaoErro}</span><button onClick={() => setAcaoErro("")}><XIcon size={13} /></button></div>}
 
         {(pendentesDoDia.length > 0 || esperaDoDia.length > 0 || fretesPendentes.length > 0 || encomendasPendentes.length > 0) && (
           <Card style={{ borderColor: C.purple }}>
             <div className="flex items-center gap-2 mb-3"><AlertTriangle size={16} style={{ color: C.purple }} /><div className="text-sm font-semibold" style={{ color: C.purple }}>Pendentes e lista de espera</div></div>
             <div className="space-y-2">
-              {pendentesDoDia.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs"><StatusPill status="pendente" /> <span className="font-semibold ml-1">{linhaReserva(r, trips)}</span> · {r.nome} · {r.motivoPendente}</div><div className="flex gap-2"><button onClick={() => confirmarPendente(r)} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.greenSoft, color: C.green }}>Confirmar</button><button onClick={() => atualizarStatus(r.id, "cancelada", "Pendência recusada")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.redSoft, color: C.red }}>Recusar</button></div></div>))}
+              {pendentesDoDia.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs"><StatusPill status="pendente" /> <span className="font-semibold ml-1">{linhaReserva(r, trips)}</span> · {r.nome} · {r.motivoPendente}</div><div className="flex gap-2"><button onClick={() => confirmarPendente(r)} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.greenSoft, color: C.green }}>Confirmar</button><button onClick={() => atualizarStatus(r.id, "cancelada")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.redSoft, color: C.red }}>Recusar</button></div></div>))}
               {esperaDoDia.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs"><StatusPill status="espera" /> <span className="font-semibold ml-1">{r.quantidade}P {r.pontoId ? labelLocal(r, trips) : "(qualquer ponto)"}</span> · {r.nome} · {r.telefone}</div><div className="flex gap-2"><button onClick={() => moverDaEspera(r)} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.greenSoft, color: C.green }}>Mover p/ reservas (manual)</button><button onClick={() => setEditando(r)} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.border, color: C.inkSoft }}>Editar</button></div></div>))}
-              {fretesPendentes.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs flex items-center gap-1.5"><Truck size={12} /> Frete · {r.nome} · {r.telefone} · {fmtDate(r.data)}</div><button onClick={() => atualizarStatus(r.id, "cancelada", "Frete arquivado")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.border, color: C.inkSoft }}>Arquivar</button></div>))}
-              {encomendasPendentes.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs flex items-center gap-1.5"><Package size={12} /> Encomenda: {r.encItem} ({r.encTipo}) · {r.encEmbarque} → {r.encDesembarque} · recebe: {r.nome} ({r.telefone}) · {fmtDate(r.data)}</div><button onClick={() => atualizarStatus(r.id, "cancelada", "Encomenda arquivada")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.border, color: C.inkSoft }}>Arquivar</button></div>))}
+              {fretesPendentes.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs flex items-center gap-1.5"><Truck size={12} /> Frete · {r.nome} · {r.telefone}{dataFrete(r) ? ` · ${fmtDate(dataFrete(r))}` : ""}</div><button onClick={() => atualizarStatus(r.id, "cancelada")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.border, color: C.inkSoft }}>Arquivar</button></div>))}
+              {encomendasPendentes.map(r => (<div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.purpleSoft }}><div className="text-xs flex items-center gap-1.5"><Package size={12} /> Encomenda: {r.extra?.encItem || "—"}{r.extra?.encTipo ? ` (${r.extra.encTipo})` : ""} · {r.extra?.encEmbarque || "?"} → {r.extra?.encDesembarque || "?"} · recebe: {r.nome} ({r.telefone}){dataFrete(r) ? ` · ${fmtDate(dataFrete(r))}` : ""}</div><button onClick={() => atualizarStatus(r.id, "cancelada")} className="btn-press text-xs px-2 py-1 rounded-md" style={{ background: C.border, color: C.inkSoft }}>Arquivar</button></div>))}
             </div>
           </Card>
         )}
@@ -610,7 +701,7 @@ function AgendaTab({ reservas, setReservas, capacidade, operacao, setOperacao, t
       <Presence when={!!editando} duration={200}>
         {(state) => modalHeld.current && (
           <div style={{ transition: "opacity 200ms var(--ease-in)", opacity: state === "entered" ? 1 : 0 }}>
-            <EditarReservaModal reserva={modalHeld.current} onClose={() => setEditando(null)} onSave={(novo, resumo) => { salvarEdicao(novo, resumo); setEditando(null); }} capacidade={capacidade} reservas={reservas} trips={trips} />
+            <EditarReservaModal reserva={modalHeld.current} onClose={() => setEditando(null)} onSave={salvarEdicao} trips={trips} />
           </div>
         )}
       </Presence>
@@ -709,43 +800,69 @@ function ViagemOperacional({ direcao, data, segunda, segundaHoras, doDia, capaci
     </Card>
   );
 }
-function EditarReservaModal({ reserva, onClose, onSave, capacidade, reservas, trips }) {
+// Fase 1 (issue #10): a edição foi enxugada para o que o banco aceita com
+// segurança — data/direção/ponto passam pela RPC de realocação (revalida
+// capacidade no destino); desembarque/rua/referência/bairro/pagamento são
+// campos que não mexem em vaga. Quantidade, nome e telefone ficam para a
+// fase 2 (precisam de RPC própria / edição de cliente). Status muda pelos
+// botões da linha, não aqui.
+function EditarReservaModal({ reserva, onClose, onSave, trips }) {
   const [f, setF] = useState({ ...reserva });
+  const [salvando, setSalvando] = useState(false);
   const viagem = trips[f.direcao] || trips.ida;
   const ponto = viagem.pontos.find(p => p.id === f.pontoId);
-  const outrosUsados = reservas.filter(r => r.id !== f.id && r.data === f.data && r.direcao === f.direcao && OCUPA_VAGA.includes(r.status)).reduce((s, r) => s + r.quantidade, 0);
-  const vagasLivres = capacidade - outrosUsados;
-  const excede = OCUPA_VAGA.includes(f.status) && parseInt(f.quantidade || 1) > vagasLivres;
+  const campoDetalhe = ponto?.campo; // 'bairro' | 'localExato' | 'localOutro' | undefined
+
+  const salvar = async () => {
+    setSalvando(true);
+    const move = (f.data !== reserva.data || f.direcao !== reserva.direcao || (f.pontoId || null) !== (reserva.pontoId || null))
+      ? { tripDate: f.data, direction: f.direcao, routePointCode: f.pontoId || null }
+      : null;
+    const details = {};
+    const set = (col, atual, orig) => { if ((atual ?? "") !== (orig ?? "")) details[col] = atual || null; };
+    set("dropoff_location", f.desembarque, reserva.desembarque);
+    set("payment_method", f.pagamento, reserva.pagamento);
+    set("street", f.rua, reserva.rua);
+    set("reference_point", f.referencia, reserva.referencia);
+    if (campoDetalhe === "bairro") set("pickup_neighborhood", f.bairro, reserva.bairro);
+    if (campoDetalhe && campoDetalhe !== "bairro") set("pickup_detail", f[campoDetalhe], reserva.localExato);
+    await onSave({ id: reserva.id, move, details });
+    setSalvando(false);
+  };
+
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center p-4 anim-fadeIn" style={{ background: "rgba(0,0,0,.65)" }} onClick={onClose}>
       <div className="anim-pop w-full max-w-lg rounded-xl border p-5 max-h-[90vh] overflow-y-auto" style={{ background: C.panel, borderColor: C.border }} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4"><div className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Editar reserva — todos os campos</div><button onClick={onClose}><X size={16} style={{ color: C.inkSoft }} /></button></div>
-        <div className="text-xs mb-3 flex items-center gap-1.5" style={{ color: C.inkFaint }}><Clock size={12} /> Reservado às {fmtHora(f.criadoEm || new Date().toISOString())} em {f.data ? fmtDate(f.data) : "—"}</div>
-        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Nome"><TextInput value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} /></Field><Field label="Telefone"><TextInput value={f.telefone} onChange={e => setF({ ...f, telefone: e.target.value })} /></Field></div>
-        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Direção"><Select value={f.direcao} onChange={e => setF({ ...f, direcao: e.target.value, pontoId: trips[e.target.value].pontos[0].id })}><option value="ida">Ida</option><option value="volta">Volta</option></Select></Field><Field label="Local de embarque"><Select value={f.pontoId || ""} onChange={e => setF({ ...f, pontoId: e.target.value })}><option value="">—</option>{viagem.pontos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</Select></Field></div>
-        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Quantidade"><TextInput type="number" min={1} value={f.quantidade} onChange={e => setF({ ...f, quantidade: parseInt(e.target.value) || 1 })} /></Field><Field label="Data"><TextInput type="date" value={f.data} onChange={e => setF({ ...f, data: e.target.value })} /></Field></div>
-        {ponto?.campo === "bairro" && <Field label="Bairro"><TextInput value={f.bairro || ""} onChange={e => setF({ ...f, bairro: e.target.value })} /></Field>}
-        {ponto?.campo && ponto.campo !== "bairro" && <Field label={ponto.campoLabel}><TextInput value={f[ponto.campo] || ""} onChange={e => setF({ ...f, [ponto.campo]: e.target.value })} /></Field>}
+        <div className="flex items-center justify-between mb-4"><div className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Editar reserva</div><button type="button" onClick={onClose}><X size={16} style={{ color: C.inkSoft }} /></button></div>
+        <div className="text-xs mb-3 flex items-center gap-1.5" style={{ color: C.inkFaint }}><Clock size={12} /> {f.nome} · {f.telefone} · {f.quantidade}P{f.criadoEm ? ` · reservado ${fmtHora(f.criadoEm)}` : ""}</div>
+        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Direção"><Select value={f.direcao || "ida"} onChange={e => setF({ ...f, direcao: e.target.value, pontoId: trips[e.target.value].pontos[0].id })}><option value="ida">Ida</option><option value="volta">Volta</option></Select></Field><Field label="Local de embarque"><Select value={f.pontoId || ""} onChange={e => setF({ ...f, pontoId: e.target.value })}><option value="">—</option>{viagem.pontos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</Select></Field></div>
+        <div className="grid grid-cols-2 gap-2 mb-2"><Field label="Data"><TextInput type="date" value={f.data || ""} onChange={e => setF({ ...f, data: e.target.value })} /></Field><Field label="Quantidade"><TextInput type="number" value={f.quantidade} disabled title="Mudança de quantidade: fase 2" style={{ opacity: 0.6 }} /></Field></div>
+        {campoDetalhe === "bairro" && <Field label="Bairro"><TextInput value={f.bairro || ""} onChange={e => setF({ ...f, bairro: e.target.value })} /></Field>}
+        {campoDetalhe && campoDetalhe !== "bairro" && <Field label={ponto.campoLabel}><TextInput value={f[campoDetalhe] || ""} onChange={e => setF({ ...f, [campoDetalhe]: e.target.value })} /></Field>}
         {f.direcao === "volta" && <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Rua"><TextInput value={f.rua || ""} onChange={e => setF({ ...f, rua: e.target.value })} /></Field><Field label="Referência"><TextInput value={f.referencia || ""} onChange={e => setF({ ...f, referencia: e.target.value })} /></Field></div>}
         <div className="mt-2"><Field label="Local de desembarque"><TextInput value={f.desembarque || ""} onChange={e => setF({ ...f, desembarque: e.target.value })} /></Field></div>
-        <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Pagamento"><Select value={f.pagamento || "dinheiro"} onChange={e => setF({ ...f, pagamento: e.target.value })}><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option></Select></Field><Field label="Status"><Select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}>{Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.emoji} {m.label}</option>)}</Select></Field></div>
-        {excede && <div className="text-xs mt-2" style={{ color: C.red }}>Só há {vagasLivres} vaga(s) livre(s) nesta viagem.</div>}
-        {f.historico?.length > 0 && (<div className="mt-3 pt-3 border-t" style={{ borderColor: C.borderSoft }}><div className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}><History size={12} /> Histórico de alterações</div><div className="space-y-1 max-h-28 overflow-y-auto">{[...f.historico].reverse().map((h, i) => (<div key={i} className="text-[11px]" style={{ color: C.inkFaint }}>{fmtHora(h.quando)} — <b style={{ color: C.inkSoft }}>{h.funcionario}</b>: {h.acao}{h.detalhe ? ` (${h.detalhe})` : ""}</div>))}</div></div>)}
-        <div className="flex items-center justify-between mt-4"><button onClick={() => onSave({ ...f, status: "cancelada" }, "Cancelada via edição")} className="btn-press text-xs px-3 py-2 rounded-lg" style={{ color: C.red, background: C.redSoft }}>Cancelar reserva</button><button disabled={excede} onClick={() => onSave({ ...f, valorTotal: (ponto?.campo === "bairro" ? (precoBairro(f.bairro) || 80) : (ponto?.valor || 60)) * f.quantidade }, "Editado manualmente")} className="btn-press text-sm px-4 py-2 rounded-lg font-medium" style={{ background: excede ? C.border : C.amber, color: excede ? C.inkFaint : "#20180A" }}>Salvar alterações</button></div>
+        <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Pagamento"><Select value={f.pagamento || "dinheiro"} onChange={e => setF({ ...f, pagamento: e.target.value })}><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option></Select></Field><div /></div>
+        <div className="flex items-center justify-between mt-4"><button type="button" onClick={() => onSave({ id: reserva.id, cancel: true })} className="btn-press text-xs px-3 py-2 rounded-lg" style={{ color: C.red, background: C.redSoft }}>Cancelar reserva</button><button type="button" disabled={salvando} onClick={salvar} className="btn-press text-sm px-4 py-2 rounded-lg font-medium" style={{ background: salvando ? C.border : C.amber, color: salvando ? C.inkFaint : "#20180A" }}>{salvando ? "Salvando…" : "Salvar alterações"}</button></div>
       </div>
     </div>
   );
 }
 
 /* ============================= 3. LISTA DO DIA ============================= */
-function ListaTab({ reservas, setReservas, trips, usuario }) {
+function ListaTab({ reservas, R, trips }) {
   const [data, setData] = useState(todayStr());
+  const [erro, setErro] = useState("");
   const doDia = reservas.filter(r => r.data === data && !["frete","encomenda"].includes(r.tipo) && r.status !== "cancelada" && r.status !== "espera");
   const pendentes = doDia.filter(r => r.status === "pendente");
   const ativos = doDia.filter(r => OCUPA_VAGA.includes(r.status));
   const alvos = useMemo(() => ([...trips.ida.pontos.map(p => ({ key: `ida__${p.id}`, direcao: "ida", pontoId: p.id, nome: p.nome })), ...trips.volta.pontos.map(p => ({ key: `volta__${p.id}`, direcao: "volta", pontoId: p.id, nome: p.nome }))]), [trips]);
-  const mover = (id, chaveAlvo) => { const alvo = alvos.find(a => a.key === chaveAlvo); if (!alvo) return; setReservas(reservas.map(r => r.id === id ? comHistorico({ ...r, direcao: alvo.direcao, pontoId: alvo.pontoId, status: "confirmada" }, "Realocada na Lista do Dia", usuario, alvo.nome) : r)); };
-  const remove = (id) => setReservas(reservas.map(r => r.id === id ? comHistorico({ ...r, status: "cancelada" }, "Removida pela Lista do Dia", usuario) : r));
+  const mover = async (id, chaveAlvo) => {
+    const alvo = alvos.find(a => a.key === chaveAlvo); if (!alvo) return;
+    setErro("");
+    try { await R.moveReservation(id, { tripDate: data, direction: alvo.direcao, routePointCode: alvo.pontoId }); }
+    catch (e) { setErro(e?.message || "Não foi possível realocar."); }
+  };
+  const remove = async (id) => { setErro(""); try { await R.cancelReservation(id); } catch (e) { setErro(e?.message || "Não foi possível remover."); } };
   const buscaItens = ativos.filter(r => r.direcao === "ida" && r.pontoId === "busca");
   const agrupadosIda = ativos.filter(r => r.direcao === "ida" && r.pontoId !== "busca").sort((a, b) => (IDA_PRIORIDADE[a.pontoId] ?? 3) - (IDA_PRIORIDADE[b.pontoId] ?? 3));
   const cantanhedeItens = ativos.filter(r => r.direcao === "volta" && r.pontoId === "cantanhede");
@@ -756,6 +873,7 @@ function ListaTab({ reservas, setReservas, trips, usuario }) {
     <div>
       <Header title="Lista do Dia" subtitle='Anotações por local — busca em casa no formato "NP - BAIRRO - TELEFONE".' right={<TextInput type="date" value={data} onChange={e => setData(e.target.value)} className="w-auto" />} />
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
+        {erro && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}><span className="flex items-center gap-2"><AlertTriangle size={14} /> {erro}</span><button onClick={() => setErro("")}><XIcon size={13} /></button></div>}
         {pendentes.length > 0 && (<Card style={{ borderColor: C.purple }}><div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: C.purple }}><AlertTriangle size={13} /> Pendentes (fora da rota padrão)</div><div className="space-y-1.5">{pendentes.map(r => (<div key={r.id} className="text-xs rounded-md px-2 py-1.5" style={{ background: C.purpleSoft }}>{linhaReserva(r, trips)} — {r.desembarque}</div>))}</div></Card>)}
         <div className="text-center"><span className="inline-block px-4 py-1 rounded-full text-sm font-bold tracking-wide" style={{ background: C.amberSoft, color: C.amber, fontFamily: "'Space Grotesk', sans-serif" }}>IDA</span></div>
         <ListaSecao titulo="BUSCAR EM CASA" itens={buscaItens} trips={trips} alvos={alvos} mover={mover} remove={remove} />
@@ -991,11 +1109,14 @@ function DashboardTab({ reservas, financeiro, capacidade, operacao, trips }) {
 }
 
 /* ============================= 8. SISTEMA ============================= */
-function SistemaTab({ reservas, setReservas, financeiro, operacao, setOperacao, capacidade, config, setConfig }) {
+function SistemaTab({ reservas, financeiro, operacao, setOperacao, capacidade, config, setConfig }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
-  const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { corrigidas, issues, fixed } = runDiagnostics(reservas, capacidade, config.trips); if (fixed.length > 0) setReservas(corrigidas); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
+  // Diagnóstico só-leitura: o banco já impede overbooking (trigger de
+  // capacidade) e quantidade inválida (check). Aqui só listamos o que a
+  // heurística local encontraria — sem reescrever nada. (issue #10)
+  const rodarDiagnostico = () => { setRodando(true); setTimeout(() => { const { issues, fixed } = runDiagnostics(reservas, capacidade, config.trips); setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") }); setRodando(false); }, 400); };
   const baixarBackup = () => { const payload = { exportadoEm: new Date().toISOString(), reservas, financeiro, operacao, config }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-rota-pirapemas-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); };
   const atualizarPonto = (direcao, pontoId, campo, valor) => { const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: config.trips[direcao].pontos.map(p => p.id === pontoId ? { ...p, [campo]: campo === "valor" ? parseFloat(valor) || 0 : valor } : p) } }; setConfig({ ...config, trips }); };
   const addPontoOutro = (direcao) => { if (!novoPontoNome.trim()) return; const id = "custom-" + fnv(novoPontoNome + Date.now()); const trips = { ...config.trips, [direcao]: { ...config.trips[direcao], pontos: [...config.trips[direcao].pontos, { id, nome: novoPontoNome.trim(), horaBase: config.trips[direcao].pontos[0].horaBase, valor: 60, core: false }] } }; setConfig({ ...config, trips }); setNovoPontoNome(""); };

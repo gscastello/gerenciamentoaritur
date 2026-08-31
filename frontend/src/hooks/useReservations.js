@@ -12,6 +12,7 @@
 
 import { useCallback, useMemo } from "react";
 import { reservationsService } from "../services/reservationsService";
+import { paymentsService } from "../services/paymentsService";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
@@ -100,6 +101,66 @@ export function useReservations(tripDate) {
       updatingStatus: setPassengersStatus.loading,
       moving: move.loading, moveError: move.error,
       editing: updateDetails.loading,
+    },
+  };
+}
+
+/**
+ * Variante usada pelo App.jsx enquanto ele ainda orquestra um único array
+ * de reservas para várias abas (Agenda, Lista, Passageiros, Dashboard).
+ * Busca uma JANELA de datas [from, to] da view achatada e devolve, além
+ * dos dados, as mesmas ações de escrita do useReservations — todas com o
+ * refetch da janela já ligado. Realtime mantém tudo sincronizado entre
+ * dispositivos. Ver docs/APP-INTEGRATION-PLAN.md (issue #10, fase 1).
+ */
+export function useReservationsWindow(fromDate, toDate) {
+  const query = useSupabaseQuery(
+    () => reservationsService.listWindow(fromDate, toDate),
+    [fromDate, toDate],
+    { enabled: !!fromDate && !!toDate }
+  );
+
+  useRealtimeTable(
+    ["reservations", "reservation_passengers", "payments", "trips"],
+    () => query.refetch()
+  );
+
+  const create = useAsyncAction(reservationsService.create);
+  const confirm = useAsyncAction(reservationsService.confirm);
+  const cancel = useAsyncAction(reservationsService.cancel);
+  const setPassengersStatus = useAsyncAction(reservationsService.setPassengersStatus);
+  const move = useAsyncAction(reservationsService.move);
+  const updateDetails = useAsyncAction(reservationsService.updateDetails);
+  const setPaid = useAsyncAction(paymentsService.setPaidForReservation);
+  const setProof = useAsyncAction(paymentsService.setProofForReservation);
+
+  const after = useCallback(async (p) => { const r = await p; await query.refetch(); return r; }, [query]);
+
+  return {
+    reservations: query.data ?? [],
+    loading: query.loading,
+    error: query.error,
+    refetch: query.refetch,
+
+    createReservation: useCallback((payload) => after(create.run(payload)), [after, create]),
+    confirmReservation: useCallback((id, opts) => after(confirm.run(id, opts)), [after, confirm]),
+    cancelReservation: useCallback((id) => after(cancel.run(id)), [after, cancel]),
+    markPassengers: useCallback((id, status) => after(setPassengersStatus.run(id, status)), [after, setPassengersStatus]),
+    moveReservation: useCallback((id, target) => after(move.run(id, target)), [after, move]),
+    editReservation: useCallback((id, fields) => after(updateDetails.run(id, fields)), [after, updateDetails]),
+    setPaid: useCallback((args) => after(setPaid.run(args)), [after, setPaid]),
+    setProof: useCallback((args) => after(setProof.run(args)), [after, setProof]),
+
+    actionState: {
+      creating: create.loading,
+      confirming: confirm.loading,
+      cancelling: cancel.loading,
+      updatingStatus: setPassengersStatus.loading,
+      moving: move.loading,
+      editing: updateDetails.loading,
+      lastError:
+        create.error || confirm.error || cancel.error || setPassengersStatus.error ||
+        move.error || updateDetails.error || setPaid.error || setProof.error || null,
     },
   };
 }

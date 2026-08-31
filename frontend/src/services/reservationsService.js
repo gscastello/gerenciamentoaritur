@@ -9,24 +9,15 @@
 
 import { supabase, getCurrentUserId, ServiceError, isRetryableError } from "../lib/supabaseClient";
 
-// `trip:trips!inner` é obrigatório para que `.eq("trip.trip_date", ...)`
-// funcione como filtro — sem o !inner o PostgREST ignora o filtro do
-// recurso aninhado e devolve reservas de todos os dias.
-const RESERVATION_SELECT = `
-  id, trip_id, customer_id, type, status, route_point_id,
-  pickup_neighborhood, pickup_detail, street, reference_point, dropoff_location,
-  quantity, unit_price, total_price, payment_method, pending_reason, extra_data,
-  created_at, updated_at, created_by, updated_by,
-  customer:customers ( id, name, phone ),
-  route_point:route_points ( id, code, name, base_time ),
-  trip:trips!inner ( id, trip_date, direction, capacity ),
-  passengers:reservation_passengers ( id, seq, passenger_name, status ),
-  payments ( id, amount, method, status, paid_at, proof_received )
-`;
-
-// Para pendências (que podem não ter viagem definida ainda), o join com
-// trips não pode ser !inner — senão frete/encomenda sem trip_id somem.
-const RESERVATION_SELECT_NO_INNER = RESERVATION_SELECT.replace("trips!inner", "trips");
+// A leitura da UI passa pela view `v_reservations_flat`, que já entrega o
+// objeto "achatado" com os MESMOS nomes de campo que o App.jsx usa
+// (data, direcao, pontoId, bairro, nome, telefone, quantidade, valorUnit,
+// valorTotal, pagamento, status, tipo, motivoPendente, pago,
+// comprovanteRecebido, temEmbarcado, criadoEm…). Assim a camada de UI não
+// precisa remapear nada. A escrita continua indo pelas funções RPC
+// (rpc_create_reservation etc.), nunca por INSERT/UPDATE direto, para que
+// a checagem de capacidade do banco participe da mesma transação.
+const FLAT_SELECT = "*";
 
 async function handle(promise, { context }) {
   const { data, error } = await promise;
@@ -40,31 +31,46 @@ async function handle(promise, { context }) {
   return data;
 }
 export const reservationsService = {
-  /** Lista as reservas de um dia (ambas as direções), já com joins prontos para a UI. */
+  /** Reservas de um dia (ambas as direções), já achatadas para a UI. */
   async listByDate(tripDate) {
     return handle(
       supabase
-        .from("reservations")
-        .select(RESERVATION_SELECT)
-        .is("deleted_at", null)
-        .eq("trip.trip_date", tripDate)
-        .order("created_at", { ascending: true }),
+        .from("v_reservations_flat")
+        .select(FLAT_SELECT)
+        .eq("data", tripDate)
+        .order("criadoEm", { ascending: true }),
       { context: "listByDate" }
     );
   },
 
   /**
+   * Reservas num intervalo de datas [from, to] — usado pelas telas que
+   * varrem várias datas (Passageiros/CRM, Dashboard, previsão de demanda).
+   */
+  async listWindow(fromDate, toDate) {
+    return handle(
+      supabase
+        .from("v_reservations_flat")
+        .select(FLAT_SELECT)
+        // inclui também as linhas sem data (frete/encomenda, que nascem sem
+        // viagem) — senão elas nunca apareceriam na Agenda.
+        .or(`data.is.null,and(data.gte.${fromDate},data.lte.${toDate})`)
+        .order("criadoEm", { ascending: true }),
+      { context: "listWindow" }
+    );
+  },
+
+  /**
    * Pendências (pendente/espera) — inclui frete/encomenda, que nascem
-   * com status 'pendente'. Não amarradas ao dia selecionado. Sem !inner
-   * no join de trips porque frete/encomenda podem não ter viagem ainda.
+   * com status 'pendente'. Não amarradas ao dia selecionado.
    */
   async listPending() {
     return handle(
       supabase
-        .from("reservations")
-        .select(RESERVATION_SELECT_NO_INNER)
-        .is("deleted_at", null)
-        .in("status", ["pendente", "espera"]),
+        .from("v_reservations_flat")
+        .select(FLAT_SELECT)
+        .in("status", ["pendente", "espera"])
+        .order("criadoEm", { ascending: true }),
       { context: "listPending" }
     );
   },
