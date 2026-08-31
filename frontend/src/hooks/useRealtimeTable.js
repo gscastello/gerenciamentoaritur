@@ -18,7 +18,9 @@ export function useRealtimeTable(tables, onChange, { enabled = true } = {}) {
   useEffect(() => {
     if (!enabled) return undefined;
     const list = Array.isArray(tables) ? tables : [tables];
-    const channel = supabase.channel(`rt-${list.join("-")}-${Math.random().toString(36).slice(2, 8)}`);
+    const channel = supabase.channel(
+      `rt-${list.join("-")}-${Math.random().toString(36).slice(2, 8)}`,
+    );
 
     list.forEach((table) => {
       channel.on("postgres_changes", { event: "*", schema: "public", table }, (payload) => {
@@ -30,10 +32,14 @@ export function useRealtimeTable(tables, onChange, { enabled = true } = {}) {
       if (status === "CHANNEL_ERROR") {
         // a conexão de realtime caiu — não é fatal: o polling de segurança
         // (ver useReservations) garante que o dado eventualmente converge
-        console.warn(`Realtime indisponível para [${list.join(", ")}] — seguindo com atualização manual/polling de segurança.`);
+        console.warn(
+          `Realtime indisponível para [${list.join(", ")}] — seguindo com atualização manual/polling de segurança.`,
+        );
       }
     });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [Array.isArray(tables) ? tables.join(",") : tables, enabled]);
 }
