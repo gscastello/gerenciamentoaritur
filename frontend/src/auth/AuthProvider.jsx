@@ -84,7 +84,10 @@ export function useAuth() {
   return ctx;
 }
 
-/** true se o papel do usuário está entre os permitidos. `null` de role => false. */
+/**
+ * true se o papel do usuário está entre os permitidos. `null` de role => false.
+ * @public — usado ao ligar as abas por papel (issue #10, ver APP-INTEGRATION-PLAN.md)
+ */
 export function useHasRole(...roles) {
   const { role } = useAuth();
   return role != null && roles.flat().includes(role);

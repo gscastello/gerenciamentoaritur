@@ -72,6 +72,7 @@ export function AuthGate({ children }) {
             Peça para um administrador liberar o acesso.
           </p>
           <button
+            type="button"
             onClick={signOut}
             style={{
               marginTop: 16,

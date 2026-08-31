@@ -66,6 +66,7 @@ const AgendaSkel = () => (
         </div>
         <div style={grid(5)}>
           {Array.from({ length: 5 }).map((_, j) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: placeholders estáticos
             <Skeleton key={j} height={44} rounded={10} />
           ))}
         </div>

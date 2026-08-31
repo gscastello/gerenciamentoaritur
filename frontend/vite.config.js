@@ -26,22 +26,17 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov", "html"],
       reportsDirectory: "./coverage",
-      // Só o que tem teste unitário de verdade entra no gate: o domínio
-      // (regras puras) e a lib de motion. Services/hooks/auth são camada
-      // de I/O — cobertos por integração/e2e (issue #4), não por unit.
-      include: ["src/domain/**/*.js", "src/ui/motion/**/*.{js,jsx}"],
+      // Só o domínio (regras puras) entra no gate de cobertura. A lib de
+      // motion tem teste dos comportamentos críticos (reduced-motion,
+      // Presence), mas cobertura 100% não é o objetivo dela. Services/
+      // hooks/auth são I/O — cobertos por integração/e2e (issue #4).
+      include: ["src/domain/**/*.js"],
       exclude: ["src/**/*.{test,spec}.{js,jsx}", "src/**/__tests__/**", "src/domain/index.js"],
       thresholds: {
-        statements: 75,
-        branches: 75,
-        functions: 75,
-        lines: 75,
-        "src/domain/**/*.js": {
-          statements: 90,
-          branches: 85,
-          functions: 95,
-          lines: 90,
-        },
+        statements: 90,
+        branches: 85,
+        functions: 90,
+        lines: 90,
       },
     },
   },

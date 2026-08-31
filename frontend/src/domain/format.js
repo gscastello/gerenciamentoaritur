@@ -16,10 +16,13 @@ export const fmtHora = (iso) =>
 
 export const todayStr = () => new Date().toISOString().slice(0, 10);
 
-const DIACRITICOS = new RegExp("[\\u0300-\\u036f]", "g");
-
 export function normalizar(s) {
-  return (s || "").normalize("NFD").replace(DIACRITICOS, "").toLowerCase().trim();
+  // NFD separa a letra do acento; \p{Diacritic} remove os acentos soltos.
+  return (s || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
 }
 
 export const digitos = (tel) => (tel || "").replace(/\D/g, "");

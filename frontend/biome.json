@@ -8,7 +8,8 @@
       "playwright-report",
       "test-results",
       ".stryker-tmp",
-      "src/app/App.jsx"
+      "src/app/App.jsx",
+      "src/INTEGRATION-EXAMPLE.jsx"
     ]
   },
   "formatter": {
