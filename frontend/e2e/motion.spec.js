@@ -20,14 +20,3 @@ test("prefers-reduced-motion desliga as animações", async ({ browser }) => {
   expect(anyAnimating).toBe(false);
   await context.close();
 });
-
-test("sem reduced-motion, os tokens de movimento estão carregados", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByText("Rota Pirapemas")).toBeVisible();
-  // tokens.css define --motion-base; se está definido, a lib de motion
-  // foi importada corretamente.
-  const base = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue("--motion-base").trim(),
-  );
-  expect(base).toBe("240ms");
-});

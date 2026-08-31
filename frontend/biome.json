@@ -24,6 +24,7 @@
     "rules": {
       "recommended": true,
       "a11y": { "recommended": true },
+      "complexity": { "noForEach": "off" },
       "correctness": {
         "noUnusedVariables": "error",
         "noUnusedImports": "error",

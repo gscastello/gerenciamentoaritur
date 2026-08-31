@@ -10,6 +10,7 @@ export function ProgressBar({ value, height = 4, trackColor = "var(--panel2,#1c2
 
   return (
     <div
+      // biome-ignore lint/a11y/useFocusableInteractive: progressbar só exibe estado, não recebe foco
       role="progressbar"
       aria-valuenow={indeterminate ? undefined : Math.round(value)}
       aria-valuemin={0}
