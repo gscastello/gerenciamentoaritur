@@ -27,6 +27,7 @@ export function useSettings() {
 
     attendanceMode: settings.attendance_mode?.mode ?? "ia",
     mondayAdjustment: settings.monday_adjustment ?? { active: true, hours: 1 },
+    pix: settings.pix ?? null,
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setMondayAdjustment: ({ active, hours }) => after(setKey.run("monday_adjustment", { active, hours })),

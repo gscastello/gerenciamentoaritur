@@ -60,6 +60,7 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
+import { tripsService } from "../services/tripsService.js";
 import { Presence } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
@@ -773,6 +774,31 @@ function gerarInsightsIA(reservas, operacao, capacidade, trips) {
 // Dashboard usam a mesma janela. (issue #10 — ver APP-INTEGRATION-PLAN.md)
 const JANELA_DIAS = 120;
 
+// Quais papéis enxergam cada aba. O RLS do banco já barra os DADOS (um
+// motorista que abrisse Financeiro só via erro de permissão); isto é só
+// navegação — esconde o que a pessoa não usa. `admin` vê tudo.
+const TAB_ROLES = {
+  reservar: ["admin", "atendente"],
+  agenda: ["admin", "atendente", "motorista", "financeiro"],
+  lista: ["admin", "atendente", "motorista", "financeiro"],
+  passageiros: ["admin", "atendente", "financeiro"],
+  financeiro: ["admin", "financeiro"],
+  operacao: ["admin", "financeiro"],
+  dashboard: ["admin", "financeiro"],
+  sistema: ["admin"],
+};
+
+const NAV_ITENS = [
+  { id: "reservar", label: "Reservar", icon: MessageCircle },
+  { id: "agenda", label: "Agenda", icon: Calendar },
+  { id: "lista", label: "Lista do Dia", icon: ClipboardList },
+  { id: "passageiros", label: "Passageiros", icon: Users },
+  { id: "financeiro", label: "Financeiro", icon: Wallet },
+  { id: "operacao", label: "Operação", icon: Bus },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "sistema", label: "Sistema", icon: ShieldCheck },
+];
+
 function AppInner() {
   useEffect(() => {
     const l = document.createElement("link");
@@ -781,7 +807,16 @@ function AppInner() {
     document.head.appendChild(l);
   }, []);
   const { profile } = useAuth();
+  const role = profile?.role ?? null;
   const [tab, setTab] = useState("reservar");
+
+  // Rede de segurança: garante que a Ida/Volta dos próximos dias exista no
+  // banco (o trabalho de fato é do pg_cron `ensure-upcoming-trips`). Sem
+  // isto, um dia ainda sem reserva mostra a Agenda vazia e não deixa
+  // "Iniciar viagem". Roda uma vez por sessão, sem travar a tela.
+  useEffect(() => {
+    tripsService.ensureUpcoming(JANELA_DIAS).catch(() => {});
+  }, []);
 
   // --- Reservas: fonte de verdade = Postgres (janela + realtime) --------
   const janela = useMemo(() => {
@@ -806,16 +841,18 @@ function AppInner() {
 
   const usuario = profile?.name || "—";
 
-  const NAV = [
-    { id: "reservar", label: "Reservar", icon: MessageCircle },
-    { id: "agenda", label: "Agenda", icon: Calendar },
-    { id: "lista", label: "Lista do Dia", icon: ClipboardList },
-    { id: "passageiros", label: "Passageiros", icon: Users },
-    { id: "financeiro", label: "Financeiro", icon: Wallet },
-    { id: "operacao", label: "Operação", icon: Bus },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "sistema", label: "Sistema", icon: ShieldCheck },
-  ];
+  const NAV = useMemo(
+    () => NAV_ITENS.filter((n) => (TAB_ROLES[n.id] ?? []).includes(role)),
+    [role],
+  );
+  const tabPermitida = NAV.some((n) => n.id === tab);
+
+  // Papel não enxerga a aba atual (ex.: motorista cai no app com "reservar"
+  // selecionado) → manda para a primeira aba que ele pode ver.
+  useEffect(() => {
+    if (role && NAV.length > 0 && !tabPermitida) setTab(NAV[0].id);
+  }, [role, NAV, tabPermitida]);
+
   const ready = useLazyTab(tab);
   const loading =
     (R.loading && reservas.length === 0) || (cfg.loading && cfg.trips.ida.pontos.length === 0);
@@ -953,7 +990,7 @@ function AppInner() {
             </button>
           </div>
         )}
-        {loading || !ready ? (
+        {loading || !ready || !tabPermitida ? (
           <TabSkeleton tab={tab} />
         ) : (
           <div className="anim-fadeIn">
@@ -966,6 +1003,7 @@ function AppInner() {
                 trips={trips}
                 segundaAtiva={cfg.segundaAtiva}
                 segundaHoras={cfg.segundaHoras}
+                pix={cfgSettings.pix}
               />
             )}
             {tab === "agenda" && (
@@ -1023,7 +1061,12 @@ function ReservarTab({
   trips,
   segundaAtiva,
   segundaHoras,
+  pix,
 }) {
+  // Chave Pix: vem de settings.pix (aba Sistema); cai no valor fixo se a
+  // config ainda não foi preenchida.
+  const pixKey = pix?.key || PIX_KEY;
+  const pixName = pix?.name || PIX_NAME;
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     data: todayStr(),
@@ -1175,7 +1218,7 @@ function ReservarTab({
     setErroEnvio("");
   };
   const copiarPix = () => {
-    navigator.clipboard?.writeText(PIX_KEY);
+    navigator.clipboard?.writeText(pixKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
@@ -1725,13 +1768,13 @@ function ReservarTab({
                   style={{ borderColor: C.border, background: C.panel2 }}
                 >
                   <div className="text-xs mb-1" style={{ color: C.inkSoft }}>
-                    Chave Pix · {PIX_NAME}
+                    Chave Pix · {pixName}
                   </div>
                   <div className="flex items-center justify-between">
                     <span
                       style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.95rem" }}
                     >
-                      {PIX_KEY}
+                      {pixKey}
                     </span>
                     <button
                       onClick={copiarPix}
