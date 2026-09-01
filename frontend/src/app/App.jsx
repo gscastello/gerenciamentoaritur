@@ -53,6 +53,7 @@ import {
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useCustomers } from "../hooks/useCustomers.js";
+import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useFinanceMonth } from "../hooks/useFinance.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
@@ -60,7 +61,6 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
-import { tripsService } from "../services/tripsService.js";
 import { Presence } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
@@ -810,13 +810,9 @@ function AppInner() {
   const role = profile?.role ?? null;
   const [tab, setTab] = useState("reservar");
 
-  // Rede de segurança: garante que a Ida/Volta dos próximos dias exista no
-  // banco (o trabalho de fato é do pg_cron `ensure-upcoming-trips`). Sem
-  // isto, um dia ainda sem reserva mostra a Agenda vazia e não deixa
-  // "Iniciar viagem". Roda uma vez por sessão, sem travar a tela.
-  useEffect(() => {
-    tripsService.ensureUpcoming(JANELA_DIAS).catch(() => {});
-  }, []);
+  // Rede de segurança para a Agenda nunca aparecer vazia num dia ainda sem
+  // reserva (o trabalho de fato é do pg_cron `ensure-upcoming-trips`).
+  useEnsureTrips(30);
 
   // --- Reservas: fonte de verdade = Postgres (janela + realtime) --------
   const janela = useMemo(() => {
