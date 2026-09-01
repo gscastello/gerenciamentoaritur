@@ -9,8 +9,10 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ClipboardList,
   Clock,
   Copy,
@@ -299,6 +301,47 @@ const OCUPA_VAGA = ["confirmada", "embarcado"];
 const IDA_PRIORIDADE = { rodoviaria: 0, retorno: 1, postocarone: 2, br: 3 };
 const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "postocarone", "br"];
 const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
+
+/* ---- Desembarque (rota do motorista) — ver database/10-dropoff-plan.sql --- */
+// Baldes de entrega por direção, na ordem em que o ônibus os alcança.
+const DESEMBARQUE_IDA = [
+  { id: "cantanhede", label: "Cantanhede" },
+  { id: "pirapemas", label: "Pirapemas" },
+  { id: "outro", label: "Outros locais" },
+];
+const DESEMBARQUE_VOLTA = [
+  { id: "br", label: "BR (ponto de referência)" },
+  { id: "retorno", label: "Retorno" },
+  { id: "rodoviaria", label: "Rodoviária" },
+  { id: "casa", label: "Em casa (bairro)" },
+];
+const baldesDesembarque = (direcao) => (direcao === "ida" ? DESEMBARQUE_IDA : DESEMBARQUE_VOLTA);
+
+// Balde da reserva: usa a classificação manual (dropoff_area) se existir;
+// senão chuta pelo texto livre que o cliente deu no agendamento.
+function inferirBaldeDesembarque(r) {
+  if (r.desembarqueArea) return r.desembarqueArea;
+  const t = normalizar(`${r.desembarque || ""} ${r.referencia || ""} ${r.rua || ""}`);
+  if (r.direcao === "ida") {
+    if (t.includes("cantanhede")) return "cantanhede";
+    if (t.includes("pirapemas")) return "pirapemas";
+    return "outro";
+  }
+  if (t.includes("rodovi")) return "rodoviaria";
+  if (t.includes("retorno")) return "retorno";
+  if (/(^|\s)br($|\s|-)|br135|(^|\s)km(\s|$)/.test(t)) return "br";
+  return "casa";
+}
+
+// Texto que o motorista precisa pra achar o endereço (detalhe manual ou o
+// melhor palpite a partir do que já foi informado).
+function detalheDesembarque(r) {
+  if (r.desembarqueDetalhe) return r.desembarqueDetalhe;
+  const balde = inferirBaldeDesembarque(r);
+  if (balde === "casa") return r.bairro || r.desembarque || "";
+  if (balde === "br") return r.referencia || r.desembarque || r.rua || "";
+  return r.desembarque || r.referencia || "";
+}
 
 /* ============================= error boundary ============================= */
 class ErrorBoundary extends React.Component {
@@ -2775,6 +2818,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
 function ListaTab({ reservas, R, trips }) {
   const [data, setData] = useState(todayStr());
   const [erro, setErro] = useState("");
+  const [subview, setSubview] = useState("embarque");
   const doDia = reservas.filter(
     (r) =>
       r.data === data &&
@@ -2861,6 +2905,32 @@ function ListaTab({ reservas, R, trips }) {
             </button>
           </div>
         )}
+        <div className="flex gap-1 rounded-lg p-1 w-fit" style={{ background: C.panel2 }}>
+          {[
+            { id: "embarque", label: "Embarque", Icon: ClipboardList },
+            { id: "desembarque", label: "Desembarque (rota)", Icon: MapPin },
+          ].map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSubview(id)}
+              className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
+              style={{
+                background: subview === id ? C.amberSoft : "transparent",
+                color: subview === id ? C.amber : C.inkSoft,
+                fontWeight: subview === id ? 600 : 500,
+              }}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
+        </div>
+        {subview === "desembarque" && (
+          <DesembarqueView reservas={reservas} R={R} data={data} />
+        )}
+        {subview === "embarque" && (
+          <>
         {pendentes.length > 0 && (
           <Card style={{ borderColor: C.purple }}>
             <div
@@ -2938,10 +3008,225 @@ function ListaTab({ reservas, R, trips }) {
           mover={mover}
           remove={remove}
         />
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+/* --- Desembarque: rota de entrega do motorista, editável (issue: rota) --- */
+function DesembarqueView({ reservas, R, data }) {
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const doDia = useMemo(
+    () =>
+      reservas.filter(
+        (r) =>
+          r.data === data &&
+          !["frete", "encomenda"].includes(r.tipo) &&
+          OCUPA_VAGA.includes(r.status),
+      ),
+    [reservas, data],
+  );
+
+  const acao = async (p) => {
+    setErro("");
+    setSalvando(true);
+    try {
+      await p;
+    } catch (e) {
+      setErro(e?.message || "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+  const mudarBalde = (r, area) =>
+    acao(R.setDropoff(r.id, { area, detail: detalheDesembarque(r) }));
+  const mudarDetalhe = (r, detalhe) => {
+    if ((detalhe || "") === (detalheDesembarque(r) || "")) return;
+    acao(R.setDropoff(r.id, { area: inferirBaldeDesembarque(r), detail: detalhe }));
+  };
+  const reordenar = (idsNaOrdem) => acao(R.reorderDropoff(idsNaOrdem));
+
+  const temAlguem = doDia.length > 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="text-xs" style={{ color: C.inkFaint }}>
+        Ordem de entrega por local, editável. Base: o desembarque que o cliente
+        informou no agendamento — ajuste o balde e a ordem para montar a rota.
+        {salvando && " · salvando…"}
+      </div>
+      {erro && (
+        <div
+          className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle size={14} /> {erro}
+          </span>
+          <button type="button" onClick={() => setErro("")}>
+            <XIcon size={13} />
+          </button>
+        </div>
+      )}
+      {!temAlguem && (
+        <div className="text-sm" style={{ color: C.inkFaint }}>
+          Nenhum passageiro confirmado nesse dia.
+        </div>
+      )}
+      {temAlguem &&
+        ["ida", "volta"].map((direcao) => {
+          const itens = doDia.filter((r) => r.direcao === direcao);
+          if (itens.length === 0) return null;
+          return (
+            <div key={direcao} className="space-y-3">
+              <div className="text-center">
+                <span
+                  className="inline-block px-4 py-1 rounded-full text-sm font-bold tracking-wide"
+                  style={{
+                    background: direcao === "ida" ? C.amberSoft : C.blueSoft,
+                    color: direcao === "ida" ? C.amber : C.blue,
+                    fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  {direcao === "ida" ? "IDA — desembarque" : "VOLTA — desembarque"}
+                </span>
+              </div>
+              {baldesDesembarque(direcao).map((balde) => {
+                const doBalde = itens
+                  .filter((r) => inferirBaldeDesembarque(r) === balde.id)
+                  .sort(
+                    (a, b) =>
+                      (a.desembarqueSeq ?? 9999) - (b.desembarqueSeq ?? 9999) ||
+                      (a.nome || "").localeCompare(b.nome || ""),
+                  );
+                return (
+                  <DesembarqueBalde
+                    key={balde.id}
+                    balde={balde}
+                    direcao={direcao}
+                    itens={doBalde}
+                    salvando={salvando}
+                    onBalde={mudarBalde}
+                    onDetalhe={mudarDetalhe}
+                    onReordenar={reordenar}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe, onReordenar }) {
+  const pax = itens.reduce((s, r) => s + (r.quantidade || 1), 0);
+  const mover = (idx, dir) => {
+    const alvo = idx + dir;
+    if (alvo < 0 || alvo >= itens.length) return;
+    const ids = itens.map((r) => r.id);
+    [ids[idx], ids[alvo]] = [ids[alvo], ids[idx]];
+    onReordenar(ids);
+  };
+  const placeholder =
+    balde.id === "casa"
+      ? "Bairro onde vai ficar"
+      : balde.id === "br"
+        ? "Ponto de referência na BR"
+        : "Endereço / referência";
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-bold tracking-wide" style={{ color: C.inkSoft }}>
+          {balde.label.toUpperCase()}
+        </div>
+        <Pill color={C.blue}>{pax} pax</Pill>
+      </div>
+      {itens.length === 0 ? (
+        <div className="text-xs" style={{ color: C.inkFaint }}>
+          — ninguém —
+        </div>
+      ) : (
+        <ol className="list-none space-y-1.5">
+          {itens.map((r, idx) => (
+            <li key={r.id} className="rounded-md px-2.5 py-2" style={{ background: C.panel2 }}>
+              <div className="flex items-center gap-2 text-sm">
+                <span
+                  className="tabular-nums shrink-0"
+                  style={{ color: C.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {idx + 1}.
+                </span>
+                <span className="font-semibold truncate" style={{ color: C.ink }}>
+                  {r.nome || "—"}
+                </span>
+                <span className="shrink-0" style={{ color: C.inkSoft }}>
+                  · {r.quantidade}P
+                </span>
+                <StatusPill status={r.status} />
+                <span className="ml-auto flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={idx === 0 || salvando}
+                    onClick={() => mover(idx, -1)}
+                    title="Entregar antes"
+                    style={{ opacity: idx === 0 ? 0.3 : 1 }}
+                  >
+                    <ChevronUp size={15} style={{ color: C.inkSoft }} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === itens.length - 1 || salvando}
+                    onClick={() => mover(idx, 1)}
+                    title="Entregar depois"
+                    style={{ opacity: idx === itens.length - 1 ? 0.3 : 1 }}
+                  >
+                    <ChevronDown size={15} style={{ color: C.inkSoft }} />
+                  </button>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <input
+                  key={`${r.id}:${detalheDesembarque(r)}`}
+                  defaultValue={detalheDesembarque(r)}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={(e) => onDetalhe(r, e.target.value.trim())}
+                  placeholder={placeholder}
+                  className="flex-1 min-w-0 text-xs rounded px-2 py-1 outline-none"
+                  style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.ink }}
+                />
+                <select
+                  value={balde.id}
+                  onChange={(e) => onBalde(r, e.target.value)}
+                  className="text-xs rounded px-1 py-1 outline-none shrink-0"
+                  style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
+                >
+                  {baldesDesembarque(direcao).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {(r.telefone || r.desembarque) && (
+                <div className="text-[11px] mt-1 truncate" style={{ color: C.inkFaint }}>
+                  {r.telefone}
+                  {r.desembarque ? ` · cliente informou: "${r.desembarque}"` : ""}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
 function ListaSecao({ titulo, itens, trips, alvos, mover, remove }) {
   return (
     <Card>
