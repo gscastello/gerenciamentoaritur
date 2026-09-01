@@ -34,6 +34,7 @@ as $$
 declare
   v_vehicle public.vehicles%rowtype;
   v_created integer := 0;
+  v_days    integer := least(greatest(coalesce(p_days, 14), 0), 90);  -- teto de segurança
 begin
   select * into v_vehicle
     from public.vehicles
@@ -48,7 +49,7 @@ begin
   with alvo as (
     select (current_date + g.n)::date               as trip_date,
            dir.direction                            as direction
-      from generate_series(0, greatest(coalesce(p_days, 14), 0)) as g(n)
+      from generate_series(0, v_days) as g(n)
       cross join (values ('ida'::public.trip_direction),
                          ('volta'::public.trip_direction)) as dir(direction)
   ),
@@ -72,7 +73,9 @@ begin
 end;
 $$;
 
-revoke execute on function public.fn_ensure_upcoming_trips(integer) from public, anon;
+-- worker interno: só o cron (service_role). O usuário do app usa
+-- rpc_ensure_trips, que é SECURITY DEFINER e chama esta por baixo.
+revoke execute on function public.fn_ensure_upcoming_trips(integer) from public, anon, authenticated;
 grant  execute on function public.fn_ensure_upcoming_trips(integer) to service_role;
 
 -- 3 -------------------------------------------------------------------
