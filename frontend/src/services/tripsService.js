@@ -56,6 +56,20 @@ export const tripsService = {
     return data;
   },
 
+  /**
+   * Rede de segurança: garante que existam as linhas de Ida/Volta para os
+   * próximos `days` dias, para a Agenda nunca aparecer vazia num dia sem
+   * reserva (e "Iniciar viagem" sempre estar disponível). O trabalho real
+   * é do pg_cron diário `ensure-upcoming-trips`; isto só cobre o caso de o
+   * cron ter atrasado. Idempotente (index único parcial no banco).
+   * Ver database/09-daily-trips.sql.
+   */
+  async ensureUpcoming(days = 14) {
+    const { data, error } = await supabase.rpc("rpc_ensure_trips", { p_days: days });
+    if (error) throw new ServiceError(`ensureUpcoming: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    return data;
+  },
+
   async assignDriver(tripId, driverId) {
     const actor = await getCurrentUserId();
     return handle(

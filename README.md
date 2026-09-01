@@ -20,6 +20,8 @@ com WhatsApp Business API.
 │   ├── 05-seed.sql          # Veículos, pontos de embarque, bairros, config (rodar 5º)
 │   ├── 06-whatsapp.sql      # Conversas/mensagens do WhatsApp + modo IA|HUMANO (rodar 6º)
 │   ├── 07-scheduling.sql    # pg_cron: "motorista a caminho" + lembrete de viagem (rodar 7º)
+│   ├── 08-realtime.sql      # Publica as tabelas de negócio no Supabase Realtime (rodar 8º)
+│   ├── 09-daily-trips.sql   # pg_cron: cria Ida/Volta de cada dia (Agenda nunca vazia) (rodar 9º)
 │   └── retrofit-security-hardening.sql # Correções dos advisors do Supabase —
 │                             # rodar 1x só se o banco foi criado antes de 31/08/2026
 ├── supabase/functions/       # Edge Functions (backend real do WhatsApp — nunca no frontend)
