@@ -23,6 +23,7 @@ com WhatsApp Business API.
 │   ├── 08-realtime.sql      # Publica as tabelas de negócio no Supabase Realtime (rodar 8º)
 │   ├── 09-daily-trips.sql   # pg_cron: cria Ida/Volta de cada dia (Agenda nunca vazia) (rodar 9º)
 │   ├── 10-dropoff-plan.sql  # Campos de desembarque + RPCs p/ a rota do motorista (rodar 10º)
+│   ├── 11-dropoff-on-create.sql # rpc_create_reservation grava dropoff_area/detail (rodar 11º)
 │   └── retrofit-security-hardening.sql # Correções dos advisors do Supabase —
 │                             # rodar 1x só se o banco foi criado antes de 31/08/2026
 ├── supabase/functions/       # Edge Functions (backend real do WhatsApp — nunca no frontend)

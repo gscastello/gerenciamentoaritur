@@ -104,6 +104,8 @@ export const reservationsService = {
       p_extra_data: payload.extraData ?? {},
       p_whatsapp_source_message_id: payload.whatsappSourceMessageId ?? null,
       p_created_by: actor,
+      p_dropoff_area: payload.dropoffArea ?? null,
+      p_dropoff_detail: payload.dropoffDetail ?? null,
     });
     if (error) {
       throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });

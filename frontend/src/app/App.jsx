@@ -316,6 +316,31 @@ const DESEMBARQUE_VOLTA = [
   { id: "casa", label: "Em casa (bairro)" },
 ];
 const baldesDesembarque = (direcao) => (direcao === "ida" ? DESEMBARQUE_IDA : DESEMBARQUE_VOLTA);
+const rotuloBalde = (direcao, id) =>
+  baldesDesembarque(direcao).find((b) => b.id === id)?.label || id;
+
+// Rótulo/placeholder do campo de detalhe do desembarque, por balde. `req`
+// = o cliente é obrigado a preencher (BR precisa de referência, casa
+// precisa do bairro, "outro" precisa dizer onde).
+const DETALHE_DESEMBARQUE = {
+  cantanhede: { label: "Onde em Cantanhede", ph: "Rua / ponto de referência", req: false },
+  pirapemas: { label: "Onde em Pirapemas", ph: "Rua / ponto de referência", req: false },
+  outro: { label: "Onde você vai ficar", ph: "Descreva o local", req: true },
+  br: { label: "Ponto de referência na BR", ph: "Km, o que tem por perto", req: true },
+  retorno: { label: "Ponto de referência (opcional)", ph: "", req: false },
+  rodoviaria: { label: "Ponto de referência (opcional)", ph: "", req: false },
+  casa: { label: "Bairro onde vai ficar", ph: "Ex.: Cohama", req: true },
+};
+const detalheDesembarqueObrigatorio = (area) => !!DETALHE_DESEMBARQUE[area]?.req;
+
+// String legível para dropoff_location (usada na Lista/Agenda e telas de
+// sucesso). O que estrutura a rota é dropoff_area/dropoff_detail.
+function textoDesembarque(direcao, area, detalhe) {
+  if (!area) return null;
+  const rotulo = rotuloBalde(direcao, area);
+  const d = (detalhe || "").trim();
+  return d ? `${rotulo} — ${d}` : rotulo;
+}
 
 // Balde da reserva: usa a classificação manual (dropoff_area) se existir;
 // senão chuta pelo texto livre que o cliente deu no agendamento.
@@ -1117,7 +1142,8 @@ function ReservarTab({
     localOutro: "",
     rua: "",
     referencia: "",
-    desembarque: "",
+    desembarqueArea: "",
+    desembarqueDetalhe: "",
     nome: "",
     telefone: "",
     pagamento: "dinheiro",
@@ -1149,17 +1175,18 @@ function ReservarTab({
     localExato: form.localExato,
     localOutro: form.localOutro,
     rua: form.rua,
-    referencia: form.referencia,
-    desembarque: form.desembarque,
+    desembarque: form.desembarqueDetalhe,
   };
   const pendente =
     ponto?.id === "outro" || Object.values(camposTexto).some(contemCidadeIntermediaria);
   const camposFaltando = () => {
-    if (!form.nome || !form.telefone || !form.desembarque || !form.quantidade || excedeVagas)
+    if (!form.nome || !form.telefone || !form.desembarqueArea || !form.quantidade || excedeVagas)
+      return true;
+    if (detalheDesembarqueObrigatorio(form.desembarqueArea) && !form.desembarqueDetalhe.trim())
       return true;
     if (ponto?.campo === "bairro" && !form.bairro) return true;
     if (ponto?.campo && ponto.campo !== "bairro" && !form[ponto.campo]) return true;
-    if (form.direcao === "volta" && (!form.rua || !form.referencia)) return true;
+    if (form.direcao === "volta" && form.desembarqueArea === "casa" && !form.rua) return true;
     return false;
   };
   // resumo local só para as telas de sucesso — a fonte de verdade é o
@@ -1195,7 +1222,9 @@ function ReservarTab({
         pickupDetail: form.localExato || form.localOutro || null,
         street: form.rua || null,
         referencePoint: form.referencia || null,
-        dropoffLocation: form.desembarque || null,
+        dropoffLocation: textoDesembarque(form.direcao, form.desembarqueArea, form.desembarqueDetalhe),
+        dropoffArea: form.desembarqueArea || null,
+        dropoffDetail: form.desembarqueDetalhe.trim() || null,
         pendingReason: pendente
           ? "Embarque/desembarque fora de São Luís, Cantanhede ou Pirapemas — aguardando confirmação."
           : null,
@@ -1246,7 +1275,8 @@ function ReservarTab({
       localOutro: "",
       rua: "",
       referencia: "",
-      desembarque: "",
+      desembarqueArea: "",
+      desembarqueDetalhe: "",
       nome: "",
       telefone: "",
       pagamento: "dinheiro",
@@ -1713,30 +1743,60 @@ function ReservarTab({
                   />
                 </Field>
               )}
-              {form.direcao === "volta" && (
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <Field label="Nome da rua">
+              <div className="mt-2">
+                <Field label="Onde você vai ficar (desembarque)">
+                  <Select
+                    value={form.desembarqueArea}
+                    onChange={(e) =>
+                      setForm({ ...form, desembarqueArea: e.target.value, desembarqueDetalhe: "" })
+                    }
+                  >
+                    <option value="" disabled>
+                      Escolha o local…
+                    </option>
+                    {baldesDesembarque(form.direcao).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              {form.desembarqueArea && (
+                <div className="mt-2">
+                  <Field
+                    label={`${DETALHE_DESEMBARQUE[form.desembarqueArea].label}${
+                      detalheDesembarqueObrigatorio(form.desembarqueArea) ? " *" : ""
+                    }`}
+                  >
+                    <TextInput
+                      value={form.desembarqueDetalhe}
+                      placeholder={DETALHE_DESEMBARQUE[form.desembarqueArea].ph}
+                      onChange={(e) => setForm({ ...form, desembarqueDetalhe: e.target.value })}
+                    />
+                  </Field>
+                  {detalheDesembarqueObrigatorio(form.desembarqueArea) &&
+                    !form.desembarqueDetalhe.trim() && (
+                      <div className="text-xs mt-1" style={{ color: C.purple }}>
+                        {form.desembarqueArea === "br"
+                          ? "Diga um ponto de referência na BR (km, o que tem por perto)."
+                          : form.desembarqueArea === "casa"
+                            ? "Informe o bairro onde você vai ficar."
+                            : "Descreva onde você vai ficar."}
+                      </div>
+                    )}
+                </div>
+              )}
+              {form.direcao === "volta" && form.desembarqueArea === "casa" && (
+                <div className="mt-2">
+                  <Field label="Nome da rua *">
                     <TextInput
                       value={form.rua}
                       onChange={(e) => setForm({ ...form, rua: e.target.value })}
                     />
                   </Field>
-                  <Field label="Ponto de referência">
-                    <TextInput
-                      value={form.referencia}
-                      onChange={(e) => setForm({ ...form, referencia: e.target.value })}
-                    />
-                  </Field>
                 </div>
               )}
-              <div className="mt-2">
-                <Field label="Local de desembarque — onde você vai ficar">
-                  <TextInput
-                    value={form.desembarque}
-                    onChange={(e) => setForm({ ...form, desembarque: e.target.value })}
-                  />
-                </Field>
-              </div>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <Field label="Nome completo">
                   <TextInput
