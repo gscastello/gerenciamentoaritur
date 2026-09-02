@@ -104,6 +104,8 @@ export const reservationsService = {
       p_extra_data: payload.extraData ?? {},
       p_whatsapp_source_message_id: payload.whatsappSourceMessageId ?? null,
       p_created_by: actor,
+      p_dropoff_area: payload.dropoffArea ?? null,
+      p_dropoff_detail: payload.dropoffDetail ?? null,
     });
     if (error) {
       throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
@@ -198,6 +200,31 @@ export const reservationsService = {
     });
     if (error) throw new ServiceError(`setQuantity: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível mudar a quantidade (viagem pode estar lotada).", { retryable: false });
+    return data;
+  },
+
+  /**
+   * Classifica o desembarque de uma reserva para a rota do motorista:
+   * `area` (o balde — IDA: cantanhede|pirapemas|outro; VOLTA:
+   * br|retorno|rodoviaria|casa) e `detail` (bairro / ponto de referência /
+   * descrição). Via RPC porque o motorista (viagem dele) também pode.
+   */
+  async setDropoff(reservationId, { area, detail }) {
+    const { data, error } = await supabase.rpc("rpc_set_dropoff", {
+      p_reservation_id: reservationId,
+      p_area: area ?? null,
+      p_detail: detail ?? null,
+    });
+    if (error) throw new ServiceError(`setDropoff: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar o desembarque.", { retryable: false });
+    return data;
+  },
+
+  /** Reordena a fila de entrega de um balde — `orderedIds` na ordem desejada. */
+  async reorderDropoff(orderedIds) {
+    const { data, error } = await supabase.rpc("rpc_reorder_dropoff", { p_ids: orderedIds });
+    if (error) throw new ServiceError(`reorderDropoff: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível reordenar a rota.", { retryable: false });
     return data;
   },
 
