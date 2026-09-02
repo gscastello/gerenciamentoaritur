@@ -850,9 +850,9 @@ const TAB_ROLES = {
   agenda: ["admin", "atendente", "motorista", "financeiro"],
   lista: ["admin", "atendente", "motorista", "financeiro"],
   passageiros: ["admin", "atendente", "financeiro"],
-  financeiro: ["admin", "financeiro"],
-  operacao: ["admin", "financeiro"],
-  dashboard: ["admin", "financeiro"],
+  financeiro: ["admin"],
+  operacao: ["admin"],
+  dashboard: ["admin"],
   sistema: ["admin"],
 };
 
