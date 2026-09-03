@@ -48,13 +48,21 @@ export const reservationsService = {
    * varrem várias datas (Passageiros/CRM, Dashboard, previsão de demanda).
    */
   async listWindow(fromDate, toDate) {
+    // `.or()` recebe uma string de filtro do PostgREST — só entram datas
+    // ISO válidas (nada de vírgula/parêntese que abriria condições extras).
+    const iso = (d) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d))) {
+        throw new ServiceError(`listWindow: data inválida (${d})`, { retryable: false });
+      }
+      return d;
+    };
     return handle(
       supabase
         .from("v_reservations_flat")
         .select(FLAT_SELECT)
         // inclui também as linhas sem data (frete/encomenda, que nascem sem
         // viagem) — senão elas nunca apareceriam na Agenda.
-        .or(`data.is.null,and(data.gte.${fromDate},data.lte.${toDate})`)
+        .or(`data.is.null,and(data.gte.${iso(fromDate)},data.lte.${iso(toDate)})`)
         .order("criadoEm", { ascending: true }),
       { context: "listWindow" }
     );

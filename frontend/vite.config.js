@@ -7,6 +7,11 @@ export default defineConfig({
   server: { port: 5173 },
   build: {
     sourcemap: true, // necessário para o upload de source maps no Sentry
+    // Sem o polyfill de modulepreload não sobra NENHUM <script> inline no
+    // index.html — assim a CSP pode usar `script-src 'self'` (sem
+    // 'unsafe-inline'). Navegadores atuais (alvo: celulares da equipe)
+    // suportam modulepreload nativo.
+    modulepreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks: {
