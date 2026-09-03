@@ -43,10 +43,11 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
-      # Falha só em vulnerabilidade CRÍTICA (agir agora). High/moderate
-      # vêm por PR do Dependabot (.github/dependabot.yml).
-      - run: npm audit --audit-level=critical
-      # Informativo: mostra high/moderate no log sem quebrar o build.
+      # Gate real = o que VAI PRO NAVEGADOR (deps de produção). Quebra em
+      # high/critical. As deps de dev/build (stryker, vitest…) não sobem no
+      # bundle — ficam para os PRs do Dependabot (.github/dependabot.yml).
+      - run: npm audit --omit=dev --audit-level=high
+      # Informativo: árvore completa (dev incluso) no log, sem quebrar.
       - run: npm audit --audit-level=moderate || true
 
   test:
