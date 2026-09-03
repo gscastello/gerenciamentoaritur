@@ -1,16 +1,10 @@
 ## O que muda
 
-
-
 ## Por quê
-
-
 
 Closes #<issue>
 
 ## Como testar
-
-
 
 ## Checklist
 
@@ -24,3 +18,5 @@ Closes #<issue>
 - [ ] Toda tela nova/alterada tem skeleton, lazy-load e transição de entrada/saída
 - [ ] Se toca em reservas: sem risco de perda de dado (idempotência/transação confirmadas)
 - [ ] Eventos de observabilidade nomeados nas funções críticas alteradas
+- [ ] README.md "Estado atual" atualizado, se este PR muda o que está pronto/pendente
+
