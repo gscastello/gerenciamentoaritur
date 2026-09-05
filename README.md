@@ -27,6 +27,7 @@ com WhatsApp Business API.
 │   ├── 12-write-guards.sql  # GRANT UPDATE por coluna + REVOKE DELETE (anti-adulteração) (rodar 12º)
 │   ├── 15-fix-capacity-on-reservation-move.sql # Trigger de capacidade em reservations.trip_id (rodar 15º)
 │   ├── 16-timezone-sao-luis.sql # Fuso do banco = America/Fortaleza (current_date/now()) (rodar 16º)
+│   ├── 17-backup-completo.sql # Backup completo (todas as tabelas) + cron diário automático (rodar 17º)
 │   └── retrofit-security-hardening.sql # Correções dos advisors do Supabase —
 │                             # rodar 1x só se o banco foi criado antes de 31/08/2026
 ├── supabase/functions/       # Edge Functions (backend real do WhatsApp — nunca no frontend)
