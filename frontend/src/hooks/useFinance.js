@@ -38,6 +38,29 @@ export function useFinanceYear(year) {
   };
 }
 
+/** Contas a receber — passageiros pendentes de pagamento (view
+ * v_contas_a_receber). Some sozinha quando a reserva é paga/estornada/
+ * cancelada (realtime nas 3 tabelas de origem). */
+export function useContasReceber() {
+  const query = useSupabaseQuery(() => financeService.listContasReceber(), []);
+  useRealtimeTable(["reservations", "payments", "financial_entries"], () => query.refetch());
+
+  const ajuste = useAsyncAction((reservationId, fields) => financeService.registerAdjustment(reservationId, fields));
+
+  return {
+    contas: query.data ?? [],
+    loading: query.loading,
+    error: query.error,
+    refetch: query.refetch,
+    registrarAjuste: async (reservationId, fields) => {
+      const r = await ajuste.run(reservationId, fields);
+      await query.refetch();
+      return r;
+    },
+    registrando: ajuste.loading,
+  };
+}
+
 export function useFinanceMonth(year, month) {
   const query = useSupabaseQuery(() => financeService.listByMonth(year, month), [year, month], { enabled: !!year && !!month });
   // financial_entries também recebe as despesas de combustível/manutenção

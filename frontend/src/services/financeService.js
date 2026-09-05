@@ -87,4 +87,43 @@ export const financeService = {
     const expenses = entries.filter((e) => e.type === "despesa").reduce((s, e) => s + Number(e.amount), 0);
     return { revenue, expenses, profit: revenue - expenses, entries };
   },
+
+  /**
+   * Contas a receber — passageiros com reserva confirmada e pagamento
+   * ainda pendente (ver database/18-receita-automatica-contas-a-receber.sql).
+   * A receita em si nasce sozinha (trigger na confirmação/pagamento) —
+   * esta tela é só cobrança do que falta receber.
+   */
+  async listContasReceber() {
+    return handle(
+      supabase.from("v_contas_a_receber").select("*").order("vencimento", { ascending: true, nullsFirst: false }),
+      "listContasReceber"
+    );
+  },
+
+  /**
+   * Registra estorno/reembolso/ajuste manual contra uma reserva (ex.:
+   * devolveu em dinheiro depois de já ter passado pelo caixa). Nunca
+   * apaga o lançamento original — grava uma linha nova ligada a ele.
+   */
+  async registerAdjustment(reservationId, { category, amount, description }) {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase.rpc("rpc_register_financial_adjustment", {
+      p_reservation_id: reservationId,
+      p_categoria: category,
+      p_valor: amount,
+      p_descricao: description ?? null,
+      p_actor: actor,
+    });
+    if (error) throw new ServiceError(`registerAdjustment: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível registrar o ajuste.", { retryable: false });
+    return data;
+  },
 };
+
+function isRetryableError(error) {
+  if (!error) return false;
+  if (error.message?.toLowerCase().includes("fetch")) return true;
+  if (error.message?.toLowerCase().includes("network")) return true;
+  return ["57014", "40001", "40P01"].includes(error.code);
+}
