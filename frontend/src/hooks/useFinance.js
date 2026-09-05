@@ -24,6 +24,20 @@ export function useFinanceDay(entryDate) {
   };
 }
 
+/** Só leitura — usado pro "lucro real anual" do Dashboard (não faz sentido
+ * lançar/editar uma entrada "do ano", sempre é de um dia específico). */
+export function useFinanceYear(year) {
+  const query = useSupabaseQuery(() => financeService.listByYear(year), [year], { enabled: !!year });
+  useRealtimeTable(["financial_entries", "fuel_records", "maintenance"], () => query.refetch());
+
+  return {
+    entries: query.data ?? [],
+    loading: query.loading,
+    error: query.error,
+    refetch: query.refetch,
+  };
+}
+
 export function useFinanceMonth(year, month) {
   const query = useSupabaseQuery(() => financeService.listByMonth(year, month), [year, month], { enabled: !!year && !!month });
   // financial_entries também recebe as despesas de combustível/manutenção
