@@ -3541,6 +3541,20 @@ function PassageirosTab({ reservas, trips }) {
 }
 
 /* ============================= 5. FINANCEIRO (com lucro real) ============================= */
+// Categorias fixas de despesa — combustível/manutenção também chegam
+// sozinhas via trigger (Operação), mas continuam escolhíveis aqui pra
+// cobrir um lançamento manual (ex.: abastecimento pago sem passar pela
+// aba Operação).
+const CATEGORIAS_DESPESA = [
+  { id: "combustivel", label: "Combustível" },
+  { id: "alimentacao", label: "Alimentação" },
+  { id: "motorista", label: "Motorista(s)" },
+  { id: "manutencao", label: "Manutenção" },
+  { id: "outro", label: "Outro" },
+];
+const rotuloCategoriaDespesa = (id) =>
+  CATEGORIAS_DESPESA.find((c) => c.id === id)?.label || "Outro";
+
 // Mapeia a linha do banco (financial_entries) para o formato que a tela usa.
 function mapEntry(e) {
   return {
@@ -3558,7 +3572,12 @@ function mapEntry(e) {
 function FinanceiroTab() {
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
-  const [novo, setNovo] = useState({ tipo: "receita", valor: "", descricao: "" });
+  const [novo, setNovo] = useState({
+    tipo: "receita",
+    categoria: "combustivel",
+    valor: "",
+    descricao: "",
+  });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [erro, setErro] = useState("");
@@ -3586,10 +3605,11 @@ function FinanceiroTab() {
       await fin.addEntry({
         entryDate: diaSel,
         type: novo.tipo,
+        category: novo.tipo === "despesa" ? novo.categoria : undefined,
         amount: Number.parseFloat(novo.valor),
         description: novo.descricao || null,
       });
-      setNovo({ tipo: "receita", valor: "", descricao: "" });
+      setNovo({ tipo: "receita", categoria: "combustivel", valor: "", descricao: "" });
     });
   };
   const remove = (id) => run(() => fin.removeEntry(id));
@@ -3599,11 +3619,14 @@ function FinanceiroTab() {
   };
   const salvarEdicao = () =>
     run(async () => {
-      await fin.updateEntry(editId, {
+      const campos = {
         type: editVal.tipo,
         amount: Number.parseFloat(editVal.valor),
         description: editVal.descricao || null,
-      });
+      };
+      // categoria só faz sentido pra despesa; receita mantém o que já tinha
+      if (editVal.tipo === "despesa") campos.category = editVal.categoria || "outro";
+      await fin.updateEntry(editId, campos);
       setEditId(null);
     });
   const primeiroDia = new Date(ano, mes, 1);
@@ -3751,7 +3774,7 @@ function FinanceiroTab() {
           </div>
           <Card>
             <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
-            <div className="grid sm:grid-cols-4 gap-2">
+            <div className="grid sm:grid-cols-3 gap-2">
               <Select
                 value={novo.tipo}
                 onChange={(e) => setNovo({ ...novo, tipo: e.target.value })}
@@ -3759,15 +3782,30 @@ function FinanceiroTab() {
                 <option value="receita">Receita</option>
                 <option value="despesa">Despesa</option>
               </Select>
+              {novo.tipo === "despesa" && (
+                <Select
+                  value={novo.categoria}
+                  onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
+                >
+                  {CATEGORIAS_DESPESA.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+              )}
               <TextInput
                 placeholder="Valor"
                 type="number"
+                className={novo.tipo === "despesa" ? "" : "sm:col-span-2"}
                 value={novo.valor}
                 onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
               />
+            </div>
+            <div className="mt-2">
               <TextInput
                 placeholder="Descrição"
-                className="sm:col-span-2"
+                className="w-full"
                 value={novo.descricao}
                 onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
               />
@@ -3789,6 +3827,7 @@ function FinanceiroTab() {
               <thead>
                 <tr style={{ background: C.panel2, color: C.inkSoft }}>
                   <th className="text-left px-4 py-2.5 font-medium">Tipo</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Categoria</th>
                   <th className="text-left px-4 py-2.5 font-medium">Valor</th>
                   <th className="text-left px-4 py-2.5 font-medium">Descrição</th>
                   <th />
@@ -3811,6 +3850,25 @@ function FinanceiroTab() {
                           <option value="receita">Receita</option>
                           <option value="despesa">Despesa</option>
                         </Select>
+                      </td>
+                      <td className="px-2 py-2">
+                        {editVal.tipo === "despesa" ? (
+                          <Select
+                            value={editVal.categoria || "outro"}
+                            onChange={(e) => setEditVal({ ...editVal, categoria: e.target.value })}
+                            className="text-xs py-1"
+                          >
+                            {CATEGORIAS_DESPESA.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <span className="text-xs" style={{ color: C.inkFaint }}>
+                            —
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <TextInput
@@ -3846,6 +3904,9 @@ function FinanceiroTab() {
                         >
                           {f.tipo}
                         </Pill>
+                      </td>
+                      <td className="px-4 py-2 text-xs" style={{ color: C.inkSoft }}>
+                        {f.tipo === "despesa" ? rotuloCategoriaDespesa(f.categoria) : "—"}
                       </td>
                       <td
                         className="px-4 py-2"
@@ -3885,7 +3946,7 @@ function FinanceiroTab() {
                 {doDia.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="text-center py-8 text-xs"
                       style={{ color: C.inkFaint }}
                     >
