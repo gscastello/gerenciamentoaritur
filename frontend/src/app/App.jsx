@@ -27,6 +27,8 @@ import {
   MapPin,
   Megaphone,
   MessageCircle,
+  MoreHorizontal,
+  PhoneCall,
   Package,
   Pencil,
   PlayCircle,
@@ -495,7 +497,9 @@ function GlobalStyles() {
       ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:8px; }
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
-        button, select, input, a[role="button"] { min-height: 34px; }
+        button, select, input, textarea, a[role="button"] { min-height: 42px; }
+        /* botões/ícones minúsculos dentro de linhas densas não precisam do mínimo */
+        table button, .no-min-h, .no-min-h button { min-height: 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
@@ -552,26 +556,89 @@ function normalizaBusca(s) {
     .toLowerCase();
 }
 
-function GlobalSearchButton({ onOpen }) {
+// Botão de ações rápidas — flutua no canto inferior direito (acima da
+// barra de navegação no celular), disponível em todas as telas. Abre um
+// menuzinho com Buscar / Agendar / Hoje.
+function FabItem({ icon: Icon, label, onClick, accent = C.panel }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
-      aria-label="Buscar no sistema"
-      className="btn-press fixed z-30 flex items-center justify-center rounded-full border"
-      style={{
-        top: "max(0.6rem, env(safe-area-inset-top))",
-        right: "0.75rem",
-        width: 40,
-        height: 40,
-        background: C.panel,
-        borderColor: C.border,
-        color: C.inkSoft,
-        boxShadow: "0 2px 10px rgba(0,0,0,.35)",
-      }}
+      onClick={onClick}
+      className="btn-press flex items-center gap-2 rounded-full border pl-3 pr-4 py-2 text-sm font-medium"
+      style={{ background: accent, borderColor: C.border, color: C.ink, boxShadow: "0 2px 10px rgba(0,0,0,.35)" }}
     >
-      <Search size={18} />
+      <Icon size={16} />
+      {label}
     </button>
+  );
+}
+
+function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar }) {
+  const [aberto, setAberto] = useState(false);
+  const fechar = () => setAberto(false);
+  return (
+    <>
+      {aberto && (
+        <button
+          type="button"
+          aria-label="Fechar ações rápidas"
+          className="fixed inset-0 z-30"
+          style={{ background: "rgba(0,0,0,.25)" }}
+          onClick={fechar}
+        />
+      )}
+      <div
+        className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6"
+      >
+        {aberto && (
+          <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
+            {mostrarHoje && (
+              <FabItem
+                icon={Calendar}
+                label="Ir para hoje"
+                onClick={() => {
+                  onHoje();
+                  fechar();
+                }}
+              />
+            )}
+            {podeAgendar && (
+              <FabItem
+                icon={Plus}
+                label="Agendar passagem"
+                onClick={() => {
+                  onAgendar();
+                  fechar();
+                }}
+              />
+            )}
+            <FabItem
+              icon={Search}
+              label="Buscar"
+              onClick={() => {
+                onBuscar();
+                fechar();
+              }}
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setAberto((v) => !v)}
+          aria-label="Ações rápidas"
+          className="btn-press rounded-full flex items-center justify-center"
+          style={{
+            width: 56,
+            height: 56,
+            background: C.amber,
+            color: "#20180A",
+            boxShadow: "0 4px 18px rgba(0,0,0,.45)",
+          }}
+        >
+          {aberto ? <X size={24} /> : <Plus size={26} />}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -1226,6 +1293,126 @@ const NAV_ITENS = [
   { id: "sistema", label: "Sistema", icon: ShieldCheck },
 ];
 
+// Navegação inferior (celular). Muitas abas não cabem numa linha só —
+// mostra as principais + "Mais" numa folha. A aba ativa sempre aparece
+// na barra, mesmo que normalmente estivesse em "Mais".
+function MobileNavItem({ n, active, grande, badge, onClick }) {
+  const Icon = n.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        grande
+          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl"
+          : "tab-btn flex-1 flex flex-col items-center gap-0.5 py-2 min-w-0"
+      }
+      style={
+        grande
+          ? { background: active ? C.amberSoft : C.panel2, color: active ? C.amber : C.inkSoft }
+          : { color: active ? C.amber : C.inkFaint }
+      }
+    >
+      <span className="relative flex items-center justify-center" style={{ minHeight: 20 }}>
+        <Icon size={grande ? 18 : 20} />
+        {badge > 0 && (
+          <span
+            className="absolute -top-1.5 -right-2.5 text-[8px] font-bold px-1 rounded-full"
+            style={{ background: C.purple, color: "#fff" }}
+          >
+            {badge}
+          </span>
+        )}
+      </span>
+      <span className={grande ? "text-[10px]" : "text-[9px] leading-none truncate max-w-full"}>
+        {n.label}
+      </span>
+    </button>
+  );
+}
+
+function MobileNav({ nav, tab, onSelect, pendentesCount }) {
+  const [maisAberto, setMaisAberto] = useState(false);
+  const LIMITE = 5;
+  let visiveis = nav;
+  let extras = [];
+  if (nav.length > LIMITE) {
+    visiveis = nav.slice(0, LIMITE - 1);
+    extras = nav.slice(LIMITE - 1);
+    const ativoNosExtras = extras.find((n) => n.id === tab);
+    if (ativoNosExtras) {
+      const trocado = visiveis[visiveis.length - 1];
+      visiveis = [...visiveis.slice(0, -1), ativoNosExtras];
+      extras = [trocado, ...extras.filter((n) => n.id !== tab)];
+    }
+  }
+  const escolher = (id) => {
+    onSelect(id);
+    setMaisAberto(false);
+  };
+  return (
+    <>
+      {maisAberto && (
+        <div
+          className="md:hidden fixed inset-0 z-30 anim-fadeIn"
+          style={{ background: "rgba(0,0,0,.5)" }}
+          onClick={() => setMaisAberto(false)}
+        >
+          <div
+            className="absolute left-0 right-0 bottom-0 rounded-t-2xl border-t p-3 pb-6 safe-bottom anim-slideDown"
+            style={{ background: C.panel, borderColor: C.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="w-9 h-1 rounded-full mx-auto mb-3"
+              style={{ background: C.border }}
+            />
+            <div className="grid grid-cols-4 gap-2">
+              {extras.map((n) => (
+                <MobileNavItem
+                  key={n.id}
+                  n={n}
+                  grande
+                  active={tab === n.id}
+                  badge={n.id === "agenda" ? pendentesCount : 0}
+                  onClick={() => escolher(n.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      <div
+        className="md:hidden safe-bottom fixed bottom-0 left-0 right-0 z-20 flex border-t"
+        style={{ background: C.panel, borderColor: C.border }}
+      >
+        {visiveis.map((n) => (
+          <MobileNavItem
+            key={n.id}
+            n={n}
+            active={tab === n.id}
+            badge={n.id === "agenda" ? pendentesCount : 0}
+            onClick={() => escolher(n.id)}
+          />
+        ))}
+        {extras.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMaisAberto(true)}
+            className="tab-btn flex-1 flex flex-col items-center gap-0.5 py-2"
+            style={{ color: maisAberto ? C.amber : C.inkFaint }}
+          >
+            <span className="flex items-center justify-center" style={{ minHeight: 20 }}>
+              <MoreHorizontal size={20} />
+            </span>
+            <span className="text-[9px] leading-none">Mais</span>
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 function AppInner() {
   useEffect(() => {
     const l = document.createElement("link");
@@ -1237,6 +1424,8 @@ function AppInner() {
   const role = profile?.role ?? null;
   const [tab, setTab] = useState("reservar");
   const [buscaAberta, setBuscaAberta] = useState(false);
+  const [agendarAberto, setAgendarAberto] = useState(false);
+  const [agendou, setAgendou] = useState("");
   // deep-link da busca global: leva a aba destino a pré-selecionar data /
   // pré-preencher o filtro. `at` força o efeito a rodar de novo mesmo se
   // o alvo repetir.
@@ -1308,6 +1497,14 @@ function AppInner() {
     setTab(id);
     setDeepLink(null);
   };
+  const irParaHoje = () => setDeepLink({ kind: "data", data: todayStr(), at: Date.now() });
+  useEffect(() => {
+    if (!agendou) return undefined;
+    const t = setTimeout(() => setAgendou(""), 5000);
+    return () => clearTimeout(t);
+  }, [agendou]);
+  const podeAgendar = ["admin", "atendente"].includes(role);
+  const tabComData = tab === "agenda" || tab === "lista";
 
   const ready = useLazyTab(tab);
   const loading =
@@ -1322,13 +1519,57 @@ function AppInner() {
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
     >
       <GlobalStyles />
-      <GlobalSearchButton onOpen={() => setBuscaAberta(true)} />
+      <QuickActionsFab
+        onBuscar={() => setBuscaAberta(true)}
+        onAgendar={() => setAgendarAberto(true)}
+        onHoje={irParaHoje}
+        mostrarHoje={tabComData}
+        podeAgendar={podeAgendar}
+      />
       {buscaAberta && (
         <GlobalSearchOverlay
           onClose={() => setBuscaAberta(false)}
           onNavigate={irParaBusca}
           navIds={NAV.map((n) => n.id)}
         />
+      )}
+      {agendarAberto && (
+        <NovaReservaModal
+          dataInicial={deepLink?.kind === "data" ? deepLink.data : todayStr()}
+          trips={trips}
+          onCriar={R.createReservation}
+          onClose={(r) => {
+            setAgendarAberto(false);
+            if (r?.ok) {
+              setTab("lista");
+              setDeepLink({ kind: "data", data: r.data, at: Date.now() });
+              setAgendou(
+                r.status === "pendente"
+                  ? `${r.nome} agendado(a) como pendente.`
+                  : r.status === "espera"
+                    ? `${r.nome} entrou na lista de espera.`
+                    : `${r.nome} agendado(a) e confirmado(a).`,
+              );
+            }
+          }}
+        />
+      )}
+      {agendou && (
+        <div
+          className="anim-slideDown fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 text-xs rounded-lg px-4 py-2.5 max-w-[92vw]"
+          style={{
+            top: "max(0.75rem, env(safe-area-inset-top))",
+            background: C.green,
+            color: "#0C1F16",
+            boxShadow: "0 4px 16px rgba(0,0,0,.4)",
+          }}
+        >
+          <CheckCircle2 size={15} />
+          <span className="font-medium">{agendou}</span>
+          <button type="button" onClick={() => setAgendou("")} className="ml-1">
+            <X size={13} />
+          </button>
+        </div>
       )}
       <div
         className="hidden md:flex flex-col w-64 shrink-0 border-r"
@@ -1414,28 +1655,9 @@ function AppInner() {
         </nav>
       </div>
 
-      <div
-        className="md:hidden safe-bottom fixed bottom-0 left-0 right-0 z-20 flex overflow-x-auto border-t py-2 px-1 gap-1"
-        style={{ background: C.panel, borderColor: C.border }}
-      >
-        {NAV.map((n) => {
-          const Icon = n.icon;
-          const active = tab === n.id;
-          return (
-            <button
-              key={n.id}
-              onClick={() => mudarAba(n.id)}
-              className="tab-btn flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-lg shrink-0"
-              style={{ color: active ? C.amber : C.inkFaint }}
-            >
-              <Icon size={16} />
-              <span style={{ fontSize: "0.55rem" }}>{n.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      <MobileNav nav={NAV} tab={tab} onSelect={mudarAba} pendentesCount={pendentesCount} />
 
-      <div className="flex-1 min-w-0 pb-16 md:pb-0 overflow-x-hidden">
+      <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden">
         {R.error && !loading && (
           <div
             className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
@@ -1479,6 +1701,7 @@ function AppInner() {
                 segundaAtiva={cfg.segundaAtiva}
                 segundaHoras={cfg.segundaHoras}
                 deepLink={deepLink}
+                onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
               />
             )}
             {tab === "lista" && (
@@ -1487,6 +1710,7 @@ function AppInner() {
                 R={R}
                 trips={trips}
                 deepLink={deepLink}
+                onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
               />
             )}
             {tab === "passageiros" && (
@@ -2516,12 +2740,19 @@ function NextBtn({ onClick, disabled, label = "Continuar" }) {
 }
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
-function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras, deepLink }) {
+function AgendaTab({
+  reservas,
+  R,
+  capacidade,
+  trips,
+  segundaAtiva,
+  segundaHoras,
+  deepLink,
+  onAgendar,
+}) {
   const [data, setData] = useState(todayStr());
   useDeepLinkData(deepLink, setData);
   const [editando, setEditando] = useState(null);
-  const [agendar, setAgendar] = useState(false);
-  const [agendou, setAgendou] = useState("");
   const [acaoErro, setAcaoErro] = useState("");
   const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
@@ -2622,44 +2853,15 @@ function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras,
               onChange={(e) => setData(e.target.value)}
               className="w-auto"
             />
-            <BotaoAgendar onClick={() => setAgendar(true)} />
+            {onAgendar && (
+              <span className="hidden sm:block">
+                <BotaoAgendar onClick={onAgendar} />
+              </span>
+            )}
           </div>
         }
       />
-      {agendar && (
-        <NovaReservaModal
-          dataInicial={data}
-          trips={trips}
-          onCriar={R.createReservation}
-          onClose={(r) => {
-            setAgendar(false);
-            if (r?.ok) {
-              if (r.data) setData(r.data);
-              setAgendou(
-                r.status === "pendente"
-                  ? `${r.nome} agendado(a) como pendente.`
-                  : r.status === "espera"
-                    ? `${r.nome} entrou na lista de espera.`
-                    : `${r.nome} agendado(a) e confirmado(a).`,
-              );
-            }
-          }}
-        />
-      )}
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
-        {agendou && (
-          <div
-            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.greenSoft, color: C.green }}
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 size={14} /> {agendou}
-            </span>
-            <button type="button" onClick={() => setAgendou("")}>
-              <XIcon size={13} />
-            </button>
-          </div>
-        )}
         <div className="text-xs" style={{ color: C.inkFaint }}>
           {data === todayStr() ? "Hoje" : fmtDate(data)} — {fmtDate(data)} ·{" "}
           <span className="capitalize">{diaSemana(data)}</span>
@@ -3648,12 +3850,10 @@ function BotaoAgendar({ onClick }) {
 }
 
 /* ============================= 3. LISTA DO DIA ============================= */
-function ListaTab({ reservas, R, trips, deepLink }) {
+function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   const [data, setData] = useState(todayStr());
   useDeepLinkData(deepLink, setData);
   const [erro, setErro] = useState("");
-  const [agendar, setAgendar] = useState(false);
-  const [agendou, setAgendou] = useState("");
   const [subview, setSubview] = useState("embarque");
   const doDia = reservas.filter(
     (r) =>
@@ -3703,13 +3903,29 @@ function ListaTab({ reservas, R, trips, deepLink }) {
       setErro(e?.message || "Não foi possível remover.");
     }
   };
-  const buscaItens = ativos.filter((r) => r.direcao === "ida" && r.pontoId === "busca");
-  const agrupadosIda = ativos
+  // Ações do motorista direto na lista de embarque.
+  const marcar = async (id, acao) => {
+    setErro("");
+    try {
+      if (acao === "embarcado") await R.markPassengers(id, "embarcado");
+      else if (acao === "nao_compareceu") await R.markPassengers(id, "nao_compareceu");
+      else await R.markPassengers(id, "confirmado").then(() => R.confirmReservation(id));
+    } catch (e) {
+      setErro(e?.message || "Não foi possível atualizar o passageiro.");
+    }
+  };
+  // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
+  // mas o motorista ainda vê e pode reverter).
+  const naRota = doDia.filter(
+    (r) => OCUPA_VAGA.includes(r.status) || r.status === "nao_compareceu",
+  );
+  const buscaItens = naRota.filter((r) => r.direcao === "ida" && r.pontoId === "busca");
+  const agrupadosIda = naRota
     .filter((r) => r.direcao === "ida" && r.pontoId !== "busca")
     .sort((a, b) => (IDA_PRIORIDADE[a.pontoId] ?? 3) - (IDA_PRIORIDADE[b.pontoId] ?? 3));
-  const cantanhedeItens = ativos.filter((r) => r.direcao === "volta" && r.pontoId === "cantanhede");
-  const pirapemasItens = ativos.filter((r) => r.direcao === "volta" && r.pontoId === "pirapemas");
-  const outrasVolta = ativos.filter(
+  const cantanhedeItens = naRota.filter((r) => r.direcao === "volta" && r.pontoId === "cantanhede");
+  const pirapemasItens = naRota.filter((r) => r.direcao === "volta" && r.pontoId === "pirapemas");
+  const outrasVolta = naRota.filter(
     (r) => r.direcao === "volta" && r.pontoId !== "cantanhede" && r.pontoId !== "pirapemas",
   );
 
@@ -3726,44 +3942,15 @@ function ListaTab({ reservas, R, trips, deepLink }) {
               onChange={(e) => setData(e.target.value)}
               className="w-auto"
             />
-            <BotaoAgendar onClick={() => setAgendar(true)} />
+            {onAgendar && (
+              <span className="hidden sm:block">
+                <BotaoAgendar onClick={onAgendar} />
+              </span>
+            )}
           </div>
         }
       />
-      {agendar && (
-        <NovaReservaModal
-          dataInicial={data}
-          trips={trips}
-          onCriar={R.createReservation}
-          onClose={(r) => {
-            setAgendar(false);
-            if (r?.ok) {
-              if (r.data) setData(r.data);
-              setAgendou(
-                r.status === "pendente"
-                  ? `${r.nome} agendado(a) como pendente.`
-                  : r.status === "espera"
-                    ? `${r.nome} entrou na lista de espera.`
-                    : `${r.nome} agendado(a) e confirmado(a).`,
-              );
-            }
-          }}
-        />
-      )}
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
-        {agendou && (
-          <div
-            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.greenSoft, color: C.green }}
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 size={14} /> {agendou}
-            </span>
-            <button type="button" onClick={() => setAgendou("")}>
-              <XIcon size={13} />
-            </button>
-          </div>
-        )}
         {erro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -3841,6 +4028,7 @@ function ListaTab({ reservas, R, trips, deepLink }) {
           itens={buscaItens}
           trips={trips}
           alvos={alvos}
+          marcar={marcar}
           mover={mover}
           remove={remove}
         />
@@ -3849,6 +4037,7 @@ function ListaTab({ reservas, R, trips, deepLink }) {
           itens={agrupadosIda}
           trips={trips}
           alvos={alvos}
+          marcar={marcar}
           mover={mover}
           remove={remove}
         />
@@ -3869,6 +4058,7 @@ function ListaTab({ reservas, R, trips, deepLink }) {
           itens={cantanhedeItens}
           trips={trips}
           alvos={alvos}
+          marcar={marcar}
           mover={mover}
           remove={remove}
         />
@@ -3877,6 +4067,7 @@ function ListaTab({ reservas, R, trips, deepLink }) {
           itens={[...pirapemasItens, ...outrasVolta]}
           trips={trips}
           alvos={alvos}
+          marcar={marcar}
           mover={mover}
           remove={remove}
         />
@@ -4099,44 +4290,136 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
   );
 }
 
-function ListaSecao({ titulo, itens, trips, alvos, mover, remove }) {
+function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar }) {
+  const paxAtivos = itens
+    .filter((r) => OCUPA_VAGA.includes(r.status))
+    .reduce((s, r) => s + r.quantidade, 0);
   return (
     <Card>
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-bold tracking-wide" style={{ color: C.inkSoft }}>
           {titulo}
         </div>
-        <Pill color={C.blue}>{itens.reduce((s, r) => s + r.quantidade, 0)} pax</Pill>
+        <Pill color={C.blue}>{paxAtivos} pax</Pill>
       </div>
       {itens.length === 0 ? (
         <div className="text-xs" style={{ color: C.inkFaint }}>
           — sem anotações —
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {itens.map((r) => (
-            <div
+            <LinhaEmbarque
               key={r.id}
-              className="row-hover flex items-center justify-between gap-2 rounded-md px-2.5 py-2"
-              style={{ background: C.panel2 }}
-            >
-              <div className="text-sm min-w-0 truncate flex items-center gap-1.5">
-                <span className="font-bold" style={{ color: C.ink }}>
-                  {linhaReserva(r, trips)}
-                </span>
-                <StatusPill status={r.status} />
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <MoverCompacto reservaId={r.id} alvos={alvos} mover={mover} />
-                <button onClick={() => remove(r.id)}>
-                  <X size={13} style={{ color: C.red }} />
-                </button>
-              </div>
-            </div>
+              r={r}
+              trips={trips}
+              alvos={alvos}
+              mover={mover}
+              remove={remove}
+              marcar={marcar}
+            />
           ))}
         </div>
       )}
     </Card>
+  );
+}
+
+// Linha de passageiro na lista de embarque — pensada pro celular do
+// motorista: nome grande, telefone com toque pra ligar / abrir WhatsApp,
+// e dois botões grandes "Embarcou" / "Faltou".
+function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar }) {
+  const tel = digitos(r.telefone);
+  const embarcado = r.status === "embarcado";
+  const faltou = r.status === "nao_compareceu";
+  return (
+    <div
+      className="rounded-lg px-3 py-2.5"
+      style={{ background: C.panel2, opacity: faltou ? 0.6 : 1 }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div
+            className="text-sm font-bold"
+            style={{ color: C.ink, textDecoration: faltou ? "line-through" : "none" }}
+          >
+            {linhaReserva(r, trips)}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+            <StatusPill status={r.status} />
+            {r.pago ? (
+              <span className="text-[10px]" style={{ color: C.green }}>
+                pago
+              </span>
+            ) : (
+              <span className="text-[10px]" style={{ color: C.amber }}>
+                a receber {fmtBRL(r.valorTotal)}
+              </span>
+            )}
+          </div>
+        </div>
+        {(mover || remove) && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {mover && <MoverCompacto reservaId={r.id} alvos={alvos} mover={mover} />}
+            {remove && (
+              <button type="button" onClick={() => remove(r.id)} aria-label="Cancelar">
+                <X size={14} style={{ color: C.red }} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
+        {tel && (
+          <>
+            <a
+              href={`tel:${tel}`}
+              className="btn-press flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md"
+              style={{ background: C.panel, color: C.inkSoft }}
+            >
+              <PhoneCall size={12} /> {r.telefone}
+            </a>
+            <a
+              href={`https://wa.me/55${tel}`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-press flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md"
+              style={{ background: C.greenSoft, color: C.green }}
+            >
+              <MessageCircle size={12} /> WhatsApp
+            </a>
+          </>
+        )}
+      </div>
+
+      {marcar && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => marcar(r.id, embarcado ? "reverter" : "embarcado")}
+            className="btn-press flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold"
+            style={{
+              background: embarcado ? C.green : C.greenSoft,
+              color: embarcado ? "#0C1F16" : C.green,
+            }}
+          >
+            <Check size={15} /> {embarcado ? "Embarcou ✓" : "Embarcou"}
+          </button>
+          <button
+            type="button"
+            onClick={() => marcar(r.id, faltou ? "reverter" : "nao_compareceu")}
+            className="btn-press flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold"
+            style={{
+              background: faltou ? C.gray : C.graySoft,
+              color: faltou ? "#0E1116" : C.inkSoft,
+            }}
+          >
+            <UserX size={15} /> {faltou ? "Faltou" : "Não veio"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 function MoverCompacto({ reservaId, alvos, mover }) {
