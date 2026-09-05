@@ -26,6 +26,19 @@ export const financeService = {
     );
   },
 
+  /** Ano inteiro — usado pra "lucro real anual" do Dashboard. */
+  async listByYear(year) {
+    return handle(
+      supabase
+        .from("financial_entries")
+        .select("*")
+        .gte("entry_date", `${year}-01-01`)
+        .lte("entry_date", `${year}-12-31`)
+        .is("deleted_at", null),
+      "listByYear"
+    );
+  },
+
   /**
    * Lançamento manual (receita/despesa). Combustível e manutenção NUNCA
    * são lançados por aqui — eles entram sozinhos via trigger quando um

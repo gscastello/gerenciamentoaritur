@@ -57,7 +57,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } fr
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useCustomers } from "../hooks/useCustomers.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
-import { useFinanceMonth } from "../hooks/useFinance.js";
+import { useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
@@ -3569,6 +3569,10 @@ function mapEntry(e) {
     auto: !!(e.fuel_record_id || e.maintenance_id),
   };
 }
+// Soma receita/despesa de uma lista já mapeada por mapEntry.
+function somaTipo(lista, tipo) {
+  return lista.filter((f) => f.tipo === tipo).reduce((s, f) => s + f.valor, 0);
+}
 
 function FinanceiroTab() {
   const [mesRef, setMesRef] = useState(new Date());
@@ -4636,6 +4640,9 @@ function DashboardTab({ reservas, capacidade, trips }) {
     () => [...(finPrev.entries || []), ...(finThis.entries || [])].map(mapEntry),
     [finThis.entries, finPrev.entries],
   );
+  // Ano inteiro — só para o "Lucro real" (hoje/mês já saem de financeiro acima).
+  const finAno = useFinanceYear(now.getFullYear());
+  const financeiroAno = useMemo(() => (finAno.entries || []).map(mapEntry), [finAno.entries]);
   // combustível/manutenção do veículo padrão — só para os alertas de "IA Operacional"
   const { defaultVehicle } = useVehicles();
   const fuel = useFuelRecords(defaultVehicle?.id ?? null);
@@ -4671,6 +4678,21 @@ function DashboardTab({ reservas, capacidade, trips }) {
       .filter((f) => f.tipo === "receita" && f.data.startsWith(m))
       .reduce((s, f) => s + f.valor, 0);
   }, [financeiro, hoje]);
+  // Lucro real = receita − despesa (a mesma conta da aba Financeiro),
+  // em 3 janelas: hoje, mês corrente (até hoje) e ano corrente (até hoje).
+  const despesaHoje = financeiro.filter((f) => f.data === hoje && f.tipo === "despesa").reduce((s, f) => s + f.valor, 0);
+  const lucroHoje = receitaHoje - despesaHoje;
+  const despesaMes = useMemo(() => {
+    const m = hoje.slice(0, 7);
+    return financeiro
+      .filter((f) => f.tipo === "despesa" && f.data.startsWith(m))
+      .reduce((s, f) => s + f.valor, 0);
+  }, [financeiro, hoje]);
+  const lucroMes = receitaMes - despesaMes;
+  const lucroAno = useMemo(
+    () => somaTipo(financeiroAno, "receita") - somaTipo(financeiroAno, "despesa"),
+    [financeiroAno],
+  );
   const contagemPorCliente = {};
   confirmadas.forEach((r) => {
     const k = r.telefone || r.nome;
@@ -4780,6 +4802,24 @@ function DashboardTab({ reservas, capacidade, trips }) {
             value={fmtBRL(receitaMes)}
             icon={TrendingUp}
             accent={C.amber}
+          />
+          <StatCard
+            label="Lucro real até hoje"
+            value={fmtBRL(lucroHoje)}
+            icon={Route}
+            accent={lucroHoje >= 0 ? C.blue : C.red}
+          />
+          <StatCard
+            label="Lucro real do mês"
+            value={fmtBRL(lucroMes)}
+            icon={Route}
+            accent={lucroMes >= 0 ? C.blue : C.red}
+          />
+          <StatCard
+            label="Lucro real do ano"
+            value={fmtBRL(lucroAno)}
+            icon={Route}
+            accent={lucroAno >= 0 ? C.blue : C.red}
           />
           <StatCard
             label="Clientes recorrentes"
