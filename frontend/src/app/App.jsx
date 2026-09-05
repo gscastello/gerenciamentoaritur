@@ -57,7 +57,7 @@ import { useAuth } from "../auth/AuthProvider.jsx";
 import { useBackup } from "../hooks/useBackup.js";
 import { useCustomers } from "../hooks/useCustomers.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
-import { useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
+import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
@@ -1118,7 +1118,7 @@ function AppInner() {
             )}
             {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={trips} />}
             {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={trips} />}
-            {tab === "financeiro" && <FinanceiroTab />}
+            {tab === "financeiro" && <FinanceiroTab pix={cfgSettings.pix} />}
             {tab === "operacao" && <OperacaoTab />}
             {tab === "dashboard" && (
               <DashboardTab
@@ -3588,8 +3588,12 @@ const CATEGORIAS_DESPESA = [
   { id: "manutencao", label: "Manutenção", icon: Wrench },
   { id: "outro", label: "Outro", icon: Receipt },
 ];
+// estorno/reembolso/ajuste são categorias de AJUSTE ligadas a uma reserva
+// (ver database/18-receita-automatica-contas-a-receber.sql) — não aparecem
+// nos botões rápidos de lançamento manual, só na tabela de lançamentos.
+const ROTULOS_AJUSTE = { estorno: "Estorno", reembolso: "Reembolso", ajuste: "Ajuste" };
 const rotuloCategoriaDespesa = (id) =>
-  CATEGORIAS_DESPESA.find((c) => c.id === id)?.label || "Outro";
+  CATEGORIAS_DESPESA.find((c) => c.id === id)?.label || ROTULOS_AJUSTE[id] || "Outro";
 
 // Mapeia a linha do banco (financial_entries) para o formato que a tela usa.
 function mapEntry(e) {
@@ -3609,7 +3613,8 @@ function somaTipo(lista, tipo) {
   return lista.filter((f) => f.tipo === tipo).reduce((s, f) => s + f.valor, 0);
 }
 
-function FinanceiroTab() {
+function FinanceiroTab({ pix }) {
+  const [subview, setSubview] = useState("lancamentos");
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
   const [novo, setNovo] = useState({
@@ -3727,6 +3732,29 @@ function FinanceiroTab() {
           )}
         </div>
       )}
+      <div className="px-6 md:px-10 mb-4 flex gap-1 rounded-lg p-1 w-fit" style={{ background: C.panel2 }}>
+        {[
+          { id: "lancamentos", label: "Lançamentos", Icon: Wallet },
+          { id: "contas_receber", label: "Contas a receber", Icon: MessageCircle },
+        ].map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSubview(id)}
+            className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
+            style={{
+              background: subview === id ? C.amberSoft : "transparent",
+              color: subview === id ? C.amber : C.inkSoft,
+              fontWeight: subview === id ? 600 : 500,
+            }}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+      {subview === "contas_receber" && <ContasReceberView pix={pix} />}
+      {subview === "lancamentos" && (
       <div className="px-6 md:px-10 pb-10 grid lg:grid-cols-[340px_1fr] gap-6">
         <Card className="anim-fadeUp">
           <div className="flex items-center justify-between mb-3">
@@ -4031,6 +4059,188 @@ function FinanceiroTab() {
           </Card>
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Contas a receber: passageiros com reserva confirmada e pagamento
+   ainda pendente — ver database/18-receita-automatica-contas-a-receber.sql.
+   A receita nasce sozinha (trigger); esta tela é só cobrança do que falta
+   receber, com botão de cobrança direta pelo WhatsApp. --- */
+function ContasReceberView({ pix }) {
+  const { contas, loading, error, registrarAjuste, registrando } = useContasReceber();
+  const pixKey = pix?.key || PIX_KEY;
+  const [ajusteAberto, setAjusteAberto] = useState(null); // reservation_id em edição
+  const [ajusteVal, setAjusteVal] = useState({ categoria: "estorno", valor: "", descricao: "" });
+  const [erroAjuste, setErroAjuste] = useState("");
+
+  const vencida = (venc) => !!venc && venc < todayStr();
+
+  const abrirCobranca = (c) => {
+    const venc = c.vencimento ? fmtDate(c.vencimento) : "sem data definida";
+    const msg =
+      `Olá, ${c.nome}! Tudo bem? Aqui é da Rota Pirapemas. ` +
+      `Notamos que sua passagem de ${venc} no valor de ${fmtBRL(c.valor_devido)} ainda está pendente de pagamento. ` +
+      `Você pode pagar via Pix na chave ${pixKey}. Qualquer dúvida, estamos à disposição!`;
+    window.open(`https://wa.me/55${digitos(c.telefone)}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  const iniciarAjuste = (reservationId) => {
+    setErroAjuste("");
+    setAjusteAberto(reservationId);
+    setAjusteVal({ categoria: "estorno", valor: "", descricao: "" });
+  };
+  const salvarAjuste = async () => {
+    if (!ajusteVal.valor) return;
+    setErroAjuste("");
+    try {
+      await registrarAjuste(ajusteAberto, {
+        category: ajusteVal.categoria,
+        amount: Number.parseFloat(ajusteVal.valor),
+        description: ajusteVal.descricao || null,
+      });
+      setAjusteAberto(null);
+    } catch (e) {
+      setErroAjuste(e?.message || "Não foi possível registrar o ajuste.");
+    }
+  };
+
+  return (
+    <div className="px-6 md:px-10 pb-10">
+      {error && (
+        <div
+          className="mb-3 flex items-center gap-2 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
+          <AlertTriangle size={14} /> {error?.message || "Erro ao carregar contas a receber."}
+        </div>
+      )}
+      <Card className="anim-fadeUp">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold">Passageiros com pagamento pendente</div>
+          {loading && (
+            <span className="text-xs" style={{ color: C.inkFaint }}>
+              carregando…
+            </span>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+                <th className="px-4 py-2 font-medium">Passageiro</th>
+                <th className="px-4 py-2 font-medium">Valor devido</th>
+                <th className="px-4 py-2 font-medium">Vencimento</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contas.map((c) => (
+                <React.Fragment key={c.reservation_id}>
+                  <tr className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                    <td className="px-4 py-2">
+                      <div>{c.nome}</div>
+                      <div className="text-xs" style={{ color: C.inkFaint }}>
+                        {c.telefone}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      {fmtBRL(c.valor_devido)}
+                    </td>
+                    <td className="px-4 py-2" style={{ color: C.inkSoft }}>
+                      {c.vencimento ? fmtDate(c.vencimento) : "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Pill
+                        color={vencida(c.vencimento) ? C.red : C.amber}
+                        bg={vencida(c.vencimento) ? C.redSoft : C.amberSoft}
+                      >
+                        {vencida(c.vencimento) ? "Vencido" : "No prazo"}
+                      </Pill>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => abrirCobranca(c)}
+                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                          style={{ background: C.greenSoft, color: C.green, fontWeight: 600 }}
+                        >
+                          <MessageCircle size={12} /> Cobrar no WhatsApp
+                        </button>
+                        <button
+                          onClick={() => iniciarAjuste(c.reservation_id)}
+                          className="btn-press text-xs px-2 py-1 rounded-md"
+                          style={{ background: C.panel2, color: C.inkSoft }}
+                        >
+                          Estorno/ajuste
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {ajusteAberto === c.reservation_id && (
+                    <tr className="border-t" style={{ borderColor: C.borderSoft, background: C.panel2 }}>
+                      <td colSpan={5} className="px-4 py-3">
+                        {erroAjuste && (
+                          <div className="mb-2 text-xs" style={{ color: C.red }}>
+                            {erroAjuste}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Select
+                            value={ajusteVal.categoria}
+                            onChange={(e) => setAjusteVal({ ...ajusteVal, categoria: e.target.value })}
+                          >
+                            <option value="estorno">Estorno</option>
+                            <option value="reembolso">Reembolso</option>
+                            <option value="ajuste">Ajuste</option>
+                          </Select>
+                          <TextInput
+                            type="number"
+                            placeholder="Valor"
+                            value={ajusteVal.valor}
+                            onChange={(e) => setAjusteVal({ ...ajusteVal, valor: e.target.value })}
+                            className="w-28"
+                          />
+                          <TextInput
+                            placeholder="Descrição (opcional)"
+                            value={ajusteVal.descricao}
+                            onChange={(e) => setAjusteVal({ ...ajusteVal, descricao: e.target.value })}
+                            className="flex-1 min-w-[160px]"
+                          />
+                          <button
+                            onClick={salvarAjuste}
+                            disabled={registrando || !ajusteVal.valor}
+                            className="btn-press text-xs px-3 py-1.5 rounded-md"
+                            style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
+                          >
+                            Registrar
+                          </button>
+                          <button
+                            onClick={() => setAjusteAberto(null)}
+                            className="btn-press text-xs px-2 py-1.5 rounded-md"
+                            style={{ color: C.inkFaint }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {contas.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-xs" style={{ color: C.inkFaint }}>
+                    Nenhuma conta pendente — tudo em dia.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
