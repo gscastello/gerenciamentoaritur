@@ -46,6 +46,7 @@ import {
   UserCog,
   UserX,
   Users,
+  UtensilsCrossed,
   Wallet,
   Wifi,
   Wrench,
@@ -3546,11 +3547,11 @@ function PassageirosTab({ reservas, trips }) {
 // cobrir um lançamento manual (ex.: abastecimento pago sem passar pela
 // aba Operação).
 const CATEGORIAS_DESPESA = [
-  { id: "combustivel", label: "Combustível" },
-  { id: "alimentacao", label: "Alimentação" },
-  { id: "motorista", label: "Motorista(s)" },
-  { id: "manutencao", label: "Manutenção" },
-  { id: "outro", label: "Outro" },
+  { id: "combustivel", label: "Combustível", icon: Fuel },
+  { id: "alimentacao", label: "Alimentação", icon: UtensilsCrossed },
+  { id: "motorista", label: "Motorista(s)", icon: Users },
+  { id: "manutencao", label: "Manutenção", icon: Wrench },
+  { id: "outro", label: "Outro", icon: Receipt },
 ];
 const rotuloCategoriaDespesa = (id) =>
   CATEGORIAS_DESPESA.find((c) => c.id === id)?.label || "Outro";
@@ -3774,6 +3775,35 @@ function FinanceiroTab() {
           </div>
           <Card>
             <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
+            <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
+              Despesa rápida — escolhe a categoria e só falta o valor
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {CATEGORIAS_DESPESA.map((c) => {
+                const Icon = c.icon;
+                const ativo = novo.tipo === "despesa" && novo.categoria === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.id }));
+                      document.getElementById("financeiro-valor-input")?.focus();
+                    }}
+                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
+                    style={{
+                      background: ativo ? C.amberSoft : C.panel2,
+                      color: ativo ? C.amber : C.inkSoft,
+                      fontWeight: ativo ? 600 : 500,
+                      border: `1px solid ${ativo ? C.amber : C.border}`,
+                    }}
+                  >
+                    <Icon size={13} />
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
             <div className="grid sm:grid-cols-3 gap-2">
               <Select
                 value={novo.tipo}
@@ -3795,11 +3825,13 @@ function FinanceiroTab() {
                 </Select>
               )}
               <TextInput
+                id="financeiro-valor-input"
                 placeholder="Valor"
                 type="number"
                 className={novo.tipo === "despesa" ? "" : "sm:col-span-2"}
                 value={novo.valor}
                 onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && add()}
               />
             </div>
             <div className="mt-2">
@@ -3808,6 +3840,7 @@ function FinanceiroTab() {
                 className="w-full"
                 value={novo.descricao}
                 onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && add()}
               />
             </div>
             <button
