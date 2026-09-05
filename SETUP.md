@@ -93,6 +93,7 @@ Passo a passo completo em [`WHATSAPP.md`](WHATSAPP.md). Resumo:
    supabase secrets set WHATSAPP_TOKEN=...
    supabase secrets set WHATSAPP_PHONE_NUMBER_ID=...
    supabase secrets set WHATSAPP_VERIFY_TOKEN=...   # string à sua escolha
+   supabase secrets set WHATSAPP_APP_SECRET=...     # Meta → App → Configurações → Básico → Chave secreta (assina o webhook)
    supabase secrets set DISPATCH_SECRET=...          # string à sua escolha (a mesma do 07-scheduling.sql)
    supabase secrets set ANTHROPIC_API_KEY=...        # console.anthropic.com → API Keys
    ```

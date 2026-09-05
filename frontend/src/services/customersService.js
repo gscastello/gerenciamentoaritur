@@ -8,15 +8,33 @@ async function handle(promise, context) {
   return data;
 }
 
+const CUSTOMER_COLS = "id, name, phone, notes, default_neighborhood, created_at";
+
 export const customersService = {
   async list({ search } = {}) {
-    let query = supabase.from("customers").select("*").is("deleted_at", null).order("name");
-    if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+    let query = supabase
+      .from("customers")
+      .select(CUSTOMER_COLS)
+      .is("deleted_at", null)
+      .order("name");
+    if (search) {
+      // `.or()` do PostgREST usa vírgula/parênteses como sintaxe: tirar
+      // esses caracteres evita que um termo de busca "vaze" para
+      // condições extras. Sobra texto puro para o ilike (limitado a 80).
+      const termo = String(search)
+        .replace(/[,()*:\\%]/g, " ")
+        .trim()
+        .slice(0, 80);
+      if (termo) query = query.or(`name.ilike.%${termo}%,phone.ilike.%${termo}%`);
+    }
     return handle(query, "list");
   },
 
   async getByPhone(phone) {
-    return handle(supabase.from("customers").select("*").eq("phone", phone).is("deleted_at", null).maybeSingle(), "getByPhone");
+    return handle(
+      supabase.from("customers").select(CUSTOMER_COLS).eq("phone", phone).is("deleted_at", null).maybeSingle(),
+      "getByPhone",
+    );
   },
 
   /** Histórico + total gerado, calculado no banco para não depender de somar tudo no cliente. */

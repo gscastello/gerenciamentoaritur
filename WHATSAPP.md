@@ -36,6 +36,7 @@ supabase functions deploy whatsapp-notifications-dispatcher --no-verify-jwt
 supabase secrets set WHATSAPP_TOKEN=seu-token-da-meta
 supabase secrets set WHATSAPP_PHONE_NUMBER_ID=seu-phone-number-id
 supabase secrets set WHATSAPP_VERIFY_TOKEN=escolha-uma-string-qualquer-só-sua
+supabase secrets set WHATSAPP_APP_SECRET=o-App-Secret-do-app-na-Meta   # Configurações → Básico → Chave secreta do app
 supabase secrets set DISPATCH_SECRET=escolha-outra-string-qualquer-só-sua
 supabase secrets set ANTHROPIC_API_KEY=sua-chave-da-api-da-anthropic
 ```
