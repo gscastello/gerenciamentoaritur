@@ -2520,6 +2520,8 @@ function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras,
   const [data, setData] = useState(todayStr());
   useDeepLinkData(deepLink, setData);
   const [editando, setEditando] = useState(null);
+  const [agendar, setAgendar] = useState(false);
+  const [agendou, setAgendou] = useState("");
   const [acaoErro, setAcaoErro] = useState("");
   const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
@@ -2613,15 +2615,51 @@ function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras,
         title="Agenda"
         subtitle="Painel operacional do dia — capacidade, confirmados, pendentes, vagas e embarcados."
         right={
-          <TextInput
-            type="date"
-            value={data}
-            onChange={(e) => setData(e.target.value)}
-            className="w-auto"
-          />
+          <div className="flex items-center gap-2">
+            <TextInput
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="w-auto"
+            />
+            <BotaoAgendar onClick={() => setAgendar(true)} />
+          </div>
         }
       />
+      {agendar && (
+        <NovaReservaModal
+          dataInicial={data}
+          trips={trips}
+          onCriar={R.createReservation}
+          onClose={(r) => {
+            setAgendar(false);
+            if (r?.ok) {
+              if (r.data) setData(r.data);
+              setAgendou(
+                r.status === "pendente"
+                  ? `${r.nome} agendado(a) como pendente.`
+                  : r.status === "espera"
+                    ? `${r.nome} entrou na lista de espera.`
+                    : `${r.nome} agendado(a) e confirmado(a).`,
+              );
+            }
+          }}
+        />
+      )}
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
+        {agendou && (
+          <div
+            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.greenSoft, color: C.green }}
+          >
+            <span className="flex items-center gap-2">
+              <CheckCircle2 size={14} /> {agendou}
+            </span>
+            <button type="button" onClick={() => setAgendou("")}>
+              <XIcon size={13} />
+            </button>
+          </div>
+        )}
         <div className="text-xs" style={{ color: C.inkFaint }}>
           {data === todayStr() ? "Hoje" : fmtDate(data)} — {fmtDate(data)} ·{" "}
           <span className="capitalize">{diaSemana(data)}</span>
@@ -3292,11 +3330,330 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
   );
 }
 
+/* ---- Agendamento manual (Agenda / Lista do Dia) ------------------------
+   Atalho interno: a equipe marca um passageiro direto na tela operacional,
+   sem passar pelo roteiro do bot. Vai pela MESMA RPC (rpc_create_reservation
+   via R.createReservation) — a capacidade é decidida pelo banco. */
+const BAIRROS_BUSCA = [...new Set([...BAIRROS_80, ...BAIRROS_90])].sort((a, b) =>
+  a.localeCompare(b, "pt-BR"),
+);
+
+function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose, onCriar }) {
+  const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
+  const [f, setF] = useState({
+    nome: "",
+    telefone: "",
+    data: dataInicial || todayStr(),
+    direcao: direcaoInicial,
+    pontoId: primeiroPonto(direcaoInicial),
+    bairro: "",
+    detalhe: "",
+    quantidade: "1",
+    pagamento: "dinheiro",
+    valorManual: "",
+    desembarque: "",
+    rua: "",
+    referencia: "",
+    comoPendente: false,
+  });
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [ofereceEspera, setOfereceEspera] = useState(false);
+
+  const viagem = trips[f.direcao] || trips.ida;
+  const ponto = viagem.pontos.find((p) => p.id === f.pontoId);
+  const campoDetalhe = ponto?.campo; // 'bairro' | 'localExato' | 'localOutro' | undefined
+  const precoBairroAtual = campoDetalhe === "bairro" ? precoBairro(f.bairro) : undefined;
+  const bairroNaoReconhecido =
+    campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
+  const precoAuto =
+    campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
+  const valorUnit =
+    f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
+  const qtd = Number.parseInt(f.quantidade, 10) || 1;
+  const podeEnviar =
+    f.nome.trim() &&
+    f.telefone.trim() &&
+    f.pontoId &&
+    (campoDetalhe !== "bairro" || f.bairro.trim());
+
+  const trocarDirecao = (dir) =>
+    setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir), bairro: "", detalhe: "" }));
+
+  const montarPayload = (status) => ({
+    tripDate: f.data,
+    direction: f.direcao,
+    customerName: f.nome.trim(),
+    customerPhone: f.telefone.trim(),
+    routePointCode: f.pontoId || null,
+    quantity: qtd,
+    unitPrice: valorUnit,
+    paymentMethod: f.pagamento,
+    pickupNeighborhood: campoDetalhe === "bairro" ? f.bairro.trim() || null : null,
+    pickupDetail:
+      campoDetalhe && campoDetalhe !== "bairro" ? f.detalhe.trim() || null : null,
+    street: f.direcao === "volta" ? f.rua.trim() || null : null,
+    referencePoint: f.direcao === "volta" ? f.referencia.trim() || null : null,
+    dropoffLocation: f.desembarque.trim() || null,
+    status,
+    pendingReason:
+      status === "pendente" ? "Agendamento manual — aguardando confirmação." : null,
+    extraData: { origem: "agendamento_manual" },
+  });
+
+  const criar = async (status) => {
+    setErro("");
+    setSalvando(true);
+    try {
+      const res = await onCriar(montarPayload(status));
+      onClose({ ok: true, nome: f.nome.trim(), status: res?.status || status, data: f.data });
+    } catch (e) {
+      if (e?.code === "CAPACITY_OR_BUSINESS_RULE" && status !== "espera") {
+        setOfereceEspera(true);
+        setErro(e?.message || "Viagem lotada.");
+      } else {
+        setErro(e?.message || "Não foi possível agendar. Tente de novo.");
+      }
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-4 anim-fadeIn"
+      style={{ background: "rgba(0,0,0,.65)" }}
+      onClick={() => onClose()}
+    >
+      <div
+        className="anim-pop w-full max-w-lg rounded-xl border p-5 max-h-[90vh] overflow-y-auto"
+        style={{ background: C.panel, borderColor: C.border }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Agendar passagem
+          </div>
+          <button type="button" onClick={() => onClose()}>
+            <X size={16} style={{ color: C.inkSoft }} />
+          </button>
+        </div>
+
+        {erro && (
+          <div
+            className="mb-3 flex items-start gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>{erro}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Nome *">
+            <TextInput value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
+          </Field>
+          <Field label="Telefone *">
+            <TextInput
+              value={f.telefone}
+              inputMode="tel"
+              onChange={(e) => setF({ ...f, telefone: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Data">
+            <TextInput
+              type="date"
+              value={f.data}
+              onChange={(e) => setF({ ...f, data: e.target.value })}
+            />
+          </Field>
+          <Field label="Direção">
+            <Select value={f.direcao} onChange={(e) => trocarDirecao(e.target.value)}>
+              <option value="ida">Ida</option>
+              <option value="volta">Volta</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Ponto de embarque">
+            <Select value={f.pontoId} onChange={(e) => setF({ ...f, pontoId: e.target.value })}>
+              {viagem.pontos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Quantidade">
+            <TextInput
+              type="number"
+              min={1}
+              value={f.quantidade}
+              onChange={(e) => setF({ ...f, quantidade: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        {campoDetalhe === "bairro" && (
+          <div className="mb-2">
+            <Field label="Bairro (busca em casa)">
+              <TextInput
+                list="bairros-agendamento"
+                value={f.bairro}
+                onChange={(e) => setF({ ...f, bairro: e.target.value })}
+                placeholder="Ex.: Centro"
+              />
+            </Field>
+            <datalist id="bairros-agendamento">
+              {BAIRROS_BUSCA.map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
+            {f.bairro.trim() && !bairroNaoReconhecido && (
+              <div className="text-[11px] mt-1" style={{ color: C.green }}>
+                Valor de busca para {f.bairro.trim()}: {fmtBRL(precoAuto)} / passagem
+              </div>
+            )}
+            {bairroNaoReconhecido && (
+              <div className="text-[11px] mt-1" style={{ color: C.amber }}>
+                Bairro fora da tabela — confira o valor abaixo antes de salvar.
+              </div>
+            )}
+          </div>
+        )}
+
+        {campoDetalhe && campoDetalhe !== "bairro" && (
+          <div className="mb-2">
+            <Field label={ponto.campoLabel || "Local"}>
+              <TextInput
+                value={f.detalhe}
+                onChange={(e) => setF({ ...f, detalhe: e.target.value })}
+              />
+            </Field>
+          </div>
+        )}
+
+        {f.direcao === "volta" && (
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <Field label="Rua (opcional)">
+              <TextInput value={f.rua} onChange={(e) => setF({ ...f, rua: e.target.value })} />
+            </Field>
+            <Field label="Referência (opcional)">
+              <TextInput
+                value={f.referencia}
+                onChange={(e) => setF({ ...f, referencia: e.target.value })}
+              />
+            </Field>
+          </div>
+        )}
+
+        <div className="mb-2">
+          <Field label="Local de desembarque (opcional)">
+            <TextInput
+              value={f.desembarque}
+              onChange={(e) => setF({ ...f, desembarque: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Field label="Pagamento">
+            <Select
+              value={f.pagamento}
+              onChange={(e) => setF({ ...f, pagamento: e.target.value })}
+            >
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">Pix</option>
+            </Select>
+          </Field>
+          <Field label={`Valor / passagem (auto: ${fmtBRL(precoAuto)})`}>
+            <TextInput
+              type="number"
+              value={f.valorManual}
+              placeholder={String(precoAuto)}
+              onChange={(e) => setF({ ...f, valorManual: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <label
+          className="flex items-center gap-2 text-xs mb-4 cursor-pointer"
+          style={{ color: C.inkSoft }}
+        >
+          <input
+            type="checkbox"
+            checked={f.comoPendente}
+            onChange={(e) => setF({ ...f, comoPendente: e.target.checked })}
+          />
+          Deixar como pendente (não reserva a vaga ainda)
+        </label>
+
+        <div
+          className="flex items-center justify-between text-xs mb-3 rounded-lg px-3 py-2"
+          style={{ background: C.panel2, color: C.inkSoft }}
+        >
+          <span>
+            {qtd}× {fmtDate(f.data)} · {f.direcao === "ida" ? "Ida" : "Volta"}
+          </span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink }}>
+            {fmtBRL(valorUnit * qtd)}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          {ofereceEspera && (
+            <button
+              type="button"
+              disabled={salvando}
+              onClick={() => criar("espera")}
+              className="btn-press text-xs px-3 py-2 rounded-lg"
+              style={{ background: C.purpleSoft, color: C.purple, fontWeight: 600 }}
+            >
+              Pôr na lista de espera
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={salvando || !podeEnviar}
+            onClick={() => criar(f.comoPendente ? "pendente" : "confirmada")}
+            className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
+            style={{
+              background: salvando || !podeEnviar ? C.border : C.amber,
+              color: salvando || !podeEnviar ? C.inkFaint : "#20180A",
+            }}
+          >
+            {salvando ? "Agendando…" : "Agendar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BotaoAgendar({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium shrink-0"
+      style={{ background: C.amber, color: "#20180A" }}
+    >
+      <Plus size={14} /> Agendar
+    </button>
+  );
+}
+
 /* ============================= 3. LISTA DO DIA ============================= */
 function ListaTab({ reservas, R, trips, deepLink }) {
   const [data, setData] = useState(todayStr());
   useDeepLinkData(deepLink, setData);
   const [erro, setErro] = useState("");
+  const [agendar, setAgendar] = useState(false);
+  const [agendou, setAgendou] = useState("");
   const [subview, setSubview] = useState("embarque");
   const doDia = reservas.filter(
     (r) =>
@@ -3362,15 +3719,51 @@ function ListaTab({ reservas, R, trips, deepLink }) {
         title="Lista do Dia"
         subtitle='Anotações por local — busca em casa no formato "NP - BAIRRO - TELEFONE".'
         right={
-          <TextInput
-            type="date"
-            value={data}
-            onChange={(e) => setData(e.target.value)}
-            className="w-auto"
-          />
+          <div className="flex items-center gap-2">
+            <TextInput
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="w-auto"
+            />
+            <BotaoAgendar onClick={() => setAgendar(true)} />
+          </div>
         }
       />
+      {agendar && (
+        <NovaReservaModal
+          dataInicial={data}
+          trips={trips}
+          onCriar={R.createReservation}
+          onClose={(r) => {
+            setAgendar(false);
+            if (r?.ok) {
+              if (r.data) setData(r.data);
+              setAgendou(
+                r.status === "pendente"
+                  ? `${r.nome} agendado(a) como pendente.`
+                  : r.status === "espera"
+                    ? `${r.nome} entrou na lista de espera.`
+                    : `${r.nome} agendado(a) e confirmado(a).`,
+              );
+            }
+          }}
+        />
+      )}
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
+        {agendou && (
+          <div
+            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.greenSoft, color: C.green }}
+          >
+            <span className="flex items-center gap-2">
+              <CheckCircle2 size={14} /> {agendou}
+            </span>
+            <button type="button" onClick={() => setAgendou("")}>
+              <XIcon size={13} />
+            </button>
+          </div>
+        )}
         {erro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
