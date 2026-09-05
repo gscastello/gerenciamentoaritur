@@ -9,7 +9,7 @@ test("prefers-reduced-motion desliga as animações", async ({ browser }) => {
   const context = await browser.newContext({ reducedMotion: "reduce" });
   const page = await context.newPage();
   await page.goto("/");
-  await expect(page.getByText("Rota Pirapemas")).toBeVisible();
+  await expect(page.getByText("Gestão AriTur")).toBeVisible();
 
   const anyAnimating = await page.evaluate(() =>
     [...document.querySelectorAll("*")].some((el) => {

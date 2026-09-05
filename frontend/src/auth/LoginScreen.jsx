@@ -66,7 +66,7 @@ export function LoginScreen() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.amber, marginBottom: 4 }}>
           <Route size={20} strokeWidth={2.3} />
-          <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>Rota Pirapemas</span>
+          <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>Gestão AriTur</span>
         </div>
         <p style={{ color: C.inkSoft, fontSize: 13, margin: "0 0 20px" }}>
           Entre com sua conta da equipe.
