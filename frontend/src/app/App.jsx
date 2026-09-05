@@ -107,14 +107,36 @@ const CIDADES_INTERMEDIARIAS = [
   "matoes",
 ];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// A operação é em São Luís (MA) — UTC-3 o ano inteiro (Brasil não observa
+// mais horário de verão desde 2019). "Hoje"/"agora" tem que ser sempre o
+// dia civil e a hora de São Luís, nunca o fuso de quem está com o app
+// aberto nem UTC puro — `new Date().toISOString()` é UTC e, das 21h à
+// meia-noite em São Luís, já mostra o dia seguinte (bug real: reserva
+// "de hoje" feita à noite ia pra Agenda de amanhã).
+const FUSO_OPERACAO = "America/Fortaleza";
+const fmtDiaFuso = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FUSO_OPERACAO,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+// `offsetDias` desloca em milissegundos absolutos a partir de agora (nunca
+// usa getDate/setDate locais) — o resultado não depende do fuso do
+// aparelho, só do relógio real + a formatação final em São Luís.
+const dataOperacao = (offsetDias = 0) =>
+  fmtDiaFuso.format(new Date(Date.now() + offsetDias * 86400000));
+const todayStr = () => dataOperacao();
 const fmtBRL = (n) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (d) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
 const fmtHora = (iso) =>
-  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: FUSO_OPERACAO,
+  });
 const isMonday = (d) => new Date(`${d}T12:00:00`).getDay() === 1;
 const diaSemana = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
 const shiftHour = (hhmm, ativo, horas = 1) => {
@@ -883,15 +905,10 @@ function AppInner() {
   useEnsureTrips(30);
 
   // --- Reservas: fonte de verdade = Postgres (janela + realtime) --------
-  const janela = useMemo(() => {
-    const base = new Date();
-    const iso = (delta) => {
-      const d = new Date(base);
-      d.setDate(d.getDate() + delta);
-      return d.toISOString().slice(0, 10);
-    };
-    return { from: iso(-JANELA_DIAS), to: iso(JANELA_DIAS) };
-  }, []);
+  const janela = useMemo(
+    () => ({ from: dataOperacao(-JANELA_DIAS), to: dataOperacao(JANELA_DIAS) }),
+    [],
+  );
   const R = useReservationsWindow(janela.from, janela.to);
   const reservas = R.reservations;
 
@@ -4698,9 +4715,7 @@ function DashboardTab({ reservas, capacidade, trips }) {
   const ultimos7 = useMemo(() => {
     const dias = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const ds = d.toISOString().slice(0, 10);
+      const ds = dataOperacao(-i);
       dias.push({
         dia: `${ds.slice(8, 10)}/${ds.slice(5, 7)}`,
         faturamento: financeiro
