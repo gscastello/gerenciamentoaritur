@@ -13,6 +13,13 @@ updates:
       prod-patches:
         dependency-type: production
         update-types: [patch]
+    # Bump major sozinho costuma quebrar o npm ci por conflito de peer dep
+    # (ex.: vite 8 sem @vitejs/plugin-react novo, typescript 7 sem o knip
+    # atualizado) — upgrade major é decisão manual, coordenada, não PR
+    # automático. Ver AGENTS.md / não subir Tailwind p/ v4 sem migração.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: [dependencies]
 
   - package-ecosystem: github-actions
