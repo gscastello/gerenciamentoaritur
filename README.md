@@ -29,6 +29,7 @@ com WhatsApp Business API.
 │   ├── 16-timezone-sao-luis.sql # Fuso do banco = America/Fortaleza (current_date/now()) (rodar 16º)
 │   ├── 17-backup-completo.sql # Backup completo (todas as tabelas) + cron diário automático (rodar 17º)
 │   ├── 18-receita-automatica-contas-a-receber.sql # Receita auto ao confirmar/pagar, estorno ao cancelar, contas a receber (rodar 18º)
+│   ├── 19-gestao-operacional.sql # Custos recorrentes (salários, impostos, taxas, seguro, IPVA...) + lançamento automático (cron) + resultado líquido (rodar 19º)
 │   └── retrofit-security-hardening.sql # Correções dos advisors do Supabase —
 │                             # rodar 1x só se o banco foi criado antes de 31/08/2026
 ├── supabase/functions/       # Edge Functions (backend real do WhatsApp — nunca no frontend)
