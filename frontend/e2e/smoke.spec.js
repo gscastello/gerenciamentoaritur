@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 test("carrega a tela de login", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Rota Pirapemas")).toBeVisible();
+  await expect(page.getByText("Gestão AriTur")).toBeVisible();
   await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
 });
 

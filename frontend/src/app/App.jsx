@@ -36,6 +36,7 @@ import {
   Repeat,
   Route,
   Save,
+  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -60,6 +61,7 @@ import { useBackup } from "../hooks/useBackup.js";
 import { useCustomers } from "../hooks/useCustomers.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
+import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
 import { useRecurringExpenses } from "../hooks/useRecurringExpenses.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
@@ -501,12 +503,297 @@ function GlobalStyles() {
     `}</style>
   );
 }
+
+/* ===================== BUSCA GLOBAL ============================= */
+// Lupa fixa no topo (todas as telas) + atalho "/" e Ctrl/⌘+K no desktop.
+// Resultados agrupados: passageiros, reservas, viagens e "ir para" (telas).
+
+// Reconhece dd/mm, dd/mm/aaaa, dd-mm, aaaa-mm-dd → ISO aaaa-mm-dd.
+function termoParaData(termo) {
+  const t = (termo || "").trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  m = t.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    let y = m[3] || String(new Date().getFullYear());
+    if (y.length === 2) y = `20${y}`;
+    if (Number(mo) < 1 || Number(mo) > 12 || Number(d) < 1 || Number(d) > 31) return null;
+    return `${y}-${mo}-${d}`;
+  }
+  return null;
+}
+
+// Telas / funcionalidades navegáveis pela busca (respeita o papel via NAV).
+const DESTINOS_BUSCA = [
+  { tab: "reservar", label: "Reservar passagem", termos: "nova reserva atendimento whatsapp bot" },
+  { tab: "agenda", label: "Agenda de viagens", termos: "viagens dia pendentes confirmar" },
+  { tab: "lista", label: "Lista do dia", termos: "embarque desembarque motorista rota passageiros do dia" },
+  { tab: "passageiros", label: "Passageiros / CRM", termos: "clientes histórico contatos telefone" },
+  { tab: "financeiro", label: "Financeiro", termos: "caixa receita despesa lucro lançamento" },
+  { tab: "financeiro", sub: "contas_receber", label: "Contas a receber", termos: "cobrança pendente devendo whatsapp pagamento" },
+  { tab: "gestao", sub: "resultado", label: "Gestão Operacional", termos: "resultado líquido dre margem empresarial" },
+  { tab: "gestao", sub: "recorrentes", label: "Custos recorrentes", termos: "salário pró-labore imposto seguro ipva depreciação automação" },
+  { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
+  { tab: "operacao", label: "Manutenção preventiva", termos: "troca óleo revisão preventiva veículo" },
+  { tab: "dashboard", label: "Dashboard", termos: "visão geral indicadores gráficos" },
+  { tab: "sistema", label: "Sistema / Configurações", termos: "backup usuários pontos valores horários pix" },
+  { tab: "sistema", label: "Backup completo", termos: "exportar json csv excel pdf cópia dados" },
+];
+
+function normalizaBusca(s) {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function GlobalSearchButton({ onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Buscar no sistema"
+      className="btn-press fixed z-30 flex items-center justify-center rounded-full border"
+      style={{
+        top: "max(0.6rem, env(safe-area-inset-top))",
+        right: "0.75rem",
+        width: 40,
+        height: 40,
+        background: C.panel,
+        borderColor: C.border,
+        color: C.inkSoft,
+        boxShadow: "0 2px 10px rgba(0,0,0,.35)",
+      }}
+    >
+      <Search size={18} />
+    </button>
+  );
+}
+
+function GrupoResultados({ titulo, children }) {
+  return (
+    <div className="mb-3">
+      <div
+        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: C.inkFaint }}
+      >
+        {titulo}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ItemResultado({ icon: Icon, titulo, sub, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="row-hover w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left"
+      style={{ color: C.ink }}
+    >
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: C.panel2, color: C.inkSoft }}
+      >
+        <Icon size={15} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm truncate">{titulo}</span>
+        {sub && (
+          <span className="block text-xs truncate" style={{ color: C.inkFaint }}>
+            {sub}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
+  const [termo, setTermo] = useState("");
+  const { passageiros, reservas, loading, error } = useGlobalSearch(termo);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const t = termo.trim();
+  const dataAlvo = termoParaData(t);
+  const nt = normalizaBusca(t);
+  const destinos =
+    t.length >= 2
+      ? DESTINOS_BUSCA.filter(
+          (d) =>
+            navIds.includes(d.tab) &&
+            (normalizaBusca(d.label).includes(nt) || normalizaBusca(d.termos).includes(nt)),
+        ).slice(0, 6)
+      : [];
+
+  const temResultado =
+    passageiros.length > 0 || reservas.length > 0 || !!dataAlvo || destinos.length > 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-start justify-center"
+      style={{ background: "rgba(0,0,0,.55)" }}
+      onClick={onClose}
+    >
+      <div
+        className="anim-pop w-full m-3 rounded-2xl border overflow-hidden"
+        style={{
+          maxWidth: 560,
+          marginTop: "max(0.75rem, env(safe-area-inset-top))",
+          background: C.panel,
+          borderColor: C.border,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center gap-2 px-4 border-b"
+          style={{ borderColor: C.border, height: 52 }}
+        >
+          <Search size={17} style={{ color: C.inkFaint }} className="shrink-0" />
+          <input
+            ref={inputRef}
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            placeholder="Buscar passageiro, telefone, reserva, data, tela…"
+            className="flex-1 bg-transparent outline-none text-sm"
+            style={{ color: C.ink }}
+          />
+          {loading && (
+            <RefreshCw size={14} className="pulse-dot shrink-0" style={{ color: C.inkFaint }} />
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-press shrink-0 text-xs px-2 py-1 rounded-md"
+            style={{ color: C.inkFaint }}
+          >
+            Esc
+          </button>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto py-2">
+          {error && (
+            <div className="px-4 py-3 text-xs" style={{ color: C.red }}>
+              Não foi possível buscar agora. Tente de novo.
+            </div>
+          )}
+
+          {t.length < 2 && (
+            <div className="px-4 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
+              Digite ao menos 2 caracteres. Ex.: nome do passageiro, telefone, “05/09”, “financeiro”.
+            </div>
+          )}
+
+          {t.length >= 2 && !loading && !temResultado && (
+            <div className="px-4 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
+              Nada encontrado para “{t}”.
+            </div>
+          )}
+
+          {dataAlvo && (
+            <GrupoResultados titulo="Viagens">
+              <ItemResultado
+                icon={Calendar}
+                titulo={`Agenda de ${fmtDate(dataAlvo)}`}
+                sub="Ver viagens e reservas do dia"
+                onClick={() => onNavigate({ tab: "agenda", deepLink: { kind: "data", data: dataAlvo } })}
+              />
+              <ItemResultado
+                icon={ClipboardList}
+                titulo={`Lista do dia — ${fmtDate(dataAlvo)}`}
+                sub="Embarque e desembarque"
+                onClick={() => onNavigate({ tab: "lista", deepLink: { kind: "data", data: dataAlvo } })}
+              />
+            </GrupoResultados>
+          )}
+
+          {passageiros.length > 0 && (
+            <GrupoResultados titulo="Passageiros">
+              {passageiros.map((c) => (
+                <ItemResultado
+                  key={c.id}
+                  icon={Users}
+                  titulo={c.name}
+                  sub={[c.phone, c.default_neighborhood].filter(Boolean).join(" · ")}
+                  onClick={() =>
+                    onNavigate({
+                      tab: "passageiros",
+                      deepLink: { kind: "passageiro", termo: c.name || c.phone },
+                    })
+                  }
+                />
+              ))}
+            </GrupoResultados>
+          )}
+
+          {reservas.length > 0 && (
+            <GrupoResultados titulo="Reservas">
+              {reservas.map((r) => {
+                const meta = STATUS_META[r.status] || {};
+                const quando = r.data ? fmtDate(r.data) : "sem data";
+                const dir = r.direcao === "ida" ? "Ida" : r.direcao === "volta" ? "Volta" : r.tipo;
+                return (
+                  <ItemResultado
+                    key={r.id}
+                    icon={Bus}
+                    titulo={`${r.nome || "—"} · ${quando} · ${dir}`}
+                    sub={`${meta.emoji || ""} ${meta.label || r.status} · ${r.telefone || ""}`}
+                    onClick={() =>
+                      onNavigate({
+                        tab: r.data ? "lista" : "agenda",
+                        deepLink: { kind: "data", data: r.data, reservaId: r.id },
+                      })
+                    }
+                  />
+                );
+              })}
+            </GrupoResultados>
+          )}
+
+          {destinos.length > 0 && (
+            <GrupoResultados titulo="Ir para">
+              {destinos.map((d) => (
+                <ItemResultado
+                  key={d.label}
+                  icon={ArrowRight}
+                  titulo={d.label}
+                  onClick={() =>
+                    onNavigate({
+                      tab: d.tab,
+                      deepLink: d.sub ? { kind: "subview", sub: d.sub } : undefined,
+                    })
+                  }
+                />
+              ))}
+            </GrupoResultados>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* Skeletons por aba: ../ui/skeletons/TabSkeleton.jsx (sistema de motion, issue #2). */
 
 /* ============================= shared UI ============================= */
 function Header({ title, subtitle, right }) {
   return (
-    <div className="px-6 md:px-10 pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+    <div className="px-6 md:px-10 pr-16 md:pr-16 pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
       <div>
         <h1
           style={{
@@ -641,6 +928,32 @@ function useLazyTab(tab) {
     return () => clearTimeout(t);
   }, [tab]);
   return ready;
+}
+// Aplica um deep-link {kind:"data", data} da busca global: seleciona a
+// data na aba. O guard por `at` evita reaplicar quando a aba desmonta e
+// remonta (skeleton do useLazyTab) ou quando o usuário mexe na data à mão.
+function useDeepLinkData(deepLink, setData) {
+  const aplicadoEm = useRef(null);
+  useEffect(() => {
+    if (
+      deepLink?.kind === "data" &&
+      deepLink.data &&
+      deepLink.at !== aplicadoEm.current
+    ) {
+      aplicadoEm.current = deepLink.at;
+      setData(deepLink.data);
+    }
+  }, [deepLink, setData]);
+}
+// Idem para telas com sub-abas (Financeiro, Gestão): aplica deepLink.sub.
+function useDeepLinkSubview(deepLink, setSubview) {
+  const aplicadoEm = useRef(null);
+  useEffect(() => {
+    if (deepLink?.kind === "subview" && deepLink.sub && deepLink.at !== aplicadoEm.current) {
+      aplicadoEm.current = deepLink.at;
+      setSubview(deepLink.sub);
+    }
+  }, [deepLink, setSubview]);
 }
 function pontoDe(reserva, trips) {
   return trips[reserva.direcao]?.pontos.find((p) => p.id === reserva.pontoId);
@@ -923,6 +1236,11 @@ function AppInner() {
   const { profile } = useAuth();
   const role = profile?.role ?? null;
   const [tab, setTab] = useState("reservar");
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  // deep-link da busca global: leva a aba destino a pré-selecionar data /
+  // pré-preencher o filtro. `at` força o efeito a rodar de novo mesmo se
+  // o alvo repetir.
+  const [deepLink, setDeepLink] = useState(null);
 
   // Rede de segurança para a Agenda nunca aparecer vazia num dia ainda sem
   // reserva (o trabalho de fato é do pg_cron `ensure-upcoming-trips`).
@@ -958,6 +1276,39 @@ function AppInner() {
     if (role && NAV.length > 0 && !tabPermitida) setTab(NAV[0].id);
   }, [role, NAV, tabPermitida]);
 
+  // Atalho de teclado (desktop): "/" ou Ctrl/⌘+K abre a busca global.
+  useEffect(() => {
+    const onKey = (e) => {
+      const alvo = e.target;
+      const digitando =
+        alvo &&
+        (alvo.tagName === "INPUT" ||
+          alvo.tagName === "TEXTAREA" ||
+          alvo.tagName === "SELECT" ||
+          alvo.isContentEditable);
+      if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setBuscaAberta(true);
+      } else if (e.key === "/" && !digitando && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setBuscaAberta(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const irParaBusca = ({ tab: destino, deepLink: dl }) => {
+    setTab(destino);
+    setDeepLink(dl ? { ...dl, at: Date.now() } : null);
+    setBuscaAberta(false);
+  };
+  // Troca de aba pela navegação normal: descarta qualquer deep-link pendente.
+  const mudarAba = (id) => {
+    setTab(id);
+    setDeepLink(null);
+  };
+
   const ready = useLazyTab(tab);
   const loading =
     (R.loading && reservas.length === 0) || (cfg.loading && cfg.trips.ida.pontos.length === 0);
@@ -971,6 +1322,14 @@ function AppInner() {
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
     >
       <GlobalStyles />
+      <GlobalSearchButton onOpen={() => setBuscaAberta(true)} />
+      {buscaAberta && (
+        <GlobalSearchOverlay
+          onClose={() => setBuscaAberta(false)}
+          onNavigate={irParaBusca}
+          navIds={NAV.map((n) => n.id)}
+        />
+      )}
       <div
         className="hidden md:flex flex-col w-64 shrink-0 border-r"
         style={{ borderColor: C.border, background: C.panel }}
@@ -985,11 +1344,11 @@ function AppInner() {
                 fontSize: "1.05rem",
               }}
             >
-              Rota Pirapemas
+              Gestão AriTur
             </span>
           </div>
           <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
-            São Luís ⇄ Pirapemas
+            Rota Pirapemas · São Luís ⇄ Pirapemas
           </div>
           <div
             className="mt-3 flex items-center gap-1.5 text-xs rounded-md px-2 py-1"
@@ -1031,7 +1390,7 @@ function AppInner() {
             return (
               <button
                 key={n.id}
-                onClick={() => setTab(n.id)}
+                onClick={() => mudarAba(n.id)}
                 className="tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
                 style={{
                   background: active ? C.amberSoft : "transparent",
@@ -1065,7 +1424,7 @@ function AppInner() {
           return (
             <button
               key={n.id}
-              onClick={() => setTab(n.id)}
+              onClick={() => mudarAba(n.id)}
               className="tab-btn flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-lg shrink-0"
               style={{ color: active ? C.amber : C.inkFaint }}
             >
@@ -1119,12 +1478,28 @@ function AppInner() {
                 trips={trips}
                 segundaAtiva={cfg.segundaAtiva}
                 segundaHoras={cfg.segundaHoras}
+                deepLink={deepLink}
               />
             )}
-            {tab === "lista" && <ListaTab reservas={reservas} R={R} trips={trips} />}
-            {tab === "passageiros" && <PassageirosTab reservas={reservas} trips={trips} />}
-            {tab === "financeiro" && <FinanceiroTab pix={cfgSettings.pix} />}
-            {tab === "gestao" && <GestaoTab />}
+            {tab === "lista" && (
+              <ListaTab
+                reservas={reservas}
+                R={R}
+                trips={trips}
+                deepLink={deepLink}
+              />
+            )}
+            {tab === "passageiros" && (
+              <PassageirosTab
+                reservas={reservas}
+                trips={trips}
+                deepLink={deepLink}
+              />
+            )}
+            {tab === "financeiro" && (
+              <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />
+            )}
+            {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
             {tab === "operacao" && <OperacaoTab />}
             {tab === "dashboard" && (
               <DashboardTab
@@ -2141,8 +2516,9 @@ function NextBtn({ onClick, disabled, label = "Continuar" }) {
 }
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
-function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras }) {
+function AgendaTab({ reservas, R, capacidade, trips, segundaAtiva, segundaHoras, deepLink }) {
   const [data, setData] = useState(todayStr());
+  useDeepLinkData(deepLink, setData);
   const [editando, setEditando] = useState(null);
   const [acaoErro, setAcaoErro] = useState("");
   const T = useTrips(data);
@@ -2917,8 +3293,9 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
 }
 
 /* ============================= 3. LISTA DO DIA ============================= */
-function ListaTab({ reservas, R, trips }) {
+function ListaTab({ reservas, R, trips, deepLink }) {
   const [data, setData] = useState(todayStr());
+  useDeepLinkData(deepLink, setData);
   const [erro, setErro] = useState("");
   const [subview, setSubview] = useState("embarque");
   const doDia = reservas.filter(
@@ -3401,8 +3778,19 @@ function MoverCompacto({ reservaId, alvos, mover }) {
 }
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
-function PassageirosTab({ reservas, trips }) {
+function PassageirosTab({ reservas, trips, deepLink }) {
   const [busca, setBusca] = useState("");
+  const deepLinkAplicado = useRef(null);
+  useEffect(() => {
+    if (
+      deepLink?.kind === "passageiro" &&
+      deepLink.termo &&
+      deepLink.at !== deepLinkAplicado.current
+    ) {
+      deepLinkAplicado.current = deepLink.at;
+      setBusca(deepLink.termo);
+    }
+  }, [deepLink]);
   const [aberto, setAberto] = useState(null);
   const [erro, setErro] = useState("");
   const { customers, updateNotes } = useCustomers();
@@ -3657,8 +4045,9 @@ function somaTipo(lista, tipo) {
   return lista.filter((f) => f.tipo === tipo).reduce((s, f) => s + f.valor, 0);
 }
 
-function FinanceiroTab({ pix }) {
+function FinanceiroTab({ pix, deepLink }) {
   const [subview, setSubview] = useState("lancamentos");
+  useDeepLinkSubview(deepLink, setSubview);
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
   const [novo, setNovo] = useState({
@@ -4331,7 +4720,7 @@ function LinhaDRE({ label, valor, negativo = false, forte = false, indent = fals
   );
 }
 
-function GestaoTab() {
+function GestaoTab({ deepLink }) {
   const [mesRef, setMesRef] = useState(new Date());
   const ano = mesRef.getFullYear();
   const mes = mesRef.getMonth();
@@ -4339,6 +4728,7 @@ function GestaoTab() {
   const rec = useRecurringExpenses();
 
   const [aba, setAba] = useState("resultado");
+  useDeepLinkSubview(deepLink, setAba);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
 

@@ -77,7 +77,7 @@ function paraCSV(linhas) {
 
 export function baixarJSON(payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  baixarBlob(blob, nomeArquivo("backup-rota-pirapemas", "json"));
+  baixarBlob(blob, nomeArquivo("backup-gestao-aritur", "json"));
 }
 
 export async function baixarCSVZip(payload) {
@@ -88,13 +88,13 @@ export async function baixarCSVZip(payload) {
     zip.file(`${chave}.csv`, paraCSV(linhas));
   }
   const blob = await zip.generateAsync({ type: "blob" });
-  baixarBlob(blob, nomeArquivo("backup-rota-pirapemas-csv", "zip"));
+  baixarBlob(blob, nomeArquivo("backup-gestao-aritur-csv", "zip"));
 }
 
 export async function baixarExcel(payload) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Rota Pirapemas";
+  workbook.creator = "Gestão AriTur";
   workbook.created = new Date(payload.gerado_em || Date.now());
 
   const categorias = categoriasTabulares(payload);
@@ -124,7 +124,7 @@ export async function baixarExcel(payload) {
   const buffer = await workbook.xlsx.writeBuffer();
   baixarBlob(
     new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-    nomeArquivo("backup-rota-pirapemas", "xlsx"),
+    nomeArquivo("backup-gestao-aritur", "xlsx"),
   );
 }
 
@@ -152,7 +152,7 @@ export function abrirRelatorioPDF(payload) {
     : new Date().toLocaleString("pt-BR", { timeZone: "America/Fortaleza" });
 
   const html = `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de backup — Rota Pirapemas</title>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de backup — Gestão AriTur</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; padding: 32px; color: #16191a; }
   h1 { font-size: 19px; margin-bottom: 2px; }
@@ -165,7 +165,7 @@ export function abrirRelatorioPDF(payload) {
   @media print { body { padding: 0; } }
 </style></head>
 <body>
-  <h1>Rota Pirapemas — Relatório de backup</h1>
+  <h1>Gestão AriTur — Relatório de backup</h1>
   <div class="sub">Gerado em ${geradoEm} (São Luís, MA)</div>
   <table>
     <thead><tr><th>Categoria</th><th style="text-align:right">Registros</th></tr></thead>
