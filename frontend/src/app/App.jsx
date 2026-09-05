@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
-  Ban,
   Bot,
   Bus,
   Calendar,
@@ -4664,10 +4663,6 @@ function DashboardTab({ reservas, capacidade, trips }) {
   );
   const doDia = confirmadas.filter((r) => r.data === hoje);
   const passageirosHoje = doDia.reduce((s, r) => s + r.quantidade, 0);
-  const canceladas = reservas.filter(
-    (r) => r.status === "cancelada" && !["frete", "encomenda"].includes(r.tipo),
-  );
-  const naoCompareceu = reservas.filter((r) => r.status === "nao_compareceu").length;
   const emEspera = reservas.filter((r) => r.status === "espera").length;
   const receitaHoje = financeiro
     .filter((f) => f.data === hoje && f.tipo === "receita")
@@ -4827,8 +4822,6 @@ function DashboardTab({ reservas, capacidade, trips }) {
             icon={Repeat}
             accent={C.blue}
           />
-          <StatCard label="Cancelamentos" value={canceladas.length} icon={Ban} accent={C.red} />
-          <StatCard label="Não compareceu" value={naoCompareceu} icon={UserX} accent={C.gray} />
           <StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} />
           <StatCard
             label="Ocupação média hoje"
