@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
+import { useBackup } from "../hooks/useBackup.js";
 import { useCustomers } from "../hooks/useCustomers.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
@@ -63,6 +64,12 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
+import {
+  abrirRelatorioPDF,
+  baixarCSVZip,
+  baixarExcel,
+  baixarJSON,
+} from "../lib/backupExport.js";
 import { Presence } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
@@ -136,6 +143,18 @@ const fmtHora = (iso) =>
     hour: "2-digit",
     minute: "2-digit",
     timeZone: FUSO_OPERACAO,
+  });
+// Data + hora de um timestamp completo (ex.: created_at de system_backups) —
+// nunca cortar a string na mão (`.slice(0,10)`): um timestamp serializado em
+// UTC pode cair no dia seguinte ao de São Luís perto da meia-noite.
+const fmtDataHora = (iso) =>
+  new Date(iso).toLocaleString("pt-BR", {
+    timeZone: FUSO_OPERACAO,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 const isMonday = (d) => new Date(`${d}T12:00:00`).getDay() === 1;
 const diaSemana = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
@@ -4872,20 +4891,42 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
       setRodando(false);
     }, 400);
   };
-  const baixarBackup = () => {
-    const payload = {
-      exportadoEm: new Date().toISOString(),
-      reservas,
-      trips: cfg.trips,
-      nota: "Reservas, financeiro, operação, pontos e settings ficam no Postgres. Este backup é só a janela de reservas carregada + a configuração atual de pontos.",
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `backup-rota-pirapemas-${todayStr()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Backup completo — gerado pelo servidor (database/17-backup-completo.sql),
+  // nunca a partir do que já está carregado na tela. Um cron diário também
+  // gera sozinho; aqui só disparamos sob demanda e oferecemos os formatos.
+  const backup = useBackup();
+  const [ultimoBackup, setUltimoBackup] = useState(null);
+  const [formatoEmProcesso, setFormatoEmProcesso] = useState(null);
+  const gerarBackupAgora = async () => {
+    setErro("");
+    try {
+      setUltimoBackup(await backup.gerarAgora());
+    } catch (e) {
+      setErro(e?.message || "Não foi possível gerar o backup.");
+    }
+  };
+  const abrirBackupDoHistorico = async (id) => {
+    setErro("");
+    try {
+      setUltimoBackup(await backup.buscarPayload(id));
+    } catch (e) {
+      setErro(e?.message || "Não foi possível abrir esse backup.");
+    }
+  };
+  const exportarBackup = async (formato) => {
+    if (!ultimoBackup) return;
+    setErro("");
+    setFormatoEmProcesso(formato);
+    try {
+      if (formato === "json") baixarJSON(ultimoBackup);
+      else if (formato === "excel") await baixarExcel(ultimoBackup);
+      else if (formato === "csv") await baixarCSVZip(ultimoBackup);
+      else if (formato === "pdf") abrirRelatorioPDF(ultimoBackup);
+    } catch (e) {
+      setErro(e?.message || "Não foi possível exportar o backup.");
+    } finally {
+      setFormatoEmProcesso(null);
+    }
   };
   const trocarModo = (v) => {
     setErro("");
@@ -5138,19 +5179,89 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
 
         <Card>
           <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <Download size={15} style={{ color: C.blue }} /> Backup manual
+            <Download size={15} style={{ color: C.blue }} /> Backup completo
           </div>
           <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-            Os dados ficam no Postgres (Supabase) com backup automático da plataforma. Baixe um
-            extra em JSON antes de mudanças grandes.
+            Gerado pelo servidor com <b>todas</b> as tabelas — clientes, reservas, viagens,
+            veículos, motoristas, combustível, manutenções, financeiro, configurações, usuários
+            e logs — nunca só o que está carregado na tela. Um backup automático roda sozinho
+            todo dia às 3h (São Luís) e fica guardado por 30 dias.
           </p>
           <button
-            onClick={baixarBackup}
+            type="button"
+            onClick={gerarBackupAgora}
+            disabled={backup.gerando}
             className="btn-press flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg"
-            style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            style={{
+              background: backup.gerando ? C.border : C.panel2,
+              color: C.ink,
+              border: `1px solid ${C.border}`,
+            }}
           >
-            <Download size={14} /> Baixar backup agora
+            <Download size={14} /> {backup.gerando ? "Gerando…" : "Gerar backup completo agora"}
           </button>
+
+          {ultimoBackup && (
+            <div className="mt-3 anim-slideDown">
+              <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
+                Pronto — gerado em {fmtDataHora(ultimoBackup.gerado_em)}. Baixar como:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: "json", label: "JSON" },
+                  { id: "excel", label: "Excel (.xlsx)" },
+                  { id: "csv", label: "CSV (.zip)" },
+                  { id: "pdf", label: "PDF (relatório)" },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => exportarBackup(f.id)}
+                    disabled={formatoEmProcesso === f.id}
+                    className="btn-press text-xs px-2.5 py-1.5 rounded-md"
+                    style={{
+                      background: C.amberSoft,
+                      color: C.amber,
+                      opacity: formatoEmProcesso === f.id ? 0.6 : 1,
+                    }}
+                  >
+                    {formatoEmProcesso === f.id ? "…" : f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {backup.historico.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs font-semibold mb-1.5" style={{ color: C.inkSoft }}>
+                Histórico de backups
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {backup.historico.map((h) => (
+                  <div
+                    key={h.id}
+                    className="flex items-center justify-between gap-2 text-xs rounded-md px-2.5 py-1.5"
+                    style={{ background: C.panel2 }}
+                  >
+                    <span style={{ color: C.inkSoft }}>
+                      {fmtDataHora(h.created_at)} ·{" "}
+                      {h.origem === "automatico" ? "automático" : "manual"} ·{" "}
+                      {(h.tamanho_bytes / 1024).toFixed(0)} KB
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => abrirBackupDoHistorico(h.id)}
+                      className="btn-press shrink-0"
+                      style={{ color: C.blue }}
+                    >
+                      Abrir
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card style={{ borderColor: C.blueSoft }}>
