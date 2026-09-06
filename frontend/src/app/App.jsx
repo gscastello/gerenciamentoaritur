@@ -120,8 +120,6 @@ const C = {
   gray: "#7D8494",
   graySoft: "#1B1D21",
 };
-const FONTS =
-  "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap";
 const PIX_KEY = "98981012388";
 const PIX_NAME = "A O Castelo Transporte e Turismo";
 const CIDADES_INTERMEDIARIAS = [
@@ -534,41 +532,114 @@ function GlobalStyles() {
   );
 }
 
-/* ===================== IDENTIDADE ARITUR ============================= */
-// Marca "A" angular + assinatura da estrada. Desenhada, não é imagem —
-// escala em qualquer tamanho e acompanha o tema.
-function AriturMark({ size = 28 }) {
+/* ===================== IDENTIDADE ARITUR =============================
+ * Recriação vetorial da logo AriTur Transportes: monograma "AT" (serifa
+ * de alto contraste, "A" vermelho em itálico + "T" grafite) atravessado
+ * pela fita da rodovia, wordmark "AriTur" em serifa itálica e
+ * "TRANSPORTES" espaçado. Não é imagem — escala em qualquer tamanho.
+ */
+const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
+const MONO_T = "#DDDEE2";
+
+function AriturMark({ size = 42, ribbon = true }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <path d="M24 3 L44 45 H33 L24 24 L15 45 H4 Z" fill={C.brand} />
-      <path d="M24 3 L44 45 H33 L24 24 Z" fill={C.brandDim} />
-      <rect x="17.5" y="33" width="13" height="4.2" rx="1" fill={C.bg} />
-    </svg>
+    <div
+      style={{ position: "relative", width: size, height: size, flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      {ribbon && (
+        <svg viewBox="0 0 100 100" width={size} height={size} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
+          <path
+            d="M1 62 C 22 34, 44 12, 76 8 C 90 6, 99 13, 99 26 C 92 19, 82 19, 71 23 C 44 33, 24 55, 12 76 Z"
+            fill="#2A2A30"
+          />
+          <path
+            d="M6 60 C 26 34, 46 15, 76 12"
+            stroke={C.brand}
+            strokeWidth="2.6"
+            strokeDasharray="5 6"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.9"
+          />
+        </svg>
+      )}
+      <span
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: SERIF,
+          lineHeight: 1,
+        }}
+      >
+        <span
+          style={{
+            fontStyle: "italic",
+            fontWeight: 700,
+            fontSize: size * 0.9,
+            color: C.brand,
+            textShadow: "0 1px 2px rgba(0,0,0,.55)",
+          }}
+        >
+          A
+        </span>
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: size * 0.82,
+            color: MONO_T,
+            marginLeft: -size * 0.28,
+          }}
+        >
+          T
+        </span>
+      </span>
+    </div>
   );
 }
 
-function AriturLogo({ compact = false }) {
+function AriturLogo({ compact = false, tagline = false }) {
   return (
     <div className="flex items-center gap-2.5">
-      <AriturMark size={compact ? 24 : 30} />
+      <AriturMark size={compact ? 30 : 44} ribbon={!compact} />
       <div className="leading-none">
         <div
           style={{
-            fontFamily: "'Space Grotesk', sans-serif",
+            fontFamily: SERIF,
+            fontStyle: "italic",
             fontWeight: 700,
-            fontSize: compact ? "1rem" : "1.15rem",
-            letterSpacing: "0.04em",
-            color: C.ink,
+            fontSize: compact ? "1.2rem" : "1.65rem",
+            letterSpacing: "0.005em",
+            lineHeight: 1,
           }}
         >
-          ARI<span style={{ color: C.brand }}>TUR</span>
+          <span style={{ color: C.brand }}>Ari</span>
+          <span style={{ color: MONO_T }}>Tur</span>
         </div>
         {!compact && (
           <div
-            className="mt-1"
-            style={{ fontSize: "0.56rem", letterSpacing: "0.22em", color: C.inkFaint }}
+            className="mt-1.5"
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: "0.58rem",
+              fontWeight: 600,
+              letterSpacing: "0.44em",
+              color: C.inkSoft,
+              paddingLeft: 2,
+            }}
           >
-            TRANSPORTE DE PASSAGEIROS
+            TRANSPORTES
+          </div>
+        )}
+        {tagline && (
+          <div
+            className="mt-1.5"
+            style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "0.66rem", color: C.inkFaint }}
+          >
+            Conectando destinos, cuidando de cada viagem
           </div>
         )}
       </div>
@@ -1511,12 +1582,8 @@ function MobileNav({ nav, tab, onSelect, pendentesCount }) {
 }
 
 function AppInner() {
-  useEffect(() => {
-    const l = document.createElement("link");
-    l.rel = "stylesheet";
-    l.href = FONTS;
-    document.head.appendChild(l);
-  }, []);
+  // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
+  // carregadas no index.html — valem também para a tela de login.
   const { profile } = useAuth();
   const role = profile?.role ?? null;
   const [tab, setTab] = useState("reservar");

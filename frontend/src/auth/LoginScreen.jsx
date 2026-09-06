@@ -17,17 +17,58 @@ const C = {
   inkSoft: "#9CA0A8",
   inkFaint: "#63666D",
   brand: "#E4121F",
-  brandDim: "#A50D17",
   red: "#F0625F",
 };
 
-function Mark({ size = 34 }) {
+const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
+const MONO_T = "#DDDEE2";
+
+// Monograma "AT" com a fita da rodovia — recriação vetorial da logo AriTur.
+function Mark({ size = 46 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <path d="M24 3 L44 45 H33 L24 24 L15 45 H4 Z" fill={C.brand} />
-      <path d="M24 3 L44 45 H33 L24 24 Z" fill={C.brandDim} />
-      <rect x="17.5" y="33" width="13" height="4.2" rx="1" fill={C.bg} />
-    </svg>
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }} aria-hidden="true">
+      <svg viewBox="0 0 100 100" width={size} height={size} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
+        <path
+          d="M1 62 C 22 34, 44 12, 76 8 C 90 6, 99 13, 99 26 C 92 19, 82 19, 71 23 C 44 33, 24 55, 12 76 Z"
+          fill="#2A2A30"
+        />
+        <path
+          d="M6 60 C 26 34, 46 15, 76 12"
+          stroke={C.brand}
+          strokeWidth="2.6"
+          strokeDasharray="5 6"
+          strokeLinecap="round"
+          fill="none"
+          opacity="0.9"
+        />
+      </svg>
+      <span
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: SERIF,
+          lineHeight: 1,
+        }}
+      >
+        <span
+          style={{
+            fontStyle: "italic",
+            fontWeight: 700,
+            fontSize: size * 0.9,
+            color: C.brand,
+            textShadow: "0 1px 2px rgba(0,0,0,.55)",
+          }}
+        >
+          A
+        </span>
+        <span style={{ fontWeight: 700, fontSize: size * 0.82, color: MONO_T, marginLeft: -size * 0.28 }}>
+          T
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -112,32 +153,47 @@ export function LoginScreen() {
         />
         <Bus />
         <div style={{ position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
             <Mark />
             <div style={{ lineHeight: 1 }}>
               <div
                 style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontFamily: SERIF,
+                  fontStyle: "italic",
                   fontWeight: 700,
-                  fontSize: "1.35rem",
-                  letterSpacing: "0.04em",
+                  fontSize: "1.7rem",
+                  letterSpacing: "0.005em",
                 }}
               >
-                ARI<span style={{ color: C.brand }}>TUR</span>
+                <span style={{ color: C.brand }}>Ari</span>
+                <span style={{ color: MONO_T }}>Tur</span>
               </div>
               <div
                 style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontWeight: 600,
                   fontSize: "0.55rem",
-                  letterSpacing: "0.22em",
-                  color: C.inkFaint,
-                  marginTop: 5,
+                  letterSpacing: "0.42em",
+                  color: C.inkSoft,
+                  marginTop: 7,
                 }}
               >
-                TRANSPORTE DE PASSAGEIROS
+                TRANSPORTES
+              </div>
+              <div
+                style={{
+                  fontFamily: SERIF,
+                  fontStyle: "italic",
+                  fontSize: "0.66rem",
+                  color: C.inkFaint,
+                  marginTop: 6,
+                }}
+              >
+                Conectando destinos, cuidando de cada viagem
               </div>
             </div>
           </div>
-          <p style={{ color: C.inkSoft, fontSize: 13, margin: "14px 0 20px" }}>
+          <p style={{ color: C.inkSoft, fontSize: 13, margin: "16px 0 20px" }}>
             <b style={{ color: C.ink }}>Gestão AriTur</b> — entre com sua conta da equipe.
           </p>
 
