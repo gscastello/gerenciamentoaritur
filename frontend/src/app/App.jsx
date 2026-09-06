@@ -84,28 +84,41 @@ import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 // do bundle inicial (ver vite.config.js manualChunks). Issue #2.
 const SevenDayCharts = React.lazy(() => import("../ui/charts/SevenDayCharts.jsx"));
 
-/* ============================= tokens ============================= */
+/* ============================= tokens =============================
+ * Identidade AriTur — fundo quase preto, vermelho da marca nos detalhes.
+ * `amber`/`amberSoft` mantêm o nome (centenas de usos) mas agora são o
+ * VERMELHO da marca — é a cor de ação/destaque do app inteiro.
+ * `warn`/`warnSoft` = âmbar de verdade, só para "pendente / atenção".
+ */
 const C = {
-  bg: "#0E1116",
-  panel: "#161B22",
-  panel2: "#1C222B",
-  border: "#262D38",
-  borderSoft: "#1E252F",
-  ink: "#ECEEF2",
-  inkSoft: "#8B93A3",
-  inkFaint: "#5B6272",
-  amber: "#E8A33D",
-  amberSoft: "#3A2E1B",
+  bg: "#08090B",
+  panel: "#111214",
+  panel2: "#191A1D",
+  border: "#292A2E",
+  borderSoft: "#1E1F22",
+  ink: "#F2F3F5",
+  inkSoft: "#9CA0A8",
+  inkFaint: "#63666D",
+  // vermelho da marca (era âmbar)
+  amber: "#E4121F",
+  amberSoft: "#2A0E10",
+  brand: "#E4121F",
+  brandDim: "#A50D17",
+  brandGlow: "rgba(228,18,31,0.35)",
+  onBrand: "#FFFFFF",
+  // âmbar real — pendências / avisos
+  warn: "#E8A33D",
+  warnSoft: "#2E2413",
   blue: "#5B8DEF",
-  blueSoft: "#1B2740",
+  blueSoft: "#141E33",
   green: "#34C77B",
-  greenSoft: "#132E22",
+  greenSoft: "#0F291D",
   red: "#F0625F",
-  redSoft: "#3A1E1F",
+  redSoft: "#33161A",
   purple: "#9B7BE8",
-  purpleSoft: "#251E3A",
+  purpleSoft: "#201A33",
   gray: "#7D8494",
-  graySoft: "#20242C",
+  graySoft: "#1B1D21",
 };
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap";
@@ -335,7 +348,7 @@ function precoBairro(bairro) {
 
 /* ============================= status ============================= */
 const STATUS_META = {
-  pendente: { emoji: "🟡", label: "Pendente", cor: C.amber, bg: C.amberSoft },
+  pendente: { emoji: "🟡", label: "Pendente", cor: C.warn, bg: C.warnSoft },
   confirmada: { emoji: "🟢", label: "Confirmada", cor: C.green, bg: C.greenSoft },
   embarcado: { emoji: "🔵", label: "Embarcado", cor: C.blue, bg: C.blueSoft },
   cancelada: { emoji: "🔴", label: "Cancelada", cor: C.red, bg: C.redSoft },
@@ -449,7 +462,7 @@ class ErrorBoundary extends React.Component {
             <button
               onClick={() => this.setState({ erro: null })}
               className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-              style={{ background: C.amber, color: "#20180A" }}
+              style={{ background: C.amber, color: C.onBrand }}
             >
               Tentar novamente
             </button>
@@ -495,6 +508,18 @@ function GlobalStyles() {
       @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:.35; } }
       ::-webkit-scrollbar { width:8px; height:8px; }
       ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:8px; }
+      ::-webkit-scrollbar-thumb:hover { background:${C.brandDim}; }
+      ::selection { background:${C.brand}; color:#fff; }
+      body { background:${C.bg}; }
+      @keyframes roadDash { to { background-position: -48px 0; } }
+      .aritur-hero { position:relative; overflow:hidden;
+        background:
+          radial-gradient(120% 140% at 88% 20%, ${C.brandGlow} 0%, transparent 55%),
+          linear-gradient(105deg, ${C.brandDim} 0%, #6c0910 42%, ${C.panel} 100%); }
+      .aritur-road { height:3px; border-radius:3px;
+        background-image: linear-gradient(90deg, ${C.brand} 0 60%, transparent 60% 100%);
+        background-size: 24px 3px; background-repeat: repeat-x;
+        animation: roadDash 1.6s linear infinite; }
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         button, select, input, textarea, a[role="button"] { min-height: 42px; }
@@ -503,8 +528,80 @@ function GlobalStyles() {
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+        .aritur-road { animation: none !important; }
       }
     `}</style>
+  );
+}
+
+/* ===================== IDENTIDADE ARITUR ============================= */
+// Marca "A" angular + assinatura da estrada. Desenhada, não é imagem —
+// escala em qualquer tamanho e acompanha o tema.
+function AriturMark({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M24 3 L44 45 H33 L24 24 L15 45 H4 Z" fill={C.brand} />
+      <path d="M24 3 L44 45 H33 L24 24 Z" fill={C.brandDim} />
+      <rect x="17.5" y="33" width="13" height="4.2" rx="1" fill={C.bg} />
+    </svg>
+  );
+}
+
+function AriturLogo({ compact = false }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <AriturMark size={compact ? 24 : 30} />
+      <div className="leading-none">
+        <div
+          style={{
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontWeight: 700,
+            fontSize: compact ? "1rem" : "1.15rem",
+            letterSpacing: "0.04em",
+            color: C.ink,
+          }}
+        >
+          ARI<span style={{ color: C.brand }}>TUR</span>
+        </div>
+        {!compact && (
+          <div
+            className="mt-1"
+            style={{ fontSize: "0.56rem", letterSpacing: "0.22em", color: C.inkFaint }}
+          >
+            TRANSPORTE DE PASSAGEIROS
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Silhueta de ônibus para decoração (rodapé da barra lateral, login, hero).
+function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 }) {
+  return (
+    <svg
+      className={className}
+      style={style}
+      viewBox="0 0 220 84"
+      fill="none"
+      aria-hidden="true"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <g fill={color} opacity={opacity}>
+        <path d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z" />
+      </g>
+      <g fill={C.bg} opacity={Math.min(opacity + 0.05, 1)}>
+        <rect x="18" y="20" width="26" height="18" rx="3" />
+        <rect x="50" y="20" width="26" height="18" rx="3" />
+        <rect x="82" y="20" width="26" height="18" rx="3" />
+        <rect x="114" y="20" width="26" height="18" rx="3" />
+        <rect x="148" y="20" width="22" height="18" rx="3" />
+      </g>
+      <g fill={color} opacity={Math.min(opacity + 0.25, 1)}>
+        <circle cx="54" cy="72" r="11" />
+        <circle cx="186" cy="72" r="11" />
+      </g>
+    </svg>
   );
 }
 
@@ -631,7 +728,7 @@ function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar
             width: 56,
             height: 56,
             background: C.amber,
-            color: "#20180A",
+            color: C.onBrand,
             boxShadow: "0 4px 18px rgba(0,0,0,.45)",
           }}
         >
@@ -860,7 +957,7 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
 /* ============================= shared UI ============================= */
 function Header({ title, subtitle, right }) {
   return (
-    <div className="px-6 md:px-10 pr-16 md:pr-16 pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+    <div className="px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
       <div>
         <h1
           style={{
@@ -1572,23 +1669,19 @@ function AppInner() {
         </div>
       )}
       <div
-        className="hidden md:flex flex-col w-64 shrink-0 border-r"
+        className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden"
         style={{ borderColor: C.border, background: C.panel }}
       >
-        <div className="px-5 pt-6 pb-5 border-b" style={{ borderColor: C.border }}>
-          <div className="flex items-center gap-2" style={{ color: C.amber }}>
-            <Route size={20} strokeWidth={2.3} />
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontWeight: 700,
-                fontSize: "1.05rem",
-              }}
-            >
-              Gestão AriTur
-            </span>
-          </div>
-          <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
+        <div
+          className="px-5 pt-6 pb-5 border-b relative"
+          style={{
+            borderColor: C.border,
+            background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
+          }}
+        >
+          <AriturLogo />
+          <div className="aritur-road mt-3" style={{ width: 72 }} />
+          <div className="text-xs mt-2" style={{ color: C.inkFaint }}>
             Rota Pirapemas · São Luís ⇄ Pirapemas
           </div>
           <div
@@ -1598,7 +1691,7 @@ function AppInner() {
             {modoAtendimento === "ia" ? (
               <Bot size={12} style={{ color: C.green }} />
             ) : (
-              <UserCog size={12} style={{ color: C.amber }} />
+              <UserCog size={12} style={{ color: C.warn }} />
             )}
             {modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}
           </div>
@@ -1624,7 +1717,7 @@ function AppInner() {
             </span>
           </div>
         </div>
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto relative z-10">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = tab === n.id;
@@ -1632,19 +1725,23 @@ function AppInner() {
               <button
                 key={n.id}
                 onClick={() => mudarAba(n.id)}
-                className="tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
+                className="tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm relative"
                 style={{
-                  background: active ? C.amberSoft : "transparent",
-                  color: active ? C.amber : C.inkSoft,
+                  background: active ? C.brand : "transparent",
+                  color: active ? C.onBrand : C.inkSoft,
                   fontWeight: active ? 600 : 500,
+                  boxShadow: active ? `0 6px 18px -6px ${C.brandGlow}` : "none",
                 }}
               >
                 <Icon size={16} />
                 {n.label}
                 {n.id === "agenda" && pendentesCount > 0 && (
                   <span
-                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full"
-                    style={{ background: C.purpleSoft, color: C.purple }}
+                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                    style={{
+                      background: active ? "rgba(255,255,255,.22)" : C.purpleSoft,
+                      color: active ? C.onBrand : C.purple,
+                    }}
                   >
                     {pendentesCount}
                   </span>
@@ -1653,11 +1750,40 @@ function AppInner() {
             );
           })}
         </nav>
+        <div
+          className="px-5 py-4 border-t relative"
+          style={{ borderColor: C.border }}
+        >
+          <div
+            className="text-[11px] leading-snug"
+            style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            Mais que transporte,
+            <br />
+            <span style={{ color: C.brand }}>conectamos pessoas.</span>
+          </div>
+        </div>
+        <BusSilhueta
+          className="absolute pointer-events-none"
+          style={{ width: 260, bottom: -14, left: -34, opacity: 0.9 }}
+          opacity={0.07}
+        />
       </div>
 
       <MobileNav nav={NAV} tab={tab} onSelect={mudarAba} pendentesCount={pendentesCount} />
 
       <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden">
+        <div
+          className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
+          style={{
+            background: C.panel,
+            borderColor: C.border,
+            paddingTop: "max(0.6rem, env(safe-area-inset-top))",
+          }}
+        >
+          <AriturLogo compact />
+          <div className="aritur-road" style={{ width: 42 }} />
+        </div>
         {R.error && !loading && (
           <div
             className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
@@ -1670,7 +1796,7 @@ function AppInner() {
             <button
               onClick={R.refetch}
               className="btn-press text-xs px-2 py-1 rounded-md"
-              style={{ background: C.red, color: "#20180A" }}
+              style={{ background: C.red, color: C.onBrand }}
             >
               Tentar de novo
             </button>
@@ -1999,7 +2125,7 @@ function ReservarTab({
           {modoAtendimento === "manual" && step < 7 && (
             <div
               className="text-xs rounded-lg px-3 py-2 mb-4 flex items-center gap-2"
-              style={{ background: C.amberSoft, color: C.amber }}
+              style={{ background: C.warnSoft, color: C.warn }}
             >
               <UserCog size={13} /> Atendimento manual ativo — a equipe está respondendo
               diretamente.
@@ -2564,7 +2690,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2586,7 +2712,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2635,7 +2761,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Simular nova reserva
               </button>
@@ -2656,7 +2782,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2677,7 +2803,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2731,7 +2857,7 @@ function NextBtn({ onClick, disabled, label = "Continuar" }) {
       className="btn-press mt-4 px-4 py-2 rounded-lg text-sm font-medium"
       style={{
         background: disabled ? C.border : C.amber,
-        color: disabled ? C.inkFaint : "#20180A",
+        color: disabled ? C.inkFaint : C.onBrand,
       }}
     >
       {label}
@@ -2869,7 +2995,7 @@ function AgendaTab({
         {segunda && (
           <div
             className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.amberSoft, color: C.amber }}
+            style={{ background: C.warnSoft, color: C.warn }}
           >
             <Sunrise size={14} /> Segunda-feira: horários de ida ajustados automaticamente.
           </div>
@@ -3267,7 +3393,7 @@ function ViagemOperacional({
       >
         <MiniStat label="Capacidade" value={capacidade} />
         <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
-        <MiniStat label="Pendentes" value={pendentesQtd} cor={C.amber} />
+        <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
         <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
         <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
       </div>
@@ -3521,7 +3647,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
             style={{
               background: salvando ? C.border : C.amber,
-              color: salvando ? C.inkFaint : "#20180A",
+              color: salvando ? C.inkFaint : C.onBrand,
             }}
           >
             {salvando ? "Salvando…" : "Salvar alterações"}
@@ -3721,7 +3847,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
               </div>
             )}
             {bairroNaoReconhecido && (
-              <div className="text-[11px] mt-1" style={{ color: C.amber }}>
+              <div className="text-[11px] mt-1" style={{ color: C.warn }}>
                 Bairro fora da tabela — confira o valor abaixo antes de salvar.
               </div>
             )}
@@ -3825,7 +3951,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
             className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
             style={{
               background: salvando || !podeEnviar ? C.border : C.amber,
-              color: salvando || !podeEnviar ? C.inkFaint : "#20180A",
+              color: salvando || !podeEnviar ? C.inkFaint : C.onBrand,
             }}
           >
             {salvando ? "Agendando…" : "Agendar"}
@@ -3842,7 +3968,7 @@ function BotaoAgendar({ onClick }) {
       type="button"
       onClick={onClick}
       className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium shrink-0"
-      style={{ background: C.amber, color: "#20180A" }}
+      style={{ background: C.amber, color: C.onBrand }}
     >
       <Plus size={14} /> Agendar
     </button>
@@ -4352,7 +4478,7 @@ function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar }) {
                 pago
               </span>
             ) : (
-              <span className="text-[10px]" style={{ color: C.amber }}>
+              <span className="text-[10px]" style={{ color: C.warn }}>
                 a receber {fmtBRL(r.valorTotal)}
               </span>
             )}
@@ -4905,7 +5031,7 @@ function FinanceiroTab({ pix, deepLink }) {
                   className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs"
                   style={{
                     background: sel ? C.amber : C.panel2,
-                    color: sel ? "#20180A" : C.ink,
+                    color: sel ? C.onBrand : C.ink,
                     border:
                       ds === todayStr() && !sel ? `1px solid ${C.amber}` : "1px solid transparent",
                   }}
@@ -4914,7 +5040,7 @@ function FinanceiroTab({ pix, deepLink }) {
                   {temMovimento && (
                     <span
                       className="w-1 h-1 rounded-full mt-0.5"
-                      style={{ background: sel ? "#20180A" : lucro >= 0 ? C.green : C.red }}
+                      style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
                     />
                   )}
                 </button>
@@ -5025,7 +5151,7 @@ function FinanceiroTab({ pix, deepLink }) {
               className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
               style={{
                 background: salvando || !novo.valor ? C.border : C.amber,
-                color: salvando || !novo.valor ? C.inkFaint : "#20180A",
+                color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
               }}
             >
               <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
@@ -5833,7 +5959,7 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
               onClick={add}
               disabled={rec.salvando || !form.label.trim() || !form.amount}
               className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md w-full justify-center"
-              style={{ background: C.amber, color: "#20180A", fontWeight: 600 }}
+              style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
             >
               <Plus size={13} /> Adicionar
             </button>
@@ -6149,7 +6275,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
             onClick={add}
             disabled={!novo.valor}
             className="btn-press flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md"
-            style={{ background: C.amber, color: "#20180A", fontWeight: 600 }}
+            style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
           >
             <Plus size={13} /> Lançar
           </button>
@@ -6518,7 +6644,7 @@ function OperacaoTab() {
                       })
                     }
                     className="btn-press mt-2 text-xs px-3 py-1.5 rounded-md"
-                    style={{ background: C.amber, color: "#20180A" }}
+                    style={{ background: C.amber, color: C.onBrand }}
                   >
                     Salvar
                   </button>
@@ -6582,7 +6708,7 @@ function OperacaoTab() {
               className="btn-press text-xs px-3 py-1.5 rounded-full"
               style={{
                 background: periodo === p ? C.amber : C.panel2,
-                color: periodo === p ? "#20180A" : C.inkSoft,
+                color: periodo === p ? C.onBrand : C.inkSoft,
               }}
             >
               {p === "dia" ? "Hoje" : p === "mes" ? "Este mês" : "Este ano"}
@@ -6731,7 +6857,7 @@ function OperacaoTab() {
             className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
             style={{
               background: !reg.km || !veiculoId ? C.border : C.amber,
-              color: !reg.km || !veiculoId ? C.inkFaint : "#20180A",
+              color: !reg.km || !veiculoId ? C.inkFaint : C.onBrand,
             }}
           >
             <Plus size={14} /> Registrar
@@ -6859,7 +6985,7 @@ function OperacaoTab() {
             className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
             style={{
               background: !novaManut.tipo || !veiculoId ? C.border : C.amber,
-              color: !novaManut.tipo || !veiculoId ? C.inkFaint : "#20180A",
+              color: !novaManut.tipo || !veiculoId ? C.inkFaint : C.onBrand,
             }}
           >
             <Plus size={14} /> Registrar manutenção
@@ -6921,6 +7047,67 @@ function OperacaoTab() {
 }
 
 /* ============================= 7. DASHBOARD ============================= */
+function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
+  const { profile } = useAuth();
+  const nome = (profile?.name || "").split(" ")[0] || "equipe";
+  const h = new Date().getHours();
+  const saud = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  const chips = [
+    { label: "Passageiros", valor: passageiros, Icon: Users },
+    { label: "Vagas", valor: vagas, Icon: Bus },
+    { label: "Faturamento", valor: fmtBRL(faturamento), Icon: Wallet },
+    { label: "Pendências", valor: pendencias, Icon: AlertTriangle },
+  ];
+  return (
+    <div className="px-6 md:px-10 pt-6 pb-4">
+      <div className="aritur-hero rounded-2xl border p-5 md:p-6" style={{ borderColor: C.brandDim }}>
+        <BusSilhueta
+          className="absolute pointer-events-none hidden sm:block"
+          style={{ width: 300, right: -30, bottom: -26 }}
+          color="#000"
+          opacity={0.14}
+        />
+        <div className="relative">
+          <h1
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontWeight: 700,
+              fontSize: "1.5rem",
+              color: "#fff",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {saud}, {nome}!
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,.8)" }}>
+            Aqui está o resumo da operação de hoje.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            {chips.map(({ label, valor, Icon }) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 rounded-xl px-3 py-2"
+                style={{ background: "rgba(0,0,0,.32)", backdropFilter: "blur(2px)" }}
+              >
+                <Icon size={15} style={{ color: "#fff" }} />
+                <span className="text-xs" style={{ color: "rgba(255,255,255,.72)" }}>
+                  {label}
+                </span>
+                <span
+                  className="text-sm font-bold"
+                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {valor}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardTab({ reservas, capacidade, trips }) {
   const hoje = todayStr();
   // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
@@ -7009,9 +7196,18 @@ function DashboardTab({ reservas, capacidade, trips }) {
     }
     return dias;
   }, [financeiro, reservas]);
+  const pendentesHoje = reservas.filter(
+    (r) => r.data === hoje && (r.status === "pendente" || r.status === "espera"),
+  ).length;
+  const vagasHoje = Math.max(0, capacidade * 2 - passageirosHoje);
   return (
     <div>
-      <Header title="Dashboard" subtitle={`Visão geral — hoje, ${fmtDate(hoje)}.`} />
+      <DashboardHero
+        passageiros={passageirosHoje}
+        vagas={vagasHoje}
+        faturamento={receitaHoje}
+        pendencias={pendentesHoje}
+      />
       <div className="px-6 md:px-10 pb-10 space-y-5">
         <Card className="anim-fadeUp" style={{ borderColor: C.purple }}>
           <div className="flex items-center gap-2 mb-3">
@@ -7335,7 +7531,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
                 <button
                   onClick={() => addPontoOutro(dir)}
                   className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0"
-                  style={{ background: C.amber, color: "#20180A" }}
+                  style={{ background: C.amber, color: C.onBrand }}
                 >
                   Adicionar
                 </button>
@@ -7401,7 +7597,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
               onClick={rodarDiagnostico}
               disabled={rodando}
               className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: C.amber, color: "#20180A" }}
+              style={{ background: C.amber, color: C.onBrand }}
             >
               <RefreshCw size={12} className={rodando ? "animate-spin" : ""} />{" "}
               {rodando ? "Verificando…" : "Rodar diagnóstico agora"}
