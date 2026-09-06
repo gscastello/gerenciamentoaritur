@@ -1305,6 +1305,58 @@ function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true }) {
   );
 }
 
+// Divisor de direção (IDA / VOLTA) com "estrada" tracejada dos dois lados.
+function DirecaoDivisor({ label, cor }) {
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <span className="flex-1 aritur-road" style={{ opacity: 0.5 }} />
+      <span
+        className="px-3.5 py-1 rounded-full text-xs font-bold tracking-[0.15em]"
+        style={{
+          background: `${cor}1f`,
+          color: cor,
+          border: `1px solid ${cor}44`,
+          fontFamily: "'Space Grotesk', sans-serif",
+        }}
+      >
+        {label}
+      </span>
+      <span className="flex-1 aritur-road" style={{ opacity: 0.5, transform: "scaleX(-1)" }} />
+    </div>
+  );
+}
+
+// Sub-navegação em pílulas (usada em Lista, Financeiro, Gestão).
+function SubTabs({ value, onChange, options }) {
+  return (
+    <div
+      className="inline-flex gap-1 rounded-xl p-1"
+      style={{ background: C.panel2, border: `1px solid ${C.border}` }}
+    >
+      {options.map(({ id, label, Icon }) => {
+        const active = value === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className="btn-press flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg"
+            style={{
+              background: active ? C.brand : "transparent",
+              color: active ? C.onBrand : C.inkSoft,
+              fontWeight: active ? 600 : 500,
+              boxShadow: active ? `0 6px 16px -8px ${C.brandGlow}` : "none",
+            }}
+          >
+            {Icon && <Icon size={13} />}
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label className="block text-xs mb-1" style={{ color: C.inkSoft }}>
@@ -4434,27 +4486,67 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </button>
           </div>
         )}
-        <div className="flex gap-1 rounded-lg p-1 w-fit" style={{ background: C.panel2 }}>
-          {[
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 200, right: -16, bottom: -16 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
+            <div>
+              <div
+                className="capitalize"
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1.3rem",
+                  color: "#fff",
+                }}
+              >
+                {data === todayStr() ? "Hoje" : diaSemana(data)}
+              </div>
+              <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
+                {fmtDate(data)} · lista de embarque
+              </div>
+            </div>
+            <div className="flex gap-5">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                  Passageiros
+                </div>
+                <div
+                  className="font-bold"
+                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.15rem" }}
+                >
+                  {ativos.reduce((s, r) => s + r.quantidade, 0)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                  Embarcados
+                </div>
+                <div
+                  className="font-bold"
+                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.15rem" }}
+                >
+                  {ativos.filter((r) => r.status === "embarcado").reduce((s, r) => s + r.quantidade, 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <SubTabs
+          value={subview}
+          onChange={setSubview}
+          options={[
             { id: "embarque", label: "Embarque", Icon: ClipboardList },
             { id: "desembarque", label: "Desembarque (rota)", Icon: MapPin },
-          ].map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSubview(id)}
-              className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
-              style={{
-                background: subview === id ? C.amberSoft : "transparent",
-                color: subview === id ? C.amber : C.inkSoft,
-                fontWeight: subview === id ? 600 : 500,
-              }}
-            >
-              <Icon size={13} />
-              {label}
-            </button>
-          ))}
-        </div>
+          ]}
+        />
         {subview === "desembarque" && (
           <DesembarqueView reservas={reservas} R={R} data={data} />
         )}
@@ -4481,18 +4573,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </div>
           </Card>
         )}
-        <div className="text-center">
-          <span
-            className="inline-block px-4 py-1 rounded-full text-sm font-bold tracking-wide"
-            style={{
-              background: C.amberSoft,
-              color: C.amber,
-              fontFamily: "'Space Grotesk', sans-serif",
-            }}
-          >
-            IDA
-          </span>
-        </div>
+        <DirecaoDivisor label="IDA" cor={C.brand} />
         <ListaSecao
           titulo="BUSCAR EM CASA"
           itens={buscaItens}
@@ -4511,18 +4592,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           mover={mover}
           remove={remove}
         />
-        <div className="text-center pt-2">
-          <span
-            className="inline-block px-4 py-1 rounded-full text-sm font-bold tracking-wide"
-            style={{
-              background: C.blueSoft,
-              color: C.blue,
-              fontFamily: "'Space Grotesk', sans-serif",
-            }}
-          >
-            VOLTA
-          </span>
-        </div>
+        <DirecaoDivisor label="VOLTA" cor={C.blue} />
         <ListaSecao
           titulo="CANTANHEDE"
           itens={cantanhedeItens}
@@ -5311,26 +5381,15 @@ function FinanceiroTab({ pix, deepLink }) {
           )}
         </div>
       )}
-      <div className="px-6 md:px-10 mb-4 flex gap-1 rounded-lg p-1 w-fit" style={{ background: C.panel2 }}>
-        {[
-          { id: "lancamentos", label: "Lançamentos", Icon: Wallet },
-          { id: "contas_receber", label: "Contas a receber", Icon: MessageCircle },
-        ].map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSubview(id)}
-            className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
-            style={{
-              background: subview === id ? C.amberSoft : "transparent",
-              color: subview === id ? C.amber : C.inkSoft,
-              fontWeight: subview === id ? 600 : 500,
-            }}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+      <div className="px-6 md:px-10 mb-4">
+        <SubTabs
+          value={subview}
+          onChange={setSubview}
+          options={[
+            { id: "lancamentos", label: "Lançamentos", Icon: Wallet },
+            { id: "contas_receber", label: "Contas a receber", Icon: MessageCircle },
+          ]}
+        />
       </div>
       {subview === "contas_receber" && <ContasReceberView pix={pix} />}
       {subview === "lancamentos" && (
@@ -5988,28 +6047,15 @@ function GestaoTab({ deepLink }) {
             <ChevronRight size={16} />
           </button>
         </div>
-        <div className="flex gap-1 rounded-lg p-1" style={{ background: C.panel2 }}>
-          {[
+        <SubTabs
+          value={aba}
+          onChange={setAba}
+          options={[
             { id: "resultado", label: "Resultado", Icon: TrendingUp },
             { id: "recorrentes", label: "Custos recorrentes", Icon: RefreshCw },
             { id: "lancamentos", label: "Lançamentos do mês", Icon: Receipt },
-          ].map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setAba(id)}
-              className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
-              style={{
-                background: aba === id ? C.amberSoft : "transparent",
-                color: aba === id ? C.amber : C.inkSoft,
-                fontWeight: aba === id ? 600 : 500,
-              }}
-            >
-              <Icon size={13} />
-              {label}
-            </button>
-          ))}
-        </div>
+          ]}
+        />
       </div>
 
       <div className="px-6 md:px-10 pb-10 space-y-6">
