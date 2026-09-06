@@ -84,31 +84,42 @@ import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 // do bundle inicial (ver vite.config.js manualChunks). Issue #2.
 const SevenDayCharts = React.lazy(() => import("../ui/charts/SevenDayCharts.jsx"));
 
-/* ============================= tokens ============================= */
+/* ============================= tokens =============================
+ * Identidade AriTur — fundo quase preto, vermelho da marca nos detalhes.
+ * `amber`/`amberSoft` mantêm o nome (centenas de usos) mas agora são o
+ * VERMELHO da marca — é a cor de ação/destaque do app inteiro.
+ * `warn`/`warnSoft` = âmbar de verdade, só para "pendente / atenção".
+ */
 const C = {
-  bg: "#0E1116",
-  panel: "#161B22",
-  panel2: "#1C222B",
-  border: "#262D38",
-  borderSoft: "#1E252F",
-  ink: "#ECEEF2",
-  inkSoft: "#8B93A3",
-  inkFaint: "#5B6272",
-  amber: "#E8A33D",
-  amberSoft: "#3A2E1B",
+  bg: "#08090B",
+  panel: "#111214",
+  panel2: "#191A1D",
+  border: "#292A2E",
+  borderSoft: "#1E1F22",
+  ink: "#F2F3F5",
+  inkSoft: "#9CA0A8",
+  inkFaint: "#63666D",
+  // vermelho da marca (era âmbar)
+  amber: "#E4121F",
+  amberSoft: "#2A0E10",
+  brand: "#E4121F",
+  brandDim: "#A50D17",
+  brandGlow: "rgba(228,18,31,0.35)",
+  onBrand: "#FFFFFF",
+  // âmbar real — pendências / avisos
+  warn: "#E8A33D",
+  warnSoft: "#2E2413",
   blue: "#5B8DEF",
-  blueSoft: "#1B2740",
+  blueSoft: "#141E33",
   green: "#34C77B",
-  greenSoft: "#132E22",
+  greenSoft: "#0F291D",
   red: "#F0625F",
-  redSoft: "#3A1E1F",
+  redSoft: "#33161A",
   purple: "#9B7BE8",
-  purpleSoft: "#251E3A",
+  purpleSoft: "#201A33",
   gray: "#7D8494",
-  graySoft: "#20242C",
+  graySoft: "#1B1D21",
 };
-const FONTS =
-  "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap";
 const PIX_KEY = "98981012388";
 const PIX_NAME = "A O Castelo Transporte e Turismo";
 const CIDADES_INTERMEDIARIAS = [
@@ -335,7 +346,7 @@ function precoBairro(bairro) {
 
 /* ============================= status ============================= */
 const STATUS_META = {
-  pendente: { emoji: "🟡", label: "Pendente", cor: C.amber, bg: C.amberSoft },
+  pendente: { emoji: "🟡", label: "Pendente", cor: C.warn, bg: C.warnSoft },
   confirmada: { emoji: "🟢", label: "Confirmada", cor: C.green, bg: C.greenSoft },
   embarcado: { emoji: "🔵", label: "Embarcado", cor: C.blue, bg: C.blueSoft },
   cancelada: { emoji: "🔴", label: "Cancelada", cor: C.red, bg: C.redSoft },
@@ -449,7 +460,7 @@ class ErrorBoundary extends React.Component {
             <button
               onClick={() => this.setState({ erro: null })}
               className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-              style={{ background: C.amber, color: "#20180A" }}
+              style={{ background: C.amber, color: C.onBrand }}
             >
               Tentar novamente
             </button>
@@ -495,6 +506,46 @@ function GlobalStyles() {
       @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:.35; } }
       ::-webkit-scrollbar { width:8px; height:8px; }
       ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:8px; }
+      ::-webkit-scrollbar-thumb:hover { background:${C.brandDim}; }
+      ::selection { background:${C.brand}; color:#fff; }
+      body { background:${C.bg}; }
+      @keyframes roadDash { to { background-position: -48px 0; } }
+      .aritur-hero { position:relative; overflow:hidden;
+        background:
+          radial-gradient(120% 140% at 88% 20%, ${C.brandGlow} 0%, transparent 55%),
+          linear-gradient(105deg, ${C.brandDim} 0%, #6c0910 42%, ${C.panel} 100%); }
+      .aritur-road { height:3px; border-radius:3px;
+        background-image: linear-gradient(90deg, ${C.brand} 0 60%, transparent 60% 100%);
+        background-size: 24px 3px; background-repeat: repeat-x;
+        animation: roadDash 1.6s linear infinite; }
+
+      /* ---- hero cinematográfico do Dashboard ---- */
+      @keyframes heroLanes { from { background-position: 0 0; } to { background-position: -640px 0; } }
+      @keyframes heroBusBob { 0%,100% { transform: translateY(0) rotate(-.4deg); } 50% { transform: translateY(-5px) rotate(.3deg); } }
+      @keyframes heroHeadlight { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+      @keyframes heroSky { 0%,100% { opacity:.9; } 50% { opacity:1; } }
+      @keyframes heroTextIn { from { opacity:0; transform:translateY(14px); filter:blur(4px); } to { opacity:1; transform:translateY(0); filter:blur(0); } }
+      @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      @keyframes glowPulse { 0%,100% { box-shadow: 0 0 0 0 ${C.brandGlow}; } 50% { box-shadow: 0 0 24px 2px ${C.brandGlow}; } }
+      @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+      @keyframes sweep { to { transform: translateX(220%); } }
+      .hero-lanes { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.85) 0 46px, transparent 46px 132px);
+        animation: heroLanes 1.05s linear infinite; }
+      .hero-bus { animation: heroBusBob 4.5s ease-in-out infinite; will-change: transform; }
+      .hero-headlight { animation: heroHeadlight 2.6s ease-in-out infinite; }
+      .hero-t { animation: heroTextIn .7s cubic-bezier(.16,1,.3,1) both; }
+      .hero-t-1 { animation-delay: .05s; } .hero-t-2 { animation-delay: .16s; }
+      .hero-t-3 { animation-delay: .27s; } .hero-t-4 { animation-delay: .38s; }
+      .float-y { animation: floatY 5s ease-in-out infinite; }
+      .glow-pulse { animation: glowPulse 3.2s ease-in-out infinite; }
+      .card-lift { transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .2s ease; }
+      .card-lift:hover { transform: translateY(-3px); border-color: ${C.brandDim}; box-shadow: 0 14px 34px -18px rgba(0,0,0,.7); }
+      .bar-grow { transform-origin: bottom; animation: barGrow .7s cubic-bezier(.16,1,.3,1) both; }
+      .sheen { position:relative; overflow:hidden; }
+      .sheen::after { content:""; position:absolute; top:0; left:-60%; width:40%; height:100%;
+        background:linear-gradient(100deg, transparent, rgba(255,255,255,.10), transparent);
+        transform: translateX(0); animation: sweep 6s ease-in-out 1s infinite; }
+
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         button, select, input, textarea, a[role="button"] { min-height: 42px; }
@@ -503,8 +554,255 @@ function GlobalStyles() {
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+        .aritur-road, .hero-lanes, .hero-bus, .hero-headlight, .float-y, .glow-pulse, .sheen::after { animation: none !important; }
       }
     `}</style>
+  );
+}
+
+/* ===================== IDENTIDADE ARITUR =============================
+ * Recriação vetorial da logo AriTur Transportes: monograma "AT" (serifa
+ * de alto contraste, "A" vermelho em itálico + "T" grafite) atravessado
+ * pela fita da rodovia, wordmark "AriTur" em serifa itálica e
+ * "TRANSPORTES" espaçado. Não é imagem — escala em qualquer tamanho.
+ */
+const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
+const MONO_T = "#DDDEE2";
+
+function AriturMark({ size = 42, ribbon = true }) {
+  return (
+    <div
+      style={{ position: "relative", width: size, height: size, flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      {ribbon && (
+        <svg viewBox="0 0 100 100" width={size} height={size} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
+          <path
+            d="M1 62 C 22 34, 44 12, 76 8 C 90 6, 99 13, 99 26 C 92 19, 82 19, 71 23 C 44 33, 24 55, 12 76 Z"
+            fill="#2A2A30"
+          />
+          <path
+            d="M6 60 C 26 34, 46 15, 76 12"
+            stroke={C.brand}
+            strokeWidth="2.6"
+            strokeDasharray="5 6"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.9"
+          />
+        </svg>
+      )}
+      <span
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: SERIF,
+          lineHeight: 1,
+        }}
+      >
+        <span
+          style={{
+            fontStyle: "italic",
+            fontWeight: 700,
+            fontSize: size * 0.9,
+            color: C.brand,
+            textShadow: "0 1px 2px rgba(0,0,0,.55)",
+          }}
+        >
+          A
+        </span>
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: size * 0.82,
+            color: MONO_T,
+            marginLeft: -size * 0.28,
+          }}
+        >
+          T
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function AriturLogo({ compact = false, tagline = false }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <AriturMark size={compact ? 30 : 44} ribbon={!compact} />
+      <div className="leading-none">
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontStyle: "italic",
+            fontWeight: 700,
+            fontSize: compact ? "1.2rem" : "1.65rem",
+            letterSpacing: "0.005em",
+            lineHeight: 1,
+          }}
+        >
+          <span style={{ color: C.brand }}>Ari</span>
+          <span style={{ color: MONO_T }}>Tur</span>
+        </div>
+        {!compact && (
+          <div
+            className="mt-1.5"
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: "0.58rem",
+              fontWeight: 600,
+              letterSpacing: "0.44em",
+              color: C.inkSoft,
+              paddingLeft: 2,
+            }}
+          >
+            TRANSPORTES
+          </div>
+        )}
+        {tagline && (
+          <div
+            className="mt-1.5"
+            style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "0.66rem", color: C.inkFaint }}
+          >
+            Conectando destinos, cuidando de cada viagem
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Silhueta de ônibus para decoração (rodapé da barra lateral, login, hero).
+function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 }) {
+  return (
+    <svg
+      className={className}
+      style={style}
+      viewBox="0 0 220 84"
+      fill="none"
+      aria-hidden="true"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <g fill={color} opacity={opacity}>
+        <path d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z" />
+      </g>
+      <g fill={C.bg} opacity={Math.min(opacity + 0.05, 1)}>
+        <rect x="18" y="20" width="26" height="18" rx="3" />
+        <rect x="50" y="20" width="26" height="18" rx="3" />
+        <rect x="82" y="20" width="26" height="18" rx="3" />
+        <rect x="114" y="20" width="26" height="18" rx="3" />
+        <rect x="148" y="20" width="22" height="18" rx="3" />
+      </g>
+      <g fill={color} opacity={Math.min(opacity + 0.25, 1)}>
+        <circle cx="54" cy="72" r="11" />
+        <circle cx="186" cy="72" r="11" />
+      </g>
+    </svg>
+  );
+}
+
+/* Cena animada do hero — céu em degradê, morros, estrada com faixas
+   correndo e um ônibus com faróis pulsando. Tudo CSS/SVG, sem imagem. */
+function HeroBusScene() {
+  return (
+    <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+      {/* céu / atmosfera */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, #1a0407 0%, #5c0a11 38%, #b3161f 70%, #f0533a 100%)",
+          opacity: 0.9,
+        }}
+      />
+      <div
+        className="absolute float-y"
+        style={{
+          right: "5%",
+          top: "-34%",
+          width: 130,
+          height: 130,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, #ffe1b0 0%, #ff7a3c 42%, transparent 70%)",
+          opacity: 0.8,
+          filter: "blur(3px)",
+        }}
+      />
+      {/* morros */}
+      <svg aria-hidden="true"
+        className="absolute bottom-0 left-0 w-full"
+        viewBox="0 0 1200 220"
+        preserveAspectRatio="none"
+        style={{ height: "62%" }}
+      >
+        <path d="M0 150 Q 200 70 430 130 T 900 120 T 1200 150 V220 H0 Z" fill="#2a0508" opacity="0.85" />
+        <path d="M0 180 Q 260 120 560 165 T 1200 175 V220 H0 Z" fill="#160305" />
+      </svg>
+      {/* estrada */}
+      <div
+        className="absolute left-0 w-full"
+        style={{
+          bottom: 0,
+          height: "34%",
+          background: "linear-gradient(180deg, #241a1b 0%, #0c0708 100%)",
+          transform: "perspective(420px) rotateX(48deg)",
+          transformOrigin: "bottom",
+        }}
+      >
+        <div
+          className="hero-lanes absolute left-1/2 -translate-x-1/2"
+          style={{ bottom: "18%", width: "68%", height: 6 }}
+        />
+      </div>
+      {/* ônibus */}
+      <div
+        className="hero-bus absolute"
+        style={{ right: "3%", bottom: "16%", width: 340, maxWidth: "52%" }}
+      >
+        <svg viewBox="0 0 300 120" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="busBody" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#2b2b30" />
+              <stop offset="1" stopColor="#0d0d10" />
+            </linearGradient>
+          </defs>
+          <ellipse cx="150" cy="112" rx="140" ry="10" fill="#000" opacity="0.5" />
+          <path
+            d="M8 30c0-8 5-14 14-14h214c30 0 52 14 60 40l4 14c2 6 3 12 3 18v10c0 5-4 9-9 9h-20a20 20 0 0 0-40 0H86a20 20 0 0 0-40 0H16c-5 0-8-4-8-9V30Z"
+            fill="url(#busBody)"
+            stroke="#3a0a0e"
+            strokeWidth="1.5"
+          />
+          <g fill="#1b1112">
+            <rect x="22" y="30" width="34" height="22" rx="4" />
+            <rect x="62" y="30" width="34" height="22" rx="4" />
+            <rect x="102" y="30" width="34" height="22" rx="4" />
+            <rect x="142" y="30" width="34" height="22" rx="4" />
+            <rect x="182" y="30" width="34" height="22" rx="4" />
+          </g>
+          <rect x="8" y="60" width="284" height="4" fill={C.brand} opacity="0.9" />
+          <circle cx="66" cy="96" r="16" fill="#111" stroke="#333" strokeWidth="3" />
+          <circle cx="234" cy="96" r="16" fill="#111" stroke="#333" strokeWidth="3" />
+          {/* faróis */}
+          <g className="hero-headlight">
+            <circle cx="292" cy="72" r="6" fill="#fff3c4" />
+            <path d="M292 66 L300 40 L300 104 Z" fill="#ffe9a8" opacity="0.28" />
+          </g>
+          <circle cx="12" cy="74" r="4" fill={C.brand} />
+        </svg>
+      </div>
+      {/* vinheta — escurece a esquerda pro texto, deixa o ônibus aparecer */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(6,6,8,.82) 0%, rgba(6,6,8,.4) 38%, rgba(6,6,8,.05) 62%, transparent 100%)",
+        }}
+      />
+    </div>
   );
 }
 
@@ -631,7 +929,7 @@ function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar
             width: 56,
             height: 56,
             background: C.amber,
-            color: "#20180A",
+            color: C.onBrand,
             boxShadow: "0 4px 18px rgba(0,0,0,.45)",
           }}
         >
@@ -860,7 +1158,7 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
 /* ============================= shared UI ============================= */
 function Header({ title, subtitle, right }) {
   return (
-    <div className="px-6 md:px-10 pr-16 md:pr-16 pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+    <div className="px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
       <div>
         <h1
           style={{
@@ -886,7 +1184,7 @@ function Header({ title, subtitle, right }) {
 function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`rounded-xl border p-5 ${className}`}
+      className={`card-lift rounded-xl border p-5 ${className}`}
       style={{ background: C.panel, borderColor: C.border, ...style }}
     >
       {children}
@@ -911,32 +1209,45 @@ function StatusPill({ status }) {
     </Pill>
   );
 }
-function StatCard({ label, value, icon: Icon, accent = C.blue }) {
+function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
   return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs" style={{ color: C.inkSoft }}>
-            {label}
-          </div>
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontWeight: 600,
-              fontSize: "1.3rem",
-              color: C.ink,
-            }}
-          >
-            {value}
-          </div>
+    <Card className="relative overflow-hidden">
+      <span
+        className="absolute left-0 top-0 bottom-0"
+        style={{ width: 3, background: accent, opacity: 0.9 }}
+      />
+      <div className="flex items-start justify-between gap-2">
+        <div
+          className="text-[11px] leading-tight"
+          style={{ color: C.inkSoft, minHeight: "2.2em" }}
+        >
+          {label}
         </div>
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: `${accent}22` }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: `${accent}1f`, border: `1px solid ${accent}33` }}
         >
-          <Icon size={17} style={{ color: accent }} />
+          <Icon size={16} style={{ color: accent }} />
         </div>
       </div>
+      <div
+        className="truncate mt-1.5"
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontWeight: 700,
+          fontSize: "clamp(0.9rem, 2vw, 1.28rem)",
+          fontVariantNumeric: "tabular-nums",
+          color: C.ink,
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </div>
+      {hint && (
+        <div className="text-[10px] mt-1" style={{ color: C.inkFaint }}>
+          {hint}
+        </div>
+      )}
     </Card>
   );
 }
@@ -995,6 +1306,38 @@ function useLazyTab(tab) {
     return () => clearTimeout(t);
   }, [tab]);
   return ready;
+}
+
+const PREFERS_REDUCED_MOTION =
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// Anima um número de 0 até `target` na montagem (e a cada mudança de
+// target). Respeita prefers-reduced-motion.
+function useCountUp(target, duration = 900) {
+  const [val, setVal] = useState(PREFERS_REDUCED_MOTION ? target : 0);
+  const fromRef = useRef(0);
+  useEffect(() => {
+    if (PREFERS_REDUCED_MOTION) {
+      setVal(target);
+      return undefined;
+    }
+    const from = fromRef.current;
+    const delta = target - from;
+    if (delta === 0) return undefined;
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - (1 - p) ** 3;
+      setVal(from + delta * eased);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
 }
 // Aplica um deep-link {kind:"data", data} da busca global: seleciona a
 // data na aba. O guard por `at` evita reaplicar quando a aba desmonta e
@@ -1282,16 +1625,17 @@ const TAB_ROLES = {
 };
 
 const NAV_ITENS = [
-  { id: "reservar", label: "Reservar", icon: MessageCircle },
-  { id: "agenda", label: "Agenda", icon: Calendar },
-  { id: "lista", label: "Lista do Dia", icon: ClipboardList },
-  { id: "passageiros", label: "Passageiros", icon: Users },
-  { id: "financeiro", label: "Financeiro", icon: Wallet },
-  { id: "gestao", label: "Gestão", icon: Landmark },
-  { id: "operacao", label: "Operação", icon: Bus },
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "sistema", label: "Sistema", icon: ShieldCheck },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
+  { id: "reservar", label: "Reservar", icon: MessageCircle, grupo: "Operação" },
+  { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
+  { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
+  { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
+  { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
+  { id: "financeiro", label: "Financeiro", icon: Wallet, grupo: "Financeiro" },
+  { id: "gestao", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
+  { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
 ];
+const NAV_GRUPOS = ["Principal", "Operação", "Clientes", "Frota", "Financeiro", "Administração"];
 
 // Navegação inferior (celular). Muitas abas não cabem numa linha só —
 // mostra as principais + "Mais" numa folha. A aba ativa sempre aparece
@@ -1414,15 +1758,11 @@ function MobileNav({ nav, tab, onSelect, pendentesCount }) {
 }
 
 function AppInner() {
-  useEffect(() => {
-    const l = document.createElement("link");
-    l.rel = "stylesheet";
-    l.href = FONTS;
-    document.head.appendChild(l);
-  }, []);
+  // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
+  // carregadas no index.html — valem também para a tela de login.
   const { profile } = useAuth();
   const role = profile?.role ?? null;
-  const [tab, setTab] = useState("reservar");
+  const [tab, setTab] = useState("dashboard");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
   const [agendou, setAgendou] = useState("");
@@ -1572,92 +1912,132 @@ function AppInner() {
         </div>
       )}
       <div
-        className="hidden md:flex flex-col w-64 shrink-0 border-r"
+        className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden"
         style={{ borderColor: C.border, background: C.panel }}
       >
-        <div className="px-5 pt-6 pb-5 border-b" style={{ borderColor: C.border }}>
-          <div className="flex items-center gap-2" style={{ color: C.amber }}>
-            <Route size={20} strokeWidth={2.3} />
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontWeight: 700,
-                fontSize: "1.05rem",
-              }}
-            >
-              Gestão AriTur
-            </span>
-          </div>
-          <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
-            Rota Pirapemas · São Luís ⇄ Pirapemas
-          </div>
-          <div
-            className="mt-3 flex items-center gap-1.5 text-xs rounded-md px-2 py-1"
-            style={{ background: C.panel2, color: C.inkSoft }}
-          >
-            {modoAtendimento === "ia" ? (
-              <Bot size={12} style={{ color: C.green }} />
-            ) : (
-              <UserCog size={12} style={{ color: C.amber }} />
-            )}
-            {modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}
-          </div>
-          <div
-            className="mt-2 flex items-center gap-1.5 text-xs rounded-md px-2 py-1"
-            style={{ background: C.panel2, color: R.error ? C.red : C.inkSoft }}
-          >
+        <div
+          className="px-5 pt-6 pb-5 border-b relative"
+          style={{
+            borderColor: C.border,
+            background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
+          }}
+        >
+          <AriturLogo />
+          <div className="aritur-road mt-3" style={{ width: 72 }} />
+          <div className="text-[11px] mt-2 flex items-center gap-1.5" style={{ color: C.inkFaint }}>
             <Wifi
-              size={12}
+              size={11}
               className={R.loading ? "pulse-dot" : ""}
               style={{ color: R.error ? C.red : C.green }}
             />
-            {R.error ? "Sem conexão — tentando…" : "Sincronizado em tempo real"}
-          </div>
-          <div
-            className="mt-2 text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5"
-            style={{ background: C.panel2, color: C.inkSoft }}
-          >
-            <UserCog size={12} style={{ color: C.inkFaint }} />
-            <span className="truncate">
-              {usuario}
-              {profile?.role ? ` · ${profile.role}` : ""}
-            </span>
+            {R.error ? "Sem conexão…" : "Sincronizado"} ·{" "}
+            {modoAtendimento === "ia" ? "IA atendendo" : "Atend. manual"}
           </div>
         </div>
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = tab === n.id;
+        <nav className="flex-1 py-3 px-3 overflow-y-auto relative z-10">
+          {NAV_GRUPOS.map((grupo) => {
+            const itens = NAV.filter((n) => n.grupo === grupo);
+            if (itens.length === 0) return null;
             return (
-              <button
-                key={n.id}
-                onClick={() => mudarAba(n.id)}
-                className="tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
-                style={{
-                  background: active ? C.amberSoft : "transparent",
-                  color: active ? C.amber : C.inkSoft,
-                  fontWeight: active ? 600 : 500,
-                }}
-              >
-                <Icon size={16} />
-                {n.label}
-                {n.id === "agenda" && pendentesCount > 0 && (
-                  <span
-                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full"
-                    style={{ background: C.purpleSoft, color: C.purple }}
+              <div key={grupo} className="mb-1.5">
+                {grupo !== "Principal" && (
+                  <div
+                    className="px-3 pt-3 pb-1 text-[10px] font-semibold tracking-[0.18em]"
+                    style={{ color: C.inkFaint }}
                   >
-                    {pendentesCount}
-                  </span>
+                    {grupo.toUpperCase()}
+                  </div>
                 )}
-              </button>
+                {itens.map((n) => {
+                  const Icon = n.icon;
+                  const active = tab === n.id;
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => mudarAba(n.id)}
+                      className="nav-item tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm relative my-0.5"
+                      style={{
+                        background: active ? C.brand : "transparent",
+                        color: active ? C.onBrand : C.inkSoft,
+                        fontWeight: active ? 600 : 500,
+                        boxShadow: active ? `0 8px 20px -8px ${C.brandGlow}` : "none",
+                      }}
+                    >
+                      {active && (
+                        <span
+                          className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
+                          style={{ width: 3, height: 18, background: "#fff" }}
+                        />
+                      )}
+                      <Icon size={16} />
+                      {n.label}
+                      {n.id === "agenda" && pendentesCount > 0 && (
+                        <span
+                          className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                          style={{
+                            background: active ? "rgba(255,255,255,.22)" : C.purpleSoft,
+                            color: active ? C.onBrand : C.purple,
+                          }}
+                        >
+                          {pendentesCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
+        <div className="px-4 py-3 border-t relative" style={{ borderColor: C.border }}>
+          <div
+            className="flex items-center gap-2.5 rounded-xl px-2.5 py-2"
+            style={{ background: C.panel2 }}
+          >
+            <span
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+              style={{ background: C.brand, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              {(usuario || "?").slice(0, 2).toUpperCase()}
+            </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block text-xs font-semibold truncate" style={{ color: C.ink }}>
+                {usuario}
+              </span>
+              <span className="block text-[10px] capitalize" style={{ color: C.inkFaint }}>
+                {profile?.role || "—"}
+              </span>
+            </span>
+          </div>
+          <div
+            className="mt-2.5 text-[10px] leading-snug"
+            style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            Mais que transporte,{" "}
+            <span style={{ color: C.brand }}>conectamos pessoas.</span>
+          </div>
+        </div>
+        <BusSilhueta
+          className="absolute pointer-events-none"
+          style={{ width: 240, bottom: -12, left: -30, opacity: 0.9 }}
+          opacity={0.055}
+        />
       </div>
 
       <MobileNav nav={NAV} tab={tab} onSelect={mudarAba} pendentesCount={pendentesCount} />
 
       <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden">
+        <div
+          className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
+          style={{
+            background: C.panel,
+            borderColor: C.border,
+            paddingTop: "max(0.6rem, env(safe-area-inset-top))",
+          }}
+        >
+          <AriturLogo compact />
+          <div className="aritur-road" style={{ width: 42 }} />
+        </div>
         {R.error && !loading && (
           <div
             className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
@@ -1670,7 +2050,7 @@ function AppInner() {
             <button
               onClick={R.refetch}
               className="btn-press text-xs px-2 py-1 rounded-md"
-              style={{ background: C.red, color: "#20180A" }}
+              style={{ background: C.red, color: C.onBrand }}
             >
               Tentar de novo
             </button>
@@ -1999,7 +2379,7 @@ function ReservarTab({
           {modoAtendimento === "manual" && step < 7 && (
             <div
               className="text-xs rounded-lg px-3 py-2 mb-4 flex items-center gap-2"
-              style={{ background: C.amberSoft, color: C.amber }}
+              style={{ background: C.warnSoft, color: C.warn }}
             >
               <UserCog size={13} /> Atendimento manual ativo — a equipe está respondendo
               diretamente.
@@ -2564,7 +2944,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2586,7 +2966,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2635,7 +3015,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Simular nova reserva
               </button>
@@ -2656,7 +3036,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2677,7 +3057,7 @@ function ReservarTab({
               <button
                 onClick={reiniciar}
                 className="btn-press mt-4 text-sm px-4 py-2 rounded-lg"
-                style={{ background: C.amber, color: "#20180A" }}
+                style={{ background: C.amber, color: C.onBrand }}
               >
                 Voltar ao início
               </button>
@@ -2731,7 +3111,7 @@ function NextBtn({ onClick, disabled, label = "Continuar" }) {
       className="btn-press mt-4 px-4 py-2 rounded-lg text-sm font-medium"
       style={{
         background: disabled ? C.border : C.amber,
-        color: disabled ? C.inkFaint : "#20180A",
+        color: disabled ? C.inkFaint : C.onBrand,
       }}
     >
       {label}
@@ -2869,7 +3249,7 @@ function AgendaTab({
         {segunda && (
           <div
             className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.amberSoft, color: C.amber }}
+            style={{ background: C.warnSoft, color: C.warn }}
           >
             <Sunrise size={14} /> Segunda-feira: horários de ida ajustados automaticamente.
           </div>
@@ -3267,7 +3647,7 @@ function ViagemOperacional({
       >
         <MiniStat label="Capacidade" value={capacidade} />
         <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
-        <MiniStat label="Pendentes" value={pendentesQtd} cor={C.amber} />
+        <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
         <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
         <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
       </div>
@@ -3521,7 +3901,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
             style={{
               background: salvando ? C.border : C.amber,
-              color: salvando ? C.inkFaint : "#20180A",
+              color: salvando ? C.inkFaint : C.onBrand,
             }}
           >
             {salvando ? "Salvando…" : "Salvar alterações"}
@@ -3721,7 +4101,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
               </div>
             )}
             {bairroNaoReconhecido && (
-              <div className="text-[11px] mt-1" style={{ color: C.amber }}>
+              <div className="text-[11px] mt-1" style={{ color: C.warn }}>
                 Bairro fora da tabela — confira o valor abaixo antes de salvar.
               </div>
             )}
@@ -3825,7 +4205,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
             className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
             style={{
               background: salvando || !podeEnviar ? C.border : C.amber,
-              color: salvando || !podeEnviar ? C.inkFaint : "#20180A",
+              color: salvando || !podeEnviar ? C.inkFaint : C.onBrand,
             }}
           >
             {salvando ? "Agendando…" : "Agendar"}
@@ -3842,7 +4222,7 @@ function BotaoAgendar({ onClick }) {
       type="button"
       onClick={onClick}
       className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium shrink-0"
-      style={{ background: C.amber, color: "#20180A" }}
+      style={{ background: C.amber, color: C.onBrand }}
     >
       <Plus size={14} /> Agendar
     </button>
@@ -4352,7 +4732,7 @@ function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar }) {
                 pago
               </span>
             ) : (
-              <span className="text-[10px]" style={{ color: C.amber }}>
+              <span className="text-[10px]" style={{ color: C.warn }}>
                 a receber {fmtBRL(r.valorTotal)}
               </span>
             )}
@@ -4905,7 +5285,7 @@ function FinanceiroTab({ pix, deepLink }) {
                   className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs"
                   style={{
                     background: sel ? C.amber : C.panel2,
-                    color: sel ? "#20180A" : C.ink,
+                    color: sel ? C.onBrand : C.ink,
                     border:
                       ds === todayStr() && !sel ? `1px solid ${C.amber}` : "1px solid transparent",
                   }}
@@ -4914,7 +5294,7 @@ function FinanceiroTab({ pix, deepLink }) {
                   {temMovimento && (
                     <span
                       className="w-1 h-1 rounded-full mt-0.5"
-                      style={{ background: sel ? "#20180A" : lucro >= 0 ? C.green : C.red }}
+                      style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
                     />
                   )}
                 </button>
@@ -5025,7 +5405,7 @@ function FinanceiroTab({ pix, deepLink }) {
               className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
               style={{
                 background: salvando || !novo.valor ? C.border : C.amber,
-                color: salvando || !novo.valor ? C.inkFaint : "#20180A",
+                color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
               }}
             >
               <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
@@ -5833,7 +6213,7 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
               onClick={add}
               disabled={rec.salvando || !form.label.trim() || !form.amount}
               className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md w-full justify-center"
-              style={{ background: C.amber, color: "#20180A", fontWeight: 600 }}
+              style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
             >
               <Plus size={13} /> Adicionar
             </button>
@@ -6149,7 +6529,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
             onClick={add}
             disabled={!novo.valor}
             className="btn-press flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-md"
-            style={{ background: C.amber, color: "#20180A", fontWeight: 600 }}
+            style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
           >
             <Plus size={13} /> Lançar
           </button>
@@ -6518,7 +6898,7 @@ function OperacaoTab() {
                       })
                     }
                     className="btn-press mt-2 text-xs px-3 py-1.5 rounded-md"
-                    style={{ background: C.amber, color: "#20180A" }}
+                    style={{ background: C.amber, color: C.onBrand }}
                   >
                     Salvar
                   </button>
@@ -6582,7 +6962,7 @@ function OperacaoTab() {
               className="btn-press text-xs px-3 py-1.5 rounded-full"
               style={{
                 background: periodo === p ? C.amber : C.panel2,
-                color: periodo === p ? "#20180A" : C.inkSoft,
+                color: periodo === p ? C.onBrand : C.inkSoft,
               }}
             >
               {p === "dia" ? "Hoje" : p === "mes" ? "Este mês" : "Este ano"}
@@ -6731,7 +7111,7 @@ function OperacaoTab() {
             className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
             style={{
               background: !reg.km || !veiculoId ? C.border : C.amber,
-              color: !reg.km || !veiculoId ? C.inkFaint : "#20180A",
+              color: !reg.km || !veiculoId ? C.inkFaint : C.onBrand,
             }}
           >
             <Plus size={14} /> Registrar
@@ -6859,7 +7239,7 @@ function OperacaoTab() {
             className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
             style={{
               background: !novaManut.tipo || !veiculoId ? C.border : C.amber,
-              color: !novaManut.tipo || !veiculoId ? C.inkFaint : "#20180A",
+              color: !novaManut.tipo || !veiculoId ? C.inkFaint : C.onBrand,
             }}
           >
             <Plus size={14} /> Registrar manutenção
@@ -6921,6 +7301,99 @@ function OperacaoTab() {
 }
 
 /* ============================= 7. DASHBOARD ============================= */
+function HeroChip({ label, valor, moeda, Icon }) {
+  const n = useCountUp(valor, 1100);
+  const txt = moeda ? fmtBRL(n) : Math.round(n).toLocaleString("pt-BR");
+  return (
+    <div
+      className="flex items-center gap-2 rounded-xl px-3 py-2"
+      style={{ background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.08)" }}
+    >
+      <Icon size={15} style={{ color: "#fff" }} />
+      <span className="text-[11px]" style={{ color: "rgba(255,255,255,.7)" }}>
+        {label}
+      </span>
+      <span
+        className="text-sm font-bold"
+        style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+      >
+        {txt}
+      </span>
+    </div>
+  );
+}
+
+function primeiroNome(profile) {
+  const raw = (profile?.name || "").trim();
+  if (!raw) return "equipe";
+  const base = raw.includes("@") ? raw.split("@")[0].replace(/[._-]+/g, " ") : raw;
+  const p = base.split(/\s+/)[0];
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
+
+function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
+  const { profile } = useAuth();
+  const nome = primeiroNome(profile);
+  const h = new Date().getHours();
+  const saud = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  return (
+    <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
+      <div
+        className="relative rounded-2xl border overflow-hidden"
+        style={{ borderColor: C.brandDim, minHeight: 236 }}
+      >
+        <HeroBusScene />
+        <div className="relative p-5 md:p-7 max-w-2xl">
+          <h1
+            className="hero-t hero-t-1"
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontWeight: 700,
+              fontSize: "1.7rem",
+              color: "#fff",
+              letterSpacing: "-0.015em",
+              textShadow: "0 2px 12px rgba(0,0,0,.5)",
+            }}
+          >
+            {saud}, {nome}!
+          </h1>
+          <p
+            className="hero-t hero-t-2 text-sm mt-1"
+            style={{ color: "rgba(255,255,255,.82)" }}
+          >
+            Aqui está o resumo da operação de hoje.
+          </p>
+          <div
+            className="hero-t hero-t-3 mt-2 inline-flex items-center gap-2 text-xs font-semibold"
+            style={{ color: "#fff", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}
+          >
+            <span className="aritur-road" style={{ width: 22 }} />
+            Juntos, seguimos mais longe.
+          </div>
+          <div className="hero-t hero-t-4 mt-4 flex flex-wrap gap-2.5 items-center">
+            <div
+              className="flex items-center gap-2 rounded-xl px-3 py-2"
+              style={{ background: "rgba(0,0,0,.4)", border: "1px solid rgba(255,255,255,.1)" }}
+            >
+              <Bus size={15} style={{ color: C.brand }} />
+              <span className="text-xs font-semibold" style={{ color: "#fff" }}>
+                São Luís → Pirapemas
+              </span>
+              <span className="text-[10px]" style={{ color: "rgba(255,255,255,.6)" }}>
+                viagens todos os dias
+              </span>
+            </div>
+            <HeroChip label="Passageiros" valor={passageiros} Icon={Users} />
+            <HeroChip label="Vagas" valor={vagas} Icon={Bus} />
+            <HeroChip label="Faturamento" valor={faturamento} moeda Icon={Wallet} />
+            <HeroChip label="Pendências" valor={pendencias} Icon={AlertTriangle} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardTab({ reservas, capacidade, trips }) {
   const hoje = todayStr();
   // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
@@ -7009,9 +7482,18 @@ function DashboardTab({ reservas, capacidade, trips }) {
     }
     return dias;
   }, [financeiro, reservas]);
+  const pendentesHoje = reservas.filter(
+    (r) => r.data === hoje && (r.status === "pendente" || r.status === "espera"),
+  ).length;
+  const vagasHoje = Math.max(0, capacidade * 2 - passageirosHoje);
   return (
     <div>
-      <Header title="Dashboard" subtitle={`Visão geral — hoje, ${fmtDate(hoje)}.`} />
+      <DashboardHero
+        passageiros={passageirosHoje}
+        vagas={vagasHoje}
+        faturamento={receitaHoje}
+        pendencias={pendentesHoje}
+      />
       <div className="px-6 md:px-10 pb-10 space-y-5">
         <Card className="anim-fadeUp" style={{ borderColor: C.purple }}>
           <div className="flex items-center gap-2 mb-3">
@@ -7075,7 +7557,7 @@ function DashboardTab({ reservas, capacidade, trips }) {
             Média de passageiros confirmados por dia da semana, com base no histórico de reservas.
           </div>
         </Card>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger">
           <StatCard label="Passageiros hoje" value={passageirosHoje} icon={Users} />
           <StatCard
             label="Faturamento hoje"
@@ -7335,7 +7817,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
                 <button
                   onClick={() => addPontoOutro(dir)}
                   className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0"
-                  style={{ background: C.amber, color: "#20180A" }}
+                  style={{ background: C.amber, color: C.onBrand }}
                 >
                   Adicionar
                 </button>
@@ -7401,7 +7883,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
               onClick={rodarDiagnostico}
               disabled={rodando}
               className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: C.amber, color: "#20180A" }}
+              style={{ background: C.amber, color: C.onBrand }}
             >
               <RefreshCw size={12} className={rodando ? "animate-spin" : ""} />{" "}
               {rodando ? "Verificando…" : "Rodar diagnóstico agora"}
