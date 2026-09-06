@@ -2457,10 +2457,53 @@ function ReservarTab({
 
   return (
     <div>
-      <Header
-        title="Atendimento automático — WhatsApp"
-        subtitle="Roteiro conduzido pela IA; horários, pontos e valores vêm da configuração em Sistema."
-      />
+      <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-5 md:p-6"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 240, right: -24, bottom: -22 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative max-w-xl">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: "rgba(0,0,0,.35)" }}
+              >
+                <MessageCircle size={16} style={{ color: "#fff" }} />
+              </span>
+              <span
+                className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                style={{
+                  background: modoAtendimento === "ia" ? "rgba(52,199,123,.22)" : "rgba(232,163,61,.22)",
+                  color: modoAtendimento === "ia" ? "#8ff0bd" : "#ffd79a",
+                }}
+              >
+                {modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}
+              </span>
+            </div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontWeight: 700,
+                fontSize: "1.5rem",
+                color: "#fff",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Atendimento automático
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,.8)" }}>
+              Roteiro conduzido pela IA — horários, pontos e valores vêm da configuração em Sistema.
+            </p>
+            <div className="aritur-road mt-3" style={{ width: 64 }} />
+          </div>
+        </div>
+      </div>
       <div className="px-6 md:px-10 pb-10 grid lg:grid-cols-[1fr_320px] gap-6">
         <Card style={{ maxWidth: 600 }}>
           {modoAtendimento === "manual" && step < 7 && (
@@ -7981,17 +8024,47 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
 
   return (
     <div>
-      <Header
-        title="Sistema"
-        subtitle="Fluxo, valores, modo de atendimento, backup e correção automática."
-        right={
-          cfg.saving ? (
-            <span className="text-xs" style={{ color: C.inkFaint }}>
+      <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex items-center justify-between gap-3"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 190, right: -16, bottom: -16 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative flex items-center gap-3">
+            <span
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "rgba(0,0,0,.35)" }}
+            >
+              <ShieldCheck size={19} style={{ color: "#fff" }} />
+            </span>
+            <div>
+              <h1
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1.3rem",
+                  color: "#fff",
+                }}
+              >
+                Sistema
+              </h1>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,.78)" }}>
+                Fluxo, valores, atendimento, backup e correções automáticas.
+              </p>
+            </div>
+          </div>
+          {cfg.saving && (
+            <span className="relative text-xs" style={{ color: "rgba(255,255,255,.8)" }}>
               salvando…
             </span>
-          ) : null
-        }
-      />
+          )}
+        </div>
+      </div>
       <div className="px-6 md:px-10 pb-10 space-y-5">
         {erro && (
           <div
