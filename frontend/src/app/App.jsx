@@ -1270,6 +1270,41 @@ function MiniStat({ label, value, cor }) {
     </div>
   );
 }
+// Barra de ocupação: enche com animação (bar-grow) e fica vermelha quando
+// lotada. Usada nos cards de viagem da Agenda e no hero do dia.
+function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true }) {
+  const pct = total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
+  const cor = pct >= 100 ? C.red : pct >= 85 ? C.warn : pct >= 40 ? C.brand : C.inkSoft;
+  return (
+    <div>
+      {mostrarTexto && (
+        <div className="flex items-center justify-between text-[11px] mb-1">
+          <span style={{ color: C.inkSoft }}>
+            {ocupados} / {total} passageiros
+          </span>
+          <span className="font-bold" style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}>
+            {pct}%
+          </span>
+        </div>
+      )}
+      <div
+        className="rounded-full overflow-hidden"
+        style={{ height: altura, background: C.panel2 }}
+      >
+        <div
+          className="bar-fill bar-grow h-full rounded-full"
+          style={{
+            width: `${pct}%`,
+            background:
+              pct >= 40 ? `linear-gradient(90deg, ${C.brandDim}, ${cor})` : cor,
+            boxShadow: pct > 0 ? `0 0 12px -3px ${cor}` : "none",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label className="block text-xs mb-1" style={{ color: C.inkSoft }}>
@@ -3142,6 +3177,9 @@ function AgendaTab({
   const doDia = reservas.filter((r) => r.data === data && !["frete", "encomenda"].includes(r.tipo));
   const pendentesDoDia = doDia.filter((r) => r.status === "pendente");
   const esperaDoDia = doDia.filter((r) => r.status === "espera");
+  const ocupadosDia = doDia
+    .filter((r) => OCUPA_VAGA.includes(r.status))
+    .reduce((s, r) => s + r.quantidade, 0);
   const fretesPendentes = reservas.filter((r) => r.tipo === "frete" && r.status === "pendente");
   const encomendasPendentes = reservas.filter(
     (r) => r.tipo === "encomenda" && r.status === "pendente",
@@ -3242,9 +3280,50 @@ function AgendaTab({
         }
       />
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
-        <div className="text-xs" style={{ color: C.inkFaint }}>
-          {data === todayStr() ? "Hoje" : fmtDate(data)} — {fmtDate(data)} ·{" "}
-          <span className="capitalize">{diaSemana(data)}</span>
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 220, right: -20, bottom: -18 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
+            <div>
+              <div
+                className="capitalize"
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1.35rem",
+                  color: "#fff",
+                }}
+              >
+                {data === todayStr() ? "Hoje" : diaSemana(data)}
+              </div>
+              <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
+                {fmtDate(data)} · <span className="capitalize">{diaSemana(data)}</span>
+              </div>
+            </div>
+            <div className="min-w-[180px] flex-1 max-w-xs">
+              <CapacidadeBar ocupados={ocupadosDia} total={capacidade * 2} altura={9} />
+            </div>
+            <div className="flex gap-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                  Pendentes
+                </div>
+                <div
+                  className="font-bold"
+                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.1rem" }}
+                >
+                  {pendentesDoDia.length + esperaDoDia.length}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         {segunda && (
           <div
@@ -3576,18 +3655,29 @@ function ViagemOperacional({
     );
 
   return (
-    <Card>
+    <Card className="relative overflow-hidden">
+      <span
+        className="absolute left-0 top-0 bottom-0"
+        style={{ width: 3, background: direcao === "ida" ? C.brand : C.blue, opacity: 0.85 }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div
-            className="w-11 h-11 rounded-lg flex items-center justify-center"
-            style={{ background: C.blueSoft }}
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: direcao === "ida" ? C.amberSoft : C.blueSoft,
+              border: `1px solid ${direcao === "ida" ? C.brandDim : C.blue}44`,
+            }}
           >
-            <Icon size={18} style={{ color: C.blue }} />
+            <Icon size={18} style={{ color: direcao === "ida" ? C.brand : C.blue }} />
           </div>
           <div>
-            <div className="text-sm font-semibold">
-              🚌 {viagem.nome} — {horaPrincipal}
+            <div
+              className="text-sm font-bold flex items-center gap-1.5"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              <Bus size={14} style={{ color: C.brand }} /> {viagem.nome}
+              <span style={{ color: C.inkSoft, fontWeight: 500 }}>· {horaPrincipal}</span>
             </div>
             <div className="text-xs" style={{ color: C.inkSoft }}>
               {viagem.label}
@@ -3641,15 +3731,15 @@ function ViagemOperacional({
           {viagemConcluida.end_km ? ` · km chegada ${viagemConcluida.end_km}` : ""}
         </div>
       )}
-      <div
-        className="grid grid-cols-3 sm:grid-cols-5 gap-2 rounded-lg px-3 py-3 mb-4"
-        style={{ background: C.panel2 }}
-      >
-        <MiniStat label="Capacidade" value={capacidade} />
-        <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
-        <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
-        <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
-        <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
+      <div className="rounded-xl px-3 py-3 mb-4" style={{ background: C.panel2 }}>
+        <CapacidadeBar ocupados={confirmados} total={capacidade} altura={9} />
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
+          <MiniStat label="Capacidade" value={capacidade} />
+          <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
+          <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
+          <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
+          <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
+        </div>
       </div>
       <div className="space-y-3">
         {pontosOrdenados.map((p) => {
