@@ -5281,6 +5281,9 @@ function FinanceiroTab({ pix, deepLink }) {
 
   const fin = useFinanceMonth(ano, mes + 1);
   const financeiro = useMemo(() => (fin.entries || []).map(mapEntry), [fin.entries]);
+  const receitaMes = somaTipo(financeiro, "receita");
+  const despesaMes = somaTipo(financeiro, "despesa");
+  const resultadoMes = receitaMes - despesaMes;
 
   const run = async (fn) => {
     setErro("");
@@ -5393,27 +5396,77 @@ function FinanceiroTab({ pix, deepLink }) {
       </div>
       {subview === "contas_receber" && <ContasReceberView pix={pix} />}
       {subview === "lancamentos" && (
-      <div className="px-6 md:px-10 pb-10 grid lg:grid-cols-[340px_1fr] gap-6">
-        <Card className="anim-fadeUp">
-          <div className="flex items-center justify-between mb-3">
+      <div className="px-6 md:px-10 pb-10 space-y-5">
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 190, right: -14, bottom: -14 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
-              className="btn-press p-1 rounded"
-              style={{ color: C.inkSoft }}
+              className="btn-press p-1.5 rounded-lg"
+              style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="text-sm font-semibold capitalize">
-              {mesRef.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+            <div
+              className="capitalize text-center min-w-[130px]"
+              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.15rem", color: "#fff" }}
+            >
+              {MESES_PT[mes]} <span style={{ fontWeight: 400, opacity: 0.7 }}>{ano}</span>
             </div>
             <button
+              type="button"
               onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
-              className="btn-press p-1 rounded"
-              style={{ color: C.inkSoft }}
+              className="btn-press p-1.5 rounded-lg"
+              style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
             >
               <ChevronRight size={16} />
             </button>
           </div>
+          <div className="relative flex flex-wrap gap-5">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                Receitas
+              </div>
+              <div style={{ color: C.green, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+                {fmtBRL(receitaMes)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                Despesas
+              </div>
+              <div style={{ color: "#ffb0ac", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+                {fmtBRL(despesaMes)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                Resultado do mês
+              </div>
+              <div
+                style={{
+                  color: "#fff",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 800,
+                  fontSize: "1.1rem",
+                }}
+              >
+                {fmtBRL(resultadoMes)}
+              </div>
+            </div>
+          </div>
+        </div>
+      <div className="grid lg:grid-cols-[340px_1fr] gap-6">
+        <Card className="anim-fadeUp">
           <div
             className="grid grid-cols-7 gap-1 text-center text-[10px] mb-1"
             style={{ color: C.inkFaint }}
@@ -5452,7 +5505,7 @@ function FinanceiroTab({ pix, deepLink }) {
           </div>
         </Card>
         <div className="space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <StatCard
               label={`Faturamento ${fmtDate(diaSel)}`}
               value={fmtBRL(receitaDia)}
@@ -5469,7 +5522,7 @@ function FinanceiroTab({ pix, deepLink }) {
               label="Combustível + manut."
               value={fmtBRL(despesaAutoDia)}
               icon={Fuel}
-              accent={C.amber}
+              accent={C.warn}
             />
             <StatCard
               label="Lucro do dia"
@@ -5696,6 +5749,7 @@ function FinanceiroTab({ pix, deepLink }) {
             </table>
           </Card>
         </div>
+      </div>
       </div>
       )}
     </div>
