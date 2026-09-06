@@ -5073,12 +5073,60 @@ function PassageirosTab({ reservas, trips, deepLink }) {
             </button>
           </div>
         )}
-        <TextInput
-          placeholder="Buscar por nome ou telefone…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="max-w-sm mb-4"
-        />
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-4 flex flex-wrap items-center justify-between gap-4"
+          style={{ borderColor: C.brandDim }}
+        >
+          <BusSilhueta
+            className="absolute pointer-events-none hidden sm:block"
+            style={{ width: 180, right: -12, bottom: -14 }}
+            color="#000"
+            opacity={0.16}
+          />
+          <div className="relative">
+            <div
+              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.2rem", color: "#fff" }}
+            >
+              {passageiros.length} {passageiros.length === 1 ? "passageiro" : "passageiros"}
+            </div>
+            <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
+              na janela de reservas · ordenados por valor gerado
+            </div>
+          </div>
+          <div className="relative flex gap-5">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                Valor gerado
+              </div>
+              <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+                {fmtBRL(passageiros.reduce((s, p) => s + p.totalGasto, 0))}
+              </div>
+            </div>
+            {passageiros[0] && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                  Maior cliente
+                </div>
+                <div className="text-sm font-semibold truncate max-w-[140px]" style={{ color: "#fff" }}>
+                  {passageiros[0].nome}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="relative max-w-sm mb-4">
+          <Search
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: C.inkFaint }}
+          />
+          <TextInput
+            placeholder="Buscar por nome ou telefone…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            style={{ paddingLeft: 34 }}
+          />
+        </div>
         <div className="space-y-2 stagger">
           {filtrados.length === 0 && (
             <Card>
@@ -5092,20 +5140,38 @@ function PassageirosTab({ reservas, trips, deepLink }) {
             return (
               <Card key={i} className="anim-fadeUp">
                 <button
-                  className="w-full flex items-center justify-between text-left"
+                  className="w-full flex items-center justify-between text-left gap-3"
                   onClick={() => setAberto(abertoAqui ? null : p.customer_id)}
                 >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {p.nome}{" "}
-                      <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
-                        · {p.telefone}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      style={{
+                        background: C.amberSoft,
+                        color: C.brand,
+                        fontFamily: "'Space Grotesk', sans-serif",
+                        border: `1px solid ${C.brandDim}55`,
+                      }}
+                    >
+                      {(p.nome || "?")
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((w) => w[0])
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium truncate">
+                        {p.nome}{" "}
+                        <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
+                          · {p.telefone}
+                        </span>
                       </span>
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
-                      {p.ultimoTrajeto ? trips[p.ultimoTrajeto.direcao]?.label : "—"} ·{" "}
-                      {fmtBRL(p.totalGasto)} gerados
-                    </div>
+                      <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
+                        {p.ultimoTrajeto ? trips[p.ultimoTrajeto.direcao]?.label : "—"} ·{" "}
+                        <b style={{ color: C.brand }}>{fmtBRL(p.totalGasto)}</b> gerados
+                      </span>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {p.viagensCount >= 5 ? (
@@ -7047,6 +7113,37 @@ function OperacaoTab() {
             )}
           </div>
         )}
+        {defaultVehicle && (
+          <div
+            className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
+            style={{ borderColor: C.brandDim }}
+          >
+            <BusSilhueta
+              className="absolute pointer-events-none hidden sm:block"
+              style={{ width: 200, right: -14, bottom: -16 }}
+              color="#000"
+              opacity={0.18}
+            />
+            <div className="relative flex items-center gap-3">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(0,0,0,.35)" }}
+              >
+                <Bus size={20} style={{ color: "#fff" }} />
+              </div>
+              <div>
+                <div
+                  style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.15rem", color: "#fff" }}
+                >
+                  {defaultVehicle.name}
+                </div>
+                <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
+                  {defaultVehicle.plate} · {defaultVehicle.capacity} lugares · veículo padrão
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <Card className="anim-fadeUp">
           <div className="text-sm font-semibold mb-3">Veículo em operação</div>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -7141,25 +7238,21 @@ function OperacaoTab() {
           </div>
         </Card>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs" style={{ color: C.inkSoft }}>
             Ver totais por:
           </span>
-          {["dia", "mes", "ano"].map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriodo(p)}
-              className="btn-press text-xs px-3 py-1.5 rounded-full"
-              style={{
-                background: periodo === p ? C.amber : C.panel2,
-                color: periodo === p ? C.onBrand : C.inkSoft,
-              }}
-            >
-              {p === "dia" ? "Hoje" : p === "mes" ? "Este mês" : "Este ano"}
-            </button>
-          ))}
+          <SubTabs
+            value={periodo}
+            onChange={setPeriodo}
+            options={[
+              { id: "dia", label: "Hoje" },
+              { id: "mes", label: "Este mês" },
+              { id: "ano", label: "Este ano" },
+            ]}
+          />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
           <StatCard
             label={`Km (${periodo})`}
             value={totalKm.toLocaleString("pt-BR")}
@@ -7169,7 +7262,7 @@ function OperacaoTab() {
             label="Combustível"
             value={fmtBRL(totalCombustivel)}
             icon={Fuel}
-            accent={C.amber}
+            accent={C.warn}
           />
           <StatCard
             label="Manutenção"
