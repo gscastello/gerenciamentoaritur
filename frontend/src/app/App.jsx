@@ -8522,6 +8522,104 @@ const DIAG_KIND_LABEL = {
   pagamento_ausente: "Passagem confirmada há +1 dia sem registro de pagamento",
 };
 
+// Cidades da rota (issue #6): atendidas (São Luís/Cantanhede/Pirapemas) e
+// intermediárias (onde não paramos → reserva pendente). settings.served_cities
+// / settings.intermediate_cities. (definição estava faltando no PR #83)
+function ListaChips({ titulo, ajuda, itens, onSalvar, salvando }) {
+  const [novo, setNovo] = useState("");
+  const norm = (s) => normalizar(s);
+  const add = () => {
+    const v = norm(novo);
+    if (v && !itens.includes(v)) onSalvar([...itens, v]);
+    setNovo("");
+  };
+  const remove = (c) => onSalvar(itens.filter((x) => x !== c));
+  return (
+    <div>
+      <div className="text-xs font-semibold mb-1" style={{ color: C.inkSoft }}>
+        {titulo}
+      </div>
+      <div className="text-[11px] mb-2" style={{ color: C.inkFaint }}>
+        {ajuda}
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {itens.map((c) => (
+          <span
+            key={c}
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full capitalize"
+            style={{ background: C.panel2, color: C.inkSoft }}
+          >
+            {c}
+            <button type="button" onClick={() => remove(c)} disabled={salvando} aria-label={`remover ${c}`}>
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        {itens.length === 0 && (
+          <span className="text-xs" style={{ color: C.inkFaint }}>
+            (vazio)
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <TextInput
+          value={novo}
+          onChange={(e) => setNovo(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Adicionar cidade…"
+          className="w-48"
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!norm(novo) || salvando}
+          className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
+          style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+        >
+          <Plus size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SistemaCidades() {
+  const s = useSettings();
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <Route size={16} style={{ color: C.amber }} /> Cidades da rota
+      </div>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
+        No fluxo de reserva, embarque/desembarque que menciona uma cidade{" "}
+        <b>intermediária</b> faz a reserva nascer <b>pendente</b> (não ocupa vaga, a equipe confirma).
+        As <b>atendidas</b> são a rota normal. O bot do WhatsApp usa as mesmas listas.
+      </p>
+      {s.error && (
+        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+          {s.error?.message || "Erro ao carregar as configurações."}
+        </div>
+      )}
+      <div className="grid sm:grid-cols-2 gap-6">
+        <ListaChips
+          titulo="Cidades atendidas"
+          ajuda="A rota para nessas cidades."
+          itens={s.servedCities}
+          onSalvar={s.setServedCities}
+          salvando={s.saving}
+        />
+        <ListaChips
+          titulo="Cidades intermediárias"
+          ajuda="No caminho, mas não paramos — vira reserva pendente."
+          itens={s.intermediateCities}
+          onSalvar={s.setIntermediateCities}
+          salvando={s.saving}
+        />
+      </div>
+    </Card>
+  );
+}
+
 // Preço de "Buscar em Casa" por bairro — tabela neighborhood_pricing,
 // editável (database/23-precos-bairro-editaveis.sql).
 function SistemaBairros() {

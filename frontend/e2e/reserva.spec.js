@@ -13,6 +13,29 @@ test("app passa da tela de login e mostra a navegação por papel", async ({ pag
   await expect(page.getByRole("button", { name: /^Sistema$/ })).toHaveCount(0);
 });
 
+// Regressão: a aba Sistema (só admin) precisa abrir sem quebrar. O PR #83
+// referenciou <SistemaCidades /> sem a definição do componente e nenhum
+// teste abria a aba como admin — o app quebrava só em produção.
+test("admin abre a aba Sistema e as telas de configuração renderizam", async ({ page }) => {
+  await mockSupabase(page, { role: "admin" });
+  await page.goto("/");
+
+  // espera o app sair do login e montar a navegação
+  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+
+  // no mobile a barra inferior só mostra 4 itens + "Mais"; no desktop a
+  // sidebar mostra tudo
+  const sistema = page.getByRole("button", { name: /^Sistema$/ });
+  if ((await sistema.count()) === 0) {
+    await page.getByRole("button", { name: "Mais" }).click();
+  }
+  await sistema.click();
+
+  await expect(page.getByText("Cidades da rota")).toBeVisible();
+  await expect(page.getByText("Cidades atendidas")).toBeVisible();
+  await expect(page.getByText("Cidades intermediárias")).toBeVisible();
+});
+
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {
   await mockSupabase(page, { role: "atendente", occupancy: {} });
   await page.goto("/");
