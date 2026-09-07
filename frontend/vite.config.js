@@ -37,11 +37,12 @@ export default defineConfig({
       // hooks/auth são I/O — cobertos por integração/e2e (issue #4).
       include: ["src/domain/**/*.js"],
       exclude: ["src/**/*.{test,spec}.{js,jsx}", "src/**/__tests__/**", "src/domain/index.js"],
+      // issue #4: apertado depois da leva de testes do motor de regras.
       thresholds: {
-        statements: 90,
-        branches: 85,
-        functions: 90,
-        lines: 90,
+        statements: 97,
+        branches: 92,
+        functions: 100,
+        lines: 97,
       },
     },
   },

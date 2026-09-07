@@ -55,4 +55,46 @@ describe("runDiagnostics", () => {
     const { issues } = runDiagnostics(reservas, 31, TRIPS);
     expect(issues.some((i) => i.includes("overbooking"))).toBe(false);
   });
+
+  it("autocorrige quantidade NaN e quantidade ausente para 1", () => {
+    const { corrigidas, fixed } = runDiagnostics(
+      [r({ quantidade: Number.NaN }), r({ quantidade: undefined })],
+      31,
+      TRIPS,
+    );
+    expect(corrigidas.map((x) => x.quantidade)).toEqual([1, 1]);
+    expect(fixed).toHaveLength(2);
+    expect(fixed[0]).toMatch(/quantidade inválida/i);
+  });
+
+  it("não mexe em quantidade válida", () => {
+    const { corrigidas, fixed } = runDiagnostics([r({ quantidade: 3 })], 31, TRIPS);
+    expect(corrigidas[0].quantidade).toBe(3);
+    expect(fixed).toHaveLength(0);
+  });
+
+  it("reporta direção inválida", () => {
+    const { issues } = runDiagnostics([r({ direcao: "diagonal" })], 31, TRIPS);
+    expect(issues.some((i) => i.includes("direção inválida"))).toBe(true);
+  });
+
+  it("telefone null também é reportado como sem telefone", () => {
+    const { issues } = runDiagnostics([r({ telefone: null })], 31, TRIPS);
+    expect(issues.some((i) => i.includes("sem telefone"))).toBe(true);
+  });
+
+  it("viagem sem problema nenhum não gera issue nem fix", () => {
+    const { issues, fixed } = runDiagnostics([r(), r({ pontoId: "br" })], 31, TRIPS);
+    expect(issues).toHaveLength(0);
+    expect(fixed).toHaveLength(0);
+  });
+
+  it("acumula vários problemas distintos numa passada só", () => {
+    const { issues } = runDiagnostics(
+      [r({ telefone: "" }), r({ pontoId: "fantasma" }), r({ id: "z" }), r({ id: "z" })],
+      31,
+      TRIPS,
+    );
+    expect(issues.length).toBeGreaterThanOrEqual(3);
+  });
 });
