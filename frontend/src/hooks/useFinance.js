@@ -58,6 +58,7 @@ export function useContasReceber() {
       return r;
     },
     registrando: ajuste.loading,
+    verComprovante: (path) => financeService.comprovanteUrl(path),
   };
 }
 

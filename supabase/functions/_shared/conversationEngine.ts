@@ -21,6 +21,7 @@ type IncomingMessage = {
   waMessageId: string;
   text?: string;
   interactiveId?: string;
+  media?: { mediaId: string; mimeType?: string; caption?: string; kind: "image" | "document" };
   raw: unknown;
 };
 
@@ -43,9 +44,16 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
 
   await whatsappService.logMessage(conversation.id, "inbound", {
     waMessageId: msg.waMessageId,
-    type: msg.interactiveId ? "interactive" : "text",
+    type: msg.media ? msg.media.kind : msg.interactiveId ? "interactive" : "text",
     content: msg.raw,
   });
+
+  // Comprovante Pix (imagem/documento) — issue #8. Arquiva a mídia e liga
+  // ao pagamento pendente, em QUALQUER modo (não é a IA decidindo nada).
+  if (msg.media) {
+    await handleProofUpload(conversation, msg);
+    return;
+  }
 
   const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
   if (mode !== "ia") return; // HUMANO: só loga, equipe responde direto pelo WhatsApp Business
@@ -232,6 +240,32 @@ async function finalizeReservation(conversation: any, state: any, to: string) {
 
 async function sendText(conversationId: string, to: string, text: string) {
   await whatsappService.reply(conversationId, to, () => whatsappClient.sendText(to, text), { type: "text", content: { text } });
+}
+
+/** Comprovante Pix recebido como mídia (issue #8). */
+async function handleProofUpload(conversation: any, msg: IncomingMessage) {
+  const to = msg.from;
+  try {
+    const result = await whatsappService.receivePaymentProof(to, {
+      mediaId: msg.media!.mediaId,
+      mimeType: msg.media!.mimeType,
+      caption: msg.media!.caption,
+      waMessageId: msg.waMessageId,
+    });
+    if (result.matched) {
+      await sendText(conversation.id, to,
+        "Comprovante recebido! 🧾 Nossa equipe confere o pagamento e confirma a sua reserva por aqui. Obrigado!");
+    } else {
+      await whatsappService.transferToHuman(conversation.id, "Comprovante recebido sem reserva Pix pendente para associar.");
+      await sendText(conversation.id, to,
+        "Recebi seu comprovante, mas não achei uma reserva com Pix pendente no seu número. Já pedi para um atendente conferir. 🙏");
+    }
+  } catch (err) {
+    console.error("Erro ao processar comprovante:", err);
+    await whatsappService.transferToHuman(conversation.id, `Falha ao processar comprovante: ${String(err)}`);
+    await sendText(conversation.id, to,
+      "Recebi seu comprovante, mas tive um problema para registrar. Um atendente vai conferir manualmente. 🙏");
+  }
 }
 
 async function sendMenu(conversationId: string, to: string) {
