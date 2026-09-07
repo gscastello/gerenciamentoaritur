@@ -47,6 +47,7 @@ const SETTINGS = [
   { key: "monday_adjustment", value: { active: true, hours: 1 } },
   { key: "pix", value: { key: "98981012388", name: "A O Castelo Transporte e Turismo" } },
   { key: "served_cities", value: ["sao luis", "cantanhede", "pirapemas"] },
+  { key: "intermediate_cities", value: ["bacabeira", "santa rita"] },
 ];
 
 function json(body, status = 200) {

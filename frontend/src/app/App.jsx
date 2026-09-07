@@ -2195,6 +2195,7 @@ function AppInner() {
                 segundaAtiva={cfg.segundaAtiva}
                 segundaHoras={cfg.segundaHoras}
                 pix={cfgSettings.pix}
+                cidadesIntermediarias={cfgSettings.intermediateCities}
               />
             )}
             {tab === "agenda" && (
@@ -2274,6 +2275,7 @@ function ReservarTab({
   segundaAtiva,
   segundaHoras,
   pix,
+  cidadesIntermediarias,
 }) {
   // Chave Pix: vem de settings.pix (aba Sistema); cai no valor fixo se a
   // config ainda não foi preenchida.
@@ -2326,8 +2328,11 @@ function ReservarTab({
     rua: form.rua,
     desembarque: form.desembarqueDetalhe,
   };
+  const optCidades = cidadesIntermediarias?.length
+    ? { intermediarias: cidadesIntermediarias }
+    : undefined;
   const pendente =
-    ponto?.id === "outro" || foraDaAreaPadrao(Object.values(camposTexto));
+    ponto?.id === "outro" || foraDaAreaPadrao(Object.values(camposTexto), optCidades);
   const camposFaltando = () => {
     if (!form.nome || !form.telefone || !form.desembarqueArea || !form.quantidade || excedeVagas)
       return true;
@@ -8810,6 +8815,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
             </button>
           </div>
         )}
+        <SistemaCidades />
+
         <Card className="anim-fadeUp">
           <div className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Settings2 size={16} style={{ color: C.amber }} /> Fluxo de agendamento e valores
