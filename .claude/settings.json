@@ -1,0 +1,9 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/merge-pr.sh:*)",
+      "Bash(./scripts/merge-pr.sh:*)"
+    ]
+  }
+}
