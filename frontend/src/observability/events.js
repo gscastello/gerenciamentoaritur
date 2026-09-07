@@ -16,6 +16,7 @@ export const EVENTS = {
   VIAGEM_INICIADA: "viagem.iniciada",
   VIAGEM_FINALIZADA: "viagem.finalizada",
   RELATORIO_FINANCEIRO_EXPORTADO: "relatorio.financeiro.exportado",
+  DIAGNOSTICO_EXECUTADO: "diagnostico.executado",
 };
 
 /** Registra um evento de negócio pontual (sem duração). */

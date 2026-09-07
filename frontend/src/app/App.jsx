@@ -61,6 +61,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } fr
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useBackup } from "../hooks/useBackup.js";
 import { useCustomers } from "../hooks/useCustomers.js";
+import { useDiagnostics } from "../hooks/useDiagnostics.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
@@ -8131,6 +8132,15 @@ function DashboardTab({ reservas, capacidade, trips }) {
 }
 
 /* ============================= 8. SISTEMA ============================= */
+const DIAG_KIND_LABEL = {
+  overbooking: "Overbooking (passageiros acima da capacidade)",
+  ponto_invalido: "Ponto de embarque removido ou não informado",
+  sem_telefone: "Reserva ativa sem telefone de contato",
+  quantidade_dessincronizada: "Quantidade fora de sincronia com os passageiros",
+  sem_viagem: "Passagem confirmada sem viagem associada",
+  pagamento_ausente: "Passagem confirmada há +1 dia sem registro de pagamento",
+};
+
 function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
@@ -8146,6 +8156,26 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
       setDiag({ issues, fixed, quando: new Date().toLocaleString("pt-BR") });
       setRodando(false);
     }, 400);
+  };
+  // Diagnóstico no servidor (issue #9) — mesmas checagens do
+  // domain/diagnostics.js, mas no banco: roda de 6/6h por pg_cron e também
+  // sob demanda aqui. Só reporta/alerta (a sincronia de quantity já é
+  // garantida pela trigger trg_sync_quantity).
+  const serverDiag = useDiagnostics();
+  const [diagServidor, setDiagServidor] = useState(null);
+  const rodarDiagnosticoServidor = async () => {
+    setErro("");
+    try {
+      const resumo = await serverDiag.rodar();
+      setDiagServidor({ ...resumo, quando: new Date().toLocaleString("pt-BR") });
+      emit(EVENTS.DIAGNOSTICO_EXECUTADO, {
+        origem: "sistema_tab",
+        novos_alertas: resumo.novos_alertas,
+        por_tipo: resumo.por_tipo,
+      });
+    } catch (e) {
+      setErro(e?.message || "Não foi possível rodar o diagnóstico no servidor.");
+    }
   };
   // Backup completo — gerado pelo servidor (database/17-backup-completo.sql),
   // nunca a partir do que já está carregado na tela. Um cron diário também
@@ -8461,6 +8491,49 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
               ))}
             </div>
           )}
+
+          <div className="mt-4 pt-3 border-t" style={{ borderColor: C.borderSoft }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>
+                Job no servidor
+              </div>
+              <button
+                type="button"
+                onClick={rodarDiagnosticoServidor}
+                disabled={serverDiag.rodando}
+                className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <RefreshCw size={12} className={serverDiag.rodando ? "animate-spin" : ""} />{" "}
+                {serverDiag.rodando ? "Rodando…" : "Rodar no servidor agora"}
+              </button>
+            </div>
+            <p className="text-xs mb-2" style={{ color: C.inkFaint }}>
+              Roda sozinho de 6 em 6h. Overbooking, ponto removido, telefone ausente, reserva sem
+              viagem e pagamento em aberto viram alerta interno (sem duplicar nas 24h).
+            </p>
+            {diagServidor && (
+              <div className="anim-slideDown text-xs mb-2" style={{ color: C.inkSoft }}>
+                Última execução: {diagServidor.quando} — {diagServidor.novos_alertas} novo(s) alerta(s).
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {serverDiag.achados.length === 0 && !serverDiag.loading && (
+                <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}>
+                  <Check size={13} /> Servidor não encontrou pendências.
+                </div>
+              )}
+              {serverDiag.achados.map((a, i) => (
+                <div
+                  key={`${a.kind}-${a.reservation_id ?? a.trip_id ?? i}`}
+                  className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5"
+                  style={{ background: C.warnSoft, color: C.warn }}
+                >
+                  <AlertTriangle size={12} /> {DIAG_KIND_LABEL[a.kind] || a.kind}
+                </div>
+              ))}
+            </div>
+          </div>
         </Card>
 
         <Card>
