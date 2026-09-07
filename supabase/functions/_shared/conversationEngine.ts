@@ -211,14 +211,31 @@ async function advanceReservationFlow(conversation: any, state: any, to: string)
 
 async function finalizeReservation(conversation: any, state: any, to: string) {
   try {
+    // issue #6: embarque/desembarque menciona cidade fora de São Luís /
+    // Cantanhede / Pirapemas? A reserva nasce pendente (não ocupa vaga) e a
+    // equipe é avisada; o ponto de embarque "outro" também cai aqui.
+    const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([
+      state.dropoffLocation, state.pickupDetail, state.pickupNeighborhood,
+    ]);
+    const fora = !!cidadeFora || state.routePointCode === "outro";
+    const pendingReason = fora
+      ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
+      : null;
+
     const result = await whatsappService.createReservation(conversation.id, {
       tripDate: state.tripDate, direction: state.direction, customerName: state.customerName, customerPhone: to,
       routePointCode: state.routePointCode, quantity: state.quantity, unitPrice: state.routePointPrice,
       paymentMethod: state.paymentMethod, pickupNeighborhood: state.pickupNeighborhood ?? null,
       pickupDetail: state.pickupDetail ?? null, dropoffLocation: state.dropoffLocation,
+      status: fora ? "pendente" : "confirmada",
+      pendingReason,
     });
     await whatsappService.updateConversationState(conversation.id, { step: "idle" });
     if (result.status === "pendente") {
+      await whatsappService.enqueueAreaReviewAlert(result.reservation_id, {
+        motivo: pendingReason, cidade: cidadeFora, dropoff: state.dropoffLocation ?? null,
+        pickup_detail: state.pickupDetail ?? null, telefone: to,
+      });
       await sendText(conversation.id, to, "Recebemos sua solicitação! Esse trajeto está fora da nossa área padrão — vamos confirmar a disponibilidade e te avisamos por aqui. 🙏");
     } else {
       let text = `Reserva confirmada! ✅ ${state.quantity}x passagem, R$ ${state.routePointPrice} cada.`;

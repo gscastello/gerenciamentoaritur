@@ -17,5 +17,4 @@ export const STATUS = [
 /** Tipos de reserva que NUNCA contam na lotação (fluxo humano). */
 export const TIPOS_SEM_VAGA = ["frete", "encomenda"];
 
-/** Cidades atendidas na rota padrão. Fora disso => reserva pendente. */
-export const CIDADES_ATENDIDAS = ["sao luis", "cantanhede", "pirapemas"];
+// Cidades da rota: ver domain/cidades.js (issue #6).

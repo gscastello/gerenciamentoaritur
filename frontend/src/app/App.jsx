@@ -72,6 +72,7 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
+import { foraDaAreaPadrao } from "../domain/cidades.js";
 import { montarRelatorioFinanceiro } from "../domain/relatorioFinanceiro.js";
 import {
   abrirRelatorioPDF,
@@ -129,15 +130,6 @@ const C = {
 };
 const PIX_KEY = "98981012388";
 const PIX_NAME = "A O Castelo Transporte e Turismo";
-const CIDADES_INTERMEDIARIAS = [
-  "bacabeira",
-  "santa rita",
-  "entroncamento",
-  "colombo",
-  "miranda",
-  "matões",
-  "matoes",
-];
 
 // A operação é em São Luís (MA) — UTC-3 o ano inteiro (Brasil não observa
 // mais horário de verão desde 2019). "Hoje"/"agora" tem que ser sempre o
@@ -189,11 +181,6 @@ const shiftHour = (hhmm, ativo, horas = 1) => {
   h = (h - horas + 24) % 24;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
-function contemCidadeIntermediaria(texto) {
-  if (!texto) return false;
-  const t = texto.toLowerCase();
-  return CIDADES_INTERMEDIARIAS.some((c) => t.includes(c));
-}
 function normalizar(s) {
   return (s || "")
     .normalize("NFD")
@@ -2293,7 +2280,7 @@ function ReservarTab({
     desembarque: form.desembarqueDetalhe,
   };
   const pendente =
-    ponto?.id === "outro" || Object.values(camposTexto).some(contemCidadeIntermediaria);
+    ponto?.id === "outro" || foraDaAreaPadrao(Object.values(camposTexto));
   const camposFaltando = () => {
     if (!form.nome || !form.telefone || !form.desembarqueArea || !form.quantidade || excedeVagas)
       return true;
