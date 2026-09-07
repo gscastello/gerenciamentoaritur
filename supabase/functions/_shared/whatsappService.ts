@@ -40,6 +40,15 @@ function extensionForMime(mime?: string): string {
   return MIME_EXT[mime.split(";")[0].trim()] ?? "bin";
 }
 
+/** minúsculas + sem acento, para comparar cidade em texto livre (issue #6). */
+function semAcento(s?: string | null): string {
+  return (s ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+}
+
+const CIDADES_INTERMEDIARIAS_FALLBACK = [
+  "bacabeira", "santa rita", "entroncamento", "colombo", "miranda", "matoes",
+];
+
 async function logAiAction(entityTable: string, entityId: string | null, action: string, afterData: unknown) {
   const botId = await getBotUserId();
   await supabaseAdmin.from("audit_logs").insert({
@@ -192,6 +201,36 @@ export const whatsappService = {
 
     await logAiAction("reservations", data.reservation_id, "create", { origem: "whatsapp", ...payload });
     return data;
+  },
+
+  // =====================================================================
+  // 4b) cidades intermediárias (issue #6) — o texto livre de embarque/
+  //     desembarque menciona uma cidade da rota onde não paramos?
+  //     Fonte: settings.intermediate_cities (fallback = lista fixa).
+  // =====================================================================
+  async mencionaCidadeIntermediaria(textos: (string | null | undefined)[]): Promise<string | null> {
+    const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "intermediate_cities").maybeSingle();
+    const lista: string[] = Array.isArray(data?.value) && data.value.length
+      ? (data.value as string[])
+      : CIDADES_INTERMEDIARIAS_FALLBACK;
+    for (const texto of textos) {
+      const t = semAcento(texto);
+      if (!t) continue;
+      const achou = lista.find((c) => t.includes(semAcento(c)));
+      if (achou) return achou;
+    }
+    return null;
+  },
+
+  /** Avisa a equipe (fila interna) que uma reserva ficou pendente por área. */
+  async enqueueAreaReviewAlert(reservationId: string, detail: Record<string, unknown>) {
+    await supabaseAdmin.from("notifications").insert({
+      reservation_id: reservationId,
+      channel: "whatsapp",
+      template_key: "reserva_fora_de_area",
+      payload: detail,
+      status: "pendente",
+    });
   },
 
   // =====================================================================

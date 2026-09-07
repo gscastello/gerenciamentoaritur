@@ -48,6 +48,44 @@ test("Reservar: roteiro do cliente até os dados da reserva", async ({ page }) =
   await expect(page.getByRole("button", { name: "Continuar" })).toBeEnabled();
 });
 
+test("Reservar: desembarque em cidade intermediária → reserva pendente (issue #6)", async ({
+  page,
+}) => {
+  let createBody = null;
+  await mockSupabase(page, {
+    role: "atendente",
+    occupancy: {},
+    createResult: { success: true, reservation_id: "e2e-pend-1", status: "pendente", message: "created" },
+    onCreate: (route) => {
+      createBody = JSON.parse(route.request().postData() || "{}");
+    },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Reservar/ }).first().click();
+
+  await page.locator('input[type="date"]').fill("2026-09-15");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: /Ida ·/ }).click();
+  await page.getByRole("button", { name: /Rodoviária/ }).click();
+
+  await expect(page.getByText("Dados da reserva")).toBeVisible();
+  await page.getByLabel("Onde você vai ficar (desembarque)").selectOption("outro");
+  await page.getByRole("textbox", { name: "Onde você vai ficar *" }).fill("perto do posto em Bacabeira");
+  await page.getByLabel("Nome completo").fill("Cliente E2E");
+  await page.getByLabel("WhatsApp", { exact: true }).fill("98999990000");
+
+  // a UI já avisa que vai ficar pendente
+  await expect(page.getByText(/fora da nossa área padrão|ficará\s+pendente/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Dinheiro" }).click();
+  await page.getByRole("button", { name: "Confirmar reserva" }).click();
+
+  await expect
+    .poll(() => createBody?.p_status, { timeout: 10000 })
+    .toBe("pendente");
+});
+
 test("Reservar: viagem lotada → lista de espera → confirmação (RPC com status espera)", async ({
   page,
 }) => {
