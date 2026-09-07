@@ -71,13 +71,19 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
+import { montarRelatorioFinanceiro } from "../domain/relatorioFinanceiro.js";
 import {
   abrirRelatorioPDF,
   baixarCSVZip,
   baixarExcel,
   baixarJSON,
 } from "../lib/backupExport.js";
-import { Presence } from "../ui/motion/index.js";
+import {
+  abrirRelatorioFinanceiroPDF,
+  baixarRelatorioFinanceiroXLSX,
+} from "../lib/relatorioFinanceiroExport.js";
+import { EVENTS, emit } from "../observability/index.js";
+import { FadeIn, Presence, Skeleton } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
 // Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
@@ -5500,10 +5506,12 @@ function FinanceiroTab({ pix, deepLink }) {
           options={[
             { id: "lancamentos", label: "Lançamentos", Icon: Wallet },
             { id: "contas_receber", label: "Contas a receber", Icon: MessageCircle },
+            { id: "relatorio", label: "Relatório", Icon: Receipt },
           ]}
         />
       </div>
       {subview === "contas_receber" && <ContasReceberView pix={pix} />}
+      {subview === "relatorio" && <RelatorioFinanceiroView />}
       {subview === "lancamentos" && (
       <div className="px-6 md:px-10 pb-10 space-y-5">
         <div
@@ -5860,6 +5868,189 @@ function FinanceiroTab({ pix, deepLink }) {
         </div>
       </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+/* --- Relatório financeiro por período (issue #12): faturamento e lucro
+   por dia / mês / ano, a partir dos mesmos financial_entries do calendário.
+   Exporta em PDF (janela de impressão) ou XLSX (exceljs). A agregação é
+   pura — domain/relatorioFinanceiro.js; aqui é só tela + download. --- */
+const GRANULARIDADES_RELATORIO = [
+  { id: "mes", label: "Por mês" },
+  { id: "dia", label: "Por dia" },
+  { id: "ano", label: "Por ano" },
+];
+
+function rotuloPeriodoRelatorio(periodo, gran) {
+  const p = String(periodo).split("-");
+  if (gran === "ano") return p[0];
+  if (gran === "mes") return `${MESES_PT[Number(p[1]) - 1] ?? p[1]}/${p[0]}`;
+  return `${p[2]}/${p[1]}/${p[0]}`;
+}
+
+function RelatorioFinanceiroView() {
+  const anoAtual = new Date().getFullYear();
+  const [ano, setAno] = useState(anoAtual);
+  const [gran, setGran] = useState("mes");
+  const [erro, setErro] = useState("");
+  const [baixando, setBaixando] = useState(false);
+  const finAno = useFinanceYear(ano);
+
+  const relatorio = useMemo(
+    () =>
+      montarRelatorioFinanceiro(finAno.entries || [], {
+        granularidade: gran,
+        escopo: String(ano),
+      }),
+    [finAno.entries, gran, ano],
+  );
+
+  const exportar = async (formato) => {
+    setErro("");
+    try {
+      emit(EVENTS.RELATORIO_FINANCEIRO_EXPORTADO, {
+        formato,
+        granularidade: gran,
+        ano,
+        linhas: relatorio.linhas.length,
+      });
+      if (formato === "pdf") {
+        abrirRelatorioFinanceiroPDF(relatorio);
+      } else {
+        setBaixando(true);
+        await baixarRelatorioFinanceiroXLSX(relatorio);
+      }
+    } catch (e) {
+      setErro(e?.message || "Não foi possível gerar o relatório.");
+    } finally {
+      setBaixando(false);
+    }
+  };
+
+  const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i);
+  const semDados = !finAno.loading && relatorio.linhas.length === 0;
+
+  return (
+    <div className="px-6 md:px-10 pb-10 space-y-5">
+      <Presence when={!!(erro || finAno.error)}>
+        <div
+          className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle size={14} /> {erro || "Erro ao carregar os lançamentos do ano."}
+          </span>
+          {erro && (
+            <button type="button" onClick={() => setErro("")}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      </Presence>
+
+      <Card className="anim-fadeUp">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="text-xs" style={{ color: C.inkSoft }}>
+            Ano
+            <Select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="mt-1 block">
+              {anos.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="text-xs" style={{ color: C.inkSoft }}>
+            Agrupar
+            <Select value={gran} onChange={(e) => setGran(e.target.value)} className="mt-1 block">
+              {GRANULARIDADES_RELATORIO.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <div className="flex gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => exportar("pdf")}
+              disabled={finAno.loading || semDados}
+              className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg disabled:opacity-40"
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            >
+              <Download size={13} /> Baixar PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => exportar("xlsx")}
+              disabled={finAno.loading || semDados || baixando}
+              className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg disabled:opacity-40"
+              style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
+            >
+              <Download size={13} /> {baixando ? "Gerando…" : "Baixar Excel"}
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {finAno.loading ? (
+        <Card>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: placeholders estáticos
+              <Skeleton key={i} height={34} rounded={8} />
+            ))}
+          </div>
+        </Card>
+      ) : semDados ? (
+        <Card>
+          <p className="text-sm" style={{ color: C.inkSoft }}>
+            Nenhum lançamento em {ano}.
+          </p>
+        </Card>
+      ) : (
+        <FadeIn>
+          <Card>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <StatCard label="Faturamento" value={fmtBRL(relatorio.totais.faturamento)} icon={Wallet} accent={C.green} />
+              <StatCard label="Despesa" value={fmtBRL(relatorio.totais.despesa)} icon={TrendingUp} accent={C.red} />
+              <StatCard
+                label="Lucro"
+                value={fmtBRL(relatorio.totais.lucro)}
+                icon={Landmark}
+                accent={relatorio.totais.lucro >= 0 ? C.green : C.red}
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+                    <th className="px-3 py-2 font-medium">Período</th>
+                    <th className="px-3 py-2 font-medium text-right">Faturamento</th>
+                    <th className="px-3 py-2 font-medium text-right">Despesa</th>
+                    <th className="px-3 py-2 font-medium text-right">Lucro</th>
+                  </tr>
+                </thead>
+                <tbody style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  {relatorio.linhas.map((l) => (
+                    <tr key={l.periodo} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                      <td className="px-3 py-2" style={{ fontFamily: "inherit", color: C.inkSoft }}>
+                        {rotuloPeriodoRelatorio(l.periodo, gran)}
+                      </td>
+                      <td className="px-3 py-2 text-right">{fmtBRL(l.faturamento)}</td>
+                      <td className="px-3 py-2 text-right">{fmtBRL(l.despesa)}</td>
+                      <td className="px-3 py-2 text-right" style={{ color: l.lucro >= 0 ? C.green : C.red }}>
+                        {fmtBRL(l.lucro)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </FadeIn>
       )}
     </div>
   );
