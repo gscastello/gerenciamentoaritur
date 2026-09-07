@@ -826,19 +826,19 @@ function termoParaData(termo) {
 
 // Telas / funcionalidades navegáveis pela busca (respeita o papel via NAV).
 const DESTINOS_BUSCA = [
-  { tab: "reservar", label: "Reservar passagem", termos: "nova reserva atendimento whatsapp bot" },
+  { tab: "dashboard", label: "Dashboard", termos: "visão geral indicadores gráficos" },
   { tab: "agenda", label: "Agenda de viagens", termos: "viagens dia pendentes confirmar" },
   { tab: "lista", label: "Lista do dia", termos: "embarque desembarque motorista rota passageiros do dia" },
-  { tab: "passageiros", label: "Passageiros / CRM", termos: "clientes histórico contatos telefone" },
   { tab: "financeiro", label: "Financeiro", termos: "caixa receita despesa lucro lançamento" },
   { tab: "financeiro", sub: "contas_receber", label: "Contas a receber", termos: "cobrança pendente devendo whatsapp pagamento" },
   { tab: "gestao", sub: "resultado", label: "Gestão Operacional", termos: "resultado líquido dre margem empresarial" },
   { tab: "gestao", sub: "recorrentes", label: "Custos recorrentes", termos: "salário pró-labore imposto seguro ipva depreciação automação" },
+  { tab: "passageiros", label: "Passageiros / CRM", termos: "clientes histórico contatos telefone" },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
   { tab: "operacao", label: "Manutenção preventiva", termos: "troca óleo revisão preventiva veículo" },
-  { tab: "dashboard", label: "Dashboard", termos: "visão geral indicadores gráficos" },
   { tab: "sistema", label: "Sistema / Configurações", termos: "backup usuários pontos valores horários pix" },
   { tab: "sistema", label: "Backup completo", termos: "exportar json csv excel pdf cópia dados" },
+  { tab: "reservar", label: "Reservar passagem", termos: "nova reserva atendimento whatsapp bot" },
 ];
 
 function normalizaBusca(s) {
@@ -1705,18 +1705,29 @@ const TAB_ROLES = {
   sistema: ["admin"],
 };
 
+// Ordem da barra lateral (pedido do dono): primeiro o dia a dia
+// (Dashboard, Agenda, Lista, Financeiro, Gestão), depois os cadastros, e o
+// fluxo de agendamento ("Reservar" / atendimento automático) por último.
 const NAV_ITENS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
-  { id: "reservar", label: "Reservar", icon: MessageCircle, grupo: "Operação" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
-  { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
-  { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "financeiro", label: "Financeiro", icon: Wallet, grupo: "Financeiro" },
   { id: "gestao", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
+  { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
+  { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
+  { id: "reservar", label: "Reservar", icon: MessageCircle, grupo: "Atendimento" },
 ];
-const NAV_GRUPOS = ["Principal", "Operação", "Clientes", "Frota", "Financeiro", "Administração"];
+const NAV_GRUPOS = [
+  "Principal",
+  "Operação",
+  "Financeiro",
+  "Clientes",
+  "Frota",
+  "Administração",
+  "Atendimento",
+];
 
 // Navegação inferior (celular). Muitas abas não cabem numa linha só —
 // mostra as principais + "Mais" numa folha. A aba ativa sempre aparece
