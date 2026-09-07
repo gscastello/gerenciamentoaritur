@@ -8,7 +8,8 @@
 const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN")!;
 const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")!;
 const GRAPH_API_VERSION = "v20.0";
-const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+const BASE_URL = `${GRAPH_BASE}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
 if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
   throw new Error("Faltam WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID nos secrets da função.");
@@ -80,5 +81,28 @@ export const whatsappClient = {
       type: "template",
       template: { name: templateName, language: { code: languageCode }, components },
     });
+  },
+
+  /**
+   * Baixa uma mídia recebida (imagem/documento). Na Cloud API é em 2 passos:
+   *   1) GET /{media-id}      -> { url, mime_type, ... } (url expira em ~5min)
+   *   2) GET {url} com Bearer -> os bytes
+   */
+  async downloadMedia(mediaId: string): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    const metaRes = await fetch(`${GRAPH_BASE}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    const meta = await metaRes.json();
+    if (!metaRes.ok || !meta?.url) {
+      throw new Error(`WhatsApp media lookup error: ${JSON.stringify(meta)}`);
+    }
+    const fileRes = await fetch(meta.url, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+    });
+    if (!fileRes.ok) {
+      throw new Error(`WhatsApp media download error: ${fileRes.status}`);
+    }
+    const bytes = new Uint8Array(await fileRes.arrayBuffer());
+    return { bytes, mimeType: (meta.mime_type as string) ?? "application/octet-stream" };
   },
 };

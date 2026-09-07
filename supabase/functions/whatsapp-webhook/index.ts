@@ -78,7 +78,17 @@ Deno.serve(async (req: Request) => {
             const text = m.text?.body as string | undefined;
             const interactiveId =
               m.interactive?.list_reply?.id ?? m.interactive?.button_reply?.id ?? m.button?.payload;
-            await handleIncomingMessage({ from, waMessageId, text, interactiveId, raw: m });
+            // comprovante Pix: imagem ou documento (issue #8)
+            const mediaSource = m.type === "image" ? m.image : m.type === "document" ? m.document : null;
+            const media = mediaSource?.id
+              ? {
+                  mediaId: mediaSource.id as string,
+                  mimeType: mediaSource.mime_type as string | undefined,
+                  caption: mediaSource.caption as string | undefined,
+                  kind: (m.type === "image" ? "image" : "document") as "image" | "document",
+                }
+              : undefined;
+            await handleIncomingMessage({ from, waMessageId, text, interactiveId, media, raw: m });
           }
         }
       }

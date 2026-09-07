@@ -102,6 +102,18 @@ export const financeService = {
   },
 
   /**
+   * URL assinada (curta duração) do comprovante Pix enviado pelo cliente
+   * no WhatsApp (issue #8 — bucket privado 'payment-proofs', só
+   * admin/financeiro leem). `path` vem de v_contas_a_receber.comprovante_path.
+   */
+  async comprovanteUrl(path, expiresIn = 120) {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, expiresIn);
+    if (error) throw new ServiceError(`comprovanteUrl: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    return data?.signedUrl ?? null;
+  },
+
+  /**
    * Registra estorno/reembolso/ajuste manual contra uma reserva (ex.:
    * devolveu em dinheiro depois de já ter passado pelo caixa). Nunca
    * apaga o lançamento original — grava uma linha nova ligada a ele.

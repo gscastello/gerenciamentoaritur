@@ -29,6 +29,17 @@ export class WhatsappServiceError extends Error {
   }
 }
 
+const MIME_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+};
+function extensionForMime(mime?: string): string {
+  if (!mime) return "bin";
+  return MIME_EXT[mime.split(";")[0].trim()] ?? "bin";
+}
+
 async function logAiAction(entityTable: string, entityId: string | null, action: string, afterData: unknown) {
   const botId = await getBotUserId();
   await supabaseAdmin.from("audit_logs").insert({
@@ -255,6 +266,69 @@ export const whatsappService = {
     const { error } = await supabaseAdmin.from("payments").update({ proof_received: true, updated_by: botId }).eq("id", paymentId);
     if (error) throw new WhatsappServiceError(`Falha ao registrar comprovante: ${error.message}`);
     await logAiAction("payments", paymentId, "update", { proof_received: true, origem: "whatsapp" });
+  },
+
+  /**
+   * Comprovante Pix recebido como mídia (imagem/documento) no WhatsApp
+   * (issue #8). Baixa da Graph API, sobe no bucket privado 'payment-proofs'
+   * e liga ao pagamento pendente mais recente do cliente. NUNCA marca como
+   * 'pago' — só `proof_received = true` + o caminho do arquivo, para
+   * conferência manual do papel financeiro no painel.
+   *
+   * Não passa por `assertAiIsAllowedToAct`: arquivar um comprovante não é
+   * a IA "decidindo" nada sobre a reserva — vale mesmo em atendimento
+   * humano (a equipe ainda precisa do arquivo ligado à reserva certa).
+   */
+  async receivePaymentProof(
+    phone: string,
+    media: { mediaId: string; mimeType?: string; caption?: string; waMessageId: string },
+  ): Promise<{ matched: boolean; reservationId?: string; paymentId?: string }> {
+    const customer = await this.identifyCustomer(phone);
+    if (!customer) return { matched: false };
+
+    const { data: pgto, error: findErr } = await supabaseAdmin
+      .from("payments")
+      .select("id, reservation_id, reservation:reservations!inner(status, deleted_at, customer_id)")
+      .eq("method", "pix")
+      .eq("status", "pendente")
+      .eq("proof_received", false)
+      .is("deleted_at", null)
+      .eq("reservation.customer_id", customer.id)
+      .in("reservation.status", ["confirmada", "embarcado", "pendente"])
+      .is("reservation.deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (findErr) throw new WhatsappServiceError(`Falha ao buscar pagamento p/ comprovante: ${findErr.message}`);
+    if (!pgto) return { matched: false };
+
+    const { bytes, mimeType } = await whatsappClient.downloadMedia(media.mediaId);
+    const ext = extensionForMime(media.mimeType ?? mimeType);
+    const path = `${pgto.reservation_id}/${media.waMessageId}.${ext}`;
+
+    const { error: upErr } = await supabaseAdmin.storage
+      .from("payment-proofs")
+      .upload(path, bytes, { contentType: mimeType, upsert: true });
+    if (upErr) throw new WhatsappServiceError(`Falha ao guardar o comprovante: ${upErr.message}`);
+
+    const botId = await getBotUserId();
+    const { error: updErr } = await supabaseAdmin
+      .from("payments")
+      .update({
+        proof_url: path,
+        proof_received: true,
+        proof_wa_media_id: media.mediaId,
+        proof_received_at: new Date().toISOString(),
+        updated_by: botId,
+      })
+      .eq("id", pgto.id);
+    if (updErr) throw new WhatsappServiceError(`Falha ao registrar o comprovante: ${updErr.message}`);
+
+    await logAiAction("payments", pgto.id, "update", {
+      proof_received: true, proof_url: path, wa_media_id: media.mediaId,
+      caption: media.caption ?? null, origem: "whatsapp",
+    });
+    return { matched: true, reservationId: pgto.reservation_id, paymentId: pgto.id };
   },
 
   // =====================================================================

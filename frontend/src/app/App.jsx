@@ -6062,11 +6062,21 @@ function RelatorioFinanceiroView() {
    A receita nasce sozinha (trigger); esta tela é só cobrança do que falta
    receber, com botão de cobrança direta pelo WhatsApp. --- */
 function ContasReceberView({ pix }) {
-  const { contas, loading, error, registrarAjuste, registrando } = useContasReceber();
+  const { contas, loading, error, registrarAjuste, registrando, verComprovante } = useContasReceber();
   const pixKey = pix?.key || PIX_KEY;
   const [ajusteAberto, setAjusteAberto] = useState(null); // reservation_id em edição
   const [ajusteVal, setAjusteVal] = useState({ categoria: "estorno", valor: "", descricao: "" });
   const [erroAjuste, setErroAjuste] = useState("");
+
+  const abrirComprovante = async (path) => {
+    setErroAjuste("");
+    try {
+      const url = await verComprovante(path);
+      if (url) window.open(url, "_blank", "noopener");
+    } catch (e) {
+      setErroAjuste(e?.message || "Não foi possível abrir o comprovante.");
+    }
+  };
 
   const vencida = (venc) => !!venc && venc < todayStr();
 
@@ -6169,6 +6179,16 @@ function ContasReceberView({ pix }) {
                         >
                           Estorno/ajuste
                         </button>
+                        {c.comprovante_recebido && (
+                          <button
+                            onClick={() => abrirComprovante(c.comprovante_path)}
+                            disabled={!c.comprovante_path}
+                            className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md disabled:opacity-40"
+                            style={{ background: C.blueSoft, color: C.blue, fontWeight: 600 }}
+                          >
+                            <Receipt size={12} /> Ver comprovante
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
