@@ -7821,6 +7821,57 @@ function DashboardTab({ reservas, capacidade, trips }) {
         pendencias={pendentesHoje}
       />
       <div className="px-6 md:px-10 pb-10 space-y-5">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger">
+          <StatCard label="Passageiros hoje" value={passageirosHoje} icon={Users} />
+          <StatCard
+            label="Faturamento hoje"
+            value={fmtBRL(receitaHoje)}
+            icon={Wallet}
+            accent={C.green}
+          />
+          <StatCard
+            label="Faturamento do mês"
+            value={fmtBRL(receitaMes)}
+            icon={TrendingUp}
+            accent={C.amber}
+          />
+          <StatCard
+            label="Lucro hoje"
+            value={fmtBRL(lucroHoje)}
+            icon={Route}
+            accent={lucroHoje >= 0 ? C.blue : C.red}
+          />
+          <StatCard
+            label="Lucro real do mês"
+            value={fmtBRL(lucroMes)}
+            icon={Route}
+            accent={lucroMes >= 0 ? C.blue : C.red}
+          />
+          <StatCard
+            label="Lucro real do ano"
+            value={fmtBRL(lucroAno)}
+            icon={Route}
+            accent={lucroAno >= 0 ? C.blue : C.red}
+          />
+          <StatCard
+            label="Clientes recorrentes"
+            value={recorrentes}
+            icon={Repeat}
+            accent={C.blue}
+          />
+          <StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} />
+          <StatCard
+            label="Ocupação média hoje"
+            value={`${ocupacaoMedia}%`}
+            icon={CheckCircle2}
+            accent={C.blue}
+          />
+        </div>
+        <div className="anim-fadeUp">
+          <Suspense fallback={<ChartsSkeleton />}>
+            <SevenDayCharts data={ultimos7} />
+          </Suspense>
+        </div>
         <Card className="anim-fadeUp" style={{ borderColor: C.purple }}>
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={16} style={{ color: C.purple }} />
@@ -7883,57 +7934,6 @@ function DashboardTab({ reservas, capacidade, trips }) {
             Média de passageiros confirmados por dia da semana, com base no histórico de reservas.
           </div>
         </Card>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger">
-          <StatCard label="Passageiros hoje" value={passageirosHoje} icon={Users} />
-          <StatCard
-            label="Faturamento hoje"
-            value={fmtBRL(receitaHoje)}
-            icon={Wallet}
-            accent={C.green}
-          />
-          <StatCard
-            label="Faturamento do mês"
-            value={fmtBRL(receitaMes)}
-            icon={TrendingUp}
-            accent={C.amber}
-          />
-          <StatCard
-            label="Lucro real até hoje"
-            value={fmtBRL(lucroHoje)}
-            icon={Route}
-            accent={lucroHoje >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Lucro real do mês"
-            value={fmtBRL(lucroMes)}
-            icon={Route}
-            accent={lucroMes >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Lucro real do ano"
-            value={fmtBRL(lucroAno)}
-            icon={Route}
-            accent={lucroAno >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Clientes recorrentes"
-            value={recorrentes}
-            icon={Repeat}
-            accent={C.blue}
-          />
-          <StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} />
-          <StatCard
-            label="Ocupação média hoje"
-            value={`${ocupacaoMedia}%`}
-            icon={CheckCircle2}
-            accent={C.blue}
-          />
-        </div>
-        <div className="anim-fadeUp">
-          <Suspense fallback={<ChartsSkeleton />}>
-            <SevenDayCharts data={ultimos7} />
-          </Suspense>
-        </div>
       </div>
     </div>
   );
