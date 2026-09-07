@@ -8,3 +8,4 @@ export * from "./vagas.js";
 export * from "./precos.js";
 export * from "./diagnostics.js";
 export * from "./demanda.js";
+export * from "./relatorioFinanceiro.js";
