@@ -129,6 +129,11 @@ export async function mockSupabase(page, opts = {}) {
         { id: "ec-2", slug: "combustivel", label: "Combustível", grupo: "Caixa do dia", kind: "despesa", icon: "Fuel", sort_order: 10, active: true },
         { id: "ec-3", slug: "outro", label: "Outro", grupo: "Caixa do dia", kind: "despesa", icon: "Receipt", sort_order: 50, active: true },
       ];
+    else if (table === "neighborhood_pricing")
+      rows = [
+        { id: "np-1", neighborhood: "Cohama", price: 80 },
+        { id: "np-2", neighborhood: "Anjo da Guarda", price: 90 },
+      ];
     else if (table === "customers") rows = [];
     else if (table === "v_contas_a_receber") rows = [];
     else rows = [];

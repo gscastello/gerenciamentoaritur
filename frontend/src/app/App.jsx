@@ -74,6 +74,7 @@ import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
 import { useExpenseCategories } from "../hooks/useExpenseCategories.js";
+import { useNeighborhoodPricing } from "../hooks/useNeighborhoodPricing.js";
 import { useRecurringExpenses } from "../hooks/useRecurringExpenses.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
@@ -339,6 +340,8 @@ const BAIRROS_90 = [
 ];
 const BAIRROS_80_NORM = BAIRROS_80.map(normalizar);
 const BAIRROS_90_NORM = BAIRROS_90.map(normalizar);
+// Fallback offline. Em produção o preço vem da tabela neighborhood_pricing
+// (useNeighborhoodPricing) via BairrosContext — editável na aba Sistema.
 function precoBairro(bairro) {
   const n = normalizar(bairro);
   if (!n) return undefined;
@@ -346,6 +349,23 @@ function precoBairro(bairro) {
   if (BAIRROS_90_NORM.includes(n)) return 90;
   return null; // não reconhecido
 }
+const BAIRROS_FALLBACK = {
+  bairros: [],
+  nomes: [...new Set([...BAIRROS_80, ...BAIRROS_90])].sort((a, b) => a.localeCompare(b, "pt-BR")),
+  preco: precoBairro,
+  loading: false,
+  error: null,
+  salvando: false,
+  salvar: async () => {
+    throw new Error("Preços de bairro indisponíveis offline.");
+  },
+  remover: async () => {
+    throw new Error("Preços de bairro indisponíveis offline.");
+  },
+  refetch: () => {},
+};
+const BairrosContext = React.createContext(BAIRROS_FALLBACK);
+const useBairros = () => useContext(BairrosContext) || BAIRROS_FALLBACK;
 
 /* ============================= status ============================= */
 const STATUS_META = {
@@ -1889,6 +1909,7 @@ function AppInner() {
   const { defaultVehicle } = useVehicles();
   const cfg = useRouteConfig();
   const categorias = useExpenseCategories();
+  const bairros = useNeighborhoodPricing();
   const modoAtendimento = cfgSettings.attendanceMode;
   const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
   const trips = cfg.trips;
@@ -1957,6 +1978,7 @@ function AppInner() {
 
   return (
     <CategoriasContext.Provider value={categorias}>
+    <BairrosContext.Provider value={bairros}>
     <div
       className="min-h-screen w-full flex"
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
@@ -2230,6 +2252,7 @@ function AppInner() {
         )}
       </div>
     </div>
+    </BairrosContext.Provider>
     </CategoriasContext.Provider>
   );
 }
@@ -2256,6 +2279,7 @@ function ReservarTab({
   // config ainda não foi preenchida.
   const pixKey = pix?.key || PIX_KEY;
   const pixName = pix?.name || PIX_NAME;
+  const bairros = useBairros();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     data: todayStr(),
@@ -2288,7 +2312,7 @@ function ReservarTab({
   const viagem =
     form.direcao && !["frete", "espera"].includes(form.direcao) ? trips[form.direcao] : null;
   const ponto = viagem?.pontos.find((p) => p.id === form.pontoId);
-  const precoDoBairro = ponto?.campo === "bairro" ? precoBairro(form.bairro) : undefined;
+  const precoDoBairro = ponto?.campo === "bairro" ? bairros.preco(form.bairro) : undefined;
   const bairroNaoReconhecido = ponto?.campo === "bairro" && form.bairro && precoDoBairro === null;
   const valorUnit = ponto?.campo === "bairro" ? precoDoBairro || 80 : ponto?.valor || 60;
   const total = valorUnit * (Number.parseInt(form.quantidade) || 1);
@@ -2878,11 +2902,17 @@ function ReservarTab({
                 <div className="mb-2">
                   <Field label="Bairro">
                     <TextInput
+                      list="bairros-reservar"
                       placeholder="Ex.: Cohama"
                       value={form.bairro}
                       onChange={(e) => setForm({ ...form, bairro: e.target.value })}
                     />
                   </Field>
+                  <datalist id="bairros-reservar">
+                    {bairros.nomes.map((b) => (
+                      <option key={b} value={b} />
+                    ))}
+                  </datalist>
                   {form.bairro && precoDoBairro > 0 && (
                     <div
                       className="text-xs mt-1 flex items-center gap-1.5"
@@ -4118,9 +4148,6 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
    Atalho interno: a equipe marca um passageiro direto na tela operacional,
    sem passar pelo roteiro do bot. Vai pela MESMA RPC (rpc_create_reservation
    via R.createReservation) — a capacidade é decidida pelo banco. */
-const BAIRROS_BUSCA = [...new Set([...BAIRROS_80, ...BAIRROS_90])].sort((a, b) =>
-  a.localeCompare(b, "pt-BR"),
-);
 
 function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose, onCriar }) {
   const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
@@ -4143,11 +4170,12 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [ofereceEspera, setOfereceEspera] = useState(false);
+  const bairros = useBairros();
 
   const viagem = trips[f.direcao] || trips.ida;
   const ponto = viagem.pontos.find((p) => p.id === f.pontoId);
   const campoDetalhe = ponto?.campo; // 'bairro' | 'localExato' | 'localOutro' | undefined
-  const precoBairroAtual = campoDetalhe === "bairro" ? precoBairro(f.bairro) : undefined;
+  const precoBairroAtual = campoDetalhe === "bairro" ? bairros.preco(f.bairro) : undefined;
   const bairroNaoReconhecido =
     campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
   const precoAuto =
@@ -4293,7 +4321,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
               />
             </Field>
             <datalist id="bairros-agendamento">
-              {BAIRROS_BUSCA.map((b) => (
+              {bairros.nomes.map((b) => (
                 <option key={b} value={b} />
               ))}
             </datalist>
@@ -8489,6 +8517,140 @@ const DIAG_KIND_LABEL = {
   pagamento_ausente: "Passagem confirmada há +1 dia sem registro de pagamento",
 };
 
+// Preço de "Buscar em Casa" por bairro — tabela neighborhood_pricing,
+// editável (database/23-precos-bairro-editaveis.sql).
+function SistemaBairros() {
+  const bairros = useBairros();
+  const [novo, setNovo] = useState({ nome: "", preco: "80" });
+  const [busca, setBusca] = useState("");
+  const [erro, setErro] = useState("");
+  const [precoEdit, setPrecoEdit] = useState({}); // id -> valor sendo digitado
+
+  const salvar = async (nome, preco) => {
+    setErro("");
+    try {
+      await bairros.salvar(nome, Number.parseFloat(preco));
+      return true;
+    } catch (e) {
+      setErro(e?.message || "Não foi possível salvar.");
+      return false;
+    }
+  };
+  const adicionar = async () => {
+    if (!novo.nome.trim() || !novo.preco) return;
+    if (await salvar(novo.nome.trim(), novo.preco)) setNovo({ nome: "", preco: novo.preco });
+  };
+  const remover = async (b) => {
+    setErro("");
+    try {
+      await bairros.remover(b.id);
+    } catch (e) {
+      setErro(e?.message || "Não foi possível remover.");
+    }
+  };
+
+  const filtro = normalizar(busca);
+  const lista = bairros.bairros
+    .filter((b) => !filtro || normalizar(b.neighborhood).includes(filtro))
+    .sort((a, b) => Number(a.price) - Number(b.price) || a.neighborhood.localeCompare(b.neighborhood, "pt-BR"));
+
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <MapPin size={16} style={{ color: C.amber }} /> Preços por bairro (Buscar em Casa)
+      </div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do bairro.
+        Bairro não cadastrado → a reserva vai para confirmação manual. {bairros.bairros.length} bairros.
+      </p>
+
+      {erro && (
+        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+          {erro}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2 mb-3">
+        <div>
+          <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+            Bairro
+          </label>
+          <TextInput
+            value={novo.nome}
+            onChange={(e) => setNovo({ ...novo, nome: e.target.value })}
+            placeholder="Ex.: Cohama"
+            className="w-48"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+            Valor (R$)
+          </label>
+          <TextInput
+            type="number"
+            value={novo.preco}
+            onChange={(e) => setNovo({ ...novo, preco: e.target.value })}
+            className="w-24"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={adicionar}
+          disabled={!novo.nome.trim() || !novo.preco || bairros.salvando}
+          className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md disabled:opacity-40"
+          style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+        >
+          <Plus size={13} /> Adicionar / atualizar
+        </button>
+      </div>
+
+      <TextInput
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar bairro…"
+        className="mb-2"
+      />
+      <div className="overflow-x-auto" style={{ maxHeight: 360, overflowY: "auto" }}>
+        <table className="w-full text-sm">
+          <tbody>
+            {lista.map((b) => (
+              <tr key={b.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                <td className="px-2 py-1.5">{b.neighborhood}</td>
+                <td className="px-2 py-1.5 w-28">
+                  <TextInput
+                    type="number"
+                    defaultValue={String(b.price)}
+                    value={precoEdit[b.id] ?? undefined}
+                    onChange={(e) => setPrecoEdit({ ...precoEdit, [b.id]: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      if (v && Number(v) !== Number(b.price)) salvar(b.neighborhood, v);
+                      setPrecoEdit((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== b.id)));
+                    }}
+                    className="w-20 text-xs py-1"
+                  />
+                </td>
+                <td className="px-2 py-1.5 w-8">
+                  <button type="button" onClick={() => remover(b)} aria-label={`remover ${b.neighborhood}`}>
+                    <X size={13} style={{ color: C.inkFaint }} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {lista.length === 0 && (
+              <tr>
+                <td className="px-2 py-4 text-xs" style={{ color: C.inkFaint }}>
+                  {bairros.loading ? "carregando…" : "Nenhum bairro." }
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
@@ -8751,9 +8913,11 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
           ))}
           <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
             Editar um ponto: altere e clique fora do campo. "Buscar em Casa" usa a tabela de bairros
-            (R$80/R$90); os demais usam o valor fixo aqui. Vale para todos os sócios.
+            abaixo; os demais usam o valor fixo aqui. Vale para todos os sócios.
           </div>
         </Card>
+
+        <SistemaBairros />
 
         <Card>
           <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
