@@ -135,6 +135,13 @@ export async function mockSupabase(page, opts = {}) {
         { id: "np-1", neighborhood: "Cohama", price: 80 },
         { id: "np-2", neighborhood: "Anjo da Guarda", price: 90 },
       ];
+    else if (table === "dropoff_areas")
+      rows = [
+        { id: "da-1", direction: "ida", code: "cantanhede", label: "Cantanhede", detail_label: "Onde em Cantanhede", detail_placeholder: "", detail_required: false, sort_order: 10, active: true },
+        { id: "da-2", direction: "ida", code: "pirapemas", label: "Pirapemas", detail_label: "Onde em Pirapemas", detail_placeholder: "", detail_required: false, sort_order: 20, active: true },
+        { id: "da-3", direction: "ida", code: "outro", label: "Outros locais", detail_label: "Onde você vai ficar", detail_placeholder: "Descreva o local", detail_required: true, sort_order: 30, active: true },
+        { id: "da-4", direction: "volta", code: "casa", label: "Em casa (bairro)", detail_label: "Bairro onde vai ficar", detail_placeholder: "Ex.: Cohama", detail_required: true, sort_order: 40, active: true },
+      ];
     else if (table === "customers") rows = [];
     else if (table === "v_contas_a_receber") rows = [];
     else rows = [];
