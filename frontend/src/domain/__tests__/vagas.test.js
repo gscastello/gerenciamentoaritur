@@ -84,4 +84,24 @@ describe("cabeNaViagem — criação e edição", () => {
     expect(cabeNaViagem({ ...p, capacidade: 31 })).toBe(true);
     expect(cabeNaViagem({ ...p, capacidade: 14 })).toBe(false);
   });
+
+  it("quantidade ausente conta como 1 (ocupação e na checagem)", () => {
+    const reservas = [r({ quantidade: undefined }), r({ quantidade: undefined })];
+    expect(ocupacao(reservas, "2026-09-01", "ida")).toBe(2);
+    expect(
+      cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 3, quantidade: undefined }),
+    ).toBe(true); // 2 ocupados + 1 = 3, cabe
+  });
+
+  it("cabe exatamente na última vaga", () => {
+    const reservas = [r({ quantidade: 30 })];
+    expect(cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 1 })).toBe(true);
+    expect(cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 2 })).toBe(false);
+  });
+
+  it("excedeCapacidade é o complemento de cabeNaViagem", () => {
+    const p = { reservas: [r({ quantidade: 30 })], data: "2026-09-01", direcao: "ida", capacidade: 31 };
+    expect(excedeCapacidade({ ...p, quantidade: 1 })).toBe(false);
+    expect(excedeCapacidade({ ...p, quantidade: 5 })).toBe(true);
+  });
 });

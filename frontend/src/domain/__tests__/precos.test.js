@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { precoBairro, valorTotal, valorUnitario } from "../precos.js";
+import { VALOR_BUSCA_PADRAO, VALOR_PONTO_PADRAO, _tabelas, precoBairro, valorTotal, valorUnitario } from "../precos.js";
+
+describe("constantes e tabelas", () => {
+  it("os padrões são R$60 (ponto) e R$80 (busca)", () => {
+    expect(VALOR_PONTO_PADRAO).toBe(60);
+    expect(VALOR_BUSCA_PADRAO).toBe(80);
+  });
+  it("as tabelas de bairro não têm sobreposição entre R$80 e R$90", () => {
+    const set80 = new Set(_tabelas.BAIRROS_80.map((b) => b.toLowerCase()));
+    const overlap = _tabelas.BAIRROS_90.filter((b) => set80.has(b.toLowerCase()));
+    expect(overlap).toEqual([]);
+  });
+});
 
 describe("precoBairro", () => {
   it("reconhece bairro da tabela de R$80 (acento/caixa irrelevantes)", () => {
@@ -42,11 +54,22 @@ describe("valorUnitario / valorTotal", () => {
 
   it("busca em casa com bairro não reconhecido cai no piso R$80", () => {
     expect(valorUnitario({ ponto: pontoBusca, bairro: "Nao Existe" })).toBe(80);
+    expect(valorUnitario({ ponto: pontoBusca })).toBe(80); // sem bairro
+  });
+
+  it("sem nenhum argumento devolve o padrão de ponto", () => {
+    expect(valorUnitario()).toBe(60);
+    expect(valorTotal()).toBe(60);
   });
 
   it("valorTotal multiplica pela quantidade", () => {
     expect(valorTotal({ ponto: pontoBR, quantidade: 3 })).toBe(180);
     expect(valorTotal({ ponto: pontoBusca, bairro: "Cohama", quantidade: 2 })).toBe(160);
     expect(valorTotal({ ponto: pontoBR })).toBe(60);
+  });
+
+  it("quantidade 0 ou não numérica conta como 1", () => {
+    expect(valorTotal({ ponto: pontoBR, quantidade: 0 })).toBe(60);
+    expect(valorTotal({ ponto: pontoBR, quantidade: "x" })).toBe(60);
   });
 });

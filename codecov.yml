@@ -3,13 +3,13 @@ coverage:
   status:
     project:
       default:
-        target: 70%
+        target: 90%
         threshold: 1%
     patch:
       default:
-        target: 80%
+        target: 85%
   # Gate mais rígido nos módulos que não podem regredir.
-  # (Ver AGENTS.md §3 — motor de vagas e financeiro.)
+  # (Ver AGENTS.md §3 — motor de vagas, precificação, financeiro, diagnóstico.)
 component_management:
   individual_components:
     - component_id: motor_vagas
@@ -17,16 +17,25 @@ component_management:
       paths:
         - frontend/src/domain/vagas.js
         - frontend/src/domain/diagnostics.js
+        - frontend/src/domain/demanda.js
       statuses:
         - type: project
-          target: 95%
+          target: 98%
     - component_id: precificacao
       name: Precificação
       paths:
         - frontend/src/domain/precos.js
+        - frontend/src/domain/horarios.js
       statuses:
         - type: project
-          target: 90%
+          target: 95%
+    - component_id: financeiro
+      name: Relatório financeiro
+      paths:
+        - frontend/src/domain/relatorioFinanceiro.js
+      statuses:
+        - type: project
+          target: 95%
 
 comment:
   layout: "reach, diff, flags, components"

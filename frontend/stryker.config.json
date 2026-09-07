@@ -10,6 +10,6 @@
     "!src/domain/index.js",
     "!src/domain/precos.js"
   ],
-  "thresholds": { "high": 90, "low": 70, "break": 60 },
-  "comment": "break=60 é o piso da 1a leva de testes (score atual ~71%). A issue #4 aperta de volta para 75+. precos.js fica fora do mutate por ser majoritariamente tabela de dados (bairros) — a lógica dele é coberta por precos.test.js."
+  "thresholds": { "high": 90, "low": 75, "break": 75 },
+  "comment": "issue #4: break subiu de 60 para 75 (score atual ~87% com a leva nova de testes). precos.js segue fora do mutate — é majoritariamente tabela de dados (100+ bairros); cada string vira um mutante equivalente que nenhum teste razoável mata. A LÓGICA de preço (precoBairro / valorUnitario / valorTotal) é coberta por precos.test.js e entra no gate de cobertura do vite.config.js."
 }
