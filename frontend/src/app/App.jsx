@@ -74,6 +74,7 @@ import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
 import { useExpenseCategories } from "../hooks/useExpenseCategories.js";
+import { useDropoffAreas } from "../hooks/useDropoffAreas.js";
 import { useNeighborhoodPricing } from "../hooks/useNeighborhoodPricing.js";
 import { useRecurringExpenses } from "../hooks/useRecurringExpenses.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
@@ -414,6 +415,53 @@ const DETALHE_DESEMBARQUE = {
   casa: { label: "Bairro onde vai ficar", ph: "Ex.: Cohama", req: true },
 };
 const detalheDesembarqueObrigatorio = (area) => !!DETALHE_DESEMBARQUE[area]?.req;
+
+// Baldes de desembarque vivos (database/24-baldes-desembarque.sql) via
+// contexto — os arrays acima viram fallback offline. Mesmo contrato:
+//   porDirecao(dir) -> [{ code, label, ... }]
+//   rotulo(dir,code) / detalhe(dir,code) -> {label,ph,req} / obrigatorio(dir,code)
+const DROPOFF_FALLBACK = (() => {
+  const norm = (dir, arr) =>
+    arr.map((b) => ({
+      code: b.id,
+      label: b.label,
+      direction: dir,
+      detail_label: DETALHE_DESEMBARQUE[b.id]?.label || "Ponto de referência",
+      detail_placeholder: DETALHE_DESEMBARQUE[b.id]?.ph || "",
+      detail_required: !!DETALHE_DESEMBARQUE[b.id]?.req,
+      active: true,
+    }));
+  const ida = norm("ida", DESEMBARQUE_IDA);
+  const volta = norm("volta", DESEMBARQUE_VOLTA);
+  return {
+    todas: [...ida, ...volta],
+    ida,
+    volta,
+    porDirecao: (dir) => (dir === "ida" ? ida : volta),
+    rotulo: rotuloBalde,
+    detalhe: (dir, code) => ({
+      label: DETALHE_DESEMBARQUE[code]?.label || "Ponto de referência",
+      ph: DETALHE_DESEMBARQUE[code]?.ph || "",
+      req: !!DETALHE_DESEMBARQUE[code]?.req,
+    }),
+    obrigatorio: (_dir, code) => detalheDesembarqueObrigatorio(code),
+    loading: false,
+    error: null,
+    salvando: false,
+    criar: async () => {
+      throw new Error("Locais de desembarque indisponíveis offline.");
+    },
+    editar: async () => {
+      throw new Error("Locais de desembarque indisponíveis offline.");
+    },
+    remover: async () => {
+      throw new Error("Locais de desembarque indisponíveis offline.");
+    },
+    refetch: () => {},
+  };
+})();
+const DropoffContext = React.createContext(DROPOFF_FALLBACK);
+const useDropoff = () => useContext(DropoffContext) || DROPOFF_FALLBACK;
 
 // String legível para dropoff_location (usada na Lista/Agenda e telas de
 // sucesso). O que estrutura a rota é dropoff_area/dropoff_detail.
@@ -1910,6 +1958,7 @@ function AppInner() {
   const cfg = useRouteConfig();
   const categorias = useExpenseCategories();
   const bairros = useNeighborhoodPricing();
+  const dropoff = useDropoffAreas();
   const modoAtendimento = cfgSettings.attendanceMode;
   const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
   const trips = cfg.trips;
@@ -1979,6 +2028,7 @@ function AppInner() {
   return (
     <CategoriasContext.Provider value={categorias}>
     <BairrosContext.Provider value={bairros}>
+    <DropoffContext.Provider value={dropoff}>
     <div
       className="min-h-screen w-full flex"
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
@@ -2253,6 +2303,7 @@ function AppInner() {
         )}
       </div>
     </div>
+    </DropoffContext.Provider>
     </BairrosContext.Provider>
     </CategoriasContext.Provider>
   );
@@ -2282,6 +2333,7 @@ function ReservarTab({
   const pixKey = pix?.key || PIX_KEY;
   const pixName = pix?.name || PIX_NAME;
   const bairros = useBairros();
+  const dropoff = useDropoff();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     data: todayStr(),
@@ -2336,7 +2388,7 @@ function ReservarTab({
   const camposFaltando = () => {
     if (!form.nome || !form.telefone || !form.desembarqueArea || !form.quantidade || excedeVagas)
       return true;
-    if (detalheDesembarqueObrigatorio(form.desembarqueArea) && !form.desembarqueDetalhe.trim())
+    if (dropoff.obrigatorio(form.direcao, form.desembarqueArea) && !form.desembarqueDetalhe.trim())
       return true;
     if (ponto?.campo === "bairro" && !form.bairro) return true;
     if (ponto?.campo && ponto.campo !== "bairro" && !form[ponto.campo]) return true;
@@ -2957,8 +3009,8 @@ function ReservarTab({
                     <option value="" disabled>
                       Escolha o local…
                     </option>
-                    {baldesDesembarque(form.direcao).map((b) => (
-                      <option key={b.id} value={b.id}>
+                    {dropoff.porDirecao(form.direcao).map((b) => (
+                      <option key={b.code} value={b.code}>
                         {b.label}
                       </option>
                     ))}
@@ -2968,17 +3020,17 @@ function ReservarTab({
               {form.desembarqueArea && (
                 <div className="mt-2">
                   <Field
-                    label={`${DETALHE_DESEMBARQUE[form.desembarqueArea].label}${
-                      detalheDesembarqueObrigatorio(form.desembarqueArea) ? " *" : ""
+                    label={`${dropoff.detalhe(form.direcao, form.desembarqueArea).label}${
+                      dropoff.obrigatorio(form.direcao, form.desembarqueArea) ? " *" : ""
                     }`}
                   >
                     <TextInput
                       value={form.desembarqueDetalhe}
-                      placeholder={DETALHE_DESEMBARQUE[form.desembarqueArea].ph}
+                      placeholder={dropoff.detalhe(form.direcao, form.desembarqueArea).ph}
                       onChange={(e) => setForm({ ...form, desembarqueDetalhe: e.target.value })}
                     />
                   </Field>
-                  {detalheDesembarqueObrigatorio(form.desembarqueArea) &&
+                  {dropoff.obrigatorio(form.direcao, form.desembarqueArea) &&
                     !form.desembarqueDetalhe.trim() && (
                       <div className="text-xs mt-1" style={{ color: C.purple }}>
                         {form.desembarqueArea === "br"
@@ -4715,6 +4767,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
 function DesembarqueView({ reservas, R, data }) {
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const dropoff = useDropoff();
 
   const doDia = useMemo(
     () =>
@@ -4791,9 +4844,9 @@ function DesembarqueView({ reservas, R, data }) {
                   {direcao === "ida" ? "IDA — desembarque" : "VOLTA — desembarque"}
                 </span>
               </div>
-              {baldesDesembarque(direcao).map((balde) => {
+              {dropoff.porDirecao(direcao).map((balde) => {
                 const doBalde = itens
-                  .filter((r) => inferirBaldeDesembarque(r) === balde.id)
+                  .filter((r) => inferirBaldeDesembarque(r) === balde.code)
                   .sort(
                     (a, b) =>
                       (a.desembarqueSeq ?? 9999) - (b.desembarqueSeq ?? 9999) ||
@@ -4801,7 +4854,7 @@ function DesembarqueView({ reservas, R, data }) {
                   );
                 return (
                   <DesembarqueBalde
-                    key={balde.id}
+                    key={balde.code}
                     balde={balde}
                     direcao={direcao}
                     itens={doBalde}
@@ -4820,6 +4873,7 @@ function DesembarqueView({ reservas, R, data }) {
 }
 
 function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe, onReordenar }) {
+  const dropoff = useDropoff();
   const pax = itens.reduce((s, r) => s + (r.quantidade || 1), 0);
   const mover = (idx, dir) => {
     const alvo = idx + dir;
@@ -4828,12 +4882,7 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
     [ids[idx], ids[alvo]] = [ids[alvo], ids[idx]];
     onReordenar(ids);
   };
-  const placeholder =
-    balde.id === "casa"
-      ? "Bairro onde vai ficar"
-      : balde.id === "br"
-        ? "Ponto de referência na BR"
-        : "Endereço / referência";
+  const placeholder = dropoff.detalhe(direcao, balde.code).label;
 
   return (
     <Card>
@@ -4897,13 +4946,13 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
                   style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.ink }}
                 />
                 <select
-                  value={balde.id}
+                  value={balde.code}
                   onChange={(e) => onBalde(r, e.target.value)}
                   className="text-xs rounded px-1 py-1 outline-none shrink-0"
                   style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
                 >
-                  {baldesDesembarque(direcao).map((b) => (
-                    <option key={b.id} value={b.id}>
+                  {dropoff.porDirecao(direcao).map((b) => (
+                    <option key={b.code} value={b.code}>
                       {b.label}
                     </option>
                   ))}
@@ -8622,6 +8671,210 @@ function SistemaCidades() {
 
 // Preço de "Buscar em Casa" por bairro — tabela neighborhood_pricing,
 // editável (database/23-precos-bairro-editaveis.sql).
+// Baldes de desembarque (database/24-baldes-desembarque.sql) — rótulo,
+// campo de detalhe e ordem, editáveis. O `code` novo não é adivinhado
+// sozinho pela inferência por palavra-chave; a classificação manual do
+// motorista prevalece.
+function SistemaBaldes() {
+  const dropoff = useDropoff();
+  const [erro, setErro] = useState("");
+  const [novo, setNovo] = useState({ direction: "ida", label: "", detailLabel: "", detailRequired: false });
+  const [editId, setEditId] = useState(null);
+  const [ev, setEv] = useState({});
+
+  const run = async (fn, msg) => {
+    setErro("");
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      setErro(e?.message || msg || "Não foi possível concluir.");
+      return false;
+    }
+  };
+  const criar = () =>
+    run(async () => {
+      if (!novo.label.trim()) return;
+      await dropoff.criar({
+        direction: novo.direction,
+        label: novo.label.trim(),
+        detailLabel: novo.detailLabel.trim() || "Ponto de referência",
+        detailRequired: novo.detailRequired,
+        sortOrder: 100 + dropoff.porDirecao(novo.direction).length * 10,
+      });
+      setNovo({ ...novo, label: "", detailLabel: "" });
+    }, "Não foi possível criar o local.");
+  const salvar = () =>
+    run(async () => {
+      await dropoff.editar(editId, {
+        label: (ev.label ?? "").trim() || "Local",
+        detail_label: (ev.detail_label ?? "").trim() || "Ponto de referência",
+        detail_placeholder: ev.detail_placeholder ?? "",
+        detail_required: !!ev.detail_required,
+        sort_order: Number.parseInt(ev.sort_order, 10) || 100,
+      });
+      setEditId(null);
+    }, "Não foi possível salvar.");
+
+  const linha = (b) =>
+    editId === b.id ? (
+      <tr key={b.id} style={{ background: C.panel2 }}>
+        <td className="px-2 py-1.5">
+          <TextInput value={ev.label} onChange={(e) => setEv({ ...ev, label: e.target.value })} className="text-xs" />
+        </td>
+        <td className="px-2 py-1.5">
+          <TextInput
+            value={ev.detail_label}
+            onChange={(e) => setEv({ ...ev, detail_label: e.target.value })}
+            className="text-xs"
+            placeholder="Rótulo do campo de detalhe"
+          />
+          <TextInput
+            value={ev.detail_placeholder}
+            onChange={(e) => setEv({ ...ev, detail_placeholder: e.target.value })}
+            className="text-xs mt-1"
+            placeholder="Placeholder (ex.: Km, o que tem perto)"
+          />
+        </td>
+        <td className="px-2 py-1.5 text-center">
+          <input
+            type="checkbox"
+            checked={!!ev.detail_required}
+            onChange={(e) => setEv({ ...ev, detail_required: e.target.checked })}
+          />
+        </td>
+        <td className="px-2 py-1.5 w-14">
+          <TextInput
+            type="number"
+            value={ev.sort_order}
+            onChange={(e) => setEv({ ...ev, sort_order: e.target.value })}
+            className="text-xs w-14"
+          />
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex gap-2">
+            <button type="button" onClick={salvar}>
+              <Save size={13} style={{ color: C.green }} />
+            </button>
+            <button type="button" onClick={() => setEditId(null)}>
+              <X size={13} style={{ color: C.inkFaint }} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    ) : (
+      <tr key={b.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+        <td className="px-2 py-1.5">{b.label}</td>
+        <td className="px-2 py-1.5 text-xs" style={{ color: C.inkSoft }}>
+          {b.detail_label}
+        </td>
+        <td className="px-2 py-1.5 text-center text-xs">{b.detail_required ? "sim" : "—"}</td>
+        <td className="px-2 py-1.5 text-xs" style={{ color: C.inkFaint }}>
+          {b.sort_order}
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEditId(b.id);
+                setEv({
+                  label: b.label,
+                  detail_label: b.detail_label,
+                  detail_placeholder: b.detail_placeholder,
+                  detail_required: b.detail_required,
+                  sort_order: String(b.sort_order),
+                });
+              }}
+            >
+              <Pencil size={12} style={{ color: C.inkFaint }} />
+            </button>
+            <button type="button" onClick={() => run(() => dropoff.remover(b.id), "Não foi possível remover.")}>
+              <X size={13} style={{ color: C.inkFaint }} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <MapPin size={16} style={{ color: C.amber }} /> Locais de desembarque
+      </div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        O passo "Onde você vai ficar" da reserva e os grupos da rota do motorista. Renomeie, defina se
+        o detalhe é obrigatório e a ordem em que o ônibus alcança cada local.
+      </p>
+      {erro && (
+        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+          {erro}
+        </div>
+      )}
+      <div className="flex flex-wrap items-end gap-2 mb-4">
+        <Select
+          value={novo.direction}
+          onChange={(e) => setNovo({ ...novo, direction: e.target.value })}
+          className="w-24"
+        >
+          <option value="ida">Ida</option>
+          <option value="volta">Volta</option>
+        </Select>
+        <TextInput
+          value={novo.label}
+          onChange={(e) => setNovo({ ...novo, label: e.target.value })}
+          placeholder="Nome do local"
+          className="w-44"
+        />
+        <TextInput
+          value={novo.detailLabel}
+          onChange={(e) => setNovo({ ...novo, detailLabel: e.target.value })}
+          placeholder="Rótulo do detalhe"
+          className="w-44"
+        />
+        <label className="text-xs flex items-center gap-1" style={{ color: C.inkSoft }}>
+          <input
+            type="checkbox"
+            checked={novo.detailRequired}
+            onChange={(e) => setNovo({ ...novo, detailRequired: e.target.checked })}
+          />
+          detalhe obrigatório
+        </label>
+        <button
+          type="button"
+          onClick={criar}
+          disabled={!novo.label.trim() || dropoff.salvando}
+          className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md disabled:opacity-40"
+          style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+        >
+          <Plus size={13} /> Criar
+        </button>
+      </div>
+      {["ida", "volta"].map((dir) => (
+        <div key={dir} className="mb-3">
+          <div className="text-xs font-semibold mb-1" style={{ color: C.inkSoft }}>
+            {dir === "ida" ? "Ida (São Luís → Pirapemas)" : "Volta (Pirapemas → São Luís)"}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+                  <th className="px-2 py-1 font-medium">Local</th>
+                  <th className="px-2 py-1 font-medium">Campo de detalhe</th>
+                  <th className="px-2 py-1 font-medium">Obrig.</th>
+                  <th className="px-2 py-1 font-medium">Ordem</th>
+                  <th className="px-2 py-1 font-medium" aria-label="ações" />
+                </tr>
+              </thead>
+              <tbody>{dropoff.porDirecao(dir).map(linha)}</tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 function SistemaBairros() {
   const bairros = useBairros();
   const [novo, setNovo] = useState({ nome: "", preco: "80" });
@@ -9023,6 +9276,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
         </Card>
 
         <SistemaBairros />
+
+        <SistemaBaldes />
 
         <Card>
           <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
