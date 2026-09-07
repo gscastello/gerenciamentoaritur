@@ -57,7 +57,15 @@ import {
   X,
   X as XIcon,
 } from "lucide-react";
-import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useContext,
+  useRef,
+  Suspense,
+} from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useBackup } from "../hooks/useBackup.js";
 import { useCustomers } from "../hooks/useCustomers.js";
@@ -65,6 +73,7 @@ import { useDiagnostics } from "../hooks/useDiagnostics.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
 import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
+import { useExpenseCategories } from "../hooks/useExpenseCategories.js";
 import { useRecurringExpenses } from "../hooks/useRecurringExpenses.js";
 import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
@@ -1879,6 +1888,7 @@ function AppInner() {
   const cfgSettings = useSettings();
   const { defaultVehicle } = useVehicles();
   const cfg = useRouteConfig();
+  const categorias = useExpenseCategories();
   const modoAtendimento = cfgSettings.attendanceMode;
   const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
   const trips = cfg.trips;
@@ -1946,6 +1956,7 @@ function AppInner() {
   ).length;
 
   return (
+    <CategoriasContext.Provider value={categorias}>
     <div
       className="min-h-screen w-full flex"
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
@@ -2219,6 +2230,7 @@ function AppInner() {
         )}
       </div>
     </div>
+    </CategoriasContext.Provider>
   );
 }
 export default function App() {
@@ -5322,7 +5334,6 @@ const ROTULOS_AJUSTE = { estorno: "Estorno", reembolso: "Reembolso", ajuste: "Aj
 // (type='despesa') distintas das do caixa do dia (combustível etc.) e da
 // manutenção preventiva (que é 'manutencao', automática da aba Operação).
 // Ver database/19-gestao-operacional.sql.
-const GRUPOS_GESTAO = ["Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"];
 const CATEGORIAS_GESTAO = [
   { id: "salario", label: "Salários", grupo: "Pessoal", icon: Users },
   { id: "pro_labore", label: "Pró-labore", grupo: "Pessoal", icon: Users },
@@ -5339,10 +5350,6 @@ const CATEGORIAS_GESTAO = [
   { id: "despesa_administrativa", label: "Despesas administrativas", grupo: "Estrutura", icon: Receipt },
   { id: "outro_recorrente", label: "Outras despesas recorrentes", grupo: "Estrutura", icon: Receipt },
 ];
-const CATEGORIA_GESTAO_IDS = new Set(CATEGORIAS_GESTAO.map((c) => c.id));
-const rotuloCategoriaGestao = (id) => CATEGORIAS_GESTAO.find((c) => c.id === id)?.label || id;
-const grupoDaCategoriaGestao = (id) =>
-  CATEGORIAS_GESTAO.find((c) => c.id === id)?.grupo || "Estrutura";
 const MESES_PT = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
@@ -5353,6 +5360,52 @@ const rotuloCategoriaDespesa = (id) =>
   ROTULOS_AJUSTE[id] ||
   CATEGORIAS_GESTAO.find((c) => c.id === id)?.label ||
   "Outro";
+
+// --- Categorias de despesa vivas (database/22-categorias-de-despesa.sql) ---
+// A lista real vem do banco (useExpenseCategories) via este contexto; as
+// constantes acima viram só o fallback (offline / e2e sem login / antes do
+// primeiro fetch). Assim as telas de Gestão e Financeiro passam a oferecer
+// as categorias personalizadas que o dono criar, sem prop-drilling.
+const CATEGORIAS_FALLBACK = (() => {
+  const norm = (c, kind) => ({ slug: c.id, label: c.label, grupo: c.grupo || "Estrutura", kind });
+  const gestao = CATEGORIAS_GESTAO.map((c) => norm(c, "gestao"));
+  const despesa = CATEGORIAS_DESPESA.map((c) => norm(c, "despesa"));
+  const gruposDe = (l) => [...new Set(l.map((c) => c.grupo))];
+  const bySlug = Object.fromEntries([...gestao, ...despesa].map((c) => [c.slug, c]));
+  return {
+    todas: [...gestao, ...despesa],
+    gestao,
+    despesa,
+    gruposGestao: gruposDe(gestao),
+    gruposDespesa: gruposDe(despesa),
+    rotulo: (slug) => bySlug[slug]?.label || rotuloCategoriaDespesa(slug),
+    grupo: (slug) => bySlug[slug]?.grupo || "Estrutura",
+    existe: (slug) => Boolean(bySlug[slug]),
+    slugsGestao: new Set(gestao.map((c) => c.slug)),
+    loading: false,
+    error: null,
+    salvando: false,
+    criar: async () => {
+      throw new Error("Categorias indisponíveis offline.");
+    },
+    editar: async () => {
+      throw new Error("Categorias indisponíveis offline.");
+    },
+    remover: async () => {
+      throw new Error("Categorias indisponíveis offline.");
+    },
+    refetch: () => {},
+  };
+})();
+const CategoriasContext = React.createContext(CATEGORIAS_FALLBACK);
+const useCategorias = () => useContext(CategoriasContext) || CATEGORIAS_FALLBACK;
+
+// nome (string, vindo do banco) -> componente de ícone lucide
+const ICONE_CATEGORIA = {
+  Users, Landmark, CreditCard, ShieldCheck, Receipt, Bus, Sparkles, Package,
+  Wrench, TrendingUp, Fuel, UtensilsCrossed,
+};
+const iconeCategoria = (nome) => ICONE_CATEGORIA[nome] || Receipt;
 
 // Mapeia a linha do banco (financial_entries) para o formato que a tela usa.
 function mapEntry(e) {
@@ -5394,6 +5447,7 @@ function FinanceiroTab({ pix, deepLink }) {
   const mes = mesRef.getMonth();
 
   const fin = useFinanceMonth(ano, mes + 1);
+  const cats = useCategorias();
   const financeiro = useMemo(() => (fin.entries || []).map(mapEntry), [fin.entries]);
   const receitaMes = somaTipo(financeiro, "receita");
   const despesaMes = somaTipo(financeiro, "despesa");
@@ -5653,15 +5707,15 @@ function FinanceiroTab({ pix, deepLink }) {
               Despesa rápida — escolhe a categoria e só falta o valor
             </div>
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {CATEGORIAS_DESPESA.map((c) => {
-                const Icon = c.icon;
-                const ativo = novo.tipo === "despesa" && novo.categoria === c.id;
+              {cats.despesa.map((c) => {
+                const Icon = iconeCategoria(c.icon);
+                const ativo = novo.tipo === "despesa" && novo.categoria === c.slug;
                 return (
                   <button
-                    key={c.id}
+                    key={c.slug}
                     type="button"
                     onClick={() => {
-                      setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.id }));
+                      setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.slug }));
                       document.getElementById("financeiro-valor-input")?.focus();
                     }}
                     className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
@@ -5691,11 +5745,14 @@ function FinanceiroTab({ pix, deepLink }) {
                   value={novo.categoria}
                   onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
                 >
-                  {CATEGORIAS_DESPESA.map((c) => (
-                    <option key={c.id} value={c.id}>
+                  {cats.despesa.map((c) => (
+                    <option key={c.slug} value={c.slug}>
                       {c.label}
                     </option>
                   ))}
+                  {!cats.existe(novo.categoria) && novo.categoria ? (
+                    <option value={novo.categoria}>{novo.categoria}</option>
+                  ) : null}
                 </Select>
               )}
               <TextInput
@@ -5765,11 +5822,14 @@ function FinanceiroTab({ pix, deepLink }) {
                             onChange={(e) => setEditVal({ ...editVal, categoria: e.target.value })}
                             className="text-xs py-1"
                           >
-                            {CATEGORIAS_DESPESA.map((c) => (
-                              <option key={c.id} value={c.id}>
+                            {cats.despesa.map((c) => (
+                              <option key={c.slug} value={c.slug}>
                                 {c.label}
                               </option>
                             ))}
+                            {editVal.categoria && !cats.existe(editVal.categoria) ? (
+                              <option value={editVal.categoria}>{cats.rotulo(editVal.categoria)}</option>
+                            ) : null}
                           </Select>
                         ) : (
                           <span className="text-xs" style={{ color: C.inkFaint }}>
@@ -5813,7 +5873,7 @@ function FinanceiroTab({ pix, deepLink }) {
                         </Pill>
                       </td>
                       <td className="px-4 py-2 text-xs" style={{ color: C.inkSoft }}>
-                        {f.tipo === "despesa" ? rotuloCategoriaDespesa(f.categoria) : "—"}
+                        {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
                       </td>
                       <td
                         className="px-4 py-2"
@@ -6304,6 +6364,7 @@ function GestaoTab({ deepLink }) {
   const mes = mesRef.getMonth();
   const fin = useFinanceMonth(ano, mes + 1);
   const rec = useRecurringExpenses();
+  const cats = useCategorias();
 
   const [aba, setAba] = useState("resultado");
   useDeepLinkSubview(deepLink, setAba);
@@ -6327,11 +6388,11 @@ function GestaoTab({ deepLink }) {
   }, [entries]);
 
   const totalPorGrupo = useMemo(() => {
-    const g = Object.fromEntries(GRUPOS_GESTAO.map((x) => [x, 0]));
-    for (const c of CATEGORIAS_GESTAO) g[c.grupo] += porCategoria[c.id] || 0;
+    const g = Object.fromEntries(cats.gruposGestao.map((x) => [x, 0]));
+    for (const c of cats.gestao) g[c.grupo] = (g[c.grupo] || 0) + (porCategoria[c.slug] || 0);
     return g;
-  }, [porCategoria]);
-  const totalGestao = GRUPOS_GESTAO.reduce((s, g) => s + totalPorGrupo[g], 0);
+  }, [porCategoria, cats.gestao, cats.gruposGestao]);
+  const totalGestao = cats.gruposGestao.reduce((s, g) => s + (totalPorGrupo[g] || 0), 0);
   const custoOperacao = despesaTotal - totalGestao;
 
   const run = async (fn, msgErro) => {
@@ -6441,11 +6502,14 @@ function GestaoTab({ deepLink }) {
             custoOperacao={custoOperacao}
             totalPorGrupo={totalPorGrupo}
             porCategoria={porCategoria}
+            cats={cats}
           />
         )}
-        {aba === "recorrentes" && <GestaoRecorrentes rec={rec} run={run} onGerar={gerarAgora} />}
+        {aba === "recorrentes" && (
+          <GestaoRecorrentes rec={rec} cats={cats} run={run} onGerar={gerarAgora} />
+        )}
         {aba === "lancamentos" && (
-          <GestaoLancamentos entries={entries} fin={fin} ano={ano} mes={mes} run={run} />
+          <GestaoLancamentos entries={entries} fin={fin} ano={ano} mes={mes} run={run} cats={cats} />
         )}
       </div>
     </div>
@@ -6460,6 +6524,7 @@ function GestaoResultado({
   custoOperacao,
   totalPorGrupo,
   porCategoria,
+  cats,
 }) {
   return (
     <>
@@ -6498,8 +6563,8 @@ function GestaoResultado({
           negativo
           indent
         />
-        {GRUPOS_GESTAO.map((g) => (
-          <LinhaDRE key={g} label={g} valor={totalPorGrupo[g]} negativo indent />
+        {cats.gruposGestao.map((g) => (
+          <LinhaDRE key={g} label={g} valor={totalPorGrupo[g] || 0} negativo indent />
         ))}
         <LinhaDRE label="Resultado líquido" valor={resultado} forte />
       </Card>
@@ -6507,8 +6572,8 @@ function GestaoResultado({
       <Card>
         <div className="text-sm font-semibold mb-3">Custos empresariais por categoria</div>
         <div className="space-y-4">
-          {GRUPOS_GESTAO.map((g) => {
-            const cats = CATEGORIAS_GESTAO.filter((c) => c.grupo === g);
+          {cats.gruposGestao.map((g) => {
+            const catsDoGrupo = cats.gestao.filter((c) => c.grupo === g);
             return (
               <div key={g}>
                 <div
@@ -6517,15 +6582,15 @@ function GestaoResultado({
                 >
                   <span>{g}</span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                    {fmtBRL(totalPorGrupo[g])}
+                    {fmtBRL(totalPorGrupo[g] || 0)}
                   </span>
                 </div>
                 <div className="space-y-1">
-                  {cats.map((c) => {
-                    const v = porCategoria[c.id] || 0;
+                  {catsDoGrupo.map((c) => {
+                    const v = porCategoria[c.slug] || 0;
                     return (
                       <div
-                        key={c.id}
+                        key={c.slug}
                         className="flex items-center justify-between text-xs"
                         style={{ color: v > 0 ? C.ink : C.inkFaint }}
                       >
@@ -6544,19 +6609,33 @@ function GestaoResultado({
   );
 }
 
-function GestaoRecorrentes({ rec, run, onGerar }) {
+function GestaoRecorrentes({ rec, cats, run, onGerar }) {
+  const catInicial = cats.gestao[0]?.slug ?? "outro_recorrente";
   const [form, setForm] = useState({
-    category: "salario",
+    category: catInicial,
     label: "",
     amount: "",
     frequency: "mensal",
     dueDay: "5",
     dueMonth: "1",
+    notes: "",
   });
   const [depBem, setDepBem] = useState("");
   const [depMeses, setDepMeses] = useState("60");
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
+  const [novaCat, setNovaCat] = useState(null); // { label, grupo } quando o form "nova categoria" está aberto
+
+  const resetForm = () =>
+    setForm({
+      category: cats.gestao[0]?.slug ?? "outro_recorrente",
+      label: "",
+      amount: "",
+      frequency: "mensal",
+      dueDay: "5",
+      dueMonth: "1",
+      notes: "",
+    });
 
   const add = () =>
     run(async () => {
@@ -6568,26 +6647,22 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
         frequency: form.frequency,
         dueDay: Number.parseInt(form.dueDay, 10) || 1,
         dueMonth: form.frequency === "anual" ? Number.parseInt(form.dueMonth, 10) || 1 : null,
+        notes: form.notes.trim() || null,
       });
-      setForm({
-        category: "salario",
-        label: "",
-        amount: "",
-        frequency: "mensal",
-        dueDay: "5",
-        dueMonth: "1",
-      });
+      resetForm();
     }, "Não foi possível adicionar o custo recorrente.");
 
   const salvarEdicao = () =>
     run(async () => {
       await rec.updateTemplate(editId, {
+        category: editVal.category || "outro_recorrente",
         label: editVal.label?.trim() || "Custo",
         amount: Number.parseFloat(editVal.amount) || 0,
         frequency: editVal.frequency,
         due_day: Number.parseInt(editVal.due_day, 10) || 1,
         due_month:
           editVal.frequency === "anual" ? Number.parseInt(editVal.due_month, 10) || 1 : null,
+        notes: (editVal.notes ?? "").trim() || null,
       });
       setEditId(null);
     }, "Não foi possível salvar.");
@@ -6595,6 +6670,43 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
   const toggleAtivo = (t) =>
     run(() => rec.updateTemplate(t.id, { active: !t.active }), "Não foi possível alterar.");
   const excluir = (t) => run(() => rec.removeTemplate(t.id), "Não foi possível excluir.");
+
+  // seletor de categoria reutilizado no form de novo custo e na edição
+  const onCategoriaChange = (setter, value) => {
+    if (value === "__nova__") {
+      setNovaCat({ label: "", grupo: cats.gruposGestao[0] || "Estrutura", aplicar: setter });
+      return;
+    }
+    setter(value);
+  };
+  const criarCategoriaInline = () =>
+    run(async () => {
+      const r = await cats.criar({
+        label: novaCat.label,
+        grupo: novaCat.grupo || "Estrutura",
+        kind: "gestao",
+      });
+      novaCat.aplicar?.(r.slug);
+      setNovaCat(null);
+    }, "Não foi possível criar a categoria.");
+
+  const categoriaSelect = (value, onChange) => (
+    <Select value={value} onChange={(e) => onCategoriaChange(onChange, e.target.value)}>
+      {cats.gruposGestao.map((g) => (
+        <optgroup key={g} label={g}>
+          {cats.gestao
+            .filter((c) => c.grupo === g)
+            .map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+        </optgroup>
+      ))}
+      {!cats.existe(value) && value ? <option value={value}>{value}</option> : null}
+      <option value="__nova__">➕ Nova categoria…</option>
+    </Select>
+  );
 
   const aplicarDepreciacao = () => {
     const bem = Number.parseFloat(depBem);
@@ -6639,20 +6751,7 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
             <label className="text-xs" style={{ color: C.inkFaint }}>
               Categoria
             </label>
-            <Select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {GRUPOS_GESTAO.map((g) => (
-                <optgroup key={g} label={g}>
-                  {CATEGORIAS_GESTAO.filter((c) => c.grupo === g).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
+            {categoriaSelect(form.category, (v) => setForm({ ...form, category: v }))}
           </div>
           <div>
             <label className="text-xs" style={{ color: C.inkFaint }}>
@@ -6716,6 +6815,16 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
               </Select>
             </div>
           )}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className="text-xs" style={{ color: C.inkFaint }}>
+              Observação (opcional)
+            </label>
+            <TextInput
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Ex.: contrato até dez/2027, reajuste anual…"
+            />
+          </div>
           <div className="flex items-end">
             <button
               type="button"
@@ -6728,6 +6837,59 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
             </button>
           </div>
         </div>
+        {novaCat && (
+          <div
+            className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
+            style={{ background: C.panel2 }}
+          >
+            <div>
+              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+                Nome da nova categoria
+              </label>
+              <TextInput
+                value={novaCat.label}
+                onChange={(e) => setNovaCat({ ...novaCat, label: e.target.value })}
+                placeholder="Ex.: Aluguel do galpão"
+                className="w-48"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+                Grupo
+              </label>
+              <Select
+                value={novaCat.grupo}
+                onChange={(e) => setNovaCat({ ...novaCat, grupo: e.target.value })}
+                className="w-40"
+              >
+                {[...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"])].map(
+                  (g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ),
+                )}
+              </Select>
+            </div>
+            <button
+              type="button"
+              disabled={!novaCat.label.trim() || cats.salvando}
+              onClick={criarCategoriaInline}
+              className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
+              style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+            >
+              Criar e usar
+            </button>
+            <button
+              type="button"
+              onClick={() => setNovaCat(null)}
+              className="btn-press text-xs px-3 py-2 rounded-md"
+              style={{ background: C.panel, color: C.inkSoft }}
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
         {form.category === "depreciacao" && (
           <div
             className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
@@ -6783,8 +6945,8 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {GRUPOS_GESTAO.map((g) => {
-              const ts = rec.templates.filter((t) => grupoDaCategoriaGestao(t.category) === g);
+            {[...new Set(rec.templates.map((t) => cats.grupo(t.category)))].map((g) => {
+              const ts = rec.templates.filter((t) => cats.grupo(t.category) === g);
               if (ts.length === 0) return null;
               return (
                 <div key={g}>
@@ -6807,13 +6969,21 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
                         {ts.map((t) =>
                           editId === t.id ? (
                             <tr key={t.id} style={{ background: C.panel2 }}>
-                              <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
-                                {rotuloCategoriaGestao(t.category)}
+                              <td className="px-3 py-2">
+                                {categoriaSelect(editVal.category, (v) =>
+                                  setEditVal({ ...editVal, category: v }),
+                                )}
                               </td>
                               <td className="px-3 py-2">
                                 <TextInput
                                   value={editVal.label}
                                   onChange={(e) => setEditVal({ ...editVal, label: e.target.value })}
+                                />
+                                <TextInput
+                                  value={editVal.notes ?? ""}
+                                  onChange={(e) => setEditVal({ ...editVal, notes: e.target.value })}
+                                  placeholder="observação"
+                                  className="mt-1 text-xs"
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -6882,9 +7052,16 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
                               style={{ borderColor: C.borderSoft, opacity: t.active ? 1 : 0.55 }}
                             >
                               <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
-                                {rotuloCategoriaGestao(t.category)}
+                                {cats.rotulo(t.category)}
                               </td>
-                              <td className="px-3 py-2">{t.label}</td>
+                              <td className="px-3 py-2">
+                                {t.label}
+                                {t.notes && (
+                                  <div className="text-[11px]" style={{ color: C.inkFaint }}>
+                                    {t.notes}
+                                  </div>
+                                )}
+                              </td>
                               <td
                                 className="px-3 py-2"
                                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
@@ -6915,7 +7092,9 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
                                     onClick={() => {
                                       setEditId(t.id);
                                       setEditVal({
+                                        category: t.category,
                                         label: t.label,
+                                        notes: t.notes ?? "",
                                         amount: String(t.amount),
                                         frequency: t.frequency,
                                         due_day: String(t.due_day),
@@ -6942,11 +7121,157 @@ function GestaoRecorrentes({ rec, run, onGerar }) {
           </div>
         )}
       </Card>
+
+      <GestaoCategorias cats={cats} run={run} />
     </>
   );
 }
 
-function GestaoLancamentos({ entries, fin, ano, mes, run }) {
+// Cadastro livre das categorias de custo empresarial (issue: liberdade
+// pra criar). Renomear, reagrupar, pausar e remover (se ninguém usa).
+function GestaoCategorias({ cats, run }) {
+  const [nova, setNova] = useState({ label: "", grupo: "Estrutura" });
+  const [editId, setEditId] = useState(null);
+  const [editVal, setEditVal] = useState({});
+
+  const criar = () =>
+    run(async () => {
+      if (!nova.label.trim()) return;
+      await cats.criar({ label: nova.label.trim(), grupo: nova.grupo.trim() || "Estrutura", kind: "gestao" });
+      setNova({ label: "", grupo: nova.grupo });
+    }, "Não foi possível criar a categoria.");
+
+  const salvar = () =>
+    run(async () => {
+      await cats.editar(editId, {
+        label: (editVal.label ?? "").trim() || "Categoria",
+        grupo: (editVal.grupo ?? "").trim() || "Estrutura",
+      });
+      setEditId(null);
+    }, "Não foi possível salvar a categoria.");
+
+  const grupos = [...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"])];
+
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1">Categorias de custo</div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        Crie, renomeie ou reagrupe as categorias usadas nos custos recorrentes e no DRE. Uma
+        categoria só pode ser removida quando nenhum custo ativo está usando ela.
+      </p>
+      <div className="flex flex-wrap items-end gap-2 mb-4">
+        <div>
+          <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+            Nova categoria
+          </label>
+          <TextInput
+            value={nova.label}
+            onChange={(e) => setNova({ ...nova, label: e.target.value })}
+            placeholder="Ex.: Aluguel do galpão"
+            className="w-52"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] block" style={{ color: C.inkFaint }}>
+            Grupo
+          </label>
+          <Select
+            value={nova.grupo}
+            onChange={(e) => setNova({ ...nova, grupo: e.target.value })}
+            className="w-44"
+          >
+            {grupos.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <button
+          type="button"
+          onClick={criar}
+          disabled={!nova.label.trim() || cats.salvando}
+          className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md disabled:opacity-40"
+          style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+        >
+          <Plus size={13} /> Criar
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+              <th className="px-3 py-1.5 font-medium">Categoria</th>
+              <th className="px-3 py-1.5 font-medium">Grupo</th>
+              <th className="px-3 py-1.5 font-medium" aria-label="ações" />
+            </tr>
+          </thead>
+          <tbody>
+            {cats.gestao.map((c) =>
+              editId === c.id ? (
+                <tr key={c.slug} style={{ background: C.panel2 }}>
+                  <td className="px-3 py-2">
+                    <TextInput
+                      value={editVal.label}
+                      onChange={(e) => setEditVal({ ...editVal, label: e.target.value })}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <Select
+                      value={editVal.grupo}
+                      onChange={(e) => setEditVal({ ...editVal, grupo: e.target.value })}
+                    >
+                      {grupos.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </Select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      <button type="button" onClick={salvar}>
+                        <Save size={13} style={{ color: C.green }} />
+                      </button>
+                      <button type="button" onClick={() => setEditId(null)}>
+                        <X size={13} style={{ color: C.inkFaint }} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={c.slug} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                  <td className="px-3 py-2">{c.label}</td>
+                  <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
+                    {c.grupo}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditId(c.id);
+                          setEditVal({ label: c.label, grupo: c.grupo });
+                        }}
+                      >
+                        <Pencil size={12} style={{ color: C.inkFaint }} />
+                      </button>
+                      <button type="button" onClick={() => run(() => cats.remover(c.id), "Não foi possível remover.")}>
+                        <X size={13} style={{ color: C.inkFaint }} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
   const [novo, setNovo] = useState({
     category: "manutencao_corretiva",
     dia: "",
@@ -6957,7 +7282,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
   const [editVal, setEditVal] = useState({});
 
   const doMes = entries.filter(
-    (e) => e.tipo === "despesa" && CATEGORIA_GESTAO_IDS.has(e.categoria),
+    (e) => e.tipo === "despesa" && cats.slugsGestao.has(e.categoria),
   );
   const totalMes = doMes.reduce((s, e) => s + e.valor, 0);
   const ordenados = [...doMes].sort((a, b) => a.data.localeCompare(b.data));
@@ -7004,13 +7329,15 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
             value={novo.category}
             onChange={(e) => setNovo({ ...novo, category: e.target.value })}
           >
-            {GRUPOS_GESTAO.map((g) => (
+            {cats.gruposGestao.map((g) => (
               <optgroup key={g} label={g}>
-                {CATEGORIAS_GESTAO.filter((c) => c.grupo === g).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
+                {cats.gestao
+                  .filter((c) => c.grupo === g)
+                  .map((c) => (
+                    <option key={c.slug} value={c.slug}>
+                      {c.label}
+                    </option>
+                  ))}
               </optgroup>
             ))}
           </Select>
@@ -7083,11 +7410,14 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
                         value={editVal.categoria}
                         onChange={(ev) => setEditVal({ ...editVal, categoria: ev.target.value })}
                       >
-                        {CATEGORIAS_GESTAO.map((c) => (
-                          <option key={c.id} value={c.id}>
+                        {cats.gestao.map((c) => (
+                          <option key={c.slug} value={c.slug}>
                             {c.label}
                           </option>
                         ))}
+                        {!cats.slugsGestao.has(editVal.categoria) && editVal.categoria ? (
+                          <option value={editVal.categoria}>{editVal.categoria}</option>
+                        ) : null}
                       </Select>
                     </td>
                     <td className="px-3 py-2">
@@ -7125,7 +7455,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run }) {
                     <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
                       {fmtDate(e.data)}
                     </td>
-                    <td className="px-3 py-2 text-xs">{rotuloCategoriaGestao(e.categoria)}</td>
+                    <td className="px-3 py-2 text-xs">{cats.rotulo(e.categoria)}</td>
                     <td className="px-3 py-2" style={{ color: C.inkSoft }}>
                       {e.descricao || "—"}
                     </td>

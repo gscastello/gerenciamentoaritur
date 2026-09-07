@@ -123,6 +123,12 @@ export async function mockSupabase(page, opts = {}) {
       });
     } else if (table === "trips") rows = [];
     else if (table === "vehicles") rows = [{ id: "veh-1", name: "Ônibus", capacity: 31, is_default: true, active: true }];
+    else if (table === "expense_categories")
+      rows = [
+        { id: "ec-1", slug: "salario", label: "Salários", grupo: "Pessoal", kind: "gestao", icon: "Users", sort_order: 10, active: true },
+        { id: "ec-2", slug: "combustivel", label: "Combustível", grupo: "Caixa do dia", kind: "despesa", icon: "Fuel", sort_order: 10, active: true },
+        { id: "ec-3", slug: "outro", label: "Outro", grupo: "Caixa do dia", kind: "despesa", icon: "Receipt", sort_order: 50, active: true },
+      ];
     else if (table === "customers") rows = [];
     else if (table === "v_contas_a_receber") rows = [];
     else rows = [];
