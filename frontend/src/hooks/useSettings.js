@@ -28,9 +28,14 @@ export function useSettings() {
     attendanceMode: settings.attendance_mode?.mode ?? "ia",
     mondayAdjustment: settings.monday_adjustment ?? { active: true, hours: 1 },
     pix: settings.pix ?? null,
+    // cidades da rota (issue #6) — listas normalizadas (minúsculas/sem acento no banco)
+    servedCities: Array.isArray(settings.served_cities) ? settings.served_cities : [],
+    intermediateCities: Array.isArray(settings.intermediate_cities) ? settings.intermediate_cities : [],
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setMondayAdjustment: ({ active, hours }) => after(setKey.run("monday_adjustment", { active, hours })),
+    setServedCities: (list) => after(setKey.run("served_cities", list)),
+    setIntermediateCities: (list) => after(setKey.run("intermediate_cities", list)),
     saving: setKey.loading,
   };
 }
