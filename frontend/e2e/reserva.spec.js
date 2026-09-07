@@ -31,9 +31,12 @@ test("admin abre a aba Sistema e as telas de configuração renderizam", async (
   }
   await sistema.click();
 
+  await expect(page.getByText("Equipe e logins")).toBeVisible();
+  await expect(page.getByText("Motorista E2E")).toBeVisible();
   await expect(page.getByText("Cidades da rota")).toBeVisible();
   await expect(page.getByText("Cidades atendidas")).toBeVisible();
   await expect(page.getByText("Cidades intermediárias")).toBeVisible();
+  await expect(page.getByText("Locais de desembarque")).toBeVisible();
 });
 
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {

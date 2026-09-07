@@ -82,6 +82,9 @@ export async function mockSupabase(page, opts = {}) {
   // realtime: nunca conecta
   await page.route("**/realtime/v1/**", (route) => route.abort());
 
+  // Edge Functions (ex.: create-user da aba Sistema → Equipe)
+  await page.route("**/functions/v1/**", (route) => route.fulfill(json({ success: true, id: "e2e-new-user" })));
+
   // auth: getUser / refresh
   await page.route("**/auth/v1/**", (route) => {
     const url = route.request().url();
@@ -113,7 +116,11 @@ export async function mockSupabase(page, opts = {}) {
 
     const table = path;
     let rows;
-    if (table === "users") rows = [{ id: FAKE_USER.id, name: "Atendente E2E", role, deleted_at: null }];
+    if (table === "users")
+      rows = [
+        { id: FAKE_USER.id, name: "Atendente E2E", phone: null, role, active: true, deleted_at: null },
+        { id: "u-motorista", name: "Motorista E2E", phone: "98999990000", role: "motorista", active: true, deleted_at: null },
+      ];
     else if (table === "route_points") rows = ROUTE_POINTS;
     else if (table === "settings") rows = SETTINGS;
     else if (table === "v_reservations_flat") rows = reservations;
