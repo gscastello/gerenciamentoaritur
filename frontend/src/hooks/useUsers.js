@@ -13,10 +13,21 @@ export function useCurrentUser() {
 export function useUsersList() {
   const query = useSupabaseQuery(() => usersService.list(), []);
   const updateRole = useAsyncAction(usersService.updateRole);
+  const update = useAsyncAction(usersService.update);
+  const setActive = useAsyncAction(usersService.setActive);
+  const remove = useAsyncAction(usersService.remove);
+  const create = useAsyncAction(usersService.create);
+  const after = async (p) => { const r = await p; await query.refetch(); return r; };
   return {
     users: query.data ?? [],
     loading: query.loading,
     error: query.error,
-    updateRole: async (id, role) => { const r = await updateRole.run(id, role); await query.refetch(); return r; },
+    refetch: query.refetch,
+    updateRole: (id, role) => after(updateRole.run(id, role)),
+    updateUser: (id, fields) => after(update.run(id, fields)),
+    setActive: (id, active) => after(setActive.run(id, active)),
+    removeUser: (id) => after(remove.run(id)),
+    createUser: (fields) => after(create.run(fields)),
+    salvando: updateRole.loading || update.loading || setActive.loading || remove.loading || create.loading,
   };
 }

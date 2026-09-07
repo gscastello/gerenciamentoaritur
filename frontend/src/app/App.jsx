@@ -82,6 +82,7 @@ import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useTrips } from "../hooks/useTrips.js";
+import { useUsersList } from "../hooks/useUsers.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
 import { foraDaAreaPadrao } from "../domain/cidades.js";
 import { montarRelatorioFinanceiro } from "../domain/relatorioFinanceiro.js";
@@ -9007,6 +9008,276 @@ function SistemaBairros() {
   );
 }
 
+// Equipe / logins (database/25-usuarios-equipe.sql + Edge Function
+// `create-user`). Só admin enxerga de verdade (RLS). Criar um LOGIN novo
+// precisa do Auth (service_role) → vai pela Edge Function; editar papel /
+// nome / telefone / ativo é direto na tabela ou via RPC com guarda.
+const PAPEIS_EQUIPE = [
+  { v: "admin", label: "Admin (sócio)" },
+  { v: "atendente", label: "Atendente" },
+  { v: "motorista", label: "Motorista" },
+  { v: "financeiro", label: "Financeiro" },
+];
+const papelLabel = (v) => PAPEIS_EQUIPE.find((p) => p.v === v)?.label || v;
+
+function senhaTemporaria() {
+  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let s = "";
+  for (let i = 0; i < 10; i += 1) s += alfabeto[Math.floor(Math.random() * alfabeto.length)];
+  return s;
+}
+
+function SistemaEquipe() {
+  const { profile } = useAuth();
+  const equipe = useUsersList();
+  const [erro, setErro] = useState("");
+  const [ok, setOk] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [ev, setEv] = useState({});
+  const [novo, setNovo] = useState({ email: "", name: "", role: "atendente", password: "" });
+
+  const run = async (fn, msgFalha) => {
+    setErro("");
+    setOk("");
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      setErro(e?.message || msgFalha || "Não foi possível concluir.");
+      return false;
+    }
+  };
+
+  const criar = () =>
+    run(async () => {
+      const email = novo.email.trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Informe um e-mail válido.");
+      if (!novo.name.trim()) throw new Error("Informe o nome.");
+      if (novo.password.length < 8) throw new Error("A senha temporária precisa de 8+ caracteres.");
+      await equipe.createUser({ email, name: novo.name.trim(), role: novo.role, password: novo.password });
+      setOk(`Login criado para ${email}. Senha temporária: ${novo.password} — passe para a pessoa; ela troca depois.`);
+      setNovo({ email: "", name: "", role: "atendente", password: "" });
+    }, "Não foi possível criar o login.");
+
+  const salvar = () =>
+    run(async () => {
+      await equipe.updateUser(editId, {
+        name: (ev.name ?? "").trim() || "—",
+        phone: (ev.phone ?? "").trim() || null,
+        role: ev.role,
+      });
+      setEditId(null);
+    }, "Não foi possível salvar.");
+
+  const linha = (u) => {
+    const euMesmo = u.id === profile?.id;
+    if (editId === u.id) {
+      return (
+        <tr key={u.id} style={{ background: C.panel2 }}>
+          <td className="px-2 py-1.5">
+            <TextInput value={ev.name} onChange={(e) => setEv({ ...ev, name: e.target.value })} className="text-xs" />
+          </td>
+          <td className="px-2 py-1.5">
+            <TextInput
+              value={ev.phone}
+              onChange={(e) => setEv({ ...ev, phone: e.target.value })}
+              placeholder="(98) 9…"
+              className="text-xs"
+            />
+          </td>
+          <td className="px-2 py-1.5">
+            <Select
+              value={ev.role}
+              onChange={(e) => setEv({ ...ev, role: e.target.value })}
+              className="text-xs"
+              disabled={euMesmo}
+            >
+              {PAPEIS_EQUIPE.map((p) => (
+                <option key={p.v} value={p.v}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
+          </td>
+          <td className="px-2 py-1.5 text-center text-xs" style={{ color: C.inkFaint }}>
+            {u.active ? "ativo" : "inativo"}
+          </td>
+          <td className="px-2 py-1.5">
+            <div className="flex gap-2">
+              <button type="button" onClick={salvar} aria-label="salvar">
+                <Save size={13} style={{ color: C.green }} />
+              </button>
+              <button type="button" onClick={() => setEditId(null)} aria-label="cancelar">
+                <X size={13} style={{ color: C.inkFaint }} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+    return (
+      <tr key={u.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+        <td className="px-2 py-1.5">
+          {u.name}
+          {euMesmo && (
+            <span className="ml-1 text-[10px]" style={{ color: C.inkFaint }}>
+              (você)
+            </span>
+          )}
+        </td>
+        <td className="px-2 py-1.5 text-xs" style={{ color: C.inkSoft }}>
+          {u.phone || "—"}
+        </td>
+        <td className="px-2 py-1.5 text-xs">{papelLabel(u.role)}</td>
+        <td className="px-2 py-1.5 text-center">
+          <button
+            type="button"
+            onClick={() => run(() => equipe.setActive(u.id, !u.active), "Não foi possível alterar.")}
+            disabled={euMesmo || equipe.salvando}
+            className="text-xs px-2 py-0.5 rounded-full disabled:opacity-40"
+            style={{
+              background: u.active ? C.greenSoft : C.panel2,
+              color: u.active ? C.green : C.inkFaint,
+            }}
+          >
+            {u.active ? "ativo" : "inativo"}
+          </button>
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              aria-label={`editar ${u.name}`}
+              onClick={() => {
+                setEditId(u.id);
+                setEv({ name: u.name, phone: u.phone || "", role: u.role });
+              }}
+            >
+              <Pencil size={12} style={{ color: C.inkFaint }} />
+            </button>
+            <button
+              type="button"
+              aria-label={`remover ${u.name}`}
+              disabled={euMesmo || equipe.salvando}
+              onClick={() => {
+                if (window.confirm(`Remover ${u.name} da equipe? O login deixa de funcionar.`)) {
+                  run(() => equipe.removeUser(u.id), "Não foi possível remover.");
+                }
+              }}
+              className="disabled:opacity-40"
+            >
+              <UserX size={13} style={{ color: C.red }} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <Users size={16} style={{ color: C.amber }} /> Equipe e logins
+      </div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        Quem entra no sistema e com qual papel. Desativar bloqueia o acesso sem apagar o histórico. O
+        banco não deixa você remover/desativar a si mesmo nem o último admin ativo.
+      </p>
+      {erro && (
+        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+          {erro}
+        </div>
+      )}
+      {ok && (
+        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.greenSoft, color: C.green }}>
+          {ok}
+        </div>
+      )}
+
+      <div className="overflow-x-auto mb-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+              <th className="px-2 py-1 font-medium">Nome</th>
+              <th className="px-2 py-1 font-medium">Telefone</th>
+              <th className="px-2 py-1 font-medium">Papel</th>
+              <th className="px-2 py-1 font-medium text-center">Acesso</th>
+              <th className="px-2 py-1 font-medium" aria-label="ações" />
+            </tr>
+          </thead>
+          <tbody>{equipe.users.map(linha)}</tbody>
+        </table>
+        {equipe.users.length === 0 && !equipe.loading && (
+          <div className="text-xs px-2 py-3" style={{ color: C.inkFaint }}>
+            Nenhum usuário — ou você não é admin.
+          </div>
+        )}
+      </div>
+
+      <div className="pt-3 border-t" style={{ borderColor: C.borderSoft }}>
+        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+          <UserCog size={13} /> Criar um login novo
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <TextInput
+            type="email"
+            value={novo.email}
+            onChange={(e) => setNovo({ ...novo, email: e.target.value })}
+            placeholder="e-mail"
+            className="w-52"
+          />
+          <TextInput
+            value={novo.name}
+            onChange={(e) => setNovo({ ...novo, name: e.target.value })}
+            placeholder="nome"
+            className="w-40"
+          />
+          <Select
+            value={novo.role}
+            onChange={(e) => setNovo({ ...novo, role: e.target.value })}
+            className="w-36"
+          >
+            {PAPEIS_EQUIPE.map((p) => (
+              <option key={p.v} value={p.v}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+          <div className="flex items-center gap-1">
+            <TextInput
+              value={novo.password}
+              onChange={(e) => setNovo({ ...novo, password: e.target.value })}
+              placeholder="senha temporária"
+              className="w-40"
+            />
+            <button
+              type="button"
+              onClick={() => setNovo({ ...novo, password: senhaTemporaria() })}
+              className="btn-press text-xs px-2 py-2 rounded-md shrink-0"
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            >
+              gerar
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={criar}
+            disabled={equipe.salvando}
+            className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md disabled:opacity-40"
+            style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+          >
+            <Plus size={13} /> Criar login
+          </button>
+        </div>
+        <p className="text-[11px] mt-2" style={{ color: C.inkFaint }}>
+          A pessoa entra com esse e-mail e a senha temporária (já confirmado, sem e-mail de
+          ativação) e troca a senha depois no primeiro acesso.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
@@ -9166,6 +9437,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
             </button>
           </div>
         )}
+        <SistemaEquipe />
+
         <SistemaCidades />
 
         <Card className="anim-fadeUp">
