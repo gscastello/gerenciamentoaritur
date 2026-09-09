@@ -7,6 +7,8 @@ import {
   Bus,
   Calculator,
   Calendar,
+  Car,
+  CarTaxiFront,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -381,6 +383,15 @@ const STATUS_META = {
   espera: { emoji: "⏳", label: "Lista de espera", cor: C.purple, bg: C.purpleSoft },
 };
 const OCUPA_VAGA = ["confirmada", "embarcado"];
+
+// Quem busca o passageiro "em casa" em São Luís (issue #96). Todos nascem
+// 'taxi'; o chip na Lista do Dia cicla taxi → proprio → motorista → taxi.
+const BUSCA_MODOS = {
+  taxi: { label: "Táxi", Icon: CarTaxiFront, cor: C.warn, bg: C.warnSoft },
+  proprio: { label: "Nós", Icon: Car, cor: C.brand, bg: C.amberSoft },
+  motorista: { label: "Motorista", Icon: Bus, cor: C.blue, bg: C.blueSoft },
+};
+const BUSCA_PROXIMO = { taxi: "proprio", proprio: "motorista", motorista: "taxi" };
 
 /* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
  * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
@@ -4721,6 +4732,15 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
       setErro(e?.message || "Não foi possível atualizar o passageiro.");
     }
   };
+  // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
+  const ciclarBusca = async (id, atual) => {
+    setErro("");
+    try {
+      await R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio");
+    } catch (e) {
+      setErro(e?.message || "Não foi possível mudar quem busca.");
+    }
+  };
   // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
   // mas o motorista ainda vê e pode reverter).
   const naRota = doDia.filter(
@@ -4867,6 +4887,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           marcar={marcar}
           mover={mover}
           remove={remove}
+          buscar={ciclarBusca}
         />
         <ListaSecao
           titulo="RODOVIÁRIA / RETORNO / POSTO CARONE / BR / OUTROS"
@@ -5112,17 +5133,40 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
   );
 }
 
-function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar }) {
+function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar, buscar }) {
   const paxAtivos = itens
     .filter((r) => OCUPA_VAGA.includes(r.status))
     .reduce((s, r) => s + r.quantidade, 0);
+  const tally = buscar
+    ? itens
+        .filter((r) => OCUPA_VAGA.includes(r.status))
+        .reduce((acc, r) => {
+          const k = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
+          acc[k] = (acc[k] ?? 0) + 1;
+          return acc;
+        }, {})
+    : null;
   return (
     <Card>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
         <div className="text-xs font-bold tracking-wide" style={{ color: C.inkSoft }}>
           {titulo}
         </div>
-        <Pill color={C.blue}>{paxAtivos} pax</Pill>
+        <div className="flex items-center gap-1.5">
+          {tally &&
+            Object.entries(BUSCA_MODOS).map(([k, m]) =>
+              tally[k] ? (
+                <span
+                  key={k}
+                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                  style={{ background: m.bg, color: m.cor }}
+                >
+                  <m.Icon size={11} /> {tally[k]}
+                </span>
+              ) : null,
+            )}
+          <Pill color={C.blue}>{paxAtivos} pax</Pill>
+        </div>
       </div>
       {itens.length === 0 ? (
         <div className="text-xs" style={{ color: C.inkFaint }}>
@@ -5139,6 +5183,7 @@ function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar }) {
               mover={mover}
               remove={remove}
               marcar={marcar}
+              buscar={buscar}
             />
           ))}
         </div>
@@ -5147,10 +5192,29 @@ function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar }) {
   );
 }
 
+// Chip de "quem busca em casa" (issue #96) — um toque cicla
+// Táxi → Nós → Motorista → Táxi.
+function BuscaChip({ r, onCycle }) {
+  const modo = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
+  const m = BUSCA_MODOS[modo];
+  return (
+    <button
+      type="button"
+      onClick={() => onCycle(r.id, modo)}
+      className="btn-press mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+      style={{ background: m.bg, color: m.cor, border: `1px solid ${m.cor}55` }}
+      title="Tocar para mudar quem busca este passageiro"
+    >
+      <m.Icon size={14} /> Busca: {m.label}
+      <Repeat size={11} style={{ opacity: 0.55 }} />
+    </button>
+  );
+}
+
 // Linha de passageiro na lista de embarque — pensada pro celular do
 // motorista: nome grande, telefone com toque pra ligar / abrir WhatsApp,
 // e dois botões grandes "Embarcou" / "Faltou".
-function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar }) {
+function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar, buscar }) {
   const tel = digitos(r.telefone);
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
@@ -5191,6 +5255,8 @@ function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar }) {
           </div>
         )}
       </div>
+
+      {buscar && <BuscaChip r={r} onCycle={buscar} />}
 
       <div className="mt-2 flex items-center gap-2 flex-wrap">
         {tel && (

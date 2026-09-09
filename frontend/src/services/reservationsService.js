@@ -236,6 +236,20 @@ export const reservationsService = {
     return data;
   },
 
+  /**
+   * Quem busca o passageiro "em casa": 'taxi' (padrão) | 'proprio' | 'motorista'.
+   * Via RPC (guarda de papel — admin/atendente/motorista).
+   */
+  async setPickupTransport(reservationId, mode) {
+    const { data, error } = await supabase.rpc("rpc_set_pickup_transport", {
+      p_reservation_id: reservationId,
+      p_mode: mode,
+    });
+    if (error) throw new ServiceError(`setPickupTransport: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", { retryable: false });
+    return data;
+  },
+
   /** Atualiza nome/telefone do cliente da reserva (tabela customers). */
   async updateCustomerContact(customerId, { name, phone }) {
     const actor = await getCurrentUserId();

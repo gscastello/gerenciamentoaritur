@@ -60,6 +60,44 @@ test("Bloco de notas: digita e o app salva sozinho", async ({ page }) => {
   await expect(page.getByText(/\d+ caracteres/)).toBeVisible();
 });
 
+// Quem busca em casa (issue #96): chip cicla Táxi → Nós → Motorista.
+test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ page }) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  await mockSupabase(page, {
+    role: "admin",
+    reservations: [
+      {
+        id: "res-busca-1",
+        data: hoje,
+        direcao: "ida",
+        pontoId: "busca",
+        bairro: "Cohama",
+        nome: "Cliente Busca E2E",
+        telefone: "98999998888",
+        quantidade: 1,
+        valorUnit: 80,
+        valorTotal: 80,
+        pagamento: "dinheiro",
+        status: "confirmada",
+        tipo: "passagem",
+        pago: false,
+        temEmbarcado: false,
+        buscaPor: "taxi",
+        criadoEm: new Date().toISOString(),
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
+
+  const chip = page.getByRole("button", { name: /Busca:/ });
+  await expect(chip).toHaveText(/Busca:\s*Táxi/);
+  await chip.click();
+  await expect(page.getByRole("button", { name: /Busca:/ })).toHaveText(/Busca:\s*Nós/);
+  await page.getByRole("button", { name: /Busca:/ }).click();
+  await expect(page.getByRole("button", { name: /Busca:/ })).toHaveText(/Busca:\s*Motorista/);
+});
+
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {
   await mockSupabase(page, { role: "atendente", occupancy: {} });
   await page.goto("/");

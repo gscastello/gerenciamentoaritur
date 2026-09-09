@@ -96,6 +96,8 @@ export async function mockSupabase(page, opts = {}) {
 
   // bloco de notas da agenda (issue #90) — stateful dentro do cenário
   let notaAgenda = null;
+  // quem busca em casa (issue #96) — override por reserva, stateful
+  const buscaOverride = {};
 
   await page.route("**/rest/v1/**", async (route) => {
     const req = route.request();
@@ -126,6 +128,11 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json(createResult));
       }
       if (fn === "rpc_ensure_trips") return route.fulfill(json({ success: true, created: 0 }));
+      if (fn === "rpc_set_pickup_transport") {
+        const b = req.postDataJSON?.() ?? {};
+        if (b.p_reservation_id) buscaOverride[b.p_reservation_id] = b.p_mode;
+        return route.fulfill(json({ success: true, mode: b.p_mode }));
+      }
       if (fn === "rpc_set_passengers_status" || fn === "rpc_confirm_reservation") {
         return route.fulfill(json({ success: true }));
       }
@@ -141,7 +148,10 @@ export async function mockSupabase(page, opts = {}) {
       ];
     else if (table === "route_points") rows = ROUTE_POINTS;
     else if (table === "settings") rows = SETTINGS;
-    else if (table === "v_reservations_flat") rows = reservations;
+    else if (table === "v_reservations_flat")
+      rows = reservations.map((r) =>
+        buscaOverride[r.id] ? { ...r, buscaPor: buscaOverride[r.id] } : r,
+      );
     else if (table === "v_trip_occupancy") {
       rows = Object.entries(occupancy).map(([k, v]) => {
         const [trip_date, direction] = k.split("|");
