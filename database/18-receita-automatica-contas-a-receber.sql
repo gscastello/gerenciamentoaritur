@@ -66,6 +66,7 @@ begin
   return NEW;
 end;
 $$;
+revoke execute on function public.fn_reservation_confirmed_to_revenue() from public, anon, authenticated;
 
 drop trigger if exists trg_reservation_confirmed_to_revenue on public.reservations;
 create trigger trg_reservation_confirmed_to_revenue
@@ -91,6 +92,7 @@ begin
   return NEW;
 end;
 $$;
+revoke execute on function public.fn_payment_to_financial_entry() from public, anon, authenticated;
 -- (o trigger trg_payment_financial_entry de 13-financial-automation.sql já
 -- existe e chama esta função — não precisa recriar o trigger em si)
 
@@ -139,6 +141,7 @@ begin
   return NEW;
 end;
 $$;
+revoke execute on function public.fn_reservation_cancelled_to_reversal() from public, anon, authenticated;
 
 drop trigger if exists trg_reservation_cancelled_to_reversal on public.reservations;
 create trigger trg_reservation_cancelled_to_reversal
