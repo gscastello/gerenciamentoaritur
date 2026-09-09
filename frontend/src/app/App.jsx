@@ -3462,6 +3462,12 @@ function AgendaTab({
       R.setPaid({ reservationId: r.id, paid: !r.pago, amount: r.valorTotal, method: r.pagamento }),
       "Não foi possível atualizar o pagamento.",
     );
+  // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
+  const ciclarBusca = (id, atual) =>
+    acao(
+      R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio"),
+      "Não foi possível mudar quem busca.",
+    );
   const toggleComprovante = (r) =>
     acao(
       R.setProof({
@@ -3693,6 +3699,7 @@ function AgendaTab({
             onEditar={setEditando}
             onPagamento={togglePagamento}
             onComprovante={toggleComprovante}
+            onBusca={ciclarBusca}
           />
         ))}
       </div>
@@ -3757,7 +3764,7 @@ function QuickActions({ r, trips, onStatus, onEditar, onPagamento, onComprovante
     </div>
   );
 }
-function LinhaOperacional({ r, trips, onStatus, onEditar, onPagamento, onComprovante }) {
+function LinhaOperacional({ r, trips, onStatus, onEditar, onPagamento, onComprovante, onBusca }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
   return (
     <div
@@ -3784,8 +3791,12 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onPagamento, onComprov
         >
           {linhaReserva(r, trips)}
         </div>
-        <div className="text-[10px] truncate flex items-center gap-1" style={{ color: C.inkFaint }}>
-          <StatusPill status={r.status} /> {r.desembarque ? `· desembarque: ${r.desembarque}` : ""}
+        <div className="text-[10px] truncate flex items-center gap-1.5 flex-wrap" style={{ color: C.inkFaint }}>
+          <StatusPill status={r.status} />
+          {onBusca && r.pontoId === "busca" && (
+            <BuscaChip r={r} onCycle={onBusca} dense />
+          )}
+          {r.desembarque ? `· desembarque: ${r.desembarque}` : ""}
           {r.pagamento === "pix" ? " · Pix" : ""}
         </div>
       </div>
@@ -3812,6 +3823,7 @@ function ViagemOperacional({
   onEditar,
   onPagamento,
   onComprovante,
+  onBusca,
 }) {
   const viagem = trips[direcao];
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
@@ -3998,6 +4010,7 @@ function ViagemOperacional({
                       onEditar={onEditar}
                       onPagamento={onPagamento}
                       onComprovante={onComprovante}
+                      onBusca={onBusca}
                     />
                   ))}
                 </div>
@@ -5193,20 +5206,22 @@ function ListaSecao({ titulo, itens, trips, alvos, mover, remove, marcar, buscar
 }
 
 // Chip de "quem busca em casa" (issue #96) — um toque cicla
-// Táxi → Nós → Motorista → Táxi.
-function BuscaChip({ r, onCycle }) {
+// Táxi → Nós → Motorista → Táxi. `dense` = variante compacta da Agenda.
+function BuscaChip({ r, onCycle, dense = false }) {
   const modo = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
   const m = BUSCA_MODOS[modo];
   return (
     <button
       type="button"
       onClick={() => onCycle(r.id, modo)}
-      className="btn-press mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold"
+      className={`btn-press inline-flex items-center gap-1.5 rounded-full font-semibold ${
+        dense ? "text-[10px] px-2 py-0.5" : "mt-2 text-xs px-3 py-1.5"
+      }`}
       style={{ background: m.bg, color: m.cor, border: `1px solid ${m.cor}55` }}
       title="Tocar para mudar quem busca este passageiro"
     >
-      <m.Icon size={14} /> Busca: {m.label}
-      <Repeat size={11} style={{ opacity: 0.55 }} />
+      <m.Icon size={dense ? 11 : 14} /> {dense ? m.label : `Busca: ${m.label}`}
+      <Repeat size={dense ? 9 : 11} style={{ opacity: 0.55 }} />
     </button>
   );
 }
