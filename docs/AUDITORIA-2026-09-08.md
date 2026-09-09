@@ -72,21 +72,22 @@ Durante uma semana, para **toda** viagem:
 Anote tudo que for lento ou confuso. Essa lista vale mais que qualquer
 feature nova.
 
-**B. Brechas de autorização no banco (write-path).**
-`rpc_create_reservation`, `rpc_confirm_reservation`, `rpc_cancel_reservation`,
-`rpc_start_trip`, `rpc_finish_trip`, `rpc_set_passengers_status` são
-`SECURITY DEFINER`, **não checam papel nenhum** e confiam no `p_actor` que o
-cliente manda. Consequências:
-- qualquer usuário logado (inclusive um `motorista` ou `financeiro`) pode
-  chamar `/rest/v1/rpc/rpc_cancel_reservation` direto e cancelar qualquer
-  reserva — o bloqueio por papel só existe na tela (`TAB_ROLES`);
-- o "quem fez" no `audit_logs` pode ser forjado (o cliente escolhe o UUID).
+**B. Brechas de autorização no banco (write-path).** ✅ **RESOLVIDO — PR #95**
+(`database/28-rpc-write-role-guards.sql`).
 
-Risco imediato baixo (4 usuários de confiança), mas contradiz a promessa de
-"RLS por papel". **Corrigir:** cada RPC deve validar
-`fn_has_role(array[...]::user_role[])` no início e usar `auth.uid()` em vez de
-`p_actor` para o autor. Também: retornar `success:false` quando 0 linhas
-forem afetadas (hoje cancela "com sucesso" uma reserva que não existe).
+As 8 RPCs de escrita (`rpc_create/confirm/cancel/move_reservation`,
+`rpc_set_passengers_status`, `rpc_start_trip`, `rpc_finish_trip`,
+`rpc_ensure_trips`) eram `SECURITY DEFINER`, sem checagem de papel, confiando
+no `p_actor`/`p_created_by` do cliente. Qualquer usuário logado (mesmo
+`motorista`/`financeiro`) podia cancelar qualquer reserva via API direta; o
+autor no `audit_logs` era forjável.
+
+Agora cada uma: guarda `fn_has_role` no início (chamada server-side via
+`service_role`/`pg_cron` passa), autor = `coalesce(auth.uid(), p_actor)`,
+e `success:false` quando 0 linhas afetadas. Verificado no banco.
+
+Resta: `rpc_register_financial_adjustment` (já tem guarda de papel, mas ainda
+usa `p_actor` para o autor — mudança menor).
 
 **C. 3 funções de trigger expostas ao `anon` (sem login).**
 `fn_reservation_confirmed_to_revenue`, `fn_reservation_cancelled_to_reversal`,
@@ -345,8 +346,8 @@ Não há "integração" a fazer entre bot e app — **é um banco só**.
 | Sev | Item | Ação |
 |---|---|---|
 | 🔴 Alto | App nunca operado de verdade — fluxo do dia não testado | Dogfooding 1–2 semanas (§3.1-A) |
-| 🔴 Alto | RPCs de escrita sem checagem de papel; autor forjável | Validar `fn_has_role` + `auth.uid()` (§3.1-B) |
-| 🟠 Médio | 3 funções de trigger chamáveis sem login | `revoke execute … from anon` (§3.1-C) |
+| ~~🔴 Alto~~ ✅ | RPCs de escrita sem checagem de papel; autor forjável | **feito — PR #95** (§3.1-B) |
+| ~~🟠 Médio~~ ✅ | 3 funções de trigger chamáveis sem login | **feito — PR #93** (§3.1-C) |
 | 🟠 Médio | Sem rastreamento de erro em produção | Sentry DSN na Vercel (§3.2-F) |
 | 🟠 Médio | WhatsApp: sem caixa de entrada do atendente | Construir aba Atendimento ou BSP (§4.4) |
 | 🟡 Baixo | Cron sem monitoramento | Card de status na aba Sistema (§3.2-G) |
