@@ -94,11 +94,29 @@ export async function mockSupabase(page, opts = {}) {
     return route.fulfill(json({}));
   });
 
+  // bloco de notas da agenda (issue #90) — stateful dentro do cenário
+  let notaAgenda = null;
+
   await page.route("**/rest/v1/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const path = url.pathname.replace("/rest/v1/", "");
     const wantsObject = (req.headers().accept || "").includes("pgrst.object");
+
+    if (path === "agenda_notes") {
+      if (req.method === "GET") {
+        return route.fulfill(json(wantsObject ? notaAgenda : notaAgenda ? [notaAgenda] : []));
+      }
+      const body = req.postDataJSON?.() ?? {};
+      const incoming = Array.isArray(body) ? body[0] : body;
+      notaAgenda = {
+        note_date: incoming.note_date ?? "2026-09-09",
+        content: incoming.content ?? "",
+        updated_at: new Date().toISOString(),
+        updated_by: FAKE_USER.id,
+      };
+      return route.fulfill(json(wantsObject ? notaAgenda : [notaAgenda]));
+    }
 
     // RPCs
     if (path.startsWith("rpc/")) {
