@@ -70,6 +70,9 @@ begin
   return NEW;
 end;
 $$;
+-- função de trigger: ninguém chama direto (o gatilho dispara sem checar
+-- EXECUTE). Fecha a superfície de API. Ver database/27.
+revoke execute on function fn_payment_to_financial_entry() from public, anon, authenticated;
 
 drop trigger if exists trg_payment_financial_entry on payments;
 create trigger trg_payment_financial_entry
