@@ -37,6 +37,7 @@ function fakeSession() {
 }
 
 const ROUTE_POINTS = [
+  { id: "rp-busca", direction: "ida", code: "busca", name: "Buscar em Casa", base_time: "05:00:00", price: null, requires_detail: true, detail_label: "Bairro", boarding_window: null, is_core: true, display_order: 0, active: true, deleted_at: null },
   { id: "rp-rodoviaria", direction: "ida", code: "rodoviaria", name: "Rodoviária", base_time: "05:40:00", price: 60, requires_detail: false, detail_label: null, boarding_window: null, is_core: true, display_order: 1, active: true, deleted_at: null },
   { id: "rp-br", direction: "ida", code: "br", name: "BR (Posto)", base_time: "06:00:00", price: 60, requires_detail: true, detail_label: "Ponto na BR", boarding_window: null, is_core: true, display_order: 2, active: true, deleted_at: null },
   { id: "rp-pirapemas", direction: "volta", code: "pirapemas", name: "Pirapemas centro", base_time: "13:00:00", price: 60, requires_detail: false, detail_label: null, boarding_window: "12:00 – 13:00", is_core: true, display_order: 1, active: true, deleted_at: null },

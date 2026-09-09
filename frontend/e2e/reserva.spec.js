@@ -98,6 +98,42 @@ test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ pag
   await expect(page.getByRole("button", { name: /Busca:/ })).toHaveText(/Busca:\s*Motorista/);
 });
 
+test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page }) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      {
+        id: "res-busca-ag",
+        data: hoje,
+        direcao: "ida",
+        pontoId: "busca",
+        bairro: "Turu",
+        nome: "Cliente Agenda E2E",
+        telefone: "98999997777",
+        quantidade: 1,
+        valorUnit: 80,
+        valorTotal: 80,
+        pagamento: "dinheiro",
+        status: "confirmada",
+        tipo: "passagem",
+        pago: false,
+        temEmbarcado: false,
+        buscaPor: "taxi",
+        criadoEm: new Date().toISOString(),
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+
+  const chip = page.getByTitle("Tocar para mudar quem busca este passageiro");
+  await expect(chip).toHaveText(/Táxi/);
+  await chip.click();
+  await expect(page.getByTitle("Tocar para mudar quem busca este passageiro")).toHaveText(/Nós/);
+});
+
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {
   await mockSupabase(page, { role: "atendente", occupancy: {} });
   await page.goto("/");
