@@ -28,6 +28,7 @@ import {
   Megaphone,
   MessageCircle,
   MoreHorizontal,
+  NotebookPen,
   PhoneCall,
   Package,
   Pencil,
@@ -81,6 +82,7 @@ import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
+import { useAgendaNote } from "../hooks/useAgendaNote.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useUsersList } from "../hooks/useUsers.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
@@ -1775,6 +1777,7 @@ const TAB_ROLES = {
   reservar: ["admin", "atendente"],
   agenda: ["admin", "atendente", "motorista", "financeiro"],
   lista: ["admin", "atendente", "motorista", "financeiro"],
+  bloco: ["admin", "atendente"],
   passageiros: ["admin", "atendente", "financeiro"],
   financeiro: ["admin"],
   gestao: ["admin"],
@@ -1790,6 +1793,7 @@ const NAV_ITENS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
+  { id: "bloco", label: "Bloco de notas", icon: NotebookPen, grupo: "Operação" },
   { id: "financeiro", label: "Financeiro", icon: Wallet, grupo: "Financeiro" },
   { id: "gestao", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
   { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
@@ -2270,6 +2274,7 @@ function AppInner() {
                 onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
               />
             )}
+            {tab === "bloco" && <BlocoDeNotasTab />}
             {tab === "passageiros" && (
               <PassageirosTab
                 reservas={reservas}
@@ -4514,6 +4519,140 @@ function BotaoAgendar({ onClick }) {
     >
       <Plus size={14} /> Agendar
     </button>
+  );
+}
+
+/* ===================== BLOCO DE NOTAS DA AGENDA (issue #90) ================
+   Texto cru por data — o dono cola a lista do Evernote durante a transição.
+   NÃO parseia, NÃO entra na Agenda. É rede de segurança da anotação. */
+function shiftDia(iso, n) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  const mm = `${d.getMonth() + 1}`.padStart(2, "0");
+  const dd = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function BlocoDeNotasTab() {
+  const [data, setData] = useState(todayStr());
+  const nota = useAgendaNote(data);
+  const ehHoje = data === todayStr();
+
+  const hora = (d) =>
+    d instanceof Date && !Number.isNaN(d.getTime())
+      ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+      : "";
+
+  const statusTexto =
+    nota.status === "saving"
+      ? "salvando…"
+      : nota.status === "error"
+        ? "erro ao salvar — edite algo para tentar de novo"
+        : nota.savedAt
+          ? `salvo às ${hora(nota.savedAt)}`
+          : "nada salvo ainda";
+  const statusCor =
+    nota.status === "error" ? C.red : nota.status === "saving" ? C.inkFaint : C.green;
+
+  return (
+    <div>
+      <Header
+        title="Bloco de notas"
+        subtitle="Cole aqui a lista do Evernote. Texto livre, uma nota por dia — não entra na Agenda automaticamente."
+        right={
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setData(shiftDia(data, -1))}
+              className="btn-press rounded-lg border px-2 py-2"
+              style={{ borderColor: C.border, color: C.inkSoft }}
+              aria-label="dia anterior"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <TextInput
+              type="date"
+              value={data}
+              onChange={(e) => e.target.value && setData(e.target.value)}
+              className="w-auto"
+            />
+            <button
+              type="button"
+              onClick={() => setData(shiftDia(data, 1))}
+              className="btn-press rounded-lg border px-2 py-2"
+              style={{ borderColor: C.border, color: C.inkSoft }}
+              aria-label="próximo dia"
+            >
+              <ChevronRight size={15} />
+            </button>
+            {!ehHoje && (
+              <button
+                type="button"
+                onClick={() => setData(todayStr())}
+                className="btn-press text-xs px-3 py-2 rounded-lg font-medium"
+                style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                Hoje
+              </button>
+            )}
+          </div>
+        }
+      />
+      <div className="px-6 md:px-10 pb-10 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="text-sm font-semibold capitalize" style={{ color: C.ink }}>
+            {ehHoje ? "Hoje" : diaSemana(data)}{" "}
+            <span className="font-normal" style={{ color: C.inkFaint }}>
+              · {fmtDate(data)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <span style={{ color: statusCor }}>{statusTexto}</span>
+            {nota.content && (
+              <span style={{ color: C.inkFaint }}>{nota.content.length} caracteres</span>
+            )}
+          </div>
+        </div>
+
+        {nota.error && (
+          <div
+            className="text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            Não foi possível carregar a nota deste dia. {nota.error?.message}
+          </div>
+        )}
+
+        {nota.loading ? (
+          <Skeleton height={460} rounded={12} />
+        ) : (
+          <textarea
+            value={nota.content}
+            onChange={(e) => nota.setContent(e.target.value)}
+            onBlur={nota.saveNow}
+            spellCheck={false}
+            placeholder={
+              "Cole aqui a lista do dia, do jeito que está no Evernote…\n\nEx.:\nSÃO LUÍS\n2p Miranda +55 98 8516-6052\n1p Cohama 98 7024-2260\n…"
+            }
+            className="w-full rounded-xl border p-4 leading-relaxed"
+            style={{
+              minHeight: "58vh",
+              background: C.panel,
+              borderColor: C.border,
+              color: C.ink,
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: "0.82rem",
+              resize: "vertical",
+            }}
+          />
+        )}
+
+        <p className="text-[11px]" style={{ color: C.inkFaint }}>
+          Salva sozinho enquanto você digita. Todos os sócios veem a mesma nota,
+          atualizando em tempo real.
+        </p>
+      </div>
+    </div>
   );
 }
 

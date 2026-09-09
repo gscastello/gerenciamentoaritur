@@ -39,6 +39,27 @@ test("admin abre a aba Sistema e as telas de configuração renderizam", async (
   await expect(page.getByText("Locais de desembarque")).toBeVisible();
 });
 
+// Bloco de notas da agenda (issue #90): cola a lista do Evernote, salva sozinho.
+test("Bloco de notas: digita e o app salva sozinho", async ({ page }) => {
+  await mockSupabase(page, { role: "atendente" });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible();
+
+  const bloco = page.getByRole("button", { name: /^Bloco de notas$/ });
+  if ((await bloco.count()) === 0) {
+    await page.getByRole("button", { name: "Mais" }).click();
+  }
+  await bloco.click();
+
+  const area = page.getByPlaceholder(/Cole aqui a lista do dia/);
+  await expect(area).toBeVisible();
+  await area.fill("SÃO LUÍS\n2p Miranda +55 98 8516-6052\n1p Cohama 98 7024-2260");
+  await area.blur();
+
+  await expect(page.getByText(/salvo às/)).toBeVisible();
+  await expect(page.getByText(/\d+ caracteres/)).toBeVisible();
+});
+
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {
   await mockSupabase(page, { role: "atendente", occupancy: {} });
   await page.goto("/");
