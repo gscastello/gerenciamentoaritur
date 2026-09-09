@@ -190,6 +190,9 @@ const fmtDataHora = (iso) =>
     minute: "2-digit",
   });
 const isMonday = (d) => new Date(`${d}T12:00:00`).getDay() === 1;
+// Dia do mês para custo recorrente: 1–31. Em meses mais curtos, o banco
+// lança no último dia (fn_generate_recurring_expenses).
+const clampDia = (v) => Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), 31);
 const diaSemana = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
 const shiftHour = (hhmm, ativo, horas = 1) => {
   if (!ativo) return hhmm;
@@ -6948,7 +6951,7 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
         label: form.label.trim(),
         amount: Number.parseFloat(form.amount),
         frequency: form.frequency,
-        dueDay: Number.parseInt(form.dueDay, 10) || 1,
+        dueDay: clampDia(form.dueDay),
         dueMonth: form.frequency === "anual" ? Number.parseInt(form.dueMonth, 10) || 1 : null,
         notes: form.notes.trim() || null,
       });
@@ -6962,7 +6965,7 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
         label: editVal.label?.trim() || "Custo",
         amount: Number.parseFloat(editVal.amount) || 0,
         frequency: editVal.frequency,
-        due_day: Number.parseInt(editVal.due_day, 10) || 1,
+        due_day: clampDia(editVal.due_day),
         due_month:
           editVal.frequency === "anual" ? Number.parseInt(editVal.due_month, 10) || 1 : null,
         notes: (editVal.notes ?? "").trim() || null,
@@ -7091,15 +7094,18 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
           </div>
           <div>
             <label className="text-xs" style={{ color: C.inkFaint }}>
-              Dia do mês (1–28)
+              Dia do mês (1–31)
             </label>
             <TextInput
               type="number"
               min="1"
-              max="28"
+              max="31"
               value={form.dueDay}
               onChange={(e) => setForm({ ...form, dueDay: e.target.value })}
             />
+            <div className="text-[10px] mt-0.5" style={{ color: C.inkFaint }}>
+              Em meses mais curtos, cai no último dia.
+            </div>
           </div>
           {form.frequency === "anual" && (
             <div>
@@ -7312,7 +7318,7 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                                   <TextInput
                                     type="number"
                                     min="1"
-                                    max="28"
+                                    max="31"
                                     value={editVal.due_day}
                                     onChange={(e) =>
                                       setEditVal({ ...editVal, due_day: e.target.value })
