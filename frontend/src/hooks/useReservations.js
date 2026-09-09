@@ -39,6 +39,7 @@ export function useReservations(tripDate) {
   const setPassengersStatus = useAsyncAction(reservationsService.setPassengersStatus);
   const move = useAsyncAction(reservationsService.move);
   const updateDetails = useAsyncAction(reservationsService.updateDetails);
+  const pickupTransport = useAsyncAction(reservationsService.setPickupTransport);
 
   // atualização otimista é deliberadamente EVITADA aqui: como a decisão
   // de "cabe ou não cabe" é do banco, mostrar uma reserva "confirmada"
@@ -75,6 +76,10 @@ export function useReservations(tripDate) {
     async (id, fields) => { const r = await updateDetails.run(id, fields); await dayQuery.refetch(); return r; },
     [updateDetails, dayQuery]
   );
+  const setPickupTransport = useCallback(
+    async (id, mode) => { const r = await pickupTransport.run(id, mode); await dayQuery.refetch(); return r; },
+    [pickupTransport, dayQuery]
+  );
 
   const reservations = useMemo(() => dayQuery.data ?? [], [dayQuery.data]);
   const pending = useMemo(() => pendingQuery.data ?? [], [pendingQuery.data]);
@@ -92,6 +97,7 @@ export function useReservations(tripDate) {
     markPassengers,
     moveReservation,
     editReservation,
+    setPickupTransport,
 
     // estados individuais de cada ação, para a UI desabilitar botões certos
     actionState: {
@@ -135,6 +141,7 @@ export function useReservationsWindow(fromDate, toDate) {
   const updateContact = useAsyncAction(reservationsService.updateCustomerContact);
   const setDrop = useAsyncAction(reservationsService.setDropoff);
   const reorderDrop = useAsyncAction(reservationsService.reorderDropoff);
+  const pickupTransp = useAsyncAction(reservationsService.setPickupTransport);
   const setPaid = useAsyncAction(paymentsService.setPaidForReservation);
   const setProof = useAsyncAction(paymentsService.setProofForReservation);
 
@@ -156,6 +163,7 @@ export function useReservationsWindow(fromDate, toDate) {
     updateContact: useCallback((customerId, fields) => after(updateContact.run(customerId, fields)), [after, updateContact]),
     setDropoff: useCallback((id, v) => after(setDrop.run(id, v)), [after, setDrop]),
     reorderDropoff: useCallback((ids) => after(reorderDrop.run(ids)), [after, reorderDrop]),
+    setPickupTransport: useCallback((id, mode) => after(pickupTransp.run(id, mode)), [after, pickupTransp]),
     setPaid: useCallback((args) => after(setPaid.run(args)), [after, setPaid]),
     setProof: useCallback((args) => after(setProof.run(args)), [after, setProof]),
 
