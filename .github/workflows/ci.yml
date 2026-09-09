@@ -93,7 +93,17 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      # Os runners do GitHub trazem os repositórios apt do Google Chrome e
+      # da Microsoft, que vira e mexe ficam com "Hash Sum mismatch" e
+      # derrubam o `apt-get update` do `playwright install --with-deps`.
+      # O Playwright só precisa das libs do Ubuntu — removemos essas
+      # fontes antes e baixamos o binário do CDN do próprio Playwright.
+      - name: Dependências de sistema (Playwright)
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+                     /etc/apt/sources.list.d/microsoft-prod.list
+          npx playwright install-deps chromium
+      - run: npx playwright install chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
