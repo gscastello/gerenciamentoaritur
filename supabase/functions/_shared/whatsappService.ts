@@ -284,12 +284,15 @@ export const whatsappService = {
   async setDropoffLocation(conversationId: string, reservationId: string, location: string) {
     await assertAiIsAllowedToAct(conversationId);
     const botId = await getBotUserId();
-    const { error } = await supabaseAdmin
-      .from("reservations")
-      .update({ dropoff_location: location, updated_by: botId })
-      .eq("id", reservationId)
-      .is("deleted_at", null);
+    const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
+      p_reservation_id: reservationId,
+      p_details: { dropoff_location: location },
+      p_actor: botId,
+    });
     if (error) throw new WhatsappServiceError(`Falha ao mudar o desembarque: ${error.message}`);
+    if (!data?.success) {
+      throw new WhatsappServiceError(data?.message ?? "Não foi possível mudar o desembarque.");
+    }
     await logAiAction("reservations", reservationId, "update", {
       acao: "desembarque_alterado", origem: "whatsapp", dropoff_location: location,
     });
