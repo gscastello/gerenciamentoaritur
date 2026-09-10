@@ -137,19 +137,23 @@ const C = {
   brandDim: "#A50D17",
   brandGlow: "rgba(228,18,31,0.35)",
   onBrand: "#FFFFFF",
-  // âmbar real — pendências / avisos
-  warn: "#E8A33D",
-  warnSoft: "#2E2413",
-  blue: "#5B8DEF",
-  blueSoft: "#141E33",
-  green: "#34C77B",
-  greenSoft: "#0F291D",
+  // Sinalização por cor foi removida do app (pedido do dono): status,
+  // ocupação, direção etc. se distinguem por TEXTO e ÍCONE, não por cor.
+  // Estes tokens semânticos agora apontam todos para a mesma escala de
+  // cinza — o vermelho da marca (`brand`/`amber`) fica só na identidade
+  // (logo, hero, botão principal) e o `red` só em erro/ação destrutiva.
+  warn: "#B9BDC6",
+  warnSoft: "#232427",
+  blue: "#B9BDC6",
+  blueSoft: "#232427",
+  green: "#B9BDC6",
+  greenSoft: "#232427",
   red: "#F0625F",
   redSoft: "#33161A",
-  purple: "#9B7BE8",
-  purpleSoft: "#201A33",
-  gray: "#7D8494",
-  graySoft: "#1B1D21",
+  purple: "#B9BDC6",
+  purpleSoft: "#232427",
+  gray: "#B9BDC6",
+  graySoft: "#232427",
 };
 const PIX_KEY = "98981012388";
 const PIX_NAME = "A O Castelo Transporte e Turismo";
@@ -384,22 +388,24 @@ const BairrosContext = React.createContext(BAIRROS_FALLBACK);
 const useBairros = () => useContext(BairrosContext) || BAIRROS_FALLBACK;
 
 /* ============================= status ============================= */
+// Sem cor de status (pedido do dono) — o texto e um marcador monocromático
+// bastam. `cancelada` mantém um leve vermelho por ser ação destrutiva.
 const STATUS_META = {
-  pendente: { emoji: "🟡", label: "Pendente", cor: C.warn, bg: C.warnSoft },
-  confirmada: { emoji: "🟢", label: "Confirmada", cor: C.green, bg: C.greenSoft },
-  embarcado: { emoji: "🔵", label: "Embarcado", cor: C.blue, bg: C.blueSoft },
-  cancelada: { emoji: "🔴", label: "Cancelada", cor: C.red, bg: C.redSoft },
-  nao_compareceu: { emoji: "⚫", label: "Não compareceu", cor: C.gray, bg: C.graySoft },
-  espera: { emoji: "⏳", label: "Lista de espera", cor: C.purple, bg: C.purpleSoft },
+  pendente: { emoji: "○", label: "Pendente", cor: C.inkSoft, bg: C.panel2 },
+  confirmada: { emoji: "●", label: "Confirmada", cor: C.inkSoft, bg: C.panel2 },
+  embarcado: { emoji: "✓", label: "Embarcado", cor: C.ink, bg: C.panel2 },
+  cancelada: { emoji: "✕", label: "Cancelada", cor: C.red, bg: C.redSoft },
+  nao_compareceu: { emoji: "–", label: "Não compareceu", cor: C.inkFaint, bg: C.panel2 },
+  espera: { emoji: "…", label: "Lista de espera", cor: C.inkSoft, bg: C.panel2 },
 };
 const OCUPA_VAGA = ["confirmada", "embarcado"];
 
 // Quem busca o passageiro "em casa" em São Luís (issue #96). Todos nascem
 // 'taxi'; o chip na Lista do Dia cicla taxi → proprio → motorista → taxi.
 const BUSCA_MODOS = {
-  taxi: { label: "Táxi", Icon: CarTaxiFront, cor: C.warn, bg: C.warnSoft },
-  proprio: { label: "Nós", Icon: Car, cor: C.brand, bg: C.amberSoft },
-  motorista: { label: "Motorista", Icon: Bus, cor: C.blue, bg: C.blueSoft },
+  taxi: { label: "Táxi", Icon: CarTaxiFront, cor: C.inkSoft, bg: C.panel2 },
+  proprio: { label: "Nós", Icon: Car, cor: C.ink, bg: C.panel2 },
+  motorista: { label: "Motorista", Icon: Bus, cor: C.inkSoft, bg: C.panel2 },
 };
 const BUSCA_PROXIMO = { taxi: "proprio", proprio: "motorista", motorista: "taxi" };
 
@@ -1266,7 +1272,7 @@ function Card({ children, style, className = "" }) {
     </div>
   );
 }
-function Pill({ children, color = C.blue, bg = C.blueSoft }) {
+function Pill({ children, color = C.inkSoft, bg = C.panel2 }) {
   return (
     <span
       className="px-2 py-0.5 rounded-full text-xs font-medium inline-flex items-center gap-1"
@@ -1345,11 +1351,12 @@ function MiniStat({ label, value, cor }) {
     </div>
   );
 }
-// Barra de ocupação: enche com animação (bar-grow) e fica vermelha quando
-// lotada. Usada nos cards de viagem da Agenda e no hero do dia.
+// Barra de ocupação: enche com animação (bar-grow). Sem cor de status — a
+// leitura é pelo número (X/Y e %) e pela palavra "LOTADO" quando cheia.
 function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefixo }) {
   const pct = total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
-  const cor = pct >= 100 ? C.red : pct >= 85 ? C.warn : pct >= 40 ? C.brand : C.inkSoft;
+  const lotado = pct >= 100;
+  const cor = lotado ? C.ink : C.inkSoft;
   return (
     <div>
       {mostrarTexto && (
@@ -1364,7 +1371,7 @@ function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefi
             {prefixo ? "" : " passageiros"}
           </span>
           <span className="font-bold" style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}>
-            {pct}%
+            {pct}%{lotado ? " · LOTADO" : ""}
           </span>
         </div>
       )}
@@ -1374,12 +1381,7 @@ function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefi
       >
         <div
           className="bar-fill bar-grow h-full rounded-full"
-          style={{
-            width: `${pct}%`,
-            background:
-              pct >= 40 ? `linear-gradient(90deg, ${C.brandDim}, ${cor})` : cor,
-            boxShadow: pct > 0 ? `0 0 12px -3px ${cor}` : "none",
-          }}
+          style={{ width: `${pct}%`, background: cor }}
         />
       </div>
     </div>
@@ -2098,8 +2100,9 @@ function AppInner() {
           className="anim-slideDown fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 text-xs rounded-lg px-4 py-2.5 max-w-[92vw]"
           style={{
             top: "max(0.75rem, env(safe-area-inset-top))",
-            background: C.green,
-            color: "#0C1F16",
+            background: C.panel2,
+            color: C.ink,
+            border: `1px solid ${C.border}`,
             boxShadow: "0 4px 16px rgba(0,0,0,.4)",
           }}
         >
@@ -2596,10 +2599,7 @@ function ReservarTab({
               </span>
               <span
                 className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
-                style={{
-                  background: modoAtendimento === "ia" ? "rgba(52,199,123,.22)" : "rgba(232,163,61,.22)",
-                  color: modoAtendimento === "ia" ? "#8ff0bd" : "#ffd79a",
-                }}
+                style={{ background: "rgba(255,255,255,.14)", color: "#fff" }}
               >
                 {modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}
               </span>
@@ -4918,7 +4918,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </div>
           </Card>
         )}
-        <DirecaoDivisor label="IDA" cor={C.brand} />
+        <DirecaoDivisor label="IDA" cor={C.inkSoft} />
         <ListaSecao
           titulo="BUSCAR EM CASA"
           itens={buscaItens}
@@ -4938,7 +4938,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           mover={mover}
           remove={remove}
         />
-        <DirecaoDivisor label="VOLTA" cor={C.blue} />
+        <DirecaoDivisor label="VOLTA" cor={C.inkSoft} />
         <ListaSecao
           titulo="CANTANHEDE"
           itens={cantanhedeItens}
@@ -5924,7 +5924,7 @@ function FinanceiroTab({ pix, deepLink }) {
               <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
                 Receitas
               </div>
-              <div style={{ color: C.green, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+              <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
                 {fmtBRL(receitaMes)}
               </div>
             </div>
@@ -5932,7 +5932,7 @@ function FinanceiroTab({ pix, deepLink }) {
               <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
                 Despesas
               </div>
-              <div style={{ color: "#ffb0ac", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+              <div style={{ color: "rgba(255,255,255,.72)", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
                 {fmtBRL(despesaMes)}
               </div>
             </div>

@@ -19,8 +19,9 @@ const C = {
   borderSoft: "#1E252F",
   ink: "#ECEEF2",
   inkSoft: "#8B93A3",
-  amber: "#E8A33D",
-  blue: "#5B8DEF",
+  // sem cor de sinalização no app — as séries usam cinza neutro
+  amber: "#B9BDC6",
+  blue: "#B9BDC6",
 };
 
 const brl = (n) =>
