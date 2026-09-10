@@ -8489,11 +8489,11 @@ function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
   return (
     <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
       <div
-        className="relative rounded-2xl border overflow-hidden"
-        style={{ borderColor: C.brandDim, minHeight: 236 }}
+        className="relative rounded-2xl border overflow-hidden min-h-[260px] md:min-h-[300px]"
+        style={{ borderColor: C.brandDim }}
       >
         <VideoBackdrop variant="hero" />
-        <div className="relative p-5 md:p-7 max-w-2xl">
+        <div className="relative p-5 md:p-7 max-w-xl lg:max-w-2xl">
           <h1
             className="hero-t hero-t-1"
             style={{
