@@ -90,12 +90,12 @@ test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ pag
   await page.goto("/");
   await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
 
-  const chip = page.getByRole("button", { name: /Busca:/ });
-  await expect(chip).toHaveText(/Busca:\s*Táxi/);
+  const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
+  await expect(chip).toHaveText(/Táxi/);
   await chip.click();
-  await expect(page.getByRole("button", { name: /Busca:/ })).toHaveText(/Busca:\s*Nós/);
-  await page.getByRole("button", { name: /Busca:/ }).click();
-  await expect(page.getByRole("button", { name: /Busca:/ })).toHaveText(/Busca:\s*Motorista/);
+  await expect(chip).toHaveText(/Gustavo/);
+  await chip.click();
+  await expect(chip).toHaveText(/Maurício/);
 });
 
 test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page }) => {
@@ -128,10 +128,10 @@ test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page
   await page.goto("/");
   await page.getByRole("button", { name: /^Agenda$/ }).first().click();
 
-  const chip = page.getByTitle("Tocar para mudar quem busca este passageiro");
+  const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
   await expect(chip).toHaveText(/Táxi/);
   await chip.click();
-  await expect(page.getByTitle("Tocar para mudar quem busca este passageiro")).toHaveText(/Nós/);
+  await expect(chip).toHaveText(/Gustavo/);
 });
 
 test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {

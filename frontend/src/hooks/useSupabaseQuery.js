@@ -54,7 +54,14 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run]);
 
-  return { data, loading, error, refetch: run };
+  // Atualização otimista pontual (ex.: marcar embarque / quem busca —
+  // ações que NÃO afetam capacidade). O refetch seguinte reconcilia com
+  // o banco.
+  const mutate = useCallback((updater) => {
+    setData((prev) => (typeof updater === "function" ? updater(prev) : updater));
+  }, []);
+
+  return { data, loading, error, refetch: run, mutate };
 }
 
 function sleep(ms) {
