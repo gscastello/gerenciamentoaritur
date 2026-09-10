@@ -87,6 +87,7 @@ import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useAgendaNote } from "../hooks/useAgendaNote.js";
+import { useErrorLog } from "../hooks/useErrorLog.js";
 import { useNotifications } from "../hooks/useNotifications.js";
 import { usePendencias } from "../hooks/usePendencias.js";
 import { useTrips } from "../hooks/useTrips.js";
@@ -103,6 +104,7 @@ import {
   validarTelefone,
   validarValor,
 } from "../domain/validacao.js";
+import { mensagemAmigavel } from "../lib/erros.js";
 import {
   abrirRelatorioPDF,
   baixarCSVZip,
@@ -2674,13 +2676,18 @@ function ReservarTab({
           : null,
         status: pendente ? "pendente" : "confirmada",
       });
+      emit(EVENTS.RESERVA_CRIADA, {
+        via: "roteiro",
+        status: res?.status || (pendente ? "pendente" : "confirmada"),
+        duplicada: res?.message === "duplicate_ignored",
+      });
       setDone(resumoLocal(res?.status || (pendente ? "pendente" : "confirmada")));
       setStep(9);
     } catch (e) {
       if (e?.code === "CAPACITY_OR_BUSINESS_RULE") {
         setForm({ ...form, _direcaoOriginal: form.direcao });
         setStep("espera-form");
-      } else setErroEnvio(e?.message || "Não foi possível enviar a reserva. Tente de novo.");
+      } else setErroEnvio(mensagemAmigavel(e, "Não foi possível enviar a reserva. Tente de novo."));
     } finally {
       setEnviando(false);
     }
@@ -2703,7 +2710,7 @@ function ReservarTab({
       setDone(resumoLocal(res?.status || "espera"));
       setStep(10);
     } catch (e) {
-      setErroEnvio(e?.message || "Não foi possível entrar na lista de espera.");
+      setErroEnvio(mensagemAmigavel(e, "Não foi possível entrar na lista de espera."));
     } finally {
       setEnviando(false);
     }
@@ -2752,7 +2759,7 @@ function ReservarTab({
       });
       setStep(7);
     } catch (e) {
-      setErroEnvio(e?.message || "Não foi possível registrar o frete.");
+      setErroEnvio(mensagemAmigavel(e, "Não foi possível registrar o frete."));
     } finally {
       setEnviando(false);
     }
@@ -2780,7 +2787,7 @@ function ReservarTab({
       });
       setStep(11);
     } catch (e) {
-      setErroEnvio(e?.message || "Não foi possível registrar a encomenda.");
+      setErroEnvio(mensagemAmigavel(e, "Não foi possível registrar a encomenda."));
     } finally {
       setEnviando(false);
     }
@@ -3630,7 +3637,7 @@ function AgendaTab({
     try {
       await promise;
     } catch (e) {
-      setAcaoErro(e?.message || msgFalha);
+      setAcaoErro(mensagemAmigavel(e, msgFalha));
     }
   };
   const atualizarStatus = (id, novoStatus) => {
@@ -3678,6 +3685,7 @@ function AgendaTab({
     try {
       if (cancel) {
         await R.cancelReservation(id);
+        emit(EVENTS.RESERVA_CANCELADA, { via: "editar" });
         setEditando(null);
         return;
       }
@@ -3699,9 +3707,19 @@ function AgendaTab({
           ? { received: comprovante.received, amount: comprovante.amount, method: comprovante.method }
           : null,
       });
+      emit(EVENTS.RESERVA_EDITADA, {
+        campos: [
+          move && "ponto",
+          quantidade && "quantidade",
+          details && Object.keys(details).length > 0 && "detalhes",
+          contato && "contato",
+          pagamento && "pagamento",
+          comprovante && "comprovante",
+        ].filter(Boolean),
+      });
       setEditando(null);
     } catch (e) {
-      setAcaoErro(e?.message || "Não foi possível salvar a edição.");
+      setAcaoErro(mensagemAmigavel(e, "Não foi possível salvar a edição."));
     }
   };
   // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
@@ -4123,7 +4141,7 @@ function ViagemOperacional({
     const kmTxt = prompt("Km atual do veículo na saída?");
     if (kmTxt === null) return;
     T.startTrip(trip.trip_id, { km: Number.parseFloat(kmTxt) || 0 }).catch((e) =>
-      alert(e?.message || "Não foi possível iniciar a viagem."),
+      alert(mensagemAmigavel(e, "Não foi possível iniciar a viagem.")),
     );
   };
   const finalizarViagem = () => {
@@ -4131,7 +4149,7 @@ function ViagemOperacional({
     const kmTxt = prompt("Km atual do veículo na chegada?");
     if (kmTxt === null) return;
     T.finishTrip(viagemAtiva.trip_id, { km: Number.parseFloat(kmTxt) || 0 }).catch((e) =>
-      alert(e?.message || "Não foi possível finalizar a viagem."),
+      alert(mensagemAmigavel(e, "Não foi possível finalizar a viagem.")),
     );
   };
   const avisarJanela = (nomeCidade) =>
@@ -4636,13 +4654,18 @@ function NovaReservaModal({
     setSalvando(true);
     try {
       const res = await onCriar(montarPayload(status));
+      emit(EVENTS.RESERVA_CRIADA, {
+        via: "agendamento_manual",
+        status: res?.status || status,
+        duplicada: res?.message === "duplicate_ignored",
+      });
       onClose({ ok: true, nome: f.nome.trim(), status: res?.status || status, data: f.data });
     } catch (e) {
       if (e?.code === "CAPACITY_OR_BUSINESS_RULE" && status !== "espera") {
         setOfereceEspera(true);
-        setErro(e?.message || "Viagem lotada.");
+        setErro(mensagemAmigavel(e, "Viagem lotada."));
       } else {
-        setErro(e?.message || "Não foi possível agendar. Tente de novo.");
+        setErro(mensagemAmigavel(e, "Não foi possível agendar. Tente de novo."));
       }
     } finally {
       setSalvando(false);
@@ -5047,7 +5070,7 @@ function PendenciasTab({ pend }) {
       });
       setNovo({ subject: "", detail: "", phone: "" });
     } catch (e) {
-      setErro(e?.message || "Não foi possível abrir a pendência.");
+      setErro(mensagemAmigavel(e, "Não foi possível abrir a pendência."));
     }
   };
   const resolver = async (id) => {
@@ -5055,7 +5078,7 @@ function PendenciasTab({ pend }) {
     try {
       await pend.resolver(id);
     } catch (e) {
-      setErro(e?.message || "Não foi possível resolver.");
+      setErro(mensagemAmigavel(e, "Não foi possível resolver."));
     }
   };
   const fonte = (s) => (s === "whatsapp" ? "WhatsApp" : s === "sistema" ? "Sistema" : "Manual");
@@ -5231,7 +5254,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
         routePointCode: alvo.pontoId,
       });
     } catch (e) {
-      setErro(e?.message || "Não foi possível realocar.");
+      setErro(mensagemAmigavel(e, "Não foi possível realocar."));
     }
   };
   const remove = async (id) => {
@@ -5239,7 +5262,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
     try {
       await R.cancelReservation(id);
     } catch (e) {
-      setErro(e?.message || "Não foi possível remover.");
+      setErro(mensagemAmigavel(e, "Não foi possível remover."));
     }
   };
   // Ações do motorista direto na lista de embarque.
@@ -5250,7 +5273,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
       else if (acao === "nao_compareceu") await R.markPassengers(id, "nao_compareceu");
       else await R.markPassengers(id, "confirmado").then(() => R.confirmReservation(id));
     } catch (e) {
-      setErro(e?.message || "Não foi possível atualizar o passageiro.");
+      setErro(mensagemAmigavel(e, "Não foi possível atualizar o passageiro."));
     }
   };
   // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
@@ -5259,7 +5282,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
     try {
       await R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio");
     } catch (e) {
-      setErro(e?.message || "Não foi possível mudar quem busca.");
+      setErro(mensagemAmigavel(e, "Não foi possível mudar quem busca."));
     }
   };
   // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
@@ -5466,7 +5489,7 @@ function DesembarqueView({ reservas, R, data }) {
     try {
       await p;
     } catch (e) {
-      setErro(e?.message || "Não foi possível salvar.");
+      setErro(mensagemAmigavel(e, "Não foi possível salvar."));
     } finally {
       setSalvando(false);
     }
@@ -6060,7 +6083,7 @@ function PassageirosTab({ reservas, trips, deepLink }) {
   const salvarNota = (customerId, texto) => {
     setErro("");
     updateNotes(customerId, texto).catch((e) =>
-      setErro(e?.message || "Não foi possível salvar a nota."),
+      setErro(mensagemAmigavel(e, "Não foi possível salvar a nota.")),
     );
   };
 
@@ -6409,7 +6432,7 @@ function FinanceiroTab({ pix, deepLink }) {
     try {
       await fn();
     } catch (e) {
-      setErro(e?.message || "Não foi possível salvar.");
+      setErro(mensagemAmigavel(e, "Não foi possível salvar."));
     } finally {
       setSalvando(false);
     }
@@ -6936,7 +6959,7 @@ function RelatorioFinanceiroView() {
         await baixarRelatorioFinanceiroXLSX(relatorio);
       }
     } catch (e) {
-      setErro(e?.message || "Não foi possível gerar o relatório.");
+      setErro(mensagemAmigavel(e, "Não foi possível gerar o relatório."));
     } finally {
       setBaixando(false);
     }
@@ -7086,7 +7109,7 @@ function ContasReceberView({ pix }) {
       const url = await verComprovante(path);
       if (url) window.open(url, "_blank", "noopener");
     } catch (e) {
-      setErroAjuste(e?.message || "Não foi possível abrir o comprovante.");
+      setErroAjuste(mensagemAmigavel(e, "Não foi possível abrir o comprovante."));
     }
   };
 
@@ -7117,7 +7140,7 @@ function ContasReceberView({ pix }) {
       });
       setAjusteAberto(null);
     } catch (e) {
-      setErroAjuste(e?.message || "Não foi possível registrar o ajuste.");
+      setErroAjuste(mensagemAmigavel(e, "Não foi possível registrar o ajuste."));
     }
   };
 
@@ -7128,7 +7151,7 @@ function ContasReceberView({ pix }) {
           className="mb-3 flex items-center gap-2 text-xs rounded-lg px-3 py-2"
           style={{ background: C.redSoft, color: C.red }}
         >
-          <AlertTriangle size={14} /> {error?.message || "Erro ao carregar contas a receber."}
+          <AlertTriangle size={14} /> {mensagemAmigavel(error, "Erro ao carregar contas a receber.")}
         </div>
       )}
       <Card className="anim-fadeUp">
@@ -7355,7 +7378,7 @@ function GestaoTab({ deepLink }) {
     try {
       return await fn();
     } catch (e) {
-      setErro(e?.message || msgErro || "Não foi possível concluir.");
+      setErro(mensagemAmigavel(e, msgErro || "Não foi possível concluir."));
     }
   };
 
@@ -8530,7 +8553,7 @@ function OperacaoTab() {
     try {
       await fn();
     } catch (e) {
-      setErro(e?.message || msg);
+      setErro(mensagemAmigavel(e, msg));
     }
   };
 
@@ -9578,7 +9601,7 @@ function SistemaCidades() {
       </p>
       {s.error && (
         <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
-          {s.error?.message || "Erro ao carregar as configurações."}
+          {mensagemAmigavel(s.error, "Erro ao carregar as configurações.")}
         </div>
       )}
       <div className="grid sm:grid-cols-2 gap-6">
@@ -9620,7 +9643,7 @@ function SistemaBaldes() {
       await fn();
       return true;
     } catch (e) {
-      setErro(e?.message || msg || "Não foi possível concluir.");
+      setErro(mensagemAmigavel(e, msg || "Não foi possível concluir."));
       return false;
     }
   };
@@ -9820,7 +9843,7 @@ function SistemaBairros() {
       await bairros.salvar(nome, Number.parseFloat(preco));
       return true;
     } catch (e) {
-      setErro(e?.message || "Não foi possível salvar.");
+      setErro(mensagemAmigavel(e, "Não foi possível salvar."));
       return false;
     }
   };
@@ -9833,7 +9856,7 @@ function SistemaBairros() {
     try {
       await bairros.remover(b.id);
     } catch (e) {
-      setErro(e?.message || "Não foi possível remover.");
+      setErro(mensagemAmigavel(e, "Não foi possível remover."));
     }
   };
 
@@ -9974,7 +9997,7 @@ function SistemaEquipe() {
       await fn();
       return true;
     } catch (e) {
-      setErro(e?.message || msgFalha || "Não foi possível concluir.");
+      setErro(mensagemAmigavel(e, msgFalha || "Não foi possível concluir."));
       return false;
     }
   };
@@ -10212,6 +10235,77 @@ function SistemaEquipe() {
 // Preferência de movimento (por dispositivo). "Automático" respeita o
 // ajuste de "reduzir animações" do sistema; "Ligado" força os heros a
 // animar mesmo assim. Ver src/lib/motion.js.
+// Erros recentes do app (database/36) — o admin vê o que os usuários
+// viram, com detalhe técnico. Alimentado por logTecnico() em lib/erros.js.
+function SistemaErros() {
+  const { erros, loading, error, recarregar } = useErrorLog();
+  return (
+    <Card className="anim-fadeUp">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-semibold flex items-center gap-2">
+          <AlertTriangle size={16} style={{ color: C.amber }} /> Erros recentes do app
+        </div>
+        <button
+          type="button"
+          onClick={recarregar}
+          className="btn-press text-[11px] px-2 py-1 rounded-md"
+          style={{ background: C.panel2, color: C.inkSoft }}
+        >
+          <RefreshCw size={12} className="inline mr-1" />
+          Atualizar
+        </button>
+      </div>
+      {error && (
+        <div className="text-xs" style={{ color: C.inkFaint }}>
+          {mensagemAmigavel(error, "Não foi possível carregar o log.")}
+        </div>
+      )}
+      {!error && loading && erros.length === 0 && (
+        <div className="text-xs" style={{ color: C.inkFaint }}>
+          carregando…
+        </div>
+      )}
+      {!error && !loading && erros.length === 0 && (
+        <div className="text-xs" style={{ color: C.inkFaint }}>
+          Nenhum erro registrado nos últimos 30 dias. 🎉
+        </div>
+      )}
+      {erros.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left" style={{ color: C.inkFaint }}>
+                <th className="py-1 pr-3 font-medium">Quando</th>
+                <th className="py-1 pr-3 font-medium">Código</th>
+                <th className="py-1 font-medium">Mensagem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {erros.map((e) => (
+                <tr key={e.id} className="border-t" style={{ borderColor: C.borderSoft }}>
+                  <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: C.inkSoft }}>
+                    {fmtDataHora(e.at)}
+                  </td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: C.inkFaint }}>
+                    {e.code || "—"}
+                  </td>
+                  <td
+                    className="py-1.5"
+                    style={{ color: C.ink, overflowWrap: "anywhere" }}
+                    title={e.context ? JSON.stringify(e.context) : ""}
+                  >
+                    {e.message}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function MovimentoControl() {
   const [pref, setPref] = useState(getMotionPref());
   useEffect(() => watchSystemMotion(), []);
@@ -10272,7 +10366,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
   const [erro, setErro] = useState("");
-  const catchErr = (p, msg) => p?.catch?.((e) => setErro(e?.message || msg));
+  const catchErr = (p, msg) => p?.catch?.((e) => setErro(mensagemAmigavel(e, msg)));
   // Diagnóstico só-leitura: o banco já impede overbooking (trigger de
   // capacidade) e quantidade inválida (check). Aqui só listamos.
   const rodarDiagnostico = () => {
@@ -10300,7 +10394,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
         por_tipo: resumo.por_tipo,
       });
     } catch (e) {
-      setErro(e?.message || "Não foi possível rodar o diagnóstico no servidor.");
+      setErro(mensagemAmigavel(e, "Não foi possível rodar o diagnóstico no servidor."));
     }
   };
   // Backup completo — gerado pelo servidor (database/17-backup-completo.sql),
@@ -10314,7 +10408,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
     try {
       setUltimoBackup(await backup.gerarAgora());
     } catch (e) {
-      setErro(e?.message || "Não foi possível gerar o backup.");
+      setErro(mensagemAmigavel(e, "Não foi possível gerar o backup."));
     }
   };
   const abrirBackupDoHistorico = async (id) => {
@@ -10322,7 +10416,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
     try {
       setUltimoBackup(await backup.buscarPayload(id));
     } catch (e) {
-      setErro(e?.message || "Não foi possível abrir esse backup.");
+      setErro(mensagemAmigavel(e, "Não foi possível abrir esse backup."));
     }
   };
   const exportarBackup = async (formato) => {
@@ -10335,14 +10429,14 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
       else if (formato === "csv") await baixarCSVZip(ultimoBackup);
       else if (formato === "pdf") abrirRelatorioPDF(ultimoBackup);
     } catch (e) {
-      setErro(e?.message || "Não foi possível exportar o backup.");
+      setErro(mensagemAmigavel(e, "Não foi possível exportar o backup."));
     } finally {
       setFormatoEmProcesso(null);
     }
   };
   const trocarModo = (v) => {
     setErro("");
-    onSetModo(v).catch((e) => setErro(e?.message || "Não foi possível trocar o modo (só admin)."));
+    onSetModo(v).catch((e) => setErro(mensagemAmigavel(e, "Não foi possível trocar o modo (só admin).")));
   };
   const atualizarPonto = (p, campo, valor) => {
     setErro("");
@@ -10422,6 +10516,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
           </div>
         )}
         <MovimentoControl />
+
+        <SistemaErros />
 
         <SistemaEquipe />
 
