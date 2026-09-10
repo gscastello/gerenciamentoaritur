@@ -98,6 +98,39 @@ test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ pag
   await expect(chip).toHaveText(/Maurício/);
 });
 
+test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ page }) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      {
+        id: "res-espera-1",
+        data: hoje,
+        direcao: "ida",
+        pontoId: "rodoviaria",
+        nome: "Cliente Espera E2E",
+        telefone: "98991110000",
+        quantidade: 2,
+        valorUnit: 60,
+        valorTotal: 120,
+        pagamento: "dinheiro",
+        status: "espera",
+        tipo: "passagem",
+        pago: false,
+        temEmbarcado: false,
+        criadoEm: new Date().toISOString(),
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByRole?.("button");
+  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await expect(page.getByText(/Lista de espera\s*\(1\)/)).toBeVisible();
+  await expect(page.getByText("Cliente Espera E2E")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Chamar (dar vaga)" })).toBeVisible();
+});
+
 test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page }) => {
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
   await mockSupabase(page, {
