@@ -8,6 +8,11 @@ import App from "./app/App.jsx";
 import { AuthGate } from "./auth/AuthGate.jsx";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
 import { initObservability, reportError } from "./observability/index.js";
+import { applyMotion } from "./lib/motion.js";
+
+// Resolve a preferência de movimento antes do primeiro paint (evita
+// piscar animação para quem tem "reduzir movimento" no sistema).
+applyMotion();
 
 initObservability();
 

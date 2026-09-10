@@ -40,11 +40,24 @@
   to { transform: rotate(360deg); }
 }
 
-/* Regra inegociável (AGENTS.md §5): ninguém pode ignorar isto. */
+/* AGENTS.md §5: menos movimento é o PADRÃO. A fonte de verdade é
+ * html[data-motion] (src/lib/motion.js), que resolve a preferência do
+ * usuário + o ajuste do sistema. "off" desliga; enquanto o JS não roda,
+ * o @media abaixo é a rede de segurança para quem tem "reduzir
+ * animações" no sistema. "on" (escolha explícita do usuário na aba
+ * Sistema) reativa tudo. */
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html:not([data-motion]) *,
+  html:not([data-motion]) *::before,
+  html:not([data-motion]) *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
