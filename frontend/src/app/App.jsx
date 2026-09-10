@@ -623,8 +623,10 @@ function GlobalStyles() {
       .row-hover { transition: background-color .15s ease, transform .15s cubic-bezier(.16,1,.3,1); }
       .tab-btn { transition: background-color .16s ease, color .16s ease, transform .12s cubic-bezier(.16,1,.3,1); }
       .bar-fill { transition: width .45s cubic-bezier(.16,1,.3,1); }
-      .check-anim { transition: transform .16s cubic-bezier(.34,1.56,.64,1), background-color .16s ease, border-color .16s ease; }
-      .check-anim:active { transform: scale(.86); }
+      /* caixa de embarque: SEM transição de cor/borda — o preenchimento
+         tem de aparecer no mesmo frame do toque. Só um micro-press. */
+      .check-fast { transition: transform .07s ease; }
+      .check-fast:active { transform: scale(.9); }
       .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
       @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:.35; } }
       ::-webkit-scrollbar { width:8px; height:8px; }
@@ -4039,13 +4041,13 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
           type="button"
           aria-label={r.status === "embarcado" ? "Desmarcar embarque" : "Marcar embarque"}
           onClick={() => onStatus(r.id, r.status === "embarcado" ? "confirmada" : "embarcado")}
-          className="check-anim shrink-0 mt-0.5 w-4 h-4 rounded border flex items-center justify-center"
+          className="check-fast shrink-0 mt-0.5 w-[15px] h-[15px] rounded-[4px] border flex items-center justify-center"
           style={{
             borderColor: r.status === "embarcado" ? C.ink : C.inkFaint,
             background: r.status === "embarcado" ? C.ink : "transparent",
           }}
         >
-          {r.status === "embarcado" && <Check size={11} color={C.panel} />}
+          {r.status === "embarcado" && <Check size={11} color={C.panel} strokeWidth={3} />}
         </button>
         <div className="min-w-0 flex-1">
           {/* o que importa: nº de passagens + endereço */}
@@ -5774,13 +5776,13 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           type="button"
           onClick={() => marcar(r.id, embarcado ? "reverter" : "embarcado")}
           aria-label={embarcado ? "Desmarcar embarque" : "Marcar embarque"}
-          className="check-anim shrink-0 mt-0.5 rounded border flex items-center justify-center w-[18px] h-[18px]"
+          className="check-fast shrink-0 mt-0.5 rounded-[4px] border flex items-center justify-center w-4 h-4"
           style={{
             borderColor: embarcado ? C.ink : C.inkFaint,
             background: embarcado ? C.ink : "transparent",
           }}
         >
-          {embarcado && <Check size={12} style={{ color: C.panel }} />}
+          {embarcado && <Check size={11} style={{ color: C.panel }} strokeWidth={3} />}
         </button>
       )}
       <div className="min-w-0 flex-1">
