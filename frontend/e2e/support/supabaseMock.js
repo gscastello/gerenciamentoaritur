@@ -64,6 +64,7 @@ function json(body, status = 200) {
  * @param {object} [opts.createResult]     resposta de rpc_create_reservation
  * @param {(route)=>void} [opts.onCreate]  callback quando rpc_create_reservation é chamado
  * @param {Array}  [opts.notifications=[]]  linhas de v_app_notifications
+ * @param {Array}  [opts.pendencias=[]]     linhas de v_pendencias_atendimento
  */
 export async function mockSupabase(page, opts = {}) {
   const {
@@ -73,6 +74,7 @@ export async function mockSupabase(page, opts = {}) {
     createResult = { success: true, reservation_id: "e2e-res-1", status: "confirmada", message: "created" },
     onCreate,
     notifications = [],
+    pendencias = [],
   } = opts;
 
   await page.addInitScript(
@@ -103,6 +105,9 @@ export async function mockSupabase(page, opts = {}) {
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
+  // pendências de atendimento (issue #118) — stateful
+  let tickets = pendencias.map((p) => ({ ...p }));
+  let ticketSeq = 0;
 
   await page.route("**/rest/v1/**", async (route) => {
     const req = route.request();
@@ -150,6 +155,32 @@ export async function mockSupabase(page, opts = {}) {
         for (const n of notifications) lidas.add(n.id);
         return route.fulfill(json({ success: true }));
       }
+      if (fn === "rpc_open_support_ticket") {
+        const b = req.postDataJSON?.() ?? {};
+        ticketSeq += 1;
+        tickets = [
+          {
+            id: `tkt-${ticketSeq}`,
+            source: b.p_source ?? "manual",
+            phone: b.p_phone ?? null,
+            customer_id: b.p_customer_id ?? null,
+            assunto: b.p_subject ?? "Atendimento",
+            detail: b.p_detail ?? "",
+            status: "aberta",
+            meta: {},
+            created_at: new Date().toISOString(),
+            cliente: null,
+            aberto_por: "Atendente E2E",
+          },
+          ...tickets,
+        ];
+        return route.fulfill(json({ success: true, id: `tkt-${ticketSeq}` }));
+      }
+      if (fn === "rpc_resolve_support_ticket") {
+        const b = req.postDataJSON?.() ?? {};
+        tickets = tickets.filter((t) => t.id !== b.p_id);
+        return route.fulfill(json({ success: true }));
+      }
       return route.fulfill(json({ success: true }));
     }
 
@@ -195,6 +226,7 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "v_contas_a_receber") rows = [];
     else if (table === "v_app_notifications")
       rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
+    else if (table === "v_pendencias_atendimento") rows = tickets;
     else rows = [];
 
     const body = wantsObject ? (rows[0] ?? null) : rows;

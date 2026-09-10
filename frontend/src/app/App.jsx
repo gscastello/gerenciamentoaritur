@@ -24,6 +24,7 @@ import {
   Headset,
   Home as HomeIcon,
   Hourglass,
+  Inbox,
   Landmark,
   LayoutDashboard,
   MapPin,
@@ -87,6 +88,7 @@ import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useAgendaNote } from "../hooks/useAgendaNote.js";
 import { useNotifications } from "../hooks/useNotifications.js";
+import { usePendencias } from "../hooks/usePendencias.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useUsersList } from "../hooks/useUsers.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
@@ -1244,6 +1246,7 @@ const NOTIF_META = {
   cancelamento: { label: "Cancelamento", Icon: X },
   mudanca_embarque: { label: "Mudança de embarque", Icon: MapPin },
   mudanca_desembarque: { label: "Mudança de desembarque", Icon: MapPin },
+  pendencia: { label: "Pendência", Icon: Inbox },
 };
 function tempoRelativo(iso) {
   const ms = Date.now() - new Date(iso).getTime();
@@ -1968,6 +1971,7 @@ const TAB_ROLES = {
   lista: ["admin", "atendente", "motorista", "financeiro"],
   bloco: ["admin", "atendente"],
   passageiros: ["admin", "atendente", "financeiro"],
+  pendencias: ["admin", "atendente"],
   financeiro: ["admin"],
   gestao: ["admin"],
   operacao: ["admin"],
@@ -1988,6 +1992,7 @@ const NAV_ITENS = [
   { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
   { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
+  { id: "pendencias", label: "Pendências", icon: Inbox, grupo: "Atendimento" },
   { id: "reservar", label: "Reservar", icon: MessageCircle, grupo: "Atendimento" },
 ];
 const NAV_GRUPOS = [
@@ -2038,9 +2043,11 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
   );
 }
 
-function MobileNav({ nav, tab, onSelect, pendentesCount }) {
+function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) {
+  const badgeDe = (id) =>
+    id === "agenda" ? pendentesCount : id === "pendencias" ? pendenciasCount : 0;
   const [maisAberto, setMaisAberto] = useState(false);
-  const LIMITE = 5;
+  const LIMITE = 6;
   let visiveis = nav;
   let extras = [];
   if (nav.length > LIMITE) {
@@ -2081,7 +2088,7 @@ function MobileNav({ nav, tab, onSelect, pendentesCount }) {
                   n={n}
                   grande
                   active={tab === n.id}
-                  badge={n.id === "agenda" ? pendentesCount : 0}
+                  badge={badgeDe(n.id)}
                   onClick={() => escolher(n.id)}
                 />
               ))}
@@ -2098,7 +2105,7 @@ function MobileNav({ nav, tab, onSelect, pendentesCount }) {
             key={n.id}
             n={n}
             active={tab === n.id}
-            badge={n.id === "agenda" ? pendentesCount : 0}
+            badge={badgeDe(n.id)}
             onClick={() => escolher(n.id)}
           />
         ))}
@@ -2219,6 +2226,8 @@ function AppInner() {
     (r) => r.status === "pendente" || r.status === "espera",
   ).length;
   const notif = useNotifications({ enabled: !!role });
+  const pend = usePendencias({ enabled: podeAgendar });
+  const pendenciasCount = pend.total;
 
   return (
     <NotificacoesContext.Provider value={notif}>
@@ -2344,15 +2353,16 @@ function AppInner() {
                       )}
                       <Icon size={16} />
                       {n.label}
-                      {n.id === "agenda" && pendentesCount > 0 && (
+                      {((n.id === "agenda" && pendentesCount > 0) ||
+                        (n.id === "pendencias" && pendenciasCount > 0)) && (
                         <span
                           className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
                           style={{
-                            background: active ? "rgba(255,255,255,.22)" : C.purpleSoft,
-                            color: active ? C.onBrand : C.purple,
+                            background: active ? "rgba(255,255,255,.22)" : C.panel2,
+                            color: active ? C.onBrand : C.ink,
                           }}
                         >
-                          {pendentesCount}
+                          {n.id === "agenda" ? pendentesCount : pendenciasCount}
                         </span>
                       )}
                     </button>
@@ -2397,7 +2407,13 @@ function AppInner() {
         />
       </div>
 
-      <MobileNav nav={NAV} tab={tab} onSelect={mudarAba} pendentesCount={pendentesCount} />
+      <MobileNav
+        nav={NAV}
+        tab={tab}
+        onSelect={mudarAba}
+        pendentesCount={pendentesCount}
+        pendenciasCount={pendenciasCount}
+      />
 
       <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden relative z-10">
         <div
@@ -2468,6 +2484,7 @@ function AppInner() {
               />
             )}
             {tab === "bloco" && <BlocoDeNotasTab />}
+            {tab === "pendencias" && <PendenciasTab pend={pend} />}
             {tab === "passageiros" && (
               <PassageirosTab
                 reservas={reservas}
@@ -4929,6 +4946,164 @@ function BlocoDeNotasTab() {
           Salva sozinho enquanto você digita. Todos os sócios veem a mesma nota,
           atualizando em tempo real.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== PENDÊNCIAS (fila de atendimento) ===================== */
+// Atendimentos que precisam da equipe: o bot de WhatsApp transferiu, ou
+// alguém abriu à mão ("ligar de volta para o cliente X"). Cada pendência
+// nova também toca o sino (database/32).
+function PendenciasTab({ pend }) {
+  const [novo, setNovo] = useState({ subject: "", detail: "", phone: "" });
+  const [erro, setErro] = useState("");
+  const abrir = async () => {
+    if (!novo.subject.trim()) return;
+    setErro("");
+    try {
+      await pend.abrir({
+        subject: novo.subject.trim(),
+        detail: novo.detail.trim(),
+        phone: novo.phone.trim() || null,
+      });
+      setNovo({ subject: "", detail: "", phone: "" });
+    } catch (e) {
+      setErro(e?.message || "Não foi possível abrir a pendência.");
+    }
+  };
+  const resolver = async (id) => {
+    setErro("");
+    try {
+      await pend.resolver(id);
+    } catch (e) {
+      setErro(e?.message || "Não foi possível resolver.");
+    }
+  };
+  const fonte = (s) => (s === "whatsapp" ? "WhatsApp" : s === "sistema" ? "Sistema" : "Manual");
+  return (
+    <div>
+      <Header
+        title="Pendências"
+        subtitle="Atendimentos que precisam da equipe — do bot de WhatsApp ou abertos à mão."
+      />
+      <div className="px-6 md:px-10 pb-10 space-y-4">
+        {erro && (
+          <div
+            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <span>{erro}</span>
+            <button type="button" onClick={() => setErro("")}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        <Card>
+          <div className="text-sm font-semibold mb-2" style={{ color: C.ink }}>
+            Nova pendência
+          </div>
+          <div className="grid sm:grid-cols-3 gap-2">
+            <TextInput
+              placeholder="Assunto (ex.: ligar de volta)"
+              value={novo.subject}
+              onChange={(e) => setNovo({ ...novo, subject: e.target.value })}
+            />
+            <TextInput
+              placeholder="Telefone (opcional)"
+              value={novo.phone}
+              onChange={(e) => setNovo({ ...novo, phone: e.target.value })}
+            />
+            <TextInput
+              placeholder="Detalhe (opcional)"
+              value={novo.detail}
+              onChange={(e) => setNovo({ ...novo, detail: e.target.value })}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={abrir}
+            disabled={!novo.subject.trim()}
+            className="btn-press mt-2 text-xs px-3 py-2 rounded-lg font-medium"
+            style={{
+              background: novo.subject.trim() ? C.amber : C.border,
+              color: novo.subject.trim() ? C.onBrand : C.inkFaint,
+            }}
+          >
+            Abrir pendência
+          </button>
+        </Card>
+
+        {pend.loading && pend.pendencias.length === 0 && (
+          <Card>
+            <div className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
+              carregando…
+            </div>
+          </Card>
+        )}
+        {!pend.loading && pend.pendencias.length === 0 && (
+          <Card>
+            <div className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
+              Nenhuma pendência aberta.
+            </div>
+          </Card>
+        )}
+        {pend.pendencias.map((p) => {
+          const tel = digitos(p.phone);
+          return (
+            <Card key={p.id}>
+              <div className="text-sm font-semibold" style={{ color: C.ink, overflowWrap: "anywhere" }}>
+                {p.assunto}
+              </div>
+              {p.detail && (
+                <div className="text-xs mt-0.5" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+                  {p.detail}
+                </div>
+              )}
+              <div
+                className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5"
+                style={{ color: C.inkFaint }}
+              >
+                <span>{fonte(p.source)}</span>
+                {p.cliente && <span>· {p.cliente}</span>}
+                {p.phone && <span>· {p.phone}</span>}
+                <span>· {tempoRelativo(p.created_at)}</span>
+                {p.aberto_por && <span>· por {p.aberto_por}</span>}
+              </div>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {tel && (
+                  <a
+                    href={`https://wa.me/55${tel}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                    style={{ background: C.panel2, color: C.ink }}
+                  >
+                    <MessageCircle size={13} /> Abrir no WhatsApp
+                  </a>
+                )}
+                {tel && (
+                  <a
+                    href={`tel:${tel}`}
+                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                    style={{ background: C.panel2, color: C.inkSoft }}
+                  >
+                    <PhoneCall size={13} /> Ligar
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => resolver(p.id)}
+                  className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
+                  style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+                >
+                  <Check size={13} /> Resolver
+                </button>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
