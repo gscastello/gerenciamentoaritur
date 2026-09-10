@@ -100,6 +100,12 @@ import {
   abrirRelatorioFinanceiroPDF,
   baixarRelatorioFinanceiroXLSX,
 } from "../lib/relatorioFinanceiroExport.js";
+import {
+  getMotionPref,
+  resolveMotion,
+  setMotionPref,
+  watchSystemMotion,
+} from "../lib/motion.js";
 import { EVENTS, emit } from "../observability/index.js";
 import { FadeIn, Presence, Skeleton } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
@@ -671,12 +677,19 @@ function GlobalStyles() {
         /* botões/ícones minúsculos dentro de linhas densas não precisam do mínimo */
         table button, .no-min-h, .no-min-h button { min-height: 0; }
       }
+      /* Movimento: a preferência efetiva vive em html[data-motion] (lib/motion.js).
+         "off" desliga tudo. Enquanto o JS não resolve, o @media abaixo é a
+         rede de segurança para quem tem "reduzir movimento" no sistema. */
+      html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
+        animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+      html[data-motion="off"] :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
+      html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after, html[data-motion="off"] .sheen::after { animation: none !important; }
+      html[data-motion="off"] .hero-fx-spark { opacity: 0 !important; }
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
-        .aritur-road, .hero-lanes, .hero-bus, .hero-headlight, .float-y, .glow-pulse, .sheen::after,
-        .aritur-hero::before, .aritur-hero::after, .hero-fx-bus, .hero-fx-spark, .bus-drift { animation: none !important; }
-        /* ônibus fica parado num canto, faíscas somem — nada se move */
-        .hero-fx-spark { opacity: 0 !important; }
+        html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
+          animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+        html:not([data-motion]) :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark),
+        html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
       }
     `}</style>
   );
@@ -9566,6 +9579,64 @@ function SistemaEquipe() {
   );
 }
 
+// Preferência de movimento (por dispositivo). "Automático" respeita o
+// ajuste de "reduzir animações" do sistema; "Ligado" força os heros a
+// animar mesmo assim. Ver src/lib/motion.js.
+function MovimentoControl() {
+  const [pref, setPref] = useState(getMotionPref());
+  useEffect(() => watchSystemMotion(), []);
+  const efetivo = resolveMotion(pref);
+  const mudar = (v) => {
+    setPref(v);
+    setMotionPref(v);
+  };
+  const OPCOES = [
+    { v: "auto", label: "Automático", desc: "segue o sistema" },
+    { v: "on", label: "Ligado", desc: "sempre anima" },
+    { v: "off", label: "Desligado", desc: "sem movimento" },
+  ];
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <Sparkles size={16} style={{ color: C.amber }} /> Movimento e animações
+      </div>
+      <p className="text-xs mb-1" style={{ color: C.inkSoft }}>
+        Heros, estrada e ônibus animados. No <b>Automático</b> o app respeita o
+        ajuste de <i>reduzir animações</i> do seu computador — se estiver ligado
+        lá, as decorações ficam paradas. Escolha <b>Ligado</b> para animar mesmo
+        assim.
+      </p>
+      {pref === "auto" && efetivo === "off" && (
+        <p className="text-xs mb-2" style={{ color: C.warn }}>
+          Seu sistema está pedindo menos movimento agora — por isso está tudo
+          parado. Coloque em <b>Ligado</b> para reativar só neste dispositivo.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 mt-2">
+        {OPCOES.map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => mudar(o.v)}
+            className="btn-press text-xs px-3 py-2 rounded-lg font-medium"
+            style={{
+              background: pref === o.v ? C.brand : C.panel2,
+              color: pref === o.v ? C.onBrand : C.ink,
+              border: `1px solid ${pref === o.v ? C.brand : C.border}`,
+            }}
+          >
+            {o.label}{" "}
+            <span style={{ opacity: 0.65 }}>· {o.desc}</span>
+          </button>
+        ))}
+      </div>
+      <div className="text-[11px] mt-2" style={{ color: C.inkFaint }}>
+        Vale só neste dispositivo · agora: <b>{efetivo === "on" ? "animando" : "parado"}</b>
+      </div>
+    </Card>
+  );
+}
+
 function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
@@ -9720,6 +9791,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
             </button>
           </div>
         )}
+        <MovimentoControl />
+
         <SistemaEquipe />
 
         <SistemaCidades />
