@@ -1,31 +1,39 @@
 // src/ui/VideoBackdrop.jsx
 //
-// Camada de vídeo do "hero" AriTur — o ônibus da empresa sob o céu
-// vermelho (loop curto e sem áudio, ~0,6 MB). Três tratamentos:
+// Camadas de vídeo AriTur (loop curto, sem áudio). Três tratamentos:
 //
-//   variant="login" — vídeo cobrindo a viewport atrás do card de login
-//   variant="hero"  — dentro de um card (Dashboard): o ônibus INTEIRO,
-//                     ancorado à direita, com véu escuro do lado do texto
-//   variant="app"   — fundo fixo de todas as telas, bem desbotado/borrado
+//   variant="login" — o ônibus da empresa cobrindo a viewport atrás do
+//                     card de login
+//   variant="hero"  — o ônibus INTEIRO num card (Dashboard), ancorado à
+//                     direita, com véu escuro do lado do texto
+//   variant="app"   — pôr-do-sol vermelho como fundo fixo de TODAS as
+//                     telas, bem borrado e escurecido — atmosfera
 //
 // Regras:
 //   - respeita a preferência de movimento (aba Sistema / sistema
-//     operacional): com movimento OFF, mostra só o pôster estático;
+//     operacional): movimento OFF → só o pôster estático;
 //   - respeita "economia de dados" do navegador (Save-Data) → só pôster;
-//   - o <video> é sempre muted + playsInline + loop (autoplay exige mudo);
-//   - aria-hidden — é decoração. Estilos inline (funciona na tela de
-//     login, que não carrega o CSS global do app).
+//   - o fundo "app" só roda o vídeo em telas grandes (>= 820px) — no
+//     celular do motorista fica o pôster, sem gastar bateria;
+//   - pausa quando a aba perde o foco;
+//   - <video> sempre muted + playsInline + loop; aria-hidden (decoração);
+//   - estilos inline → funciona também na tela de login (que não carrega
+//     o CSS global do app).
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./motion/index.js";
 
-const SRC = "/media/aritur-hero.mp4";
-const POSTER = "/media/aritur-hero-poster.jpg";
 const BG = "#08090B";
 const GLOW = "rgba(228,18,31,0.10)";
 
+const ASSET = {
+  app: { mp4: "/media/aritur-bg.mp4", poster: "/media/aritur-bg-poster.jpg" },
+  hero: { mp4: "/media/aritur-hero.mp4", poster: "/media/aritur-hero-poster.jpg" },
+  login: { mp4: "/media/aritur-hero.mp4", poster: "/media/aritur-hero-poster.jpg" },
+};
+
 const VEIL = {
-  app: `linear-gradient(180deg, rgba(8,9,11,.94) 0%, rgba(8,9,11,.9) 40%, rgba(8,9,11,.96) 100%),radial-gradient(120% 80% at 50% -10%, ${GLOW} 0%, transparent 55%)`,
+  app: `linear-gradient(180deg, rgba(8,9,11,.9) 0%, rgba(8,9,11,.85) 42%, rgba(8,9,11,.95) 100%),radial-gradient(120% 90% at 50% 6%, ${GLOW} 0%, transparent 60%)`,
   hero:
     "linear-gradient(90deg, rgba(8,9,11,.97) 0%, rgba(8,9,11,.82) 30%, rgba(8,9,11,.15) 62%, rgba(120,10,15,.12) 100%)," +
     "linear-gradient(180deg, transparent 55%, rgba(8,9,11,.55) 100%)",
@@ -41,21 +49,36 @@ function prefersSaveData() {
     return false;
   }
 }
+function isSmallScreen() {
+  try {
+    return window.matchMedia("(max-width: 819px)").matches;
+  } catch {
+    return false;
+  }
+}
 
 export function VideoBackdrop({ variant = "app" }) {
   const reduced = useReducedMotion();
   const [saveData] = useState(prefersSaveData);
+  const [small, setSmall] = useState(isSmallScreen);
   const [shown, setShown] = useState(false);
   const cls = useRef(`vbd-${Math.random().toString(36).slice(2, 8)}`).current;
-  // O fundo fixo de todas as telas ("app") usa só o pôster — atrás de
-  // tela operacional o vídeo em loop eterno não paga o custo de bateria/
-  // CPU no celular. O vídeo em movimento fica no login e no hero.
-  const estatico = variant === "app" || reduced || saveData;
+  const a = ASSET[variant];
+
+  // O fundo do app só anima em tela grande (o dono na mesa). Login/hero
+  // animam sempre (é o foco da marca).
+  const estatico = reduced || saveData || (variant === "app" && small);
   const ref = useRef(null);
 
   useEffect(() => {
     const t = setTimeout(() => setShown(true), 30);
-    return () => clearTimeout(t);
+    const mq = window.matchMedia?.("(max-width: 819px)");
+    const onResize = () => setSmall(Boolean(mq?.matches));
+    mq?.addEventListener?.("change", onResize);
+    return () => {
+      clearTimeout(t);
+      mq?.removeEventListener?.("change", onResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -80,12 +103,9 @@ export function VideoBackdrop({ variant = "app" }) {
     background: BG,
   };
 
-  // Estilo da mídia por variante.
-  const base = { opacity: shown ? 1 : 0, transition: "opacity .9s ease", background: BG };
+  const base = { opacity: shown ? 1 : 0, transition: "opacity 1s ease", background: BG };
   let mediaStyle;
   if (variant === "hero") {
-    // ônibus inteiro, ancorado à direita — o vídeo mantém a proporção
-    // natural, não é esticado nem fatiado. O CSS abaixo cuida do mobile.
     mediaStyle = {
       ...base,
       position: "absolute",
@@ -107,7 +127,7 @@ export function VideoBackdrop({ variant = "app" }) {
       objectFit: "cover",
       objectPosition: "center",
       ...(variant === "app"
-        ? { filter: "blur(3px) saturate(.7) brightness(.62)", transform: "scale(1.08)" }
+        ? { filter: "blur(4px) saturate(.8) brightness(.68)", transform: "scale(1.1)" }
         : { filter: "brightness(.72) saturate(.9)", transform: "scale(1.04)" }),
     };
   }
@@ -117,7 +137,7 @@ export function VideoBackdrop({ variant = "app" }) {
       className={`${cls}-m`}
       style={{
         ...mediaStyle,
-        backgroundImage: `url(${POSTER})`,
+        backgroundImage: `url(${a.poster})`,
         backgroundSize: variant === "hero" ? "auto 100%" : "cover",
         backgroundPosition: variant === "hero" ? "right center" : "center",
         backgroundRepeat: "no-repeat",
@@ -128,13 +148,13 @@ export function VideoBackdrop({ variant = "app" }) {
       ref={ref}
       className={`${cls}-m`}
       style={mediaStyle}
-      src={SRC}
-      poster={POSTER}
+      src={a.mp4}
+      poster={a.poster}
       autoPlay
       muted
       loop
       playsInline
-      preload="metadata"
+      preload={variant === "app" ? "none" : "metadata"}
       tabIndex={-1}
     />
   );

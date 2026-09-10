@@ -21,8 +21,10 @@ test("a tela de login tem o vídeo do ônibus AriTur de fundo", async ({ page })
   await page.goto("/");
   const video = page.locator("video[src='/media/aritur-hero.mp4']");
   await expect(video).toHaveCount(1);
-  // o mp4 é servido (não 404) — dá pra pegar a resposta
-  const resp = await page.request.get("/media/aritur-hero.mp4");
-  expect(resp.ok()).toBe(true);
-  expect(Number(resp.headers()["content-length"] || "0")).toBeLessThan(2_000_000);
+  // os dois mp4 são servidos (não 404) e são leves
+  for (const src of ["/media/aritur-hero.mp4", "/media/aritur-bg.mp4"]) {
+    const resp = await page.request.get(src);
+    expect(resp.ok()).toBe(true);
+    expect(Number(resp.headers()["content-length"] || "0")).toBeLessThan(2_000_000);
+  }
 });
