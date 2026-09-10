@@ -51,8 +51,13 @@ const SETTINGS = [
   { key: "intermediate_cities", value: ["bacabeira", "santa rita"] },
 ];
 
-function json(body, status = 200) {
-  return { status, contentType: "application/json", body: JSON.stringify(body) };
+function json(body, status = 200, headers = null) {
+  return {
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+    headers: headers || undefined,
+  };
 }
 
 /**
@@ -246,7 +251,12 @@ export async function mockSupabase(page, opts = {}) {
       rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
     else if (table === "app_error_log") rows = opts.errorLog ?? [];
-    else rows = [];
+    else if (table === "v_customers_stats") {
+      rows = opts.customersStats ?? [];
+      return route.fulfill(
+        json(rows, 200, { "content-range": `0-${Math.max(rows.length - 1, 0)}/${rows.length}` }),
+      );
+    } else rows = [];
 
     const body = wantsObject ? (rows[0] ?? null) : rows;
     return route.fulfill(json(body));

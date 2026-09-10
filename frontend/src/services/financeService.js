@@ -34,7 +34,9 @@ export const financeService = {
         .select("*")
         .gte("entry_date", `${year}-01-01`)
         .lte("entry_date", `${year}-12-31`)
-        .is("deleted_at", null),
+        .is("deleted_at", null)
+        .order("entry_date", { ascending: false })
+        .limit(4000),
       "listByYear"
     );
   },

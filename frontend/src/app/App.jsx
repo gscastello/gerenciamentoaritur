@@ -73,7 +73,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useBackup } from "../hooks/useBackup.js";
-import { useCustomers } from "../hooks/useCustomers.js";
+import { usePassageiros, usePassageiroDetalhe } from "../hooks/usePassageiros.js";
 import { useDiagnostics } from "../hooks/useDiagnostics.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../hooks/useFinance.js";
@@ -1968,10 +1968,13 @@ function gerarInsightsIA(reservas, operacao, capacidade, trips) {
 }
 
 /* ============================= app shell ============================= */
-// Reservas de -JANELA_DIAS a +JANELA_DIAS ficam carregadas no painel. É o
-// suficiente para operação, agenda futura e histórico recente; Passageiros/
-// Dashboard usam a mesma janela. (issue #10 — ver APP-INTEGRATION-PLAN.md)
-const JANELA_DIAS = 120;
+// Janela de reservas carregada no painel: 45 dias atrás → 90 à frente.
+// Cobre a operação do dia, o histórico recente e o agendamento antecipado
+// (regional — raramente > 2 meses). Datas fora disso: a busca global e o
+// CRM (paginado no servidor, v_customers_stats) consultam o banco direto.
+// (issue #10 — ver APP-INTEGRATION-PLAN.md)
+const JANELA_PASSADO = 45;
+const JANELA_FUTURO = 90;
 
 // Quais papéis enxergam cada aba. O RLS do banco já barra os DADOS (um
 // motorista que abrisse Financeiro só via erro de permissão); isto é só
@@ -2158,7 +2161,7 @@ function AppInner() {
 
   // --- Reservas: fonte de verdade = Postgres (janela + realtime) --------
   const janela = useMemo(
-    () => ({ from: dataOperacao(-JANELA_DIAS), to: dataOperacao(JANELA_DIAS) }),
+    () => ({ from: dataOperacao(-JANELA_PASSADO), to: dataOperacao(JANELA_FUTURO) }),
     [],
   );
   const R = useReservationsWindow(janela.from, janela.to);
@@ -2497,13 +2500,7 @@ function AppInner() {
             )}
             {tab === "bloco" && <BlocoDeNotasTab />}
             {tab === "pendencias" && <PendenciasTab pend={pend} />}
-            {tab === "passageiros" && (
-              <PassageirosTab
-                reservas={reservas}
-                trips={trips}
-                deepLink={deepLink}
-              />
-            )}
+            {tab === "passageiros" && <PassageirosTab trips={trips} deepLink={deepLink} />}
             {tab === "financeiro" && (
               <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />
             )}
@@ -6020,8 +6017,12 @@ function EnderecosFreq({ titulo, itens }) {
   );
 }
 
-function PassageirosTab({ reservas, trips, deepLink }) {
+// CRM paginado: lista agregada vem do banco (v_customers_stats), página
+// a página, busca no servidor. O histórico de cada passageiro (para os
+// endereços mais usados) carrega só quando o card abre.
+function PassageirosTab({ trips, deepLink }) {
   const [busca, setBusca] = useState("");
+  const [aberto, setAberto] = useState(null);
   const deepLinkAplicado = useRef(null);
   useEffect(() => {
     if (
@@ -6033,59 +6034,10 @@ function PassageirosTab({ reservas, trips, deepLink }) {
       setBusca(deepLink.termo);
     }
   }, [deepLink]);
-  const [aberto, setAberto] = useState(null);
-  const [erro, setErro] = useState("");
-  const { customers, updateNotes } = useCustomers();
-  const notaDe = (cid) => customers.find((c) => c.id === cid)?.notes || "";
-  const passageiros = useMemo(() => {
-    const map = {};
-    reservas
-      .filter((r) => !["frete", "encomenda"].includes(r.tipo) && r.customer_id)
-      .forEach((r) => {
-        const key = r.customer_id;
-        if (!map[key])
-          map[key] = { customer_id: key, nome: r.nome, telefone: r.telefone, viagens: [] };
-        map[key].viagens.push(r);
-      });
-    return Object.values(map)
-      .map((p) => ({
-        ...p,
-        totalPassagens: p.viagens
-          .filter((v) => OCUPA_VAGA.includes(v.status))
-          .reduce((s, v) => s + v.quantidade, 0),
-        viagensCount: p.viagens.filter((v) => OCUPA_VAGA.includes(v.status)).length,
-        cancelamentos: p.viagens.filter((v) => v.status === "cancelada").length,
-        naoCompareceu: p.viagens.filter((v) => v.status === "nao_compareceu").length,
-        totalGasto: p.viagens
-          .filter((v) => OCUPA_VAGA.includes(v.status))
-          .reduce((s, v) => s + (v.valorTotal || 0), 0),
-        ultima: p.viagens
-          .map((v) => v.data)
-          .sort()
-          .slice(-1)[0],
-        ultimoTrajeto: [...p.viagens].sort((a, b) => a.data.localeCompare(b.data)).slice(-1)[0],
-        enderecosIda: enderecosFrequentes(
-          p.viagens.filter((v) => v.direcao === "ida"),
-          (v) => enderecoEmbarque(v, trips) || v.bairro,
-        ),
-        enderecosVolta: enderecosFrequentes(
-          p.viagens.filter((v) => v.direcao === "volta"),
-          (v) => v.desembarque || enderecoEmbarque(v, trips),
-        ),
-      }))
-      .sort((a, b) => b.totalGasto - a.totalGasto);
-  }, [reservas, trips]);
-  const filtrados = passageiros.filter(
-    (p) =>
-      (p.nome || "").toLowerCase().includes(busca.toLowerCase()) ||
-      (p.telefone || "").includes(busca),
-  );
-  const salvarNota = (customerId, texto) => {
-    setErro("");
-    updateNotes(customerId, texto).catch((e) =>
-      setErro(mensagemAmigavel(e, "Não foi possível salvar a nota.")),
-    );
-  };
+
+  const { passageiros, total, loading, erro, temMais, carregarMais, salvarNota } =
+    usePassageiros(busca);
+  const valorPagina = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
 
   return (
     <div>
@@ -6102,9 +6054,6 @@ function PassageirosTab({ reservas, trips, deepLink }) {
             <span className="flex items-center gap-2">
               <AlertTriangle size={14} /> {erro}
             </span>
-            <button onClick={() => setErro("")}>
-              <X size={13} />
-            </button>
           </div>
         )}
         <div
@@ -6114,33 +6063,26 @@ function PassageirosTab({ reservas, trips, deepLink }) {
           <HeroFX />
           <div className="relative">
             <div
-              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.2rem", color: "#fff" }}
+              style={{
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontWeight: 700,
+                fontSize: "1.2rem",
+                color: "#fff",
+              }}
             >
-              {passageiros.length} {passageiros.length === 1 ? "passageiro" : "passageiros"}
+              {total} {total === 1 ? "passageiro" : "passageiros"}
             </div>
             <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
-              na janela de reservas · ordenados por valor gerado
+              ordenados por valor gerado
             </div>
           </div>
-          <div className="relative flex gap-5">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
-                Valor gerado
-              </div>
-              <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
-                {fmtBRL(passageiros.reduce((s, p) => s + p.totalGasto, 0))}
-              </div>
+          <div className="relative">
+            <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+              Valor gerado (nesta página)
             </div>
-            {passageiros[0] && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
-                  Maior cliente
-                </div>
-                <div className="text-sm font-semibold truncate max-w-[140px]" style={{ color: "#fff" }}>
-                  {passageiros[0].nome}
-                </div>
-              </div>
-            )}
+            <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+              {fmtBRL(valorPagina)}
+            </div>
           </div>
         </div>
         <div className="relative max-w-sm mb-4">
@@ -6157,131 +6099,175 @@ function PassageirosTab({ reservas, trips, deepLink }) {
           />
         </div>
         <div className="space-y-2 stagger">
-          {filtrados.length === 0 && (
+          {!loading && passageiros.length === 0 && (
             <Card>
               <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-                Nenhum passageiro ainda.
+                {busca ? "Nenhum passageiro para essa busca." : "Nenhum passageiro ainda."}
               </div>
             </Card>
           )}
-          {filtrados.map((p, i) => {
-            const abertoAqui = aberto === p.customer_id;
-            return (
-              <Card key={i} className="anim-fadeUp">
-                <button
-                  className="w-full flex items-center justify-between text-left gap-3"
-                  onClick={() => setAberto(abertoAqui ? null : p.customer_id)}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                      style={{
-                        background: C.amberSoft,
-                        color: C.brand,
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        border: `1px solid ${C.brandDim}55`,
-                      }}
-                    >
-                      {(p.nome || "?")
-                        .split(/\s+/)
-                        .slice(0, 2)
-                        .map((w) => w[0])
-                        .join("")
-                        .toUpperCase()}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium truncate">
-                        {p.nome}{" "}
-                        <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
-                          · {p.telefone}
-                        </span>
-                      </span>
-                      <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
-                        {p.ultimoTrajeto ? trips[p.ultimoTrajeto.direcao]?.label : "—"} ·{" "}
-                        <b style={{ color: C.brand }}>{fmtBRL(p.totalGasto)}</b> gerados
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {p.viagensCount >= 5 ? (
-                      <Pill>
-                        <Repeat size={11} />
-                        Frequente
-                      </Pill>
-                    ) : p.viagensCount >= 2 ? (
-                      <Pill>Recorrente</Pill>
-                    ) : (
-                      <Pill>Novo</Pill>
-                    )}
-                    <ChevronRight
-                      size={14}
-                      style={{
-                        color: C.inkFaint,
-                        transform: abertoAqui ? "rotate(90deg)" : "none",
-                        transition: "transform .15s",
-                      }}
-                    />
-                  </div>
-                </button>
-                {abertoAqui && (
-                  <div
-                    className="anim-slideDown mt-3 pt-3 border-t grid sm:grid-cols-2 gap-3"
-                    style={{ borderColor: C.borderSoft }}
-                  >
-                    {(p.enderecosIda.length > 0 || p.enderecosVolta.length > 0) && (
-                      <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-                        <EnderecosFreq titulo="Embarque (ida)" itens={p.enderecosIda} />
-                        <EnderecosFreq titulo="Desembarque (volta)" itens={p.enderecosVolta} />
-                      </div>
-                    )}
-                    <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
-                      <div>
-                        Passagens: <b style={{ color: C.ink }}>{p.totalPassagens}</b>
-                      </div>
-                      <div>
-                        Cancelamentos: <b style={{ color: C.ink }}>{p.cancelamentos}</b>
-                      </div>
-                      <div>
-                        Não compareceu: <b style={{ color: C.ink }}>{p.naoCompareceu}</b>
-                      </div>
-                      <div>
-                        Última viagem:{" "}
-                        <b style={{ color: C.ink }}>{p.ultima ? fmtDate(p.ultima) : "—"}</b>
-                      </div>
-                      <button
-                        onClick={() =>
-                          window.open(`https://wa.me/55${digitos(p.telefone)}`, "_blank")
-                        }
-                        className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
-                        style={{ background: C.panel2, color: C.inkSoft }}
-                      >
-                        <MessageCircle size={12} /> Abrir WhatsApp
-                      </button>
-                    </div>
-                    <div>
-                      <Field label="Notas do CRM">
-                        <textarea
-                          key={p.customer_id}
-                          defaultValue={notaDe(p.customer_id)}
-                          onBlur={(e) =>
-                            e.target.value !== notaDe(p.customer_id) &&
-                            salvarNota(p.customer_id, e.target.value)
-                          }
-                          rows={4}
-                          className={inputCls}
-                          style={inputStyle}
-                          placeholder="Preferências, observações, combinados…"
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
+          {passageiros.map((p) => (
+            <PassageiroCard
+              key={p.customer_id}
+              p={p}
+              trips={trips}
+              aberto={aberto === p.customer_id}
+              onToggle={() => setAberto(aberto === p.customer_id ? null : p.customer_id)}
+              onSalvarNota={salvarNota}
+            />
+          ))}
+          {loading && (
+            <div className="text-center py-3 text-xs" style={{ color: C.inkFaint }}>
+              carregando…
+            </div>
+          )}
+          {temMais && !loading && (
+            <button
+              type="button"
+              onClick={carregarMais}
+              className="btn-press w-full py-2.5 rounded-lg text-xs font-medium"
+              style={{ background: C.panel2, color: C.inkSoft, border: `1px solid ${C.border}` }}
+            >
+              Carregar mais ({total - passageiros.length} restantes)
+            </button>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function classificacao(viagensCount) {
+  if (viagensCount >= 5) return "Frequente";
+  if (viagensCount >= 2) return "Recorrente";
+  return "Novo";
+}
+
+function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
+  const { viagens, loading } = usePassageiroDetalhe(aberto ? p.customer_id : null);
+  const enderecosIda = useMemo(
+    () =>
+      enderecosFrequentes(
+        viagens.filter((v) => v.direcao === "ida"),
+        (v) => enderecoEmbarque(v, trips) || v.bairro,
+      ),
+    [viagens, trips],
+  );
+  const enderecosVolta = useMemo(
+    () =>
+      enderecosFrequentes(
+        viagens.filter((v) => v.direcao === "volta"),
+        (v) => v.desembarque || enderecoEmbarque(v, trips),
+      ),
+    [viagens, trips],
+  );
+  const tel = digitos(p.telefone);
+  const iniciais = (p.nome || "?")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <Card className="anim-fadeUp">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between text-left gap-3"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+            style={{
+              background: C.amberSoft,
+              color: C.brand,
+              fontFamily: "'Space Grotesk', sans-serif",
+              border: `1px solid ${C.brandDim}55`,
+            }}
+          >
+            {iniciais}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium truncate">
+              {p.nome}{" "}
+              <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
+                · {p.telefone}
+              </span>
+            </span>
+            <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
+              {p.ultima_data ? `última ${fmtDate(p.ultima_data)}` : "sem viagens"} ·{" "}
+              <b style={{ color: C.brand }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
+            </span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Pill>{classificacao(p.viagens_count)}</Pill>
+          <ChevronRight
+            size={14}
+            style={{
+              color: C.inkFaint,
+              transform: aberto ? "rotate(90deg)" : "none",
+              transition: "transform .15s",
+            }}
+          />
+        </div>
+      </button>
+      {aberto && (
+        <div
+          className="anim-slideDown mt-3 pt-3 border-t grid sm:grid-cols-2 gap-3"
+          style={{ borderColor: C.borderSoft }}
+        >
+          <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
+            <EnderecosFreq
+              titulo="Embarque (ida)"
+              itens={loading ? [] : enderecosIda}
+            />
+            <EnderecosFreq
+              titulo="Desembarque (volta)"
+              itens={loading ? [] : enderecosVolta}
+            />
+          </div>
+          <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
+            <div>
+              Passagens: <b style={{ color: C.ink }}>{p.total_passagens}</b>
+            </div>
+            <div>
+              Viagens: <b style={{ color: C.ink }}>{p.viagens_count}</b>
+            </div>
+            <div>
+              Cancelamentos: <b style={{ color: C.ink }}>{p.cancelamentos}</b>
+            </div>
+            <div>
+              Não compareceu: <b style={{ color: C.ink }}>{p.nao_compareceu}</b>
+            </div>
+            {tel && (
+              <button
+                type="button"
+                onClick={() => window.open(`https://wa.me/55${tel}`, "_blank")}
+                className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
+                style={{ background: C.panel2, color: C.inkSoft }}
+              >
+                <MessageCircle size={12} /> Abrir WhatsApp
+              </button>
+            )}
+          </div>
+          <div>
+            <Field label="Notas do CRM">
+              <textarea
+                key={p.customer_id}
+                defaultValue={p.notes || ""}
+                onBlur={(e) => e.target.value !== (p.notes || "") && onSalvarNota(p.customer_id, e.target.value)}
+                rows={4}
+                className={inputCls}
+                style={inputStyle}
+                placeholder="Preferências, observações, combinados…"
+              />
+            </Field>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
