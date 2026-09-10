@@ -276,11 +276,30 @@ export const whatsappService = {
     return data;
   },
 
+  /**
+   * Muda SÓ o local de desembarque (não afeta ocupação). É a alteração
+   * mais comum do cliente. A trigger fn_notify_reservation_change no
+   * banco avisa a equipe no sino do app.
+   */
+  async setDropoffLocation(conversationId: string, reservationId: string, location: string) {
+    await assertAiIsAllowedToAct(conversationId);
+    const botId = await getBotUserId();
+    const { error } = await supabaseAdmin
+      .from("reservations")
+      .update({ dropoff_location: location, updated_by: botId })
+      .eq("id", reservationId)
+      .is("deleted_at", null);
+    if (error) throw new WhatsappServiceError(`Falha ao mudar o desembarque: ${error.message}`);
+    await logAiAction("reservations", reservationId, "update", {
+      acao: "desembarque_alterado", origem: "whatsapp", dropoff_location: location,
+    });
+  },
+
   /** Reservas ativas do cliente — usado nos fluxos de cancelar/alterar (a IA nunca "lembra" sozinha, sempre relista). */
   async listCustomerReservations(customerId: string) {
     const { data, error } = await supabaseAdmin
       .from("reservations")
-      .select("id, status, quantity, total_price, trip:trips(trip_date, direction), route_point:route_points(name)")
+      .select("id, status, quantity, total_price, dropoff_location, trip:trips(trip_date, direction), route_point:route_points(code, name)")
       .eq("customer_id", customerId)
       .in("status", ["confirmada", "pendente", "espera"])
       .is("deleted_at", null)
