@@ -31,7 +31,7 @@ const MENU_ROWS = [
   { id: "menu_frete", title: "Frete", description: "Encomenda para outra cidade" },
   { id: "menu_encomenda", title: "Enviar encomenda", description: "Envio de item, sem passageiro" },
   { id: "menu_cancelar", title: "Cancelar reserva", description: "Ver e cancelar reservas ativas" },
-  { id: "menu_alterar", title: "Alterar reserva", description: "Mudar data/ponto de uma reserva" },
+  { id: "menu_alterar", title: "Alterar reserva", description: "Mudar desembarque, ponto ou data" },
   { id: "menu_pagamento", title: "Status de pagamento", description: "Ver se meu pagamento foi confirmado" },
   { id: "menu_atendente", title: "Falar com atendente", description: "Sair do atendimento automático" },
 ];
@@ -104,6 +104,13 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     }
 
     if (RESERVATION_STEPS.includes(state.step)) { await advanceReservationFlow(conversation, state, to); return; }
+
+    // Alteração de reserva: os passos que esperam texto livre (novo
+    // desembarque / nova data) entram direto no fluxo determinístico.
+    if (state.step === "awaiting_alter_dropoff" || state.step === "awaiting_alter_date") {
+      await route(conversation, state, text, msg);
+      return;
+    }
 
     await sendText(conversation.id, to, "Pode escolher uma das opções que te mostrei? Se preferir, digite *menu* para recomeçar.");
   } catch (err) {
@@ -317,6 +324,10 @@ async function route(conversation: any, state: any, input: string, msg: Incoming
   if (step === "awaiting_name") return handleNameInput(conversation, state, input, to);
   if (step === "awaiting_payment") return handlePaymentChoice(conversation, state, input, to);
   if (step === "awaiting_cancel_choice") return handleCancelChoice(conversation, state, input, to);
+  if (step === "awaiting_alter_field") return handleAlterFieldChoice(conversation, state, input, to);
+  if (step === "awaiting_alter_point") return handleAlterPointChoice(conversation, state, input, to);
+  if (step === "awaiting_alter_dropoff") return handleAlterDropoffInput(conversation, state, input, to);
+  if (step === "awaiting_alter_date") return handleAlterDateInput(conversation, state, input, to);
   if (step === "awaiting_date") {
     const withDate = { ...state, tripDate: normalizeDate(input) };
     await whatsappService.updateConversationState(conversation.id, withDate);
@@ -444,13 +455,130 @@ async function handlePaymentChoice(conversation: any, state: any, input: string,
 
 async function handleCancelChoice(conversation: any, state: any, input: string, to: string) {
   const reservationId = input.replace("res_", "");
-  try {
-    if (state.action === "cancelar") {
+
+  if (state.action === "cancelar") {
+    try {
       await whatsappService.cancelReservation(conversation.id, reservationId);
       await sendText(conversation.id, to, "Reserva cancelada. Se precisar remarcar, é só chamar de novo! 👋");
-    } else {
-      await whatsappService.transferToHuman(conversation.id, `Cliente quer alterar a reserva ${reservationId}`);
-      await sendText(conversation.id, to, "Vou te conectar com um atendente para ajustar sua reserva certinho. 🙋");
+    } finally {
+      await whatsappService.updateConversationState(conversation.id, { step: "idle" });
+    }
+    return;
+  }
+
+  // Alterar: relista (a IA nunca "lembra") e abre o menu do que mudar.
+  const customer = await whatsappService.identifyCustomer(to);
+  const reservations = customer ? await whatsappService.listCustomerReservations(customer.id) : [];
+  const alvo = reservations?.find((r: any) => r.id === reservationId);
+  if (!alvo) {
+    await sendText(conversation.id, to, "Não achei essa reserva. Digite *menu* para recomeçar.");
+    await whatsappService.updateConversationState(conversation.id, { step: "idle" });
+    return;
+  }
+  const alter = {
+    reservationId,
+    tripDate: alvo.trip?.trip_date ?? null,
+    direction: alvo.trip?.direction ?? null,
+    routePointCode: alvo.route_point?.code ?? null,
+  };
+  const curto = (s: string) => (s.length > 68 ? `${s.slice(0, 67)}…` : s);
+  await whatsappService.updateConversationState(conversation.id, { step: "awaiting_alter_field", alter });
+  await whatsappService.reply(conversation.id, to,
+    () => whatsappClient.sendList(to, "Alterar reserva", "O que você quer mudar?", "Escolher", [
+      { id: "alt_desembarque", title: "Local de desembarque",
+        description: curto(alvo.dropoff_location ? `Hoje: ${alvo.dropoff_location}` : "Onde você vai ficar") },
+      { id: "alt_ponto", title: "Ponto de embarque",
+        description: curto(alvo.route_point?.name ? `Hoje: ${alvo.route_point.name}` : "Onde você embarca") },
+      { id: "alt_data", title: "Data da viagem",
+        description: curto(alvo.trip?.trip_date ? `Hoje: ${alvo.trip.trip_date}` : "Outro dia") },
+      { id: "alt_atendente", title: "Outra mudança", description: "Falar com um atendente" },
+    ]),
+    { type: "interactive", content: { rows: ["alt_desembarque", "alt_ponto", "alt_data", "alt_atendente"] } });
+}
+
+async function handleAlterFieldChoice(conversation: any, state: any, input: string, to: string) {
+  const alter = state.alter ?? {};
+  if (input === "alt_atendente") {
+    await whatsappService.transferToHuman(conversation.id, `Cliente quer alterar a reserva ${alter.reservationId}`);
+    await sendText(conversation.id, to, "Vou te conectar com um atendente para ajustar sua reserva certinho. 🙋");
+    await whatsappService.updateConversationState(conversation.id, { step: "idle" });
+    return;
+  }
+  if (input === "alt_desembarque") {
+    await whatsappService.updateConversationState(conversation.id, { ...state, step: "awaiting_alter_dropoff" });
+    await sendText(conversation.id, to, "Qual o novo local de desembarque? (endereço ou ponto de referência)");
+    return;
+  }
+  if (input === "alt_data") {
+    await whatsappService.updateConversationState(conversation.id, { ...state, step: "awaiting_alter_date" });
+    await sendText(conversation.id, to, "Para qual data? (ex.: 25/12)");
+    return;
+  }
+  if (input === "alt_ponto") {
+    const points = await whatsappService.listRoutePoints(alter.direction ?? "ida");
+    const rows = points.map((p: any) => ({
+      id: `ponto_${p.code}`, title: p.name, description: (p.base_time ?? "").slice(0, 5),
+    }));
+    await whatsappService.updateConversationState(conversation.id, { ...state, step: "awaiting_alter_point" });
+    await whatsappService.reply(conversation.id, to,
+      () => whatsappClient.sendList(to, "Ponto de embarque", "Escolha o novo ponto de embarque:", "Escolher", rows),
+      { type: "interactive", content: { rows: rows.map((r: any) => r.id) } });
+    return;
+  }
+  await sendText(conversation.id, to, "Não entendi. Digite *menu* para recomeçar.");
+}
+
+async function handleAlterDropoffInput(conversation: any, state: any, input: string, to: string) {
+  const alter = state.alter ?? {};
+  try {
+    await whatsappService.setDropoffLocation(conversation.id, alter.reservationId, input.trim());
+    await sendText(conversation.id, to,
+      `Pronto! Novo desembarque: *${input.trim()}*. A equipe já foi avisada. ✅`);
+  } catch (err) {
+    if (err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE") return;
+    await whatsappService.transferToHuman(conversation.id,
+      `Falha ao mudar o desembarque da reserva ${alter.reservationId}: ${String(err)}`);
+    await sendText(conversation.id, to, "Tive um problema para salvar. Um atendente vai ajustar. 🙏");
+  } finally {
+    await whatsappService.updateConversationState(conversation.id, { step: "idle" });
+  }
+}
+
+async function handleAlterPointChoice(conversation: any, state: any, input: string, to: string) {
+  const alter = state.alter ?? {};
+  const code = input.replace("ponto_", "");
+  try {
+    await whatsappService.moveReservation(conversation.id, alter.reservationId, {
+      tripDate: alter.tripDate, direction: alter.direction, routePointCode: code,
+    });
+    await sendText(conversation.id, to, "Ponto de embarque atualizado! A equipe já foi avisada. ✅");
+  } catch (err) {
+    if (err instanceof WhatsappServiceError && err.code === "MOVE_REJECTED") {
+      await sendText(conversation.id, to, err.message);
+    } else if (!(err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE")) {
+      await whatsappService.transferToHuman(conversation.id, `Falha ao mudar o ponto: ${String(err)}`);
+      await sendText(conversation.id, to, "Tive um problema. Um atendente vai ajustar. 🙏");
+    }
+  } finally {
+    await whatsappService.updateConversationState(conversation.id, { step: "idle" });
+  }
+}
+
+async function handleAlterDateInput(conversation: any, state: any, input: string, to: string) {
+  const alter = state.alter ?? {};
+  const date = normalizeDate(input.trim());
+  try {
+    await whatsappService.moveReservation(conversation.id, alter.reservationId, {
+      tripDate: date, direction: alter.direction, routePointCode: alter.routePointCode,
+    });
+    await sendText(conversation.id, to, `Reserva remarcada para ${input.trim()}. A equipe já foi avisada. ✅`);
+  } catch (err) {
+    if (err instanceof WhatsappServiceError && err.code === "MOVE_REJECTED") {
+      await sendText(conversation.id, to,
+        `${err.message} Se quiser, digite *menu* e entre na lista de espera.`);
+    } else if (!(err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE")) {
+      await whatsappService.transferToHuman(conversation.id, `Falha ao remarcar: ${String(err)}`);
+      await sendText(conversation.id, to, "Tive um problema. Um atendente vai ajustar. 🙏");
     }
   } finally {
     await whatsappService.updateConversationState(conversation.id, { step: "idle" });
