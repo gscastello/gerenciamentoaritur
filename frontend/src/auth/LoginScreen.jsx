@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useAuth } from "./AuthProvider.jsx";
 import { ProgressBar } from "../ui/motion/index.js";
+import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 
 const C = {
   bg: "#08090B",
@@ -119,6 +120,8 @@ export function LoginScreen() {
   return (
     <div
       style={{
+        position: "relative",
+        overflow: "hidden",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
@@ -129,6 +132,7 @@ export function LoginScreen() {
         padding: 24,
       }}
     >
+      <VideoBackdrop variant="login" />
       <form
         onSubmit={onSubmit}
         style={{

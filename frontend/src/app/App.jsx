@@ -109,6 +109,7 @@ import {
 import { EVENTS, emit } from "../observability/index.js";
 import { FadeIn, Presence, Skeleton } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
+import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 
 // Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
 // do bundle inicial (ver vite.config.js manualChunks). Issue #2.
@@ -869,108 +870,6 @@ function HeroFX() {
       <span className="hero-fx-spark s1" />
       <span className="hero-fx-spark s2" />
       <span className="hero-fx-spark s3" />
-    </div>
-  );
-}
-
-/* Cena animada do hero — céu em degradê, morros, estrada com faixas
-   correndo e um ônibus com faróis pulsando. Tudo CSS/SVG, sem imagem. */
-function HeroBusScene() {
-  return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-      {/* céu / atmosfera */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(180deg, #1a0407 0%, #5c0a11 38%, #b3161f 70%, #f0533a 100%)",
-          opacity: 0.9,
-        }}
-      />
-      <div
-        className="absolute float-y"
-        style={{
-          right: "5%",
-          top: "-34%",
-          width: 130,
-          height: 130,
-          borderRadius: "50%",
-          background: "radial-gradient(circle, #ffe1b0 0%, #ff7a3c 42%, transparent 70%)",
-          opacity: 0.8,
-          filter: "blur(3px)",
-        }}
-      />
-      {/* morros */}
-      <svg aria-hidden="true"
-        className="absolute bottom-0 left-0 w-full"
-        viewBox="0 0 1200 220"
-        preserveAspectRatio="none"
-        style={{ height: "62%" }}
-      >
-        <path d="M0 150 Q 200 70 430 130 T 900 120 T 1200 150 V220 H0 Z" fill="#2a0508" opacity="0.85" />
-        <path d="M0 180 Q 260 120 560 165 T 1200 175 V220 H0 Z" fill="#160305" />
-      </svg>
-      {/* estrada */}
-      <div
-        className="absolute left-0 w-full"
-        style={{
-          bottom: 0,
-          height: "34%",
-          background: "linear-gradient(180deg, #241a1b 0%, #0c0708 100%)",
-          transform: "perspective(420px) rotateX(48deg)",
-          transformOrigin: "bottom",
-        }}
-      >
-        <div
-          className="hero-lanes absolute left-1/2 -translate-x-1/2"
-          style={{ bottom: "18%", width: "68%", height: 6 }}
-        />
-      </div>
-      {/* ônibus */}
-      <div
-        className="hero-bus absolute"
-        style={{ right: "3%", bottom: "16%", width: 340, maxWidth: "52%" }}
-      >
-        <svg viewBox="0 0 300 120" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="busBody" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#2b2b30" />
-              <stop offset="1" stopColor="#0d0d10" />
-            </linearGradient>
-          </defs>
-          <ellipse cx="150" cy="112" rx="140" ry="10" fill="#000" opacity="0.5" />
-          <path
-            d="M8 30c0-8 5-14 14-14h214c30 0 52 14 60 40l4 14c2 6 3 12 3 18v10c0 5-4 9-9 9h-20a20 20 0 0 0-40 0H86a20 20 0 0 0-40 0H16c-5 0-8-4-8-9V30Z"
-            fill="url(#busBody)"
-            stroke="#3a0a0e"
-            strokeWidth="1.5"
-          />
-          <g fill="#1b1112">
-            <rect x="22" y="30" width="34" height="22" rx="4" />
-            <rect x="62" y="30" width="34" height="22" rx="4" />
-            <rect x="102" y="30" width="34" height="22" rx="4" />
-            <rect x="142" y="30" width="34" height="22" rx="4" />
-            <rect x="182" y="30" width="34" height="22" rx="4" />
-          </g>
-          <rect x="8" y="60" width="284" height="4" fill={C.brand} opacity="0.9" />
-          <circle cx="66" cy="96" r="16" fill="#111" stroke="#333" strokeWidth="3" />
-          <circle cx="234" cy="96" r="16" fill="#111" stroke="#333" strokeWidth="3" />
-          {/* faróis */}
-          <g className="hero-headlight">
-            <circle cx="292" cy="72" r="6" fill="#fff3c4" />
-            <path d="M292 66 L300 40 L300 104 Z" fill="#ffe9a8" opacity="0.28" />
-          </g>
-          <circle cx="12" cy="74" r="4" fill={C.brand} />
-        </svg>
-      </div>
-      {/* vinheta — escurece a esquerda pro texto, deixa o ônibus aparecer */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(6,6,8,.82) 0%, rgba(6,6,8,.4) 38%, rgba(6,6,8,.05) 62%, transparent 100%)",
-        }}
-      />
     </div>
   );
 }
@@ -2137,10 +2036,11 @@ function AppInner() {
     <BairrosContext.Provider value={bairros}>
     <DropoffContext.Provider value={dropoff}>
     <div
-      className="min-h-screen w-full flex"
+      className="min-h-screen w-full flex relative"
       style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
     >
       <GlobalStyles />
+      <VideoBackdrop variant="app" />
       <QuickActionsFab
         onBuscar={() => setBuscaAberta(true)}
         onAgendar={() => setAgendarAberto(true)}
@@ -2194,7 +2094,7 @@ function AppInner() {
         </div>
       )}
       <div
-        className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden"
+        className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden z-10"
         style={{ borderColor: C.border, background: C.panel }}
       >
         <div
@@ -2308,7 +2208,7 @@ function AppInner() {
 
       <MobileNav nav={NAV} tab={tab} onSelect={mudarAba} pendentesCount={pendentesCount} />
 
-      <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden">
+      <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden relative z-10">
         <div
           className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
           style={{
@@ -8589,11 +8489,11 @@ function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
   return (
     <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
       <div
-        className="relative rounded-2xl border overflow-hidden"
-        style={{ borderColor: C.brandDim, minHeight: 236 }}
+        className="relative rounded-2xl border overflow-hidden min-h-[260px] md:min-h-[300px]"
+        style={{ borderColor: C.brandDim }}
       >
-        <HeroBusScene />
-        <div className="relative p-5 md:p-7 max-w-2xl">
+        <VideoBackdrop variant="hero" />
+        <div className="relative p-5 md:p-7 max-w-xl lg:max-w-2xl">
           <h1
             className="hero-t hero-t-1"
             style={{
