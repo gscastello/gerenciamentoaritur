@@ -10,6 +10,9 @@ import { trackAction } from "./rum.js";
 export const EVENTS = {
   RESERVA_CONFIRMADA: "reserva.confirmada",
   RESERVA_PENDENTE: "reserva.pendente",
+  RESERVA_CRIADA: "reserva.criada",
+  RESERVA_EDITADA: "reserva.editada",
+  RESERVA_CANCELADA: "reserva.cancelada",
   VAGAS_CALCULADAS: "vagas.calculadas",
   WHATSAPP_WEBHOOK: "whatsapp.webhook.recebido",
   DIAGNOSTICO_AUTOCORRECAO: "diagnostico.autocorrecao",

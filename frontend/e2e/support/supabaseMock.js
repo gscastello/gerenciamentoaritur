@@ -245,6 +245,7 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "v_app_notifications")
       rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
+    else if (table === "app_error_log") rows = opts.errorLog ?? [];
     else rows = [];
 
     const body = wantsObject ? (rows[0] ?? null) : rows;

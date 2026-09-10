@@ -6,6 +6,7 @@
 // "capacidade excedida", sozinho).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { logTecnico } from "../lib/erros.js";
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 600;
@@ -37,6 +38,7 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true } = {}) {
           if (!aliveRef.current) return;
           setError(err);
           setLoading(false);
+          logTecnico(err, { origem: "useSupabaseQuery" });
           return;
         }
         await sleep(BASE_DELAY_MS * 2 ** (attemptRef.current - 1));

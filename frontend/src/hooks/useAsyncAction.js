@@ -8,6 +8,7 @@
 // passo (ex.: oferecer lista de espera).
 
 import { useCallback, useState } from "react";
+import { logTecnico } from "../lib/erros.js";
 
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 500;
@@ -35,6 +36,12 @@ export function useAsyncAction(actionFn) {
           }
           setLoading(false);
           setError(err);
+          // "capacidade excedida / lista de espera" é regra de negócio,
+          // não erro técnico — não vai pro monitoramento. Rede, erros de
+          // banco (23xxx) e falhas inesperadas, sim.
+          if (err?.code !== "CAPACITY_OR_BUSINESS_RULE") {
+            logTecnico(err, { origem: "useAsyncAction" });
+          }
           throw err; // quem chamou decide como reagir (ex.: mostrar "lotado, entrar na espera?")
         }
       }
