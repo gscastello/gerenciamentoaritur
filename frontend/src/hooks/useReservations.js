@@ -17,6 +17,14 @@ import { useSupabaseQuery } from "./useSupabaseQuery";
 import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
 
+// status de passageiro (rpc_set_passengers_status) → status "achatado" da
+// reserva na view v_reservations_flat, para o patch otimista.
+const FLAT_PASSENGER_STATUS = {
+  embarcado: "embarcado",
+  confirmado: "confirmada",
+  nao_compareceu: "nao_compareceu",
+};
+
 export function useReservations(tripDate) {
   const dayQuery = useSupabaseQuery(
     () => reservationsService.listByDate(tripDate),
@@ -147,6 +155,24 @@ export function useReservationsWindow(fromDate, toDate) {
 
   const after = useCallback(async (p) => { const r = await p; await query.refetch(); return r; }, [query]);
 
+  // Ações que NÃO afetam capacidade (marcar embarque, quem busca) podem
+  // ser otimistas: a tela responde na hora e o refetch seguinte
+  // reconcilia; se a RPC falhar, o refetch reverte.
+  const otimista = useCallback(
+    async (patch, run) => {
+      query.mutate(patch);
+      try {
+        const r = await run();
+        await query.refetch();
+        return r;
+      } catch (e) {
+        await query.refetch();
+        throw e;
+      }
+    },
+    [query],
+  );
+
   return {
     reservations: query.data ?? [],
     loading: query.loading,
@@ -156,14 +182,31 @@ export function useReservationsWindow(fromDate, toDate) {
     createReservation: useCallback((payload) => after(create.run(payload)), [after, create]),
     confirmReservation: useCallback((id, opts) => after(confirm.run(id, opts)), [after, confirm]),
     cancelReservation: useCallback((id) => after(cancel.run(id)), [after, cancel]),
-    markPassengers: useCallback((id, status) => after(setPassengersStatus.run(id, status)), [after, setPassengersStatus]),
+    markPassengers: useCallback(
+      (id, status) =>
+        otimista(
+          (rows) =>
+            (rows ?? []).map((r) =>
+              r.id === id ? { ...r, status: FLAT_PASSENGER_STATUS[status] ?? r.status } : r,
+            ),
+          () => setPassengersStatus.run(id, status),
+        ),
+      [otimista, setPassengersStatus],
+    ),
     moveReservation: useCallback((id, target) => after(move.run(id, target)), [after, move]),
     editReservation: useCallback((id, fields) => after(updateDetails.run(id, fields)), [after, updateDetails]),
     setQuantity: useCallback((id, qty) => after(setQty.run(id, qty)), [after, setQty]),
     updateContact: useCallback((customerId, fields) => after(updateContact.run(customerId, fields)), [after, updateContact]),
     setDropoff: useCallback((id, v) => after(setDrop.run(id, v)), [after, setDrop]),
     reorderDropoff: useCallback((ids) => after(reorderDrop.run(ids)), [after, reorderDrop]),
-    setPickupTransport: useCallback((id, mode) => after(pickupTransp.run(id, mode)), [after, pickupTransp]),
+    setPickupTransport: useCallback(
+      (id, mode) =>
+        otimista(
+          (rows) => (rows ?? []).map((r) => (r.id === id ? { ...r, buscaPor: mode } : r)),
+          () => pickupTransp.run(id, mode),
+        ),
+      [otimista, pickupTransp],
+    ),
     setPaid: useCallback((args) => after(setPaid.run(args)), [after, setPaid]),
     setProof: useCallback((args) => after(setProof.run(args)), [after, setProof]),
 
