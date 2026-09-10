@@ -63,7 +63,10 @@ export const reservationsService = {
         // inclui também as linhas sem data (frete/encomenda, que nascem sem
         // viagem) — senão elas nunca apareceriam na Agenda.
         .or(`data.is.null,and(data.gte.${iso(fromDate)},data.lte.${iso(toDate)})`)
-        .order("criadoEm", { ascending: true }),
+        .order("criadoEm", { ascending: true })
+        // teto de segurança: a janela é de ~135 dias; muito acima disso é
+        // sinal de janela mal configurada, não de operação real.
+        .limit(8000),
       { context: "listWindow" }
     );
   },

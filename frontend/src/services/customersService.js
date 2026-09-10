@@ -30,6 +30,54 @@ export const customersService = {
     return handle(query, "list");
   },
 
+  /**
+   * Lista agregada do CRM (v_customers_stats, database/37) — paginada e
+   * com busca no servidor. `range` é [de, ate] inclusivo (PostgREST).
+   * Devolve { linhas, total }.
+   */
+  async listStats({ search, de = 0, ate = 24 } = {}) {
+    let query = supabase
+      .from("v_customers_stats")
+      .select(
+        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total",
+        { count: "exact" },
+      )
+      .order("total_gasto", { ascending: false })
+      .order("ultima_data", { ascending: false, nullsFirst: false })
+      .range(de, ate);
+    if (search) {
+      const termo = String(search).replace(/[,()*:\\%]/g, " ").trim().slice(0, 80);
+      if (termo) query = query.or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`);
+    }
+    const { data, error, count } = await query;
+    if (error) {
+      throw new ServiceError(`listStats: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    }
+    return { linhas: data ?? [], total: count ?? (data?.length ?? 0) };
+  },
+
+  /**
+   * Histórico "achatado" de UM cliente (v_reservations_flat) — carregado
+   * só quando o card do passageiro abre. Traz os campos de endereço para
+   * calcular os endereços mais usados.
+   */
+  async getHistoryFlat(customerId) {
+    return handle(
+      supabase
+        .from("v_reservations_flat")
+        .select(
+          "id, data, direcao, status, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
+        )
+        .eq("customer_id", customerId)
+        .order("criadoEm", { ascending: false })
+        .limit(400),
+      "getHistoryFlat",
+    );
+  },
+
   async getByPhone(phone) {
     return handle(
       supabase.from("customers").select(CUSTOMER_COLS).eq("phone", phone).is("deleted_at", null).maybeSingle(),
