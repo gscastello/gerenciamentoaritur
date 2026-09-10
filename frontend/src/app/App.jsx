@@ -1550,6 +1550,17 @@ function linhaReserva(r, trips) {
     return `${r.quantidade}P - ${(r.bairro || "bairro não informado").toUpperCase()} - ${r.telefone}`;
   return `${r.quantidade}P ${labelLocal(r, trips)} (${r.telefone})`;
 }
+// Endereço de embarque legível e COMPLETO (nunca cortado) para o celular
+// do motorista: local/bairro + rua + ponto de referência, na ordem útil.
+function enderecoEmbarque(r, trips) {
+  const partes = [];
+  const local = labelLocal(r, trips);
+  if (local && local !== "—") partes.push(local);
+  if (r.rua && !partes.includes(r.rua)) partes.push(r.rua);
+  if (r.localExato && !partes.includes(r.localExato)) partes.push(r.localExato);
+  if (r.referencia) partes.push(`ref.: ${r.referencia}`);
+  return partes.join(" · ");
+}
 function vagasDisponiveis(reservas, data, direcao, capacidade) {
   const usados = reservas
     .filter((r) => r.data === data && r.direcao === direcao && OCUPA_VAGA.includes(r.status))
@@ -3432,7 +3443,16 @@ function AgendaTab({
       "Ainda não há vaga suficiente na viagem.",
     );
   };
-  const salvarEdicao = async ({ id, move, details, quantidade, contato, cancel }) => {
+  const salvarEdicao = async ({
+    id,
+    move,
+    details,
+    quantidade,
+    contato,
+    pagamento,
+    comprovante,
+    cancel,
+  }) => {
     setAcaoErro("");
     try {
       if (cancel) {
@@ -3444,31 +3464,18 @@ function AgendaTab({
       if (details && Object.keys(details).length > 0) await R.editReservation(id, details);
       if (quantidade) await R.setQuantity(id, quantidade.qty);
       if (contato) await R.updateContact(contato.customerId, contato.fields);
+      if (pagamento) await R.setPaid(pagamento);
+      if (comprovante) await R.setProof(comprovante);
       setEditando(null);
     } catch (e) {
       setAcaoErro(e?.message || "Não foi possível salvar a edição.");
     }
   };
-  const togglePagamento = (r) =>
-    acao(
-      R.setPaid({ reservationId: r.id, paid: !r.pago, amount: r.valorTotal, method: r.pagamento }),
-      "Não foi possível atualizar o pagamento.",
-    );
   // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
   const ciclarBusca = (id, atual) =>
     acao(
       R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio"),
       "Não foi possível mudar quem busca.",
-    );
-  const toggleComprovante = (r) =>
-    acao(
-      R.setProof({
-        reservationId: r.id,
-        received: !r.comprovanteRecebido,
-        amount: r.valorTotal,
-        method: r.pagamento,
-      }),
-      "Não foi possível atualizar o comprovante.",
     );
   const dataFrete = (r) => r.data || r.extra?.data || null;
 
@@ -3685,8 +3692,6 @@ function AgendaTab({
             T={T}
             onStatus={atualizarStatus}
             onEditar={setEditando}
-            onPagamento={togglePagamento}
-            onComprovante={toggleComprovante}
             onBusca={ciclarBusca}
           />
         ))}
@@ -3713,89 +3718,81 @@ function AgendaTab({
     </div>
   );
 }
-function QuickActions({ r, trips, onStatus, onEditar, onPagamento, onComprovante }) {
-  const abrirWhats = () => window.open(`https://wa.me/55${digitos(r.telefone)}`, "_blank");
-  const abrirLocal = () => {
-    const q = r.pontoId === "busca" ? r.bairro : `${labelLocal(r, trips)} São Luís`;
-    window.open(`https://www.google.com/maps/search/${encodeURIComponent(q || "")}`, "_blank");
-  };
-  const btn = (icon, title, onClick, ativo, corAtivo) => {
-    const Icon = icon;
-    return (
-      <button
-        title={title}
-        onClick={onClick}
-        className="btn-press p-1 rounded"
-        style={{ color: ativo ? corAtivo || C.green : C.inkFaint }}
-      >
-        <Icon size={12} />
-      </button>
-    );
-  };
+// Ações da linha do passageiro na Agenda. Enxuto e com rótulo (o motorista
+// no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
+// comprovante e localização saíram — pagamento/comprovante agora ficam
+// dentro de "Editar reserva".
+function QuickActions({ r, onStatus, onEditar }) {
+  const tel = digitos(r.telefone);
+  const btn = (Icon, label, onClick) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
+      style={{ background: C.panel2, color: C.inkSoft }}
+    >
+      <Icon size={13} /> <span>{label}</span>
+    </button>
+  );
   return (
-    <div className="flex items-center gap-1 shrink-0 flex-wrap">
-      {btn(MessageCircle, "WhatsApp", abrirWhats)}
-      {btn(MapPin, "Abrir localização", abrirLocal)}
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {tel &&
+        btn(MessageCircle, "WhatsApp", () =>
+          window.open(`https://wa.me/55${tel}`, "_blank"),
+        )}
       {btn(Pencil, "Editar", () => onEditar(r))}
       {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
-      {r.status !== "embarcado"
-        ? btn(CheckCircle2, "Marcar como embarcado", () => onStatus(r.id, "embarcado"))
-        : btn(UserX, "Desfazer embarque", () => onStatus(r.id, "confirmada"))}
-      {btn(Wallet, r.pago ? "Pago" : "Marcar pagamento", () => onPagamento(r), r.pago)}
-      {btn(
-        Receipt,
-        r.comprovanteRecebido ? "Comprovante recebido" : "Marcar comprovante",
-        () => onComprovante(r),
-        r.comprovanteRecebido,
-        C.blue,
-      )}
     </div>
   );
 }
-function LinhaOperacional({ r, trips, onStatus, onEditar, onPagamento, onComprovante, onBusca }) {
+function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
+  const endereco = enderecoEmbarque(r, trips);
   return (
-    <div
-      className="row-hover flex items-center justify-between gap-2 rounded-md px-2 py-1.5"
-      style={{ background: C.panel }}
-    >
-      <button
-        onClick={() => onStatus(r.id, r.status === "embarcado" ? "confirmada" : "embarcado")}
-        className="check-anim shrink-0 w-4 h-4 rounded border flex items-center justify-center"
-        style={{
-          borderColor: r.status === "embarcado" ? C.blue : C.border,
-          background: r.status === "embarcado" ? C.blue : "transparent",
-        }}
-      >
-        {r.status === "embarcado" && <Check size={11} color="#0E1116" />}
-      </button>
-      <div className="min-w-0 flex-1">
-        <div
-          className="text-xs font-semibold truncate"
+    <div className="row-hover rounded-md px-2 py-2" style={{ background: C.panel }}>
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          aria-label={r.status === "embarcado" ? "Desmarcar embarque" : "Marcar embarque"}
+          onClick={() => onStatus(r.id, r.status === "embarcado" ? "confirmada" : "embarcado")}
+          className="check-anim shrink-0 mt-0.5 w-4 h-4 md:w-[18px] md:h-[18px] rounded border flex items-center justify-center"
           style={{
-            color: marcado ? C.inkFaint : C.ink,
-            textDecoration: r.status === "nao_compareceu" ? "line-through" : "none",
+            borderColor: r.status === "embarcado" ? C.ink : C.inkFaint,
+            background: r.status === "embarcado" ? C.ink : "transparent",
           }}
         >
-          {linhaReserva(r, trips)}
-        </div>
-        <div className="text-[10px] truncate flex items-center gap-1.5 flex-wrap" style={{ color: C.inkFaint }}>
-          <StatusPill status={r.status} />
-          {onBusca && r.pontoId === "busca" && (
-            <BuscaChip r={r} onCycle={onBusca} dense />
+          {r.status === "embarcado" && <Check size={11} color={C.panel} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div
+            className="text-[13px] font-semibold leading-snug"
+            style={{
+              color: marcado ? C.inkFaint : C.ink,
+              textDecoration: r.status === "nao_compareceu" ? "line-through" : "none",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {linhaReserva(r, trips)}
+          </div>
+          {endereco && (
+            <div
+              className="text-[11px] leading-snug mt-0.5"
+              style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+            >
+              {endereco}
+            </div>
           )}
-          {r.desembarque ? `· desembarque: ${r.desembarque}` : ""}
-          {r.pagamento === "pix" ? " · Pix" : ""}
+          <div className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: C.inkFaint }}>
+            <StatusPill status={r.status} />
+            {onBusca && r.pontoId === "busca" && <BuscaChip r={r} onCycle={onBusca} dense />}
+            {r.desembarque ? `· desembarque: ${r.desembarque}` : ""}
+            {r.pagamento === "pix" ? " · Pix" : ""}
+          </div>
         </div>
       </div>
-      <QuickActions
-        r={r}
-        trips={trips}
-        onStatus={onStatus}
-        onEditar={onEditar}
-        onPagamento={onPagamento}
-        onComprovante={onComprovante}
-      />
+      <div className="mt-2 pl-6">
+        <QuickActions r={r} onStatus={onStatus} onEditar={onEditar} />
+      </div>
     </div>
   );
 }
@@ -3809,8 +3806,6 @@ function ViagemOperacional({
   T,
   onStatus,
   onEditar,
-  onPagamento,
-  onComprovante,
   onBusca,
 }) {
   const viagem = trips[direcao];
@@ -3996,8 +3991,6 @@ function ViagemOperacional({
                       trips={trips}
                       onStatus={onStatus}
                       onEditar={onEditar}
-                      onPagamento={onPagamento}
-                      onComprovante={onComprovante}
                       onBusca={onBusca}
                     />
                   ))}
@@ -4053,7 +4046,22 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
         ? { customerId: reserva.customer_id, fields: contatoFields }
         : null;
 
-    await onSave({ id: reserva.id, move, details, quantidade, contato });
+    const metodo = f.pagamento || reserva.pagamento;
+    const pagamento =
+      !!f.pago !== !!reserva.pago
+        ? { reservationId: reserva.id, paid: !!f.pago, amount: reserva.valorTotal, method: metodo }
+        : null;
+    const comprovante =
+      !!f.comprovanteRecebido !== !!reserva.comprovanteRecebido
+        ? {
+            reservationId: reserva.id,
+            received: !!f.comprovanteRecebido,
+            amount: reserva.valorTotal,
+            method: metodo,
+          }
+        : null;
+
+    await onSave({ id: reserva.id, move, details, quantidade, contato, pagamento, comprovante });
     setSalvando(false);
   };
 
@@ -4191,6 +4199,25 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             </Select>
           </Field>
           <div />
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-xs" style={{ color: C.inkSoft }}>
+            <input
+              type="checkbox"
+              checked={!!f.pago}
+              onChange={(e) => setF({ ...f, pago: e.target.checked })}
+            />
+            Pagamento recebido{" "}
+            {reserva.valorTotal ? `(${fmtBRL(reserva.valorTotal)})` : ""}
+          </label>
+          <label className="flex items-center gap-2 text-xs" style={{ color: C.inkSoft }}>
+            <input
+              type="checkbox"
+              checked={!!f.comprovanteRecebido}
+              onChange={(e) => setF({ ...f, comprovanteRecebido: e.target.checked })}
+            />
+            Comprovante recebido
+          </label>
         </div>
         <div className="flex items-center justify-between mt-4">
           <button
@@ -5073,56 +5100,57 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
       ) : (
         <ol className="list-none space-y-1.5">
           {itens.map((r, idx) => (
-            <li key={r.id} className="rounded-md px-2.5 py-2" style={{ background: C.panel2 }}>
-              <div className="flex items-center gap-2 text-sm">
+            <li key={r.id} className="rounded-md px-2.5 py-2.5" style={{ background: C.panel2 }}>
+              <div className="flex items-start gap-2">
                 <span
-                  className="tabular-nums shrink-0"
+                  className="tabular-nums shrink-0 mt-0.5 text-sm"
                   style={{ color: C.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
                 >
                   {idx + 1}.
                 </span>
-                <span className="font-semibold truncate" style={{ color: C.ink }}>
+                <span
+                  className="font-bold text-[15px] leading-snug flex-1 min-w-0"
+                  style={{ color: C.ink, overflowWrap: "anywhere" }}
+                >
                   {r.nome || "—"}
                 </span>
-                <span className="shrink-0" style={{ color: C.inkSoft }}>
-                  · {r.quantidade}P
-                </span>
-                <StatusPill status={r.status} />
-                <span className="ml-auto flex items-center gap-0.5 shrink-0">
+                <span className="flex items-center gap-0.5 shrink-0">
                   <button
                     type="button"
                     disabled={idx === 0 || salvando}
                     onClick={() => mover(idx, -1)}
-                    title="Entregar antes"
+                    aria-label="Entregar antes"
                     style={{ opacity: idx === 0 ? 0.3 : 1 }}
                   >
-                    <ChevronUp size={15} style={{ color: C.inkSoft }} />
+                    <ChevronUp size={16} style={{ color: C.inkSoft }} />
                   </button>
                   <button
                     type="button"
                     disabled={idx === itens.length - 1 || salvando}
                     onClick={() => mover(idx, 1)}
-                    title="Entregar depois"
+                    aria-label="Entregar depois"
                     style={{ opacity: idx === itens.length - 1 ? 0.3 : 1 }}
                   >
-                    <ChevronDown size={15} style={{ color: C.inkSoft }} />
+                    <ChevronDown size={16} style={{ color: C.inkSoft }} />
                   </button>
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 mt-1.5">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-1.5">
                 <input
                   key={`${r.id}:${detalheDesembarque(r)}`}
                   defaultValue={detalheDesembarque(r)}
                   onFocus={(e) => e.target.select()}
                   onBlur={(e) => onDetalhe(r, e.target.value.trim())}
                   placeholder={placeholder}
-                  className="flex-1 min-w-0 text-xs rounded px-2 py-1 outline-none"
+                  aria-label="Endereço de desembarque"
+                  className="w-full sm:flex-1 min-w-0 text-[13px] rounded px-2.5 py-2 outline-none"
                   style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.ink }}
                 />
                 <select
                   value={balde.code}
                   onChange={(e) => onBalde(r, e.target.value)}
-                  className="text-xs rounded px-1 py-1 outline-none shrink-0"
+                  aria-label="Área de desembarque"
+                  className="w-full sm:w-auto text-xs rounded px-1 py-2 outline-none shrink-0"
                   style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
                 >
                   {dropoff.porDirecao(direcao).map((b) => (
@@ -5132,12 +5160,6 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
                   ))}
                 </select>
               </div>
-              {(r.telefone || r.desembarque) && (
-                <div className="text-[11px] mt-1 truncate" style={{ color: C.inkFaint }}>
-                  {r.telefone}
-                  {r.desembarque ? ` · cliente informou: "${r.desembarque}"` : ""}
-                </div>
-              )}
             </li>
           ))}
         </ol>
@@ -5227,101 +5249,104 @@ function BuscaChip({ r, onCycle, dense = false }) {
 }
 
 // Linha de passageiro na lista de embarque — pensada pro celular do
-// motorista: nome grande, telefone com toque pra ligar / abrir WhatsApp,
-// e dois botões grandes "Embarcou" / "Faltou".
+// motorista. Uma única CAIXA de marcar (1 toque = embarcou) à esquerda; o
+// foco é no que importa: nº de passagens, endereço COMPLETO e telefone.
 function LinhaEmbarque({ r, trips, alvos, mover, remove, marcar, buscar }) {
   const tel = digitos(r.telefone);
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
+  const endereco = enderecoEmbarque(r, trips);
   return (
     <div
-      className="rounded-lg px-3 py-2.5"
-      style={{ background: C.panel2, opacity: faltou ? 0.6 : 1 }}
+      className="rounded-lg px-3 py-3"
+      style={{ background: C.panel2, opacity: faltou ? 0.5 : 1 }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div
-            className="text-sm font-bold"
-            style={{ color: C.ink, textDecoration: faltou ? "line-through" : "none" }}
-          >
-            {linhaReserva(r, trips)}
-          </div>
-          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-            <StatusPill status={r.status} />
-            {r.pago ? (
-              <span className="text-[10px]" style={{ color: C.green }}>
-                pago
-              </span>
-            ) : (
-              <span className="text-[10px]" style={{ color: C.warn }}>
-                a receber {fmtBRL(r.valorTotal)}
-              </span>
-            )}
-          </div>
-        </div>
-        {(mover || remove) && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            {mover && <MoverCompacto reservaId={r.id} alvos={alvos} mover={mover} />}
-            {remove && (
-              <button type="button" onClick={() => remove(r.id)} aria-label="Cancelar">
-                <X size={14} style={{ color: C.red }} />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {buscar && <BuscaChip r={r} onCycle={buscar} />}
-
-      <div className="mt-2 flex items-center gap-2 flex-wrap">
-        {tel && (
-          <>
-            <a
-              href={`tel:${tel}`}
-              className="btn-press flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md"
-              style={{ background: C.panel, color: C.inkSoft }}
-            >
-              <PhoneCall size={12} /> {r.telefone}
-            </a>
-            <a
-              href={`https://wa.me/55${tel}`}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-press flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md"
-              style={{ background: C.greenSoft, color: C.green }}
-            >
-              <MessageCircle size={12} /> WhatsApp
-            </a>
-          </>
-        )}
-      </div>
-
-      {marcar && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="flex items-start gap-3">
+        {marcar && (
           <button
             type="button"
             onClick={() => marcar(r.id, embarcado ? "reverter" : "embarcado")}
-            className="btn-press flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold"
+            aria-label={embarcado ? "Desmarcar embarque" : "Marcar embarque"}
+            className="check-anim shrink-0 mt-0.5 rounded-md border flex items-center justify-center w-6 h-6 md:w-7 md:h-7"
             style={{
-              background: embarcado ? C.green : C.greenSoft,
-              color: embarcado ? "#0C1F16" : C.green,
+              borderColor: embarcado ? C.ink : C.border,
+              background: embarcado ? C.ink : "transparent",
             }}
           >
-            <Check size={15} /> {embarcado ? "Embarcou ✓" : "Embarcou"}
+            {embarcado && <Check size={16} style={{ color: C.panel }} />}
           </button>
-          <button
-            type="button"
-            onClick={() => marcar(r.id, faltou ? "reverter" : "nao_compareceu")}
-            className="btn-press flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold"
-            style={{
-              background: faltou ? C.gray : C.graySoft,
-              color: faltou ? "#0E1116" : C.inkSoft,
-            }}
-          >
-            <UserX size={15} /> {faltou ? "Faltou" : "Não veio"}
-          </button>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div
+              className="text-[15px] font-bold leading-snug"
+              style={{ color: C.ink, textDecoration: faltou ? "line-through" : "none" }}
+            >
+              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{r.quantidade}P</span>
+              {" · "}
+              {r.nome || "—"}
+            </div>
+            {(mover || remove) && (
+              <div className="flex items-center gap-2 shrink-0">
+                {mover && <MoverCompacto reservaId={r.id} alvos={alvos} mover={mover} />}
+                {remove && (
+                  <button type="button" onClick={() => remove(r.id)} aria-label="Cancelar reserva">
+                    <X size={15} style={{ color: C.inkSoft }} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {endereco && (
+            <div
+              className="mt-1 text-[13px] leading-snug"
+              style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+            >
+              {endereco}
+            </div>
+          )}
+
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px]" style={{ color: C.inkFaint }}>
+            <StatusPill status={r.status} />
+            <span>{r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}</span>
+          </div>
+
+          {tel && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <a
+                href={`tel:${tel}`}
+                className="btn-press flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-md"
+                style={{ background: C.panel, color: C.ink }}
+              >
+                <PhoneCall size={14} /> {r.telefone}
+              </a>
+              <a
+                href={`https://wa.me/55${tel}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-press flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-md"
+                style={{ background: C.panel, color: C.inkSoft }}
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            </div>
+          )}
+
+          {buscar && <BuscaChip r={r} onCycle={buscar} />}
+
+          {marcar && !embarcado && (
+            <button
+              type="button"
+              onClick={() => marcar(r.id, faltou ? "reverter" : "nao_compareceu")}
+              className="btn-press mt-2 block text-[11px] underline"
+              style={{ color: C.inkFaint }}
+            >
+              {faltou ? "desfazer “não veio”" : "marcar “não veio”"}
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
