@@ -1347,7 +1347,7 @@ function MiniStat({ label, value, cor }) {
 }
 // Barra de ocupação: enche com animação (bar-grow) e fica vermelha quando
 // lotada. Usada nos cards de viagem da Agenda e no hero do dia.
-function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true }) {
+function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefixo }) {
   const pct = total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
   const cor = pct >= 100 ? C.red : pct >= 85 ? C.warn : pct >= 40 ? C.brand : C.inkSoft;
   return (
@@ -1355,7 +1355,13 @@ function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true }) {
       {mostrarTexto && (
         <div className="flex items-center justify-between text-[11px] mb-1">
           <span style={{ color: C.inkSoft }}>
-            {ocupados} / {total} passageiros
+            {prefixo && (
+              <b className="mr-1.5 tracking-wide" style={{ color: cor }}>
+                {prefixo}
+              </b>
+            )}
+            {ocupados}/{total}
+            {prefixo ? "" : " passageiros"}
           </span>
           <span className="font-bold" style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}>
             {pct}%
@@ -3379,9 +3385,9 @@ function AgendaTab({
   const doDia = reservas.filter((r) => r.data === data && !["frete", "encomenda"].includes(r.tipo));
   const pendentesDoDia = doDia.filter((r) => r.status === "pendente");
   const esperaDoDia = doDia.filter((r) => r.status === "espera");
-  const ocupadosDia = doDia
-    .filter((r) => OCUPA_VAGA.includes(r.status))
-    .reduce((s, r) => s + r.quantidade, 0);
+  const ocupa = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
+  const paxIda = ocupa.filter((r) => r.direcao === "ida").reduce((s, r) => s + r.quantidade, 0);
+  const paxVolta = ocupa.filter((r) => r.direcao === "volta").reduce((s, r) => s + r.quantidade, 0);
   const fretesPendentes = reservas.filter((r) => r.tipo === "frete" && r.status === "pendente");
   const encomendasPendentes = reservas.filter(
     (r) => r.tipo === "encomenda" && r.status === "pendente",
@@ -3510,8 +3516,9 @@ function AgendaTab({
                 {fmtDate(data)} · <span className="capitalize">{diaSemana(data)}</span>
               </div>
             </div>
-            <div className="min-w-[180px] flex-1 max-w-xs">
-              <CapacidadeBar ocupados={ocupadosDia} total={capacidade * 2} altura={9} />
+            <div className="min-w-[200px] flex-1 max-w-xs space-y-2">
+              <CapacidadeBar prefixo="IDA" ocupados={paxIda} total={capacidade} altura={8} />
+              <CapacidadeBar prefixo="VOLTA" ocupados={paxVolta} total={capacidade} altura={8} />
             </div>
             <div className="flex gap-4">
               <div>
@@ -8481,7 +8488,44 @@ function primeiroNome(profile) {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
-function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
+// Chip de lotação do dia — SEMPRE separado por direção (cada viagem tem
+// `capacidade` lugares, nunca some as duas).
+function HeroChipCap({ paxIda, paxVolta, capacidade }) {
+  const lotIda = capacidade && paxIda >= capacidade;
+  const lotVolta = capacidade && paxVolta >= capacidade;
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-xl px-3 py-2"
+      style={{ background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.08)" }}
+    >
+      <Bus size={15} style={{ color: "#fff" }} />
+      <span className="text-[11px]" style={{ color: "rgba(255,255,255,.7)" }}>
+        Lotação
+      </span>
+      <span
+        className="text-sm font-bold"
+        style={{ color: lotIda ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+      >
+        {paxIda}/{capacidade}
+      </span>
+      <span className="text-[10px]" style={{ color: "rgba(255,255,255,.55)" }}>
+        ida
+      </span>
+      <span style={{ color: "rgba(255,255,255,.25)" }}>·</span>
+      <span
+        className="text-sm font-bold"
+        style={{ color: lotVolta ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+      >
+        {paxVolta}/{capacidade}
+      </span>
+      <span className="text-[10px]" style={{ color: "rgba(255,255,255,.55)" }}>
+        volta
+      </span>
+    </div>
+  );
+}
+
+function DashboardHero({ paxIda, paxVolta, capacidade, faturamento, pendencias }) {
   const { profile } = useAuth();
   const nome = primeiroNome(profile);
   const h = new Date().getHours();
@@ -8533,8 +8577,7 @@ function DashboardHero({ passageiros, vagas, faturamento, pendencias }) {
                 viagens todos os dias
               </span>
             </div>
-            <HeroChip label="Passageiros" valor={passageiros} Icon={Users} />
-            <HeroChip label="Vagas" valor={vagas} Icon={Bus} />
+            <HeroChipCap paxIda={paxIda} paxVolta={paxVolta} capacidade={capacidade} />
             <HeroChip label="Faturamento" valor={faturamento} moeda Icon={Wallet} />
             <HeroChip label="Pendências" valor={pendencias} Icon={AlertTriangle} />
           </div>
@@ -8579,6 +8622,15 @@ function DashboardTab({ reservas, capacidade, trips }) {
   );
   const doDia = confirmadas.filter((r) => r.data === hoje);
   const passageirosHoje = doDia.reduce((s, r) => s + r.quantidade, 0);
+  // Lotação SEMPRE por direção — cada viagem tem `capacidade` lugares.
+  const paxIdaHoje = doDia.filter((r) => r.direcao === "ida").reduce((s, r) => s + r.quantidade, 0);
+  const paxVoltaHoje = doDia
+    .filter((r) => r.direcao === "volta")
+    .reduce((s, r) => s + r.quantidade, 0);
+  const vagasIdaHoje = Math.max(0, capacidade - paxIdaHoje);
+  const vagasVoltaHoje = Math.max(0, capacidade - paxVoltaHoje);
+  const ocupIda = capacidade ? Math.round((paxIdaHoje / capacidade) * 100) : 0;
+  const ocupVolta = capacidade ? Math.round((paxVoltaHoje / capacidade) * 100) : 0;
   const emEspera = reservas.filter((r) => r.status === "espera").length;
   const receitaHoje = financeiro
     .filter((f) => f.data === hoje && f.tipo === "receita")
@@ -8610,7 +8662,7 @@ function DashboardTab({ reservas, capacidade, trips }) {
     contagemPorCliente[k] = (contagemPorCliente[k] || 0) + 1;
   });
   const recorrentes = Object.values(contagemPorCliente).filter((n) => n >= 2).length;
-  const ocupacaoMedia = capacidade ? Math.round((passageirosHoje / (capacidade * 2)) * 100) : 0;
+  const ocupacaoMedia = Math.round((ocupIda + ocupVolta) / 2);
   const ultimos7 = useMemo(() => {
     const dias = [];
     for (let i = 6; i >= 0; i--) {
@@ -8635,18 +8687,30 @@ function DashboardTab({ reservas, capacidade, trips }) {
   const pendentesHoje = reservas.filter(
     (r) => r.data === hoje && (r.status === "pendente" || r.status === "espera"),
   ).length;
-  const vagasHoje = Math.max(0, capacidade * 2 - passageirosHoje);
   return (
     <div>
       <DashboardHero
-        passageiros={passageirosHoje}
-        vagas={vagasHoje}
+        paxIda={paxIdaHoje}
+        paxVolta={paxVoltaHoje}
+        capacidade={capacidade}
         faturamento={receitaHoje}
         pendencias={pendentesHoje}
       />
       <div className="px-6 md:px-10 pb-10 space-y-5">
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger">
-          <StatCard label="Passageiros hoje" value={passageirosHoje} icon={Users} />
+          <StatCard
+            label="Passageiros hoje"
+            value={passageirosHoje}
+            hint={`ida ${paxIdaHoje} · volta ${paxVoltaHoje}`}
+            icon={Users}
+          />
+          <StatCard
+            label="Vagas hoje"
+            value={`${vagasIdaHoje} / ${vagasVoltaHoje}`}
+            hint="livres na ida · na volta"
+            icon={Bus}
+            accent={C.green}
+          />
           <StatCard
             label="Faturamento hoje"
             value={fmtBRL(receitaHoje)}
@@ -8685,8 +8749,9 @@ function DashboardTab({ reservas, capacidade, trips }) {
           />
           <StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} />
           <StatCard
-            label="Ocupação média hoje"
+            label="Ocupação hoje"
             value={`${ocupacaoMedia}%`}
+            hint={`ida ${ocupIda}% · volta ${ocupVolta}%`}
             icon={CheckCircle2}
             accent={C.blue}
           />
