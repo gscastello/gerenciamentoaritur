@@ -95,6 +95,15 @@ import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
 import { foraDaAreaPadrao } from "../domain/cidades.js";
 import { montarRelatorioFinanceiro } from "../domain/relatorioFinanceiro.js";
 import {
+  primeiroErro,
+  validarData,
+  validarNome,
+  validarObrigatorio,
+  validarQuantidade,
+  validarTelefone,
+  validarValor,
+} from "../domain/validacao.js";
+import {
   abrirRelatorioPDF,
   baixarCSVZip,
   baixarExcel,
@@ -2258,6 +2267,7 @@ function AppInner() {
         <NovaReservaModal
           dataInicial={deepLink?.kind === "data" ? deepLink.data : todayStr()}
           trips={trips}
+          capacidade={capacidadeAtiva}
           onCriar={R.createReservation}
           onClose={(r) => {
             setAgendarAberto(false);
@@ -2630,6 +2640,17 @@ function ReservarTab({
   });
   const confirmar = async () => {
     setErroEnvio("");
+    const problema = primeiroErro([
+      validarNome(form.nome),
+      validarTelefone(form.telefone),
+      validarData(form.data, { min: todayStr() }),
+      validarQuantidade(Number.parseInt(form.quantidade, 10), { min: 1, max: capacidade }),
+      validarValor(valorUnit, { min: 0 }),
+    ]);
+    if (problema) {
+      setErroEnvio(problema);
+      return;
+    }
     setEnviando(true);
     try {
       const res = await R.createReservation({
@@ -4265,11 +4286,24 @@ function ViagemOperacional({
 function EditarReservaModal({ reserva, onClose, onSave, trips }) {
   const [f, setF] = useState({ ...reserva });
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
   const viagem = trips[f.direcao] || trips.ida;
   const ponto = viagem.pontos.find((p) => p.id === f.pontoId);
   const campoDetalhe = ponto?.campo; // 'bairro' | 'localExato' | 'localOutro' | undefined
 
   const salvar = async () => {
+    const problema = primeiroErro([
+      validarNome(f.nome),
+      validarTelefone(f.telefone),
+      validarData(f.data, { min: reserva.data && reserva.data < todayStr() ? reserva.data : todayStr() }),
+      validarQuantidade(Number.parseInt(f.quantidade, 10), { min: 1 }),
+      campoDetalhe === "bairro" ? validarObrigatorio(f.bairro, "Bairro") : null,
+    ]);
+    if (problema) {
+      setErro(problema);
+      return;
+    }
+    setErro("");
     setSalvando(true);
     const move =
       f.data !== reserva.data ||
@@ -4344,6 +4378,15 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
           <Clock size={12} /> {f.quantidade}P
           {f.criadoEm ? ` · reservado ${fmtHora(f.criadoEm)}` : ""}
         </div>
+        {erro && (
+          <div
+            className="mb-3 flex items-start gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>{erro}</span>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Field label="Nome">
             <TextInput
@@ -4388,6 +4431,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
           <Field label="Data">
             <TextInput
               type="date"
+              min={reserva.data && reserva.data < todayStr() ? reserva.data : todayStr()}
               value={f.data || ""}
               onChange={(e) => setF({ ...f, data: e.target.value })}
             />
@@ -4504,7 +4548,14 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
    sem passar pelo roteiro do bot. Vai pela MESMA RPC (rpc_create_reservation
    via R.createReservation) — a capacidade é decidida pelo banco. */
 
-function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose, onCriar }) {
+function NovaReservaModal({
+  dataInicial,
+  direcaoInicial = "ida",
+  trips,
+  onClose,
+  onCriar,
+  capacidade = 31,
+}) {
   const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
   const [f, setF] = useState({
     nome: "",
@@ -4570,6 +4621,18 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
 
   const criar = async (status) => {
     setErro("");
+    const problema = primeiroErro([
+      validarNome(f.nome),
+      validarTelefone(f.telefone),
+      validarData(f.data, { min: todayStr() }),
+      validarQuantidade(qtd, { min: 1, max: capacidade }),
+      validarValor(valorUnit, { min: 0 }),
+      campoDetalhe === "bairro" ? validarObrigatorio(f.bairro, "Bairro") : null,
+    ]);
+    if (problema) {
+      setErro(problema);
+      return;
+    }
     setSalvando(true);
     try {
       const res = await onCriar(montarPayload(status));
@@ -4633,6 +4696,7 @@ function NovaReservaModal({ dataInicial, direcaoInicial = "ida", trips, onClose,
           <Field label="Data">
             <TextInput
               type="date"
+              min={todayStr()}
               value={f.data}
               onChange={(e) => setF({ ...f, data: e.target.value })}
             />
@@ -6351,13 +6415,22 @@ function FinanceiroTab({ pix, deepLink }) {
     }
   };
   const add = () => {
-    if (!novo.valor) return;
+    const v = validarValor(novo.valor, { min: 0.01 });
+    if (!v.ok) {
+      setErro(v.erro);
+      return;
+    }
+    const d = validarData(diaSel);
+    if (!d.ok) {
+      setErro(d.erro);
+      return;
+    }
     run(async () => {
       await fin.addEntry({
         entryDate: diaSel,
         type: novo.tipo,
         category: novo.tipo === "despesa" ? novo.categoria : undefined,
-        amount: Number.parseFloat(novo.valor),
+        amount: v.valor,
         description: novo.descricao || null,
       });
       setNovo({ tipo: "receita", categoria: "combustivel", valor: "", descricao: "" });
@@ -8182,12 +8255,13 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
 
   const add = () =>
     run(async () => {
-      if (!novo.valor) return;
+      const v = validarValor(novo.valor, { min: 0.01 });
+      if (!v.ok) throw new Error(v.erro);
       await fin.addEntry({
         entryDate: dataDoDia(novo.dia),
         type: "despesa",
         category: novo.category,
-        amount: Number.parseFloat(novo.valor),
+        amount: v.valor,
         description: novo.descricao || null,
       });
       setNovo({ category: novo.category, dia: "", valor: "", descricao: "" });
