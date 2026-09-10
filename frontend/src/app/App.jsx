@@ -634,6 +634,37 @@ function GlobalStyles() {
         background:linear-gradient(100deg, transparent, rgba(255,255,255,.10), transparent);
         transform: translateX(0); animation: sweep 6s ease-in-out 1s infinite; }
 
+      /* ---- FX cinematográfico dos heros (toda tela que usa .aritur-hero) ---- */
+      @keyframes heroRoad   { to { background-position: -46px 82%; } }
+      @keyframes heroBreath { 0%,100% { opacity:.35; transform:scale(1) translateY(0); } 50% { opacity:.7; transform:scale(1.06) translateY(-4px); } }
+      @keyframes heroSpark  { 0% { transform: translate(0,0) scale(1); opacity:0; } 15% { opacity:.7; } 100% { transform: translate(-120px,-24px) scale(.4); opacity:0; } }
+      @keyframes busDrift   { 0%,100% { transform: translateY(0) rotate(-.5deg); } 50% { transform: translateY(-6px) rotate(.4deg); } }
+      .aritur-hero::before {
+        content:""; position:absolute; left:-6%; right:-6%; bottom:-8px; height:38%;
+        background: repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 16px, rgba(255,255,255,0) 16px 52px);
+        background-size: 52px 100%; background-position: 0 82%; background-repeat: repeat-x;
+        transform: perspective(360px) rotateX(58deg); transform-origin: bottom;
+        animation: heroRoad 1.1s linear infinite; opacity:.55; pointer-events:none;
+        mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+      }
+      .aritur-hero::after {
+        content:""; position:absolute; top:-70%; right:-12%; width:56%; height:240%;
+        background: radial-gradient(circle at 66% 34%, ${C.brandGlow} 0%, transparent 62%);
+        filter: blur(26px); animation: heroBreath 8s ease-in-out infinite; pointer-events:none;
+      }
+      .hero-fx { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+      .hero-fx-bus { position:absolute; bottom:-16%; right:-3%; width:min(210px, 42%);
+        animation: busDrift 6s ease-in-out infinite; will-change: transform;
+        filter: drop-shadow(0 -6px 20px rgba(0,0,0,.4)); opacity:.5; }
+      .hero-fx-bus svg { display:block; width:100%; }
+      .hero-fx-spark { position:absolute; right:16%; width:3px; height:3px; border-radius:50%;
+        background:#ff7a70; box-shadow:0 0 9px 1px ${C.brandGlow}; opacity:0;
+        animation: heroSpark 4s linear infinite; }
+      .hero-fx-spark.s1 { bottom:44%; animation-delay:0s; }
+      .hero-fx-spark.s2 { bottom:58%; right:26%; animation-delay:1.5s; }
+      .hero-fx-spark.s3 { bottom:34%; right:10%; animation-delay:3s; }
+      .bus-drift { animation: busDrift 6.5s ease-in-out infinite; will-change: transform; }
+
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         button, select, input, textarea, a[role="button"] { min-height: 42px; }
@@ -642,7 +673,10 @@ function GlobalStyles() {
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
-        .aritur-road, .hero-lanes, .hero-bus, .hero-headlight, .float-y, .glow-pulse, .sheen::after { animation: none !important; }
+        .aritur-road, .hero-lanes, .hero-bus, .hero-headlight, .float-y, .glow-pulse, .sheen::after,
+        .aritur-hero::before, .aritur-hero::after, .hero-fx-bus, .hero-fx-spark, .bus-drift { animation: none !important; }
+        /* ônibus fica parado num canto, faíscas somem — nada se move */
+        .hero-fx-spark { opacity: 0 !important; }
       }
     `}</style>
   );
@@ -789,6 +823,40 @@ function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 })
         <circle cx="186" cy="72" r="11" />
       </g>
     </svg>
+  );
+}
+
+/* Camada de FX dos heros: um ônibus preto/vermelho atravessando devagar a
+   faixa + faíscas. A estrada e o brilho que respiram vêm do CSS de
+   `.aritur-hero` (::before / ::after). Tudo desligado em reduced-motion. */
+function HeroFX() {
+  return (
+    <div className="hero-fx" aria-hidden="true">
+      <div className="hero-fx-bus">
+        <svg viewBox="0 0 232 84" fill="none" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+          <path d="M226 42 L232 26 L232 62 Z" fill="#ffdca6" opacity="0.4" />
+          <path
+            d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v7c0 4-3 7-7 7h-12a15 15 0 0 0-30 0H70a15 15 0 0 0-30 0H14c-4 0-8-3-8-8V20Z"
+            fill="#050506"
+            stroke="rgba(228,18,31,0.55)"
+            strokeWidth="1.4"
+          />
+          <g fill="rgba(255,255,255,0.07)">
+            <rect x="20" y="20" width="24" height="16" rx="3" />
+            <rect x="50" y="20" width="24" height="16" rx="3" />
+            <rect x="80" y="20" width="24" height="16" rx="3" />
+            <rect x="110" y="20" width="24" height="16" rx="3" />
+            <rect x="140" y="20" width="22" height="16" rx="3" />
+          </g>
+          <rect x="6" y="43" width="196" height="3" rx="1.5" fill="#E4121F" opacity="0.85" />
+          <circle cx="54" cy="70" r="10" fill="#0b0b0d" stroke="#2b2b30" strokeWidth="2" />
+          <circle cx="186" cy="70" r="10" fill="#0b0b0d" stroke="#2b2b30" strokeWidth="2" />
+        </svg>
+      </div>
+      <span className="hero-fx-spark s1" />
+      <span className="hero-fx-spark s2" />
+      <span className="hero-fx-spark s3" />
+    </div>
   );
 }
 
@@ -1246,7 +1314,13 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
 /* ============================= shared UI ============================= */
 function Header({ title, subtitle, right }) {
   return (
-    <div className="px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+    <div className="relative px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+      <BusSilhueta
+        className="absolute pointer-events-none hidden md:block bus-drift"
+        style={{ width: 132, right: 12, top: 6, opacity: 0.9 }}
+        color={C.brand}
+        opacity={0.07}
+      />
       <div>
         <h1
           style={{
@@ -1264,6 +1338,7 @@ function Header({ title, subtitle, right }) {
             {subtitle}
           </p>
         )}
+        <span className="aritur-road mt-2 block" style={{ width: 56 }} />
       </div>
       {right}
     </div>
@@ -2212,7 +2287,7 @@ function AppInner() {
           </div>
         </div>
         <BusSilhueta
-          className="absolute pointer-events-none"
+          className="absolute pointer-events-none bus-drift"
           style={{ width: 240, bottom: -12, left: -30, opacity: 0.9 }}
           opacity={0.055}
         />
@@ -2580,12 +2655,7 @@ function ReservarTab({
           className="aritur-hero relative overflow-hidden rounded-2xl border p-5 md:p-6"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 240, right: -24, bottom: -22 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative max-w-xl">
             <div className="flex items-center gap-2 mb-1.5">
               <span
@@ -3509,12 +3579,7 @@ function AgendaTab({
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 220, right: -20, bottom: -18 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
             <div>
               <div
@@ -4626,6 +4691,23 @@ function BlocoDeNotasTab() {
         }
       />
       <div className="px-6 md:px-10 pb-10 space-y-3">
+        <div
+          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-2"
+          style={{ borderColor: C.brandDim }}
+        >
+          <HeroFX />
+          <div className="relative flex items-center gap-2">
+            <NotebookPen size={17} style={{ color: "#fff" }} />
+            <div
+              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.05rem", color: "#fff" }}
+            >
+              Anotação do dia
+              <span className="font-normal ml-1.5" style={{ color: "rgba(255,255,255,.7)", fontSize: "0.78rem" }}>
+                · cópia de segurança da agenda
+              </span>
+            </div>
+          </div>
+        </div>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="text-sm font-semibold capitalize" style={{ color: C.ink }}>
             {ehHoje ? "Hoje" : diaSemana(data)}{" "}
@@ -4811,12 +4893,7 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 200, right: -16, bottom: -16 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
             <div>
               <div
@@ -5443,12 +5520,7 @@ function PassageirosTab({ reservas, trips, deepLink }) {
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-4 flex flex-wrap items-center justify-between gap-4"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 180, right: -12, bottom: -14 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative">
             <div
               style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.2rem", color: "#fff" }}
@@ -5877,12 +5949,7 @@ function FinanceiroTab({ pix, deepLink }) {
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 190, right: -14, bottom: -14 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative flex items-center gap-2">
             <button
               type="button"
@@ -8010,12 +8077,7 @@ function OperacaoTab() {
             className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
             style={{ borderColor: C.brandDim }}
           >
-            <BusSilhueta
-              className="absolute pointer-events-none hidden sm:block"
-              style={{ width: 200, right: -14, bottom: -16 }}
-              color="#000"
-              opacity={0.18}
-            />
+            <HeroFX />
             <div className="relative flex items-center gap-3">
               <div
                 className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
@@ -9613,12 +9675,7 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex items-center justify-between gap-3"
           style={{ borderColor: C.brandDim }}
         >
-          <BusSilhueta
-            className="absolute pointer-events-none hidden sm:block"
-            style={{ width: 190, right: -16, bottom: -16 }}
-            color="#000"
-            opacity={0.16}
-          />
+          <HeroFX />
           <div className="relative flex items-center gap-3">
             <span
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
