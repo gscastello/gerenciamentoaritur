@@ -3567,7 +3567,16 @@ function AgendaTab({
   const segunda = isMonday(data) && segundaAtiva;
   const doDia = reservas.filter((r) => r.data === data && !["frete", "encomenda"].includes(r.tipo));
   const pendentesDoDia = doDia.filter((r) => r.status === "pendente");
-  const esperaDoDia = doDia.filter((r) => r.status === "espera");
+  // Lista de espera: TODA (não só o dia selecionado) — é assim que a
+  // equipe vê quem está aguardando vaga em qualquer data e chama quando
+  // alguém cancela.
+  const esperaTodos = useMemo(
+    () =>
+      reservas
+        .filter((r) => r.status === "espera")
+        .sort((a, b) => (a.data || "").localeCompare(b.data || "")),
+    [reservas],
+  );
   const ocupa = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
   const paxIda = ocupa.filter((r) => r.direcao === "ida").reduce((s, r) => s + r.quantidade, 0);
   const paxVolta = ocupa.filter((r) => r.direcao === "volta").reduce((s, r) => s + r.quantidade, 0);
@@ -3708,9 +3717,22 @@ function AgendaTab({
                   className="font-bold"
                   style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.1rem" }}
                 >
-                  {pendentesDoDia.length + esperaDoDia.length}
+                  {pendentesDoDia.length}
                 </div>
               </div>
+              {esperaTodos.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                    Na espera
+                  </div>
+                  <div
+                    className="font-bold"
+                    style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.1rem" }}
+                  >
+                    {esperaTodos.length}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3736,15 +3758,69 @@ function AgendaTab({
           </div>
         )}
 
+        {esperaTodos.length > 0 && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Hourglass size={16} style={{ color: C.inkSoft }} />
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                Lista de espera{" "}
+                <span style={{ color: C.inkFaint }}>({esperaTodos.length})</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {esperaTodos.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
+                  style={{ background: C.panel2 }}
+                >
+                  <div className="text-xs" style={{ color: C.inkSoft }}>
+                    <span className="font-semibold" style={{ color: C.ink }}>
+                      {r.data ? fmtDate(r.data) : "sem data"} ·{" "}
+                      {r.direcao === "ida" ? "IDA" : "VOLTA"}
+                    </span>
+                    {" · "}
+                    {r.quantidade}P {r.pontoId ? labelLocal(r, trips) : "(qualquer ponto)"}
+                    {" · "}
+                    {r.nome} · {r.telefone}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => moverDaEspera(r)}
+                      className="btn-press text-xs px-2 py-1 rounded-md font-semibold"
+                      style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+                    >
+                      Chamar (dar vaga)
+                    </button>
+                    <button
+                      onClick={() => setEditando(r)}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.panel, color: C.inkSoft }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => atualizarStatus(r.id, "cancelada")}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.redSoft, color: C.red }}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {(pendentesDoDia.length > 0 ||
-          esperaDoDia.length > 0 ||
           fretesPendentes.length > 0 ||
           encomendasPendentes.length > 0) && (
-          <Card style={{ borderColor: C.purple }}>
+          <Card>
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={16} style={{ color: C.purple }} />
-              <div className="text-sm font-semibold" style={{ color: C.purple }}>
-                Pendentes e lista de espera
+              <AlertTriangle size={16} style={{ color: C.inkSoft }} />
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                Pendentes (fora da rota padrão)
               </div>
             </div>
             <div className="space-y-2">
@@ -3773,37 +3849,6 @@ function AgendaTab({
                       style={{ background: C.redSoft, color: C.red }}
                     >
                       Recusar
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {esperaDoDia.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
-                  style={{ background: C.purpleSoft }}
-                >
-                  <div className="text-xs">
-                    <StatusPill status="espera" />{" "}
-                    <span className="font-semibold ml-1">
-                      {r.quantidade}P {r.pontoId ? labelLocal(r, trips) : "(qualquer ponto)"}
-                    </span>{" "}
-                    · {r.nome} · {r.telefone}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => moverDaEspera(r)}
-                      className="btn-press text-xs px-2 py-1 rounded-md"
-                      style={{ background: C.greenSoft, color: C.green }}
-                    >
-                      Mover p/ reservas (manual)
-                    </button>
-                    <button
-                      onClick={() => setEditando(r)}
-                      className="btn-press text-xs px-2 py-1 rounded-md"
-                      style={{ background: C.border, color: C.inkSoft }}
-                    >
-                      Editar
                     </button>
                   </div>
                 </div>
