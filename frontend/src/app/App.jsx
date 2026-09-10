@@ -3641,6 +3641,8 @@ function AgendaTab({
       "Ainda não há vaga suficiente na viagem.",
     );
   };
+  // Edição inteira numa transação só (rpc_edit_reservation, database/33):
+  // se a capacidade recusar o "mover" ou a nova quantidade, NADA é salvo.
   const salvarEdicao = async ({
     id,
     move,
@@ -3658,12 +3660,24 @@ function AgendaTab({
         setEditando(null);
         return;
       }
-      if (move) await R.moveReservation(id, move);
-      if (details && Object.keys(details).length > 0) await R.editReservation(id, details);
-      if (quantidade) await R.setQuantity(id, quantidade.qty);
-      if (contato) await R.updateContact(contato.customerId, contato.fields);
-      if (pagamento) await R.setPaid(pagamento);
-      if (comprovante) await R.setProof(comprovante);
+      await R.editReservationFull(id, {
+        move: move
+          ? {
+              trip_date: move.tripDate,
+              direction: move.direction,
+              route_point_code: move.routePointCode ?? null,
+            }
+          : null,
+        details: details && Object.keys(details).length > 0 ? details : null,
+        quantity: quantidade ? quantidade.qty : null,
+        contact: contato ? { customer_id: contato.customerId, ...contato.fields } : null,
+        paid: pagamento
+          ? { paid: pagamento.paid, amount: pagamento.amount, method: pagamento.method }
+          : null,
+        proof: comprovante
+          ? { received: comprovante.received, amount: comprovante.amount, method: comprovante.method }
+          : null,
+      });
       setEditando(null);
     } catch (e) {
       setAcaoErro(e?.message || "Não foi possível salvar a edição.");

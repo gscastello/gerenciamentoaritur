@@ -180,6 +180,38 @@ export const reservationsService = {
     return data;
   },
 
+  /**
+   * Edição INTEIRA de uma reserva numa transação só (rpc_edit_reservation,
+   * database/33): detalhes + quantidade + contato + mover + pagamento +
+   * comprovante. Se a capacidade recusar (mover / nova quantidade), nada
+   * é gravado. Cada bloco é opcional.
+   */
+  async editReservationFull(reservationId, { details, quantity, contact, move, paid, proof } = {}) {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase.rpc("rpc_edit_reservation", {
+      p_reservation_id: reservationId,
+      p_details: details ?? null,
+      p_quantity: quantity ?? null,
+      p_contact: contact ?? null,
+      p_move: move ?? null,
+      p_paid: paid ?? null,
+      p_proof: proof ?? null,
+      p_actor: actor,
+    });
+    if (error) {
+      throw new ServiceError(`editReservationFull: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    }
+    if (!data?.success) {
+      throw new ServiceError(data?.message || "Não foi possível salvar a edição.", {
+        retryable: false,
+      });
+    }
+    return data;
+  },
+
   /** Edição de campos que NÃO afetam ocupação (desembarque, forma de pagamento, rua…). */
   async updateDetails(reservationId, fields) {
     const actor = await getCurrentUserId();

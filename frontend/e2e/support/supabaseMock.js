@@ -69,13 +69,14 @@ function json(body, status = 200) {
 export async function mockSupabase(page, opts = {}) {
   const {
     role = "atendente",
-    reservations = [],
     occupancy = {},
     createResult = { success: true, reservation_id: "e2e-res-1", status: "confirmada", message: "created" },
     onCreate,
     notifications = [],
     pendencias = [],
   } = opts;
+  // mutável: rpc_edit_reservation aplica mudanças simples no array
+  let reservations = (opts.reservations ?? []).map((r) => ({ ...r }));
 
   await page.addInitScript(
     ([key, session]) => {
@@ -145,6 +146,23 @@ export async function mockSupabase(page, opts = {}) {
       }
       if (fn === "rpc_set_passengers_status" || fn === "rpc_confirm_reservation") {
         return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_edit_reservation") {
+        const b = req.postDataJSON?.() ?? {};
+        // aplica o que dá no array em memória (só o desembarque/pagamento
+        // simples, o suficiente pros testes)
+        if (b.p_reservation_id) {
+          reservations = reservations.map((r) =>
+            r.id === b.p_reservation_id
+              ? {
+                  ...r,
+                  desembarque: b.p_details?.dropoff_location ?? r.desembarque,
+                  quantidade: b.p_quantity ?? r.quantidade,
+                }
+              : r,
+          );
+        }
+        return route.fulfill(json({ success: true, message: "edited" }));
       }
       if (fn === "rpc_mark_notifications_read") {
         const b = req.postDataJSON?.() ?? {};
