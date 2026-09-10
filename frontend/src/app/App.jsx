@@ -1563,6 +1563,20 @@ function enderecoEmbarque(r, trips) {
   if (r.referencia) partes.push(`ref.: ${r.referencia}`);
   return partes.join(" · ");
 }
+// Endereços que um passageiro mais usa (CRM). Conta ocorrências de um
+// texto normalizado e devolve os 3 mais frequentes, com a contagem.
+function enderecosFrequentes(viagens, getTexto) {
+  const cont = new Map();
+  for (const v of viagens) {
+    const t = (getTexto(v) || "").trim();
+    if (!t) continue;
+    const k = t.toLowerCase();
+    const cur = cont.get(k) || { texto: t, n: 0 };
+    cur.n += 1;
+    cont.set(k, cur);
+  }
+  return [...cont.values()].sort((a, b) => b.n - a.n).slice(0, 3);
+}
 function vagasDisponiveis(reservas, data, direcao, capacidade) {
   const usados = reservas
     .filter((r) => r.data === data && r.direcao === direcao && OCUPA_VAGA.includes(r.status))
@@ -5382,6 +5396,36 @@ function MoverCompacto({ reservaId, alvos, mover }) {
 }
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
+// Endereços mais usados pelo passageiro numa direção — a mudança de
+// desembarque é comum, então ter o histórico à mão ajuda o atendimento.
+function EnderecosFreq({ titulo, itens }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: C.inkFaint }}>
+        {titulo}
+      </div>
+      {itens.length === 0 ? (
+        <div className="text-xs" style={{ color: C.inkFaint }}>
+          — sem histórico —
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {itens.map((e) => (
+            <li
+              key={e.texto}
+              className="text-xs leading-snug flex items-start gap-1.5"
+              style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+            >
+              <span style={{ color: C.ink }}>{e.texto}</span>
+              {e.n > 1 && <span style={{ color: C.inkFaint }}>×{e.n}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function PassageirosTab({ reservas, trips, deepLink }) {
   const [busca, setBusca] = useState("");
   const deepLinkAplicado = useRef(null);
@@ -5426,9 +5470,17 @@ function PassageirosTab({ reservas, trips, deepLink }) {
           .sort()
           .slice(-1)[0],
         ultimoTrajeto: [...p.viagens].sort((a, b) => a.data.localeCompare(b.data)).slice(-1)[0],
+        enderecosIda: enderecosFrequentes(
+          p.viagens.filter((v) => v.direcao === "ida"),
+          (v) => enderecoEmbarque(v, trips) || v.bairro,
+        ),
+        enderecosVolta: enderecosFrequentes(
+          p.viagens.filter((v) => v.direcao === "volta"),
+          (v) => v.desembarque || enderecoEmbarque(v, trips),
+        ),
       }))
       .sort((a, b) => b.totalGasto - a.totalGasto);
-  }, [reservas]);
+  }, [reservas, trips]);
   const filtrados = passageiros.filter(
     (p) =>
       (p.nome || "").toLowerCase().includes(busca.toLowerCase()) ||
@@ -5558,16 +5610,14 @@ function PassageirosTab({ reservas, trips, deepLink }) {
                   </div>
                   <div className="flex items-center gap-2">
                     {p.viagensCount >= 5 ? (
-                      <Pill color={C.amber} bg={C.amberSoft}>
+                      <Pill>
                         <Repeat size={11} />
                         Frequente
                       </Pill>
                     ) : p.viagensCount >= 2 ? (
                       <Pill>Recorrente</Pill>
                     ) : (
-                      <Pill color={C.inkSoft} bg={C.panel2}>
-                        Novo
-                      </Pill>
+                      <Pill>Novo</Pill>
                     )}
                     <ChevronRight
                       size={14}
@@ -5584,6 +5634,12 @@ function PassageirosTab({ reservas, trips, deepLink }) {
                     className="anim-slideDown mt-3 pt-3 border-t grid sm:grid-cols-2 gap-3"
                     style={{ borderColor: C.borderSoft }}
                   >
+                    {(p.enderecosIda.length > 0 || p.enderecosVolta.length > 0) && (
+                      <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
+                        <EnderecosFreq titulo="Embarque (ida)" itens={p.enderecosIda} />
+                        <EnderecosFreq titulo="Desembarque (volta)" itens={p.enderecosVolta} />
+                      </div>
+                    )}
                     <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
                       <div>
                         Passagens: <b style={{ color: C.ink }}>{p.totalPassagens}</b>
@@ -5603,7 +5659,7 @@ function PassageirosTab({ reservas, trips, deepLink }) {
                           window.open(`https://wa.me/55${digitos(p.telefone)}`, "_blank")
                         }
                         className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
-                        style={{ background: C.greenSoft, color: C.green }}
+                        style={{ background: C.panel2, color: C.inkSoft }}
                       >
                         <MessageCircle size={12} /> Abrir WhatsApp
                       </button>
