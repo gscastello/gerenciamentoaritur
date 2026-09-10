@@ -9,6 +9,7 @@ import {
   Calendar,
   Car,
   CarTaxiFront,
+  Bell,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -85,6 +86,7 @@ import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useAgendaNote } from "../hooks/useAgendaNote.js";
+import { useNotifications } from "../hooks/useNotifications.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useUsersList } from "../hooks/useUsers.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
@@ -492,6 +494,11 @@ const DROPOFF_FALLBACK = (() => {
 })();
 const DropoffContext = React.createContext(DROPOFF_FALLBACK);
 const useDropoff = () => useContext(DropoffContext) || DROPOFF_FALLBACK;
+
+// Sino de notificações — provido uma vez no AppInner (uma assinatura de
+// Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
+const NotificacoesContext = React.createContext(null);
+const useNotificacoesCtx = () => useContext(NotificacoesContext);
 
 // String legível para dropoff_location (usada na Lista/Agenda e telas de
 // sucesso). O que estrutura a rota é dropoff_area/dropoff_detail.
@@ -1230,6 +1237,149 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
 /* Skeletons por aba: ../ui/skeletons/TabSkeleton.jsx (sistema de motion, issue #2). */
 
 /* ============================= shared UI ============================= */
+const NOTIF_META = {
+  lotacao: { label: "Lotação", Icon: Users },
+  cancelamento: { label: "Cancelamento", Icon: X },
+  mudanca_embarque: { label: "Mudança de embarque", Icon: MapPin },
+  mudanca_desembarque: { label: "Mudança de desembarque", Icon: MapPin },
+};
+function tempoRelativo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `há ${d} d`;
+  return fmtDate(new Date(iso).toISOString().slice(0, 10));
+}
+// Sino de notificações — usa o contexto provido no AppInner (uma
+// assinatura de Realtime). Painel com as últimas notificações da equipe:
+// lotação, cancelamento e mudança de embarque/desembarque.
+function SinoNotificacoes() {
+  const ctx = useNotificacoesCtx();
+  const [aberto, setAberto] = useState(false);
+  if (!ctx) return null;
+  const { notificacoes, naoLidas, marcarLida, marcarTodasLidas, loading } = ctx;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-label={`Notificações${naoLidas ? ` (${naoLidas} não lidas)` : ""}`}
+        className="btn-press relative w-9 h-9 rounded-lg flex items-center justify-center"
+        style={{ background: C.panel2, border: `1px solid ${C.border}`, color: C.inkSoft }}
+      >
+        <Bell size={16} />
+        {naoLidas > 0 && (
+          <span
+            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+            style={{ background: C.brand, color: "#fff" }}
+          >
+            {naoLidas > 9 ? "9+" : naoLidas}
+          </span>
+        )}
+      </button>
+      {aberto && (
+        <>
+          <button
+            type="button"
+            aria-label="Fechar notificações"
+            className="fixed inset-0 z-40"
+            onClick={() => setAberto(false)}
+          />
+          <div
+            className="absolute right-0 mt-2 w-[min(92vw,360px)] max-h-[70vh] overflow-y-auto rounded-xl border shadow-xl z-50 anim-fadeUp"
+            style={{ background: C.panel, borderColor: C.border }}
+          >
+            <div
+              className="flex items-center justify-between px-3 py-2 border-b sticky top-0"
+              style={{ borderColor: C.borderSoft, background: C.panel }}
+            >
+              <span className="text-sm font-semibold" style={{ color: C.ink }}>
+                Notificações
+              </span>
+              {naoLidas > 0 && (
+                <button
+                  type="button"
+                  onClick={() => marcarTodasLidas()}
+                  className="btn-press text-[11px] px-2 py-1 rounded-md"
+                  style={{ background: C.panel2, color: C.inkSoft }}
+                >
+                  Marcar todas como lidas
+                </button>
+              )}
+            </div>
+            {loading && notificacoes.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
+                carregando…
+              </div>
+            )}
+            {!loading && notificacoes.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
+                Nenhuma notificação.
+              </div>
+            )}
+            <ul>
+              {notificacoes.map((n) => {
+                const meta = NOTIF_META[n.kind] || { label: n.kind, Icon: Bell };
+                const Icon = meta.Icon;
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => !n.lida && marcarLida(n.id)}
+                      className="w-full text-left px-3 py-2.5 flex gap-2.5 border-b"
+                      style={{
+                        borderColor: C.borderSoft,
+                        background: n.lida ? "transparent" : C.panel2,
+                      }}
+                    >
+                      <span
+                        className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
+                        style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
+                      >
+                        <Icon size={14} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5">
+                          {!n.lida && (
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ background: C.brand }}
+                            />
+                          )}
+                          <span
+                            className="text-[13px] font-semibold leading-snug"
+                            style={{ color: C.ink, overflowWrap: "anywhere" }}
+                          >
+                            {n.title}
+                          </span>
+                        </span>
+                        {n.body && (
+                          <span
+                            className="block text-xs mt-0.5 leading-snug"
+                            style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+                          >
+                            {n.body}
+                          </span>
+                        )}
+                        <span className="block text-[10px] mt-1" style={{ color: C.inkFaint }}>
+                          {meta.label} · {tempoRelativo(n.created_at)}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 function Header({ title, subtitle, right }) {
   return (
     <div className="relative px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
@@ -1258,7 +1408,10 @@ function Header({ title, subtitle, right }) {
         )}
         <span className="aritur-road mt-2 block" style={{ width: 56 }} />
       </div>
-      {right}
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        {right}
+        <SinoNotificacoes />
+      </div>
     </div>
   );
 }
@@ -2063,8 +2216,10 @@ function AppInner() {
   const pendentesCount = reservas.filter(
     (r) => r.status === "pendente" || r.status === "espera",
   ).length;
+  const notif = useNotifications({ enabled: !!role });
 
   return (
+    <NotificacoesContext.Provider value={notif}>
     <CategoriasContext.Provider value={categorias}>
     <BairrosContext.Provider value={bairros}>
     <DropoffContext.Provider value={dropoff}>
@@ -2348,6 +2503,7 @@ function AppInner() {
     </DropoffContext.Provider>
     </BairrosContext.Provider>
     </CategoriasContext.Provider>
+    </NotificacoesContext.Provider>
   );
 }
 export default function App() {
@@ -8770,6 +8926,9 @@ function DashboardTab({ reservas, capacidade, trips }) {
   ).length;
   return (
     <div>
+      <div className="flex justify-end px-4 md:px-10 pt-3 -mb-1">
+        <SinoNotificacoes />
+      </div>
       <DashboardHero
         paxIda={paxIdaHoje}
         paxVolta={paxVoltaHoje}

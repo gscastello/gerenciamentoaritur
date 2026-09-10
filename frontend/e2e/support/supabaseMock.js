@@ -63,6 +63,7 @@ function json(body, status = 200) {
  * @param {object} [opts.occupancy]        { [`${data}|${direcao}`]: {capacity, occupied, available} }
  * @param {object} [opts.createResult]     resposta de rpc_create_reservation
  * @param {(route)=>void} [opts.onCreate]  callback quando rpc_create_reservation é chamado
+ * @param {Array}  [opts.notifications=[]]  linhas de v_app_notifications
  */
 export async function mockSupabase(page, opts = {}) {
   const {
@@ -71,6 +72,7 @@ export async function mockSupabase(page, opts = {}) {
     occupancy = {},
     createResult = { success: true, reservation_id: "e2e-res-1", status: "confirmada", message: "created" },
     onCreate,
+    notifications = [],
   } = opts;
 
   await page.addInitScript(
@@ -99,6 +101,8 @@ export async function mockSupabase(page, opts = {}) {
   let notaAgenda = null;
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
+  // sino de notificações (issue #112) — stateful "lida" por id
+  const lidas = new Set();
 
   await page.route("**/rest/v1/**", async (route) => {
     const req = route.request();
@@ -135,6 +139,15 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json({ success: true, mode: b.p_mode }));
       }
       if (fn === "rpc_set_passengers_status" || fn === "rpc_confirm_reservation") {
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_mark_notifications_read") {
+        const b = req.postDataJSON?.() ?? {};
+        for (const id of b.p_ids ?? []) lidas.add(id);
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_mark_all_notifications_read") {
+        for (const n of notifications) lidas.add(n.id);
         return route.fulfill(json({ success: true }));
       }
       return route.fulfill(json({ success: true }));
@@ -180,6 +193,8 @@ export async function mockSupabase(page, opts = {}) {
       ];
     else if (table === "customers") rows = [];
     else if (table === "v_contas_a_receber") rows = [];
+    else if (table === "v_app_notifications")
+      rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else rows = [];
 
     const body = wantsObject ? (rows[0] ?? null) : rows;
