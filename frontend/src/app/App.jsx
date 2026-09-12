@@ -716,11 +716,22 @@ function GlobalStyles() {
       html[data-motion="off"] :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
       html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after, html[data-motion="off"] .sheen::after { animation: none !important; }
       html[data-motion="off"] .hero-fx-spark { opacity: 0 !important; }
+      /* .anim-fadeIn envolve o conteúdo de TODA aba (Reservar, Agenda, Lista,
+         Financeiro, Gestão...) e .anim-fadeUp/.anim-pop/.anim-slideDown/
+         .stagger entram cards e listas — reduzir a duração pra ~0 (regra
+         acima) não é suficiente em alguns motores móveis: a camada composta
+         em will-change pode ficar presa no frame inicial (opacity:0) sem
+         repintar, "sumindo" com o conteúdo real. animation:none remove
+         de vez o risco — o elemento nasce no estado final, sem keyframe. */
+      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+        animation: none !important; will-change: auto !important; }
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
         html:not([data-motion]) :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark),
         html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
+        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+          animation: none !important; will-change: auto !important; }
       }
     `}</style>
   );
