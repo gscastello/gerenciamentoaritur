@@ -440,12 +440,28 @@ export const whatsappService = {
       p_conversation_id: conversationId, p_reason: reason, p_actor: botId,
     });
     if (error) throw new WhatsappServiceError(`Falha ao transferir: ${error.message}`);
-    // notifica internamente (aparece para admin/atendente no painel via tabela notifications)
-    await supabaseAdmin.from("notifications").insert({
-      channel: "whatsapp", template_key: "transferencia_interna",
-      payload: { conversation_id: conversationId, motivo: reason },
-      status: "pendente",
+
+    // Avisa a equipe pela aba Pendências + sino (database/32). O destinatário
+    // aqui é a EQUIPE, não o cliente — por isso é rpc_open_support_ticket,
+    // não um envio de WhatsApp (a tabela `notifications` é fila de saída
+    // pro cliente; um registro sem customer_id ali nunca teria telefone
+    // pra mandar e falharia sempre).
+    const { data: conversation } = await supabaseAdmin
+      .from("whatsapp_conversations")
+      .select("phone, customer_id")
+      .eq("id", conversationId)
+      .maybeSingle();
+    const { error: ticketError } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
+      p_subject: "Cliente pediu atendente no WhatsApp",
+      p_detail: reason,
+      p_phone: conversation?.phone ?? null,
+      p_customer_id: conversation?.customer_id ?? null,
+      p_source: "whatsapp",
+      p_meta: { conversation_id: conversationId },
     });
+    if (ticketError) {
+      console.error("Falha ao abrir pendência de atendimento:", ticketError.message);
+    }
   },
 
   // =====================================================================
