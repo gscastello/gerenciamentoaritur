@@ -76,3 +76,59 @@ test('preferência "Ligado" reativa as animações mesmo com reduced-motion', as
   expect(anyAnimating).toBe(true);
   await context.close();
 });
+
+// Regressão: as classes de entrada que envolvem o CONTEÚDO real de cada aba
+// (.anim-fadeIn embrulha a aba inteira; .anim-fadeUp/.anim-pop/
+// .anim-slideDown/.stagger embrulham cards e listas) só ficavam com a
+// duração encurtada pra ~0 com "Desligado" — em alguns motores móveis isso
+// não é suficiente (a camada composta em will-change pode ficar presa no
+// frame inicial, opacity:0, "sumindo" com os dados). Precisam de
+// animation:none de verdade, não só duração ~0.
+test("Desligado: classes de entrada do conteúdo usam animation:none (não só duração ~0)", async ({ page }) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      {
+        id: "res-motion-1",
+        data: hoje,
+        direcao: "ida",
+        pontoId: "rodoviaria",
+        nome: "Cliente Motion E2E",
+        telefone: "98999990000",
+        quantidade: 2,
+        valorUnit: 60,
+        valorTotal: 120,
+        pagamento: "dinheiro",
+        status: "confirmada",
+        tipo: "passagem",
+        pago: false,
+        temEmbarcado: false,
+        buscaPor: "taxi",
+        criadoEm: new Date().toISOString(),
+      },
+    ],
+  });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("aritur-motion", "off");
+    } catch {}
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.motion))
+    .toBe("off");
+
+  await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
+  // a reserva mockada precisa continuar visível — é o que sumia (issue relatada)
+  await expect(page.getByText("Cliente Motion E2E")).toBeVisible();
+
+  const wrapperOk = await page.evaluate(() => {
+    const el = document.querySelector(".anim-fadeIn");
+    if (!el) return false;
+    return getComputedStyle(el).animationName === "none";
+  });
+  expect(wrapperOk).toBe(true);
+});
