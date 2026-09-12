@@ -8,8 +8,9 @@
 -- Toda pendência nova entra também no sino (app_notifications, kind
 -- 'pendencia' — ver database/31).
 --
--- NÃO depende do schema de WhatsApp (06) — quando o bot for publicado,
--- basta o transferToHuman chamar rpc_open_support_ticket.
+-- NÃO depende do schema de WhatsApp (06) — whatsappService.transferToHuman
+-- já chama rpc_open_support_ticket (source: 'whatsapp') quando o bot
+-- transfere pra humano.
 --
 -- Rodar depois de 01-31. Idempotente.
 -- =====================================================================
