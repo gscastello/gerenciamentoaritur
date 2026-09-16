@@ -6296,6 +6296,15 @@ const CATEGORIAS_DESPESA = [
   { id: "manutencao", label: "Manutenção", icon: Wrench },
   { id: "outro", label: "Outro", icon: Receipt },
 ];
+// Categorias de RECEITA do lançamento manual (auditoria 2026-09-16: sem
+// isto, todo lançamento de receita caía sempre em "outro" — a origem real
+// (passagem vendida fora do Reservar, ex. dinheiro na hora) ficava
+// escondida dos relatórios por categoria). A receita automática (trigger
+// de pagamento confirmado) já usa 'passagem' — aqui só cobre o manual.
+const CATEGORIAS_RECEITA = [
+  { id: "passagem", label: "Passagem", icon: Bus },
+  { id: "outro", label: "Outro", icon: Receipt },
+];
 // estorno/reembolso/ajuste são categorias de AJUSTE ligadas a uma reserva
 // (ver database/18-receita-automatica-contas-a-receber.sql) — não aparecem
 // nos botões rápidos de lançamento manual, só na tabela de lançamentos.
@@ -6407,7 +6416,7 @@ function FinanceiroTab({ pix, deepLink }) {
   const [diaSel, setDiaSel] = useState(todayStr());
   const [novo, setNovo] = useState({
     tipo: "receita",
-    categoria: "combustivel",
+    categoria: "passagem",
     valor: "",
     descricao: "",
   });
@@ -6451,11 +6460,11 @@ function FinanceiroTab({ pix, deepLink }) {
       await fin.addEntry({
         entryDate: diaSel,
         type: novo.tipo,
-        category: novo.tipo === "despesa" ? novo.categoria : undefined,
+        category: novo.categoria || (novo.tipo === "despesa" ? "outro" : "passagem"),
         amount: v.valor,
         description: novo.descricao || null,
       });
-      setNovo({ tipo: "receita", categoria: "combustivel", valor: "", descricao: "" });
+      setNovo({ tipo: "receita", categoria: "passagem", valor: "", descricao: "" });
     });
   };
   const remove = (id) => run(() => fin.removeEntry(id));
@@ -6711,12 +6720,19 @@ function FinanceiroTab({ pix, deepLink }) {
             <div className="grid sm:grid-cols-3 gap-2">
               <Select
                 value={novo.tipo}
-                onChange={(e) => setNovo({ ...novo, tipo: e.target.value })}
+                onChange={(e) => {
+                  const tipo = e.target.value;
+                  setNovo((n) => ({
+                    ...n,
+                    tipo,
+                    categoria: tipo === "receita" ? "passagem" : (cats.despesa[0]?.slug ?? "outro"),
+                  }));
+                }}
               >
                 <option value="receita">Receita</option>
                 <option value="despesa">Despesa</option>
               </Select>
-              {novo.tipo === "despesa" && (
+              {novo.tipo === "despesa" ? (
                 <Select
                   value={novo.categoria}
                   onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
@@ -6730,12 +6746,22 @@ function FinanceiroTab({ pix, deepLink }) {
                     <option value={novo.categoria}>{novo.categoria}</option>
                   ) : null}
                 </Select>
+              ) : (
+                <Select
+                  value={novo.categoria}
+                  onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
+                >
+                  {CATEGORIAS_RECEITA.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
               )}
               <TextInput
                 id="financeiro-valor-input"
                 placeholder="Valor"
                 type="number"
-                className={novo.tipo === "despesa" ? "" : "sm:col-span-2"}
                 value={novo.valor}
                 onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
                 onKeyDown={(e) => e.key === "Enter" && add()}
