@@ -4,6 +4,21 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // Fluxos autenticados de Reserva (issue #4). Sem projeto Supabase de teste
 // no CI — o helper mockSupabase injeta a sessão e intercepta PostgREST/RPC.
 
+// Data usada nos fluxos que chegam a criar reserva de verdade: sempre a
+// PRÓXIMA terça-feira a partir de hoje. Nunca fica no passado (o form de
+// Reservar recusa data < hoje) e evita segunda (ajuste de horário
+// especial) e o próprio dia (alguns fluxos tratam "hoje" como caso
+// especial). Antes disto a data vinha fixa ("2026-09-15") e o teste que
+// confere o status final da reserva parava de passar assim que o
+// calendário virava a data — corrigido na auditoria de 2026-09-16.
+function proximaTerca() {
+  const d = new Date();
+  do {
+    d.setDate(d.getDate() + 1);
+  } while (d.getDay() !== 2); // 0=domingo ... 2=terça
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(d);
+}
+
 test("app passa da tela de login e mostra a navegação por papel", async ({ page }) => {
   await mockSupabase(page, { role: "atendente" });
   await page.goto("/");
@@ -173,7 +188,7 @@ test("Reservar: data → direção com vaga → escolha do ponto de embarque", a
   await page.getByRole("button", { name: /Reservar/ }).first().click();
 
   await expect(page.getByText("Para quando é a viagem?")).toBeVisible();
-  await page.locator('input[type="date"]').fill("2026-09-15"); // terça
+  await page.locator('input[type="date"]').fill(proximaTerca());
   await page.getByRole("button", { name: "Continuar" }).click();
 
   await expect(page.getByText("O que você precisa?")).toBeVisible();
@@ -188,7 +203,7 @@ test("Reservar: roteiro do cliente até os dados da reserva", async ({ page }) =
   await page.goto("/");
   await page.getByRole("button", { name: /Reservar/ }).first().click();
 
-  await page.locator('input[type="date"]').fill("2026-09-15");
+  await page.locator('input[type="date"]').fill(proximaTerca());
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: /Ida ·/ }).click();
   await page.getByRole("button", { name: /Rodoviária/ }).click();
@@ -217,7 +232,7 @@ test("Reservar: desembarque em cidade intermediária → reserva pendente (issue
   await page.goto("/");
   await page.getByRole("button", { name: /Reservar/ }).first().click();
 
-  await page.locator('input[type="date"]').fill("2026-09-15");
+  await page.locator('input[type="date"]').fill(proximaTerca());
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: /Ida ·/ }).click();
   await page.getByRole("button", { name: /Rodoviária/ }).click();
@@ -249,7 +264,7 @@ test("Reservar: viagem lotada → lista de espera → confirmação (RPC com sta
     // ReservarTab calcula vagas a partir de v_reservations_flat + capacidade
     // do veículo padrão (31). Uma reserva confirmada de 40 lugares lota a Ida.
     reservations: [
-      { id: "r-cheia", data: "2026-09-15", direcao: "ida", status: "confirmada", tipo: "passagem", quantidade: 40 },
+      { id: "r-cheia", data: proximaTerca(), direcao: "ida", status: "confirmada", tipo: "passagem", quantidade: 40 },
     ],
     createResult: { success: true, reservation_id: "e2e-espera-1", status: "espera", message: "created" },
     onCreate: (route) => {
@@ -259,7 +274,7 @@ test("Reservar: viagem lotada → lista de espera → confirmação (RPC com sta
   await page.goto("/");
   await page.getByRole("button", { name: /Reservar/ }).first().click();
 
-  await page.locator('input[type="date"]').fill("2026-09-15");
+  await page.locator('input[type="date"]').fill(proximaTerca());
   await page.getByRole("button", { name: "Continuar" }).click();
 
   await page.getByRole("button", { name: /Ida.*Lotado/s }).click();
