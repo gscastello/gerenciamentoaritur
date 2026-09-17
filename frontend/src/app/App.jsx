@@ -93,7 +93,9 @@ import { usePendencias } from "../hooks/usePendencias.js";
 import { useTrips } from "../hooks/useTrips.js";
 import { useUsersList } from "../hooks/useUsers.js";
 import { useDrivers, useVehicles } from "../hooks/useVehicles.js";
+import { useCustomerLookup } from "../hooks/useCustomerLookup.js";
 import { foraDaAreaPadrao } from "../domain/cidades.js";
+import { parseAnotacaoRapida } from "../domain/anotacaoRapida.js";
 import { montarRelatorioFinanceiro } from "../domain/relatorioFinanceiro.js";
 import {
   primeiroErro,
@@ -3755,6 +3757,51 @@ function AgendaTab({
     );
   const dataFrete = (r) => r.data || r.extra?.data || null;
 
+  // Anotação rápida direto no ponto/horário da Agenda: "1P Cohatrac
+  // 98999998888" cria a reserva sem abrir modal nenhum. O ponto já é
+  // conhecido (é o da linha clicada) — só quantidade/local/telefone vêm
+  // do texto. Mesma RPC de sempre (rpc_create_reservation via
+  // R.createReservation); capacidade e duplicidade continuam decididas
+  // pelo banco.
+  const bairrosAnotacao = useBairros();
+  const buscarClientePorTelefone = useCustomerLookup();
+  const criarViaAnotacao = async (direcao, ponto, texto) => {
+    const achado = parseAnotacaoRapida(texto);
+    if (!achado.ok) return { ok: false, erro: achado.erro };
+
+    const ehBairro = ponto.campo === "bairro";
+    const precoAuto = ehBairro
+      ? (bairrosAnotacao.preco(achado.local) ?? 80)
+      : (ponto.valor ?? 60);
+
+    try {
+      const nomeExistente = await buscarClientePorTelefone(achado.telefone);
+      const nome = nomeExistente || `Passageiro${achado.local ? ` (${achado.local})` : ""}`;
+      const res = await R.createReservation({
+        tripDate: data,
+        direction: direcao,
+        customerName: nome,
+        customerPhone: achado.telefone,
+        routePointCode: ponto.id,
+        quantity: achado.quantidade,
+        unitPrice: precoAuto,
+        paymentMethod: "dinheiro",
+        pickupNeighborhood: ehBairro ? achado.local || null : null,
+        pickupDetail: !ehBairro ? achado.local || null : null,
+        status: "confirmada",
+        extraData: { origem: "anotacao_agenda" },
+      });
+      emit(EVENTS.RESERVA_CRIADA, {
+        via: "anotacao_agenda",
+        status: res?.status || "confirmada",
+        duplicada: res?.message === "duplicate_ignored",
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, erro: mensagemAmigavel(e, "Não foi possível criar a reserva.") };
+    }
+  };
+
   return (
     <div>
       <Header
@@ -4005,6 +4052,7 @@ function AgendaTab({
             onStatus={atualizarStatus}
             onEditar={setEditando}
             onBusca={ciclarBusca}
+            onAnotar={criarViaAnotacao}
           />
         ))}
       </div>
@@ -4113,6 +4161,64 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
     </div>
   );
 }
+// Linha de anotação rápida por ponto/horário na Agenda (pedido do
+// usuário): digita "1P Cohatrac 98999998888" e a reserva é criada sem
+// abrir modal — domain/anotacaoRapida.js reconhece o formato. `onSalvar`
+// devolve `{ ok, erro? }` (vem de AgendaTab.criarViaAnotacao).
+function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
+  const [texto, setTexto] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  const salvar = async () => {
+    if (!texto.trim() || salvando) return;
+    setSalvando(true);
+    setErro("");
+    const r = await onSalvar(texto);
+    setSalvando(false);
+    if (r?.ok) setTexto("");
+    else setErro(r?.erro || "Não foi possível criar a reserva.");
+  };
+
+  return (
+    <div className="mb-1.5">
+      <div className="flex items-center gap-1.5">
+        <NotebookPen size={13} className="shrink-0" style={{ color: C.inkFaint }} />
+        <TextInput
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            if (erro) setErro("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && salvar()}
+          placeholder="Anotar reserva — ex.: 1P Cohatrac 98999998888"
+          aria-label={`Anotar reserva — ${nomePonto}`}
+          className="text-xs py-1.5"
+          disabled={salvando}
+        />
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={!texto.trim() || salvando}
+          aria-label="Anotar reserva"
+          className="btn-press shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
+          style={{
+            background: !texto.trim() || salvando ? C.border : C.amberSoft,
+            color: !texto.trim() || salvando ? C.inkFaint : C.amber,
+          }}
+        >
+          <RefreshCw size={13} className={salvando ? "animate-spin" : "hidden"} />
+          <Plus size={13} className={salvando ? "hidden" : ""} />
+        </button>
+      </div>
+      {erro && (
+        <div className="text-[11px] mt-1 pl-[19px]" style={{ color: C.red }}>
+          {erro}
+        </div>
+      )}
+    </div>
+  );
+}
 function ViagemOperacional({
   direcao,
   segunda,
@@ -4124,6 +4230,7 @@ function ViagemOperacional({
   onStatus,
   onEditar,
   onBusca,
+  onAnotar,
 }) {
   const viagem = trips[direcao];
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
@@ -4296,11 +4403,11 @@ function ViagemOperacional({
                 )}
               </div>
               {itens.length === 0 ? (
-                <div className="text-xs pl-1" style={{ color: C.inkFaint }}>
+                <div className="text-xs pl-1 mb-1.5" style={{ color: C.inkFaint }}>
                   Sem reservas.
                 </div>
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 mb-1.5">
                   {itens.map((r) => (
                     <LinhaOperacional
                       key={r.id}
@@ -4312,6 +4419,12 @@ function ViagemOperacional({
                     />
                   ))}
                 </div>
+              )}
+              {onAnotar && (
+                <AnotacaoRapidaLinha
+                  nomePonto={p.nome}
+                  onSalvar={(texto) => onAnotar(direcao, p, texto)}
+                />
               )}
             </div>
           );
