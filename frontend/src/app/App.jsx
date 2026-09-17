@@ -1650,6 +1650,15 @@ function Select(props) {
     />
   );
 }
+function TextArea(props) {
+  return (
+    <textarea
+      {...props}
+      style={{ ...inputStyle, resize: "vertical", ...(props.style || {}) }}
+      className={`${inputCls} ${props.className || ""}`}
+    />
+  );
+}
 function useLazyTab(tab) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -1736,6 +1745,12 @@ function linhaReserva(r, trips) {
 }
 // Endereço de embarque legível e COMPLETO (nunca cortado) para o celular
 // do motorista: local/bairro + rua + ponto de referência, na ordem útil.
+// Junta os campos estruturados de detalhe/rua/referência num só texto —
+// é o valor de partida do campo "Anotação" ao editar (rescrever à mão em
+// vez de mexer em 3 caixinhas separadas). Ver EditarReservaModal.
+function anotacaoBase(r) {
+  return [r.localExato, r.rua, r.referencia && `ref.: ${r.referencia}`].filter(Boolean).join(" · ");
+}
 function enderecoEmbarque(r, trips) {
   const partes = [];
   const local = labelLocal(r, trips);
@@ -4312,7 +4327,7 @@ function ViagemOperacional({
 // fase 2 (precisam de RPC própria / edição de cliente). Status muda pelos
 // botões da linha, não aqui.
 function EditarReservaModal({ reserva, onClose, onSave, trips }) {
-  const [f, setF] = useState({ ...reserva });
+  const [f, setF] = useState({ ...reserva, anotacao: anotacaoBase(reserva) });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const viagem = trips[f.direcao] || trips.ida;
@@ -4345,11 +4360,15 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     };
     set("dropoff_location", f.desembarque, reserva.desembarque);
     set("payment_method", f.pagamento, reserva.pagamento);
-    set("street", f.rua, reserva.rua);
-    set("reference_point", f.referencia, reserva.referencia);
     if (campoDetalhe === "bairro") set("pickup_neighborhood", f.bairro, reserva.bairro);
-    if (campoDetalhe && campoDetalhe !== "bairro")
-      set("pickup_detail", f[campoDetalhe], reserva.localExato);
+    // Anotação reescrita à mão (issue: editar endereço escrevendo manualmente)
+    // substitui rua/referência/detalhe-por-ponto — evita duplicar a mesma
+    // informação em campos estruturados E na anotação livre.
+    if ((f.anotacao || "") !== anotacaoBase(reserva)) {
+      details.pickup_detail = f.anotacao.trim() || null;
+      details.street = null;
+      details.reference_point = null;
+    }
 
     const novaQtd = Number.parseInt(f.quantidade, 10) || 1;
     const quantidade = novaQtd !== reserva.quantidade ? { qty: novaQtd } : null;
@@ -4441,7 +4460,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
               <option value="volta">Volta</option>
             </Select>
           </Field>
-          <Field label="Local de embarque">
+          <Field label="Categoria de embarque">
             <Select
               value={f.pontoId || ""}
               onChange={(e) => setF({ ...f, pontoId: e.target.value })}
@@ -4481,30 +4500,16 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             />
           </Field>
         )}
-        {campoDetalhe && campoDetalhe !== "bairro" && (
-          <Field label={ponto.campoLabel}>
-            <TextInput
-              value={f[campoDetalhe] || ""}
-              onChange={(e) => setF({ ...f, [campoDetalhe]: e.target.value })}
+        <div className="mt-2">
+          <Field label="Anotação (endereço, ponto de referência, observações)">
+            <TextArea
+              rows={2}
+              value={f.anotacao || ""}
+              onChange={(e) => setF({ ...f, anotacao: e.target.value })}
+              placeholder="Escreva como preferir — ex.: rua tal, perto da padaria, portão azul"
             />
           </Field>
-        )}
-        {f.direcao === "volta" && (
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <Field label="Rua">
-              <TextInput
-                value={f.rua || ""}
-                onChange={(e) => setF({ ...f, rua: e.target.value })}
-              />
-            </Field>
-            <Field label="Referência">
-              <TextInput
-                value={f.referencia || ""}
-                onChange={(e) => setF({ ...f, referencia: e.target.value })}
-              />
-            </Field>
-          </div>
-        )}
+        </div>
         <div className="mt-2">
           <Field label="Local de desembarque">
             <TextInput
@@ -4592,13 +4597,11 @@ function NovaReservaModal({
     direcao: direcaoInicial,
     pontoId: primeiroPonto(direcaoInicial),
     bairro: "",
-    detalhe: "",
+    anotacao: "",
     quantidade: "1",
     pagamento: "dinheiro",
     valorManual: "",
     desembarque: "",
-    rua: "",
-    referencia: "",
     comoPendente: false,
   });
   const [erro, setErro] = useState("");
@@ -4624,7 +4627,7 @@ function NovaReservaModal({
     (campoDetalhe !== "bairro" || f.bairro.trim());
 
   const trocarDirecao = (dir) =>
-    setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir), bairro: "", detalhe: "" }));
+    setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir), bairro: "", anotacao: "" }));
 
   const montarPayload = (status) => ({
     tripDate: f.data,
@@ -4636,10 +4639,9 @@ function NovaReservaModal({
     unitPrice: valorUnit,
     paymentMethod: f.pagamento,
     pickupNeighborhood: campoDetalhe === "bairro" ? f.bairro.trim() || null : null,
-    pickupDetail:
-      campoDetalhe && campoDetalhe !== "bairro" ? f.detalhe.trim() || null : null,
-    street: f.direcao === "volta" ? f.rua.trim() || null : null,
-    referencePoint: f.direcao === "volta" ? f.referencia.trim() || null : null,
+    pickupDetail: f.anotacao.trim() || null,
+    street: null,
+    referencePoint: null,
     dropoffLocation: f.desembarque.trim() || null,
     status,
     pendingReason:
@@ -4743,7 +4745,7 @@ function NovaReservaModal({
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <Field label="Ponto de embarque">
+          <Field label="Categoria de embarque">
             <Select value={f.pontoId} onChange={(e) => setF({ ...f, pontoId: e.target.value })}>
               {viagem.pontos.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -4790,30 +4792,16 @@ function NovaReservaModal({
           </div>
         )}
 
-        {campoDetalhe && campoDetalhe !== "bairro" && (
-          <div className="mb-2">
-            <Field label={ponto.campoLabel || "Local"}>
-              <TextInput
-                value={f.detalhe}
-                onChange={(e) => setF({ ...f, detalhe: e.target.value })}
-              />
-            </Field>
-          </div>
-        )}
-
-        {f.direcao === "volta" && (
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <Field label="Rua (opcional)">
-              <TextInput value={f.rua} onChange={(e) => setF({ ...f, rua: e.target.value })} />
-            </Field>
-            <Field label="Referência (opcional)">
-              <TextInput
-                value={f.referencia}
-                onChange={(e) => setF({ ...f, referencia: e.target.value })}
-              />
-            </Field>
-          </div>
-        )}
+        <div className="mb-2">
+          <Field label="Anotação (endereço, ponto de referência, observações — opcional)">
+            <TextArea
+              rows={2}
+              value={f.anotacao}
+              onChange={(e) => setF({ ...f, anotacao: e.target.value })}
+              placeholder="Escreva como preferir — ex.: rua tal, perto da padaria, portão azul"
+            />
+          </Field>
+        </div>
 
         <div className="mb-2">
           <Field label="Local de desembarque (opcional)">
