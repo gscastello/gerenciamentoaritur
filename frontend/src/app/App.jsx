@@ -1283,7 +1283,9 @@ function tempoRelativo(iso) {
   if (h < 24) return `há ${h} h`;
   const d = Math.round(h / 24);
   if (d < 7) return `há ${d} d`;
-  return fmtDate(new Date(iso).toISOString().slice(0, 10));
+  // dia civil de São Luís, não UTC — das 21h à meia-noite local o
+  // `.toISOString()` puro já mostra o dia seguinte (mesmo bug de sempre).
+  return fmtDate(fmtDiaFuso.format(new Date(iso)));
 }
 // Sino de notificações — usa o contexto provido no AppInner (uma
 // assinatura de Realtime). Painel com as últimas notificações da equipe:

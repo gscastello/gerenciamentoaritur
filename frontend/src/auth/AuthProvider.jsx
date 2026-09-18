@@ -7,6 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 import { usersService } from "../services/usersService.js";
+import { logTecnico } from "../lib/erros.js";
 
 const AuthContext = createContext(null);
 
@@ -28,12 +29,23 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     mounted.current = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted.current) return;
-      setSession(data.session ?? null);
-      if (data.session) await loadProfile();
-      setLoading(false);
-    });
+    // Sem .catch aqui, uma rejeição (ex.: sem rede nenhuma ao abrir o PWA
+    // offline) deixava `loading` true PARA SEMPRE — AuthGate mostra o
+    // skeleton indefinidamente, sem erro, sem jeito de tentar de novo.
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        if (!mounted.current) return;
+        setSession(data.session ?? null);
+        if (data.session) await loadProfile();
+      })
+      .catch((e) => {
+        logTecnico(e, { origem: "AuthProvider.getSession" });
+        if (mounted.current) setSession(null);
+      })
+      .finally(() => {
+        if (mounted.current) setLoading(false);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
       if (!mounted.current) return;
