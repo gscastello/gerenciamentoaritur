@@ -75,6 +75,7 @@ export function abrirRelatorioFinanceiroPDF(relatorio) {
 <title>Relatório financeiro — Gestão AriTur</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; padding: 32px; color: #16191a; }
+  .logo { height: 40px; margin-bottom: 14px; }
   h1 { font-size: 19px; margin-bottom: 2px; }
   h2 { font-size: 14px; margin: 24px 0 8px; }
   .sub { color: #666; font-size: 12px; margin-bottom: 20px; }
@@ -88,6 +89,7 @@ export function abrirRelatorioFinanceiroPDF(relatorio) {
   @media print { body { padding: 0; } }
 </style></head>
 <body>
+  <img class="logo" src="${window.location.origin}/brand/mark-transparent.png" alt="AriTur">
   <h1>Gestão AriTur — Relatório financeiro (${TITULO_GRAN[gran] ?? gran})${escopo}</h1>
   <div class="sub">Gerado em ${geradoEmTexto(relatorio)} (São Luís, MA)</div>
   <table>
