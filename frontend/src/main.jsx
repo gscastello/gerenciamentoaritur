@@ -9,6 +9,7 @@ import { AuthGate } from "./auth/AuthGate.jsx";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
 import { initObservability, reportError } from "./observability/index.js";
 import { applyMotion } from "./lib/motion.js";
+import { PWAUpdatePrompt } from "./pwa/PWAUpdatePrompt.jsx";
 
 // Resolve a preferência de movimento antes do primeiro paint (evita
 // piscar animação para quem tem "reduzir movimento" no sistema).
@@ -27,5 +28,6 @@ createRoot(document.getElementById("root")).render(
         <App />
       </AuthGate>
     </AuthProvider>
+    <PWAUpdatePrompt />
   </React.StrictMode>,
 );
