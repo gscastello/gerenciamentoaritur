@@ -106,6 +106,10 @@ export function VideoBackdrop({ variant = "app" }) {
   const base = { opacity: shown ? 1 : 0, transition: "opacity 1s ease", background: BG };
   let mediaStyle;
   if (variant === "hero") {
+    // Ônibus INTEIRO, ancorado à direita: altura = 100% do card, largura
+    // livre pela proporção real do vídeo (999×594) — "contain" garante
+    // que nunca corta a imagem, em qualquer largura de tela. Uma única
+    // regra pra todos os breakpoints (sem overrides por media query).
     mediaStyle = {
       ...base,
       position: "absolute",
@@ -113,8 +117,9 @@ export function VideoBackdrop({ variant = "app" }) {
       bottom: 0,
       height: "100%",
       width: "auto",
-      objectFit: "cover",
-      objectPosition: "center",
+      maxWidth: "100%",
+      objectFit: "contain",
+      objectPosition: "right bottom",
       filter: "saturate(.95) brightness(.82)",
     };
   } else {
@@ -138,8 +143,8 @@ export function VideoBackdrop({ variant = "app" }) {
       style={{
         ...mediaStyle,
         backgroundImage: `url(${a.poster})`,
-        backgroundSize: variant === "hero" ? "auto 100%" : "cover",
-        backgroundPosition: variant === "hero" ? "right center" : "center",
+        backgroundSize: variant === "hero" ? "contain" : "cover",
+        backgroundPosition: variant === "hero" ? "right bottom" : "center",
         backgroundRepeat: "no-repeat",
       }}
     />
@@ -161,26 +166,6 @@ export function VideoBackdrop({ variant = "app" }) {
 
   return (
     <div style={wrap} aria-hidden="true">
-      {variant === "hero" && (
-        <style>{`
-          @media (max-width: 767px) {
-            .${cls}-m {
-              right: 0 !important; bottom: auto !important; top: 0 !important;
-              height: auto !important; width: 100% !important;
-              filter: brightness(.55) saturate(.9) !important;
-              background-size: cover !important; background-position: 50% 40% !important;
-            }
-            .${cls}-v {
-              background:
-                linear-gradient(180deg, rgba(8,9,11,.8) 0%, rgba(8,9,11,.55) 42%, rgba(8,9,11,.92) 100%),
-                linear-gradient(90deg, rgba(8,9,11,.55) 0%, rgba(8,9,11,.25) 60%, transparent 100%) !important;
-            }
-          }
-          @media (min-width: 1280px) {
-            .${cls}-m { height: 110% !important; bottom: -5% !important; }
-          }
-        `}</style>
-      )}
       {Media}
       <div className={`${cls}-v`} style={{ position: "absolute", inset: 0, background: VEIL[variant] }} />
     </div>
