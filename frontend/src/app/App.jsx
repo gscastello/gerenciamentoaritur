@@ -35,6 +35,8 @@ import {
   PhoneCall,
   Package,
   Pencil,
+  Pin,
+  PinOff,
   PlayCircle,
   Plus,
   Receipt,
@@ -86,7 +88,7 @@ import { useFuelRecords, useMaintenance } from "../hooks/useOperation.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
-import { useAgendaNote } from "../hooks/useAgendaNote.js";
+import { useNotes } from "../hooks/useNotes.js";
 import { useErrorLog } from "../hooks/useErrorLog.js";
 import { useNotifications } from "../hooks/useNotifications.js";
 import { usePendencias } from "../hooks/usePendencias.js";
@@ -603,7 +605,6 @@ function GlobalStyles() {
     <style>{`
       @keyframes fadeUp { from { opacity:0; transform:translateY(8px);} to {opacity:1; transform:translateY(0);} }
       @keyframes fadeIn { from { opacity:0;} to {opacity:1;} }
-      @keyframes popIn { from { opacity:0; transform:scale(.96);} to {opacity:1; transform:scale(1);} }
       @keyframes slideDown { from { opacity:0; transform:translateY(-6px);} to {opacity:1; transform:translateY(0);} }
       @keyframes shimmer { 0% { background-position:-400px 0;} 100% { background-position:400px 0;} }
       @keyframes scaleIn { from { opacity:0; transform:scale(.94) translateZ(0);} to {opacity:1; transform:scale(1) translateZ(0);} }
@@ -647,31 +648,14 @@ function GlobalStyles() {
         animation: roadDash 1.6s linear infinite; }
 
       /* ---- hero cinematográfico do Dashboard ---- */
-      @keyframes heroLanes { from { background-position: 0 0; } to { background-position: -640px 0; } }
-      @keyframes heroBusBob { 0%,100% { transform: translateY(0) rotate(-.4deg); } 50% { transform: translateY(-5px) rotate(.3deg); } }
-      @keyframes heroHeadlight { 0%,100% { opacity:.55; } 50% { opacity:1; } }
-      @keyframes heroSky { 0%,100% { opacity:.9; } 50% { opacity:1; } }
-      @keyframes heroTextIn { from { opacity:0; transform:translateY(14px); filter:blur(4px); } to { opacity:1; transform:translateY(0); filter:blur(0); } }
-      @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-      @keyframes glowPulse { 0%,100% { box-shadow: 0 0 0 0 ${C.brandGlow}; } 50% { box-shadow: 0 0 24px 2px ${C.brandGlow}; } }
+      @keyframes heroTextIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
       @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-      @keyframes sweep { to { transform: translateX(220%); } }
-      .hero-lanes { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.85) 0 46px, transparent 46px 132px);
-        animation: heroLanes 1.05s linear infinite; }
-      .hero-bus { animation: heroBusBob 4.5s ease-in-out infinite; will-change: transform; }
-      .hero-headlight { animation: heroHeadlight 2.6s ease-in-out infinite; }
-      .hero-t { animation: heroTextIn .7s cubic-bezier(.16,1,.3,1) both; }
-      .hero-t-1 { animation-delay: .05s; } .hero-t-2 { animation-delay: .16s; }
-      .hero-t-3 { animation-delay: .27s; } .hero-t-4 { animation-delay: .38s; }
-      .float-y { animation: floatY 5s ease-in-out infinite; }
-      .glow-pulse { animation: glowPulse 3.2s ease-in-out infinite; }
+      .hero-t { animation: heroTextIn .45s cubic-bezier(.16,1,.3,1) both; }
+      .hero-t-1 { animation-delay: .02s; } .hero-t-2 { animation-delay: .07s; }
+      .hero-t-3 { animation-delay: .12s; } .hero-t-4 { animation-delay: .17s; }
       .card-lift { transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .2s ease; }
       .card-lift:hover { transform: translateY(-3px); border-color: ${C.brandDim}; box-shadow: 0 14px 34px -18px rgba(0,0,0,.7); }
-      .bar-grow { transform-origin: bottom; animation: barGrow .7s cubic-bezier(.16,1,.3,1) both; }
-      .sheen { position:relative; overflow:hidden; }
-      .sheen::after { content:""; position:absolute; top:0; left:-60%; width:40%; height:100%;
-        background:linear-gradient(100deg, transparent, rgba(255,255,255,.10), transparent);
-        transform: translateX(0); animation: sweep 6s ease-in-out 1s infinite; }
+      .bar-grow { transform-origin: bottom; animation: barGrow .45s cubic-bezier(.16,1,.3,1) both; }
 
       /* ---- FX cinematográfico dos heros (toda tela que usa .aritur-hero) ---- */
       @keyframes heroRoad   { to { background-position: -46px 82%; } }
@@ -715,8 +699,8 @@ function GlobalStyles() {
          rede de segurança para quem tem "reduzir movimento" no sistema. */
       html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
         animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-      html[data-motion="off"] :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
-      html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after, html[data-motion="off"] .sheen::after { animation: none !important; }
+      html[data-motion="off"] :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
+      html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after { animation: none !important; }
       html[data-motion="off"] .hero-fx-spark { opacity: 0 !important; }
       /* .anim-fadeIn envolve o conteúdo de TODA aba (Reservar, Agenda, Lista,
          Financeiro, Gestão...) e .anim-fadeUp/.anim-pop/.anim-slideDown/
@@ -730,7 +714,7 @@ function GlobalStyles() {
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-        html:not([data-motion]) :is(.aritur-road,.hero-lanes,.hero-bus,.hero-headlight,.float-y,.glow-pulse,.bus-drift,.hero-fx-bus,.hero-fx-spark),
+        html:not([data-motion]) :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark),
         html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
         html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
           animation: none !important; will-change: auto !important; }
@@ -4970,151 +4954,137 @@ function BotaoAgendar({ onClick }) {
 }
 
 /* ===================== BLOCO DE NOTAS DA AGENDA (issue #90) ================
-   Texto cru por data — o dono cola a lista do Evernote durante a transição.
-   NÃO parseia, NÃO entra na Agenda. É rede de segurança da anotação. */
-function shiftDia(iso, n) {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  const mm = `${d.getMonth() + 1}`.padStart(2, "0");
-  const dd = `${d.getDate()}`.padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+   Notas soltas, sem data obrigatória — bloco de notas de verdade
+   (substituiu o antigo bloco por data, que era só rede de segurança pra
+   colar a lista do Evernote). Cada card salva sozinho enquanto edita. */
+function fmtNotaStamp(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const hoje = d.toDateString() === new Date().toDateString();
+  return hoje
+    ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function NotaCard({ nota, onChange, onBlur, onTogglePin, onRemove }) {
+  return (
+    <div
+      className="rounded-xl border p-3 flex flex-col gap-2"
+      style={{
+        background: C.panel,
+        borderColor: nota.pinned ? C.brandDim : C.border,
+        minHeight: 180,
+      }}
+    >
+      <textarea
+        value={nota.content}
+        onChange={(e) => onChange(nota.id, e.target.value)}
+        onBlur={(e) => onBlur(nota.id, e.target.value)}
+        spellCheck={false}
+        placeholder="Escreva aqui…"
+        className="w-full flex-1 bg-transparent outline-none resize-none leading-relaxed"
+        style={{ color: C.ink, fontSize: "0.85rem", minHeight: 110 }}
+      />
+      <div className="flex items-center justify-between text-[11px]" style={{ color: C.inkFaint }}>
+        <span>{fmtNotaStamp(nota.updated_at)}</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onTogglePin(nota.id, nota.pinned)}
+            className="btn-press rounded-md p-1.5"
+            style={{ color: nota.pinned ? C.brand : C.inkFaint }}
+            aria-label={nota.pinned ? "Desafixar" : "Fixar"}
+            title={nota.pinned ? "Desafixar" : "Fixar"}
+          >
+            {nota.pinned ? <Pin size={14} /> : <PinOff size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(nota.id)}
+            className="btn-press rounded-md p-1.5"
+            style={{ color: C.inkFaint }}
+            aria-label="Apagar"
+            title="Apagar"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BlocoDeNotasTab() {
-  const [data, setData] = useState(todayStr());
-  const nota = useAgendaNote(data);
-  const ehHoje = data === todayStr();
-
-  const hora = (d) =>
-    d instanceof Date && !Number.isNaN(d.getTime())
-      ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      : "";
-
-  const statusTexto =
-    nota.status === "saving"
-      ? "salvando…"
-      : nota.status === "error"
-        ? "erro ao salvar — edite algo para tentar de novo"
-        : nota.savedAt
-          ? `salvo às ${hora(nota.savedAt)}`
-          : "nada salvo ainda";
-  const statusCor =
-    nota.status === "error" ? C.red : nota.status === "saving" ? C.inkFaint : C.green;
+  const { notes, loading, error, create, creating, scheduleSave, flush, togglePin, remove } =
+    useNotes();
 
   return (
     <div>
       <Header
         title="Bloco de notas"
-        subtitle="Cole aqui a lista do Evernote. Texto livre, uma nota por dia — não entra na Agenda automaticamente."
+        subtitle="Notas soltas para o que quiser — recados, listas, rascunhos. Salva sozinho, sincroniza com a equipe na hora."
         right={
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setData(shiftDia(data, -1))}
-              className="btn-press rounded-lg border px-2 py-2"
-              style={{ borderColor: C.border, color: C.inkSoft }}
-              aria-label="dia anterior"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <TextInput
-              type="date"
-              value={data}
-              onChange={(e) => e.target.value && setData(e.target.value)}
-              className="w-auto"
-            />
-            <button
-              type="button"
-              onClick={() => setData(shiftDia(data, 1))}
-              className="btn-press rounded-lg border px-2 py-2"
-              style={{ borderColor: C.border, color: C.inkSoft }}
-              aria-label="próximo dia"
-            >
-              <ChevronRight size={15} />
-            </button>
-            {!ehHoje && (
-              <button
-                type="button"
-                onClick={() => setData(todayStr())}
-                className="btn-press text-xs px-3 py-2 rounded-lg font-medium"
-                style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
-              >
-                Hoje
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={create}
+            disabled={creating}
+            className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium"
+            style={{ background: C.brand, color: "#fff", opacity: creating ? 0.7 : 1 }}
+          >
+            <Plus size={14} />
+            Nova nota
+          </button>
         }
       />
-      <div className="px-6 md:px-10 pb-10 space-y-3">
-        <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-2"
-          style={{ borderColor: C.brandDim }}
-        >
-          <HeroFX />
-          <div className="relative flex items-center gap-2">
-            <NotebookPen size={17} style={{ color: "#fff" }} />
-            <div
-              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.05rem", color: "#fff" }}
-            >
-              Anotação do dia
-              <span className="font-normal ml-1.5" style={{ color: "rgba(255,255,255,.7)", fontSize: "0.78rem" }}>
-                · cópia de segurança da agenda
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="text-sm font-semibold capitalize" style={{ color: C.ink }}>
-            {ehHoje ? "Hoje" : diaSemana(data)}{" "}
-            <span className="font-normal" style={{ color: C.inkFaint }}>
-              · {fmtDate(data)}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span style={{ color: statusCor }}>{statusTexto}</span>
-            {nota.content && (
-              <span style={{ color: C.inkFaint }}>{nota.content.length} caracteres</span>
-            )}
-          </div>
-        </div>
-
-        {nota.error && (
+      <div className="px-6 md:px-10 pb-10">
+        {error && (
           <div
-            className="text-xs rounded-lg px-3 py-2"
+            className="text-xs rounded-lg px-3 py-2 mb-3"
             style={{ background: C.redSoft, color: C.red }}
           >
-            Não foi possível carregar a nota deste dia. {nota.error?.message}
+            Não foi possível carregar as notas. {error?.message}
           </div>
         )}
 
-        {nota.loading ? (
-          <Skeleton height={460} rounded={12} />
+        {loading ? (
+          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} height={180} rounded={12} />
+            ))}
+          </div>
+        ) : notes.length === 0 ? (
+          <div
+            className="rounded-xl border p-8 text-center"
+            style={{ borderColor: C.border, color: C.inkFaint }}
+          >
+            <NotebookPen size={22} className="mx-auto mb-2" style={{ color: C.inkFaint }} />
+            <div className="text-sm" style={{ color: C.inkSoft }}>Nenhuma nota ainda.</div>
+            <button
+              type="button"
+              onClick={create}
+              className="btn-press text-xs px-3 py-2 rounded-lg font-medium mt-3"
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            >
+              Criar a primeira
+            </button>
+          </div>
         ) : (
-          <textarea
-            value={nota.content}
-            onChange={(e) => nota.setContent(e.target.value)}
-            onBlur={nota.saveNow}
-            spellCheck={false}
-            placeholder={
-              "Cole aqui a lista do dia, do jeito que está no Evernote…\n\nEx.:\nSÃO LUÍS\n2p Miranda +55 98 8516-6052\n1p Cohama 98 7024-2260\n…"
-            }
-            className="w-full rounded-xl border p-4 leading-relaxed"
-            style={{
-              minHeight: "58vh",
-              background: C.panel,
-              borderColor: C.border,
-              color: C.ink,
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: "0.82rem",
-              resize: "vertical",
-            }}
-          />
+          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+            {notes.map((nota) => (
+              <NotaCard
+                key={nota.id}
+                nota={nota}
+                onChange={scheduleSave}
+                onBlur={flush}
+                onTogglePin={togglePin}
+                onRemove={(id) => {
+                  if (window.confirm("Apagar esta nota? Não dá para desfazer.")) remove(id);
+                }}
+              />
+            ))}
+          </div>
         )}
-
-        <p className="text-[11px]" style={{ color: C.inkFaint }}>
-          Salva sozinho enquanto você digita. Todos os sócios veem a mesma nota,
-          atualizando em tempo real.
-        </p>
       </div>
     </div>
   );

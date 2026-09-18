@@ -70,6 +70,7 @@ function json(body, status = 200, headers = null) {
  * @param {(route)=>void} [opts.onCreate]  callback quando rpc_create_reservation é chamado
  * @param {Array}  [opts.notifications=[]]  linhas de v_app_notifications
  * @param {Array}  [opts.pendencias=[]]     linhas de v_pendencias_atendimento
+ * @param {Array}  [opts.notes=[]]          linhas iniciais de notes (bloco de notas)
  */
 export async function mockSupabase(page, opts = {}) {
   const {
@@ -105,8 +106,9 @@ export async function mockSupabase(page, opts = {}) {
     return route.fulfill(json({}));
   });
 
-  // bloco de notas da agenda (issue #90) — stateful dentro do cenário
-  let notaAgenda = null;
+  // bloco de notas (issue #90 → notas soltas) — stateful dentro do cenário
+  let notesRows = (opts.notes ?? []).map((n) => ({ ...n }));
+  let noteSeq = 0;
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
@@ -121,19 +123,43 @@ export async function mockSupabase(page, opts = {}) {
     const path = url.pathname.replace("/rest/v1/", "");
     const wantsObject = (req.headers().accept || "").includes("pgrst.object");
 
-    if (path === "agenda_notes") {
+    if (path === "notes") {
       if (req.method === "GET") {
-        return route.fulfill(json(wantsObject ? notaAgenda : notaAgenda ? [notaAgenda] : []));
+        const sorted = [...notesRows].sort((a, b) =>
+          a.pinned === b.pinned ? new Date(b.updated_at) - new Date(a.updated_at) : a.pinned ? -1 : 1,
+        );
+        return route.fulfill(json(wantsObject ? (sorted[0] ?? null) : sorted));
       }
-      const body = req.postDataJSON?.() ?? {};
-      const incoming = Array.isArray(body) ? body[0] : body;
-      notaAgenda = {
-        note_date: incoming.note_date ?? "2026-09-09",
-        content: incoming.content ?? "",
-        updated_at: new Date().toISOString(),
-        updated_by: FAKE_USER.id,
-      };
-      return route.fulfill(json(wantsObject ? notaAgenda : [notaAgenda]));
+      if (req.method === "POST") {
+        const body = req.postDataJSON?.() ?? {};
+        noteSeq += 1;
+        const now = new Date().toISOString();
+        const row = {
+          id: `note-${noteSeq}`,
+          content: body.content ?? "",
+          pinned: false,
+          created_at: now,
+          updated_at: now,
+          updated_by: FAKE_USER.id,
+        };
+        notesRows = [row, ...notesRows];
+        return route.fulfill(json(wantsObject ? row : [row]));
+      }
+      if (req.method === "PATCH") {
+        const id = url.searchParams.get("id")?.replace("eq.", "");
+        const body = req.postDataJSON?.() ?? {};
+        notesRows = notesRows.map((n) =>
+          n.id === id ? { ...n, ...body, updated_at: new Date().toISOString() } : n,
+        );
+        const updated = notesRows.find((n) => n.id === id) ?? null;
+        return route.fulfill(json(wantsObject ? updated : [updated]));
+      }
+      if (req.method === "DELETE") {
+        const id = url.searchParams.get("id")?.replace("eq.", "");
+        notesRows = notesRows.filter((n) => n.id !== id);
+        return route.fulfill(json([]));
+      }
+      return route.fulfill(json([]));
     }
 
     // RPCs
