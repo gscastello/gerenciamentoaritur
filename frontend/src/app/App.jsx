@@ -749,9 +749,9 @@ function GlobalStyles() {
  */
 const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
 const MONO_T = "#DDDEE2";
-// proporção real de mark-transparent.png (957×558) — mantém o aspecto ao
+// proporção real de mark-transparent.png (1076×508) — mantém o aspecto ao
 // escalar só pela altura.
-const MARK_RATIO = 957 / 558;
+const MARK_RATIO = 1076 / 508;
 
 function AriturMark({ size = 42 }) {
   return (
