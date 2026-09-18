@@ -740,78 +740,33 @@ function GlobalStyles() {
 }
 
 /* ===================== IDENTIDADE ARITUR =============================
- * Recriação vetorial da logo AriTur Transportes: monograma "AT" (serifa
- * de alto contraste, "A" vermelho em itálico + "T" grafite) atravessado
- * pela fita da rodovia, wordmark "AriTur" em serifa itálica e
- * "TRANSPORTES" espaçado. Não é imagem — escala em qualquer tamanho.
+ * Logo real da AriTur Transportes (arte enviada pelo dono, 2026-09-18):
+ * monograma "AT" com a fita da rodovia, recortado com fundo transparente
+ * em frontend/public/brand/ — ver PROCESSO em git log (logo-process.html,
+ * removido depois de gerar os recortes). `mark-transparent.png` = só o
+ * monograma (cabeçalhos, ícones); `full-transparent.png` = monograma +
+ * "AriTur Transportes" + tagline (tela de login, onde há espaço).
  */
 const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
 const MONO_T = "#DDDEE2";
+// proporção real de mark-transparent.png (957×558) — mantém o aspecto ao
+// escalar só pela altura.
+const MARK_RATIO = 957 / 558;
 
-function AriturMark({ size = 42, ribbon = true }) {
+function AriturMark({ size = 42 }) {
   return (
-    <div
-      style={{ position: "relative", width: size, height: size, flexShrink: 0 }}
-      aria-hidden="true"
-    >
-      {ribbon && (
-        <svg viewBox="0 0 100 100" width={size} height={size} style={{ position: "absolute", inset: 0 }} aria-hidden="true">
-          <path
-            d="M1 62 C 22 34, 44 12, 76 8 C 90 6, 99 13, 99 26 C 92 19, 82 19, 71 23 C 44 33, 24 55, 12 76 Z"
-            fill="#2A2A30"
-          />
-          <path
-            d="M6 60 C 26 34, 46 15, 76 12"
-            stroke={C.brand}
-            strokeWidth="2.6"
-            strokeDasharray="5 6"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.9"
-          />
-        </svg>
-      )}
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: SERIF,
-          lineHeight: 1,
-        }}
-      >
-        <span
-          style={{
-            fontStyle: "italic",
-            fontWeight: 700,
-            fontSize: size * 0.9,
-            color: C.brand,
-            textShadow: "0 1px 2px rgba(0,0,0,.55)",
-          }}
-        >
-          A
-        </span>
-        <span
-          style={{
-            fontWeight: 700,
-            fontSize: size * 0.82,
-            color: MONO_T,
-            marginLeft: -size * 0.28,
-          }}
-        >
-          T
-        </span>
-      </span>
-    </div>
+    <img
+      src="/brand/mark-transparent.png"
+      alt="AriTur"
+      style={{ height: size, width: size * MARK_RATIO, flexShrink: 0, display: "block" }}
+    />
   );
 }
 
 function AriturLogo({ compact = false, tagline = false }) {
   return (
     <div className="flex items-center gap-2.5">
-      <AriturMark size={compact ? 30 : 44} ribbon={!compact} />
+      <AriturMark size={compact ? 30 : 44} />
       <div className="leading-none">
         <div
           style={{

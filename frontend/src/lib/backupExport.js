@@ -155,6 +155,7 @@ export function abrirRelatorioPDF(payload) {
 <html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório de backup — Gestão AriTur</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; padding: 32px; color: #16191a; }
+  .logo { height: 40px; margin-bottom: 14px; }
   h1 { font-size: 19px; margin-bottom: 2px; }
   .sub { color: #666; font-size: 12px; margin-bottom: 24px; }
   table { border-collapse: collapse; width: 100%; max-width: 460px; }
@@ -165,6 +166,7 @@ export function abrirRelatorioPDF(payload) {
   @media print { body { padding: 0; } }
 </style></head>
 <body>
+  <img class="logo" src="${window.location.origin}/brand/mark-transparent.png" alt="AriTur">
   <h1>Gestão AriTur — Relatório de backup</h1>
   <div class="sub">Gerado em ${geradoEm} (São Luís, MA)</div>
   <table>
