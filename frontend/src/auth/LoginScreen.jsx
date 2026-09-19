@@ -211,6 +211,9 @@ const inputStyle = {
   borderRadius: 10,
   padding: "10px 12px",
   color: C.ink,
-  fontSize: 14,
+  // 16px, não 14 — abaixo disso o Safari/iOS dá zoom sozinho ao focar o
+  // campo (a tela de login não carrega o GlobalStyles do app, que tem a
+  // correção equivalente pros campos do resto do app — precisa fixar aqui).
+  fontSize: 16,
   outline: "none",
 };
