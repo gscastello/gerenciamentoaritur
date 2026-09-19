@@ -203,9 +203,17 @@ function GlobalStyles() {
 
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
-        button, select, input, textarea, a[role="button"] { min-height: 42px; }
-        /* botões/ícones minúsculos dentro de linhas densas não precisam do mínimo */
-        table button, .no-min-h, .no-min-h button { min-height: 0; }
+        /* Só em campo de formulário — cresce pra um alvo de toque melhor
+           sem distorcer nada (um select/input já é largo por natureza).
+           Botão NÃO entra aqui: teria que valer pra um ícone de 16px do
+           mesmo jeito que pro botão "Confirmar reserva", e um min-height
+           sozinho (sem min-width) só deixa o ícone esticado — virava um
+           retângulo de 26×42 em vez de um quadrado compacto. */
+        select, input, textarea { min-height: 42px; }
+        /* Corrige o zoom automático do Safari/iOS: ele aumenta o zoom da
+           página sozinho ao focar em qualquer campo com fonte < 16px —
+           os componentes usam text-sm (14px) por padrão. */
+        select, input, textarea { font-size: 16px !important; }
       }
       /* Movimento: a preferência efetiva vive em html[data-motion] (lib/motion.js).
          "off" desliga tudo. Enquanto o JS não resolve, o @media abaixo é a
@@ -1183,7 +1191,7 @@ function AppInner() {
                 pendenciasCount={pendenciasCount}
               />
 
-              <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden relative z-10">
+              <div className="flex-1 min-w-0 pb-40 md:pb-0 overflow-x-hidden relative z-10">
                 <div
                   className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
                   style={{
