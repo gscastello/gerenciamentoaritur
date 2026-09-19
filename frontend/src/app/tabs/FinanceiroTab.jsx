@@ -16,9 +16,9 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
-import { useContasReceber, useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
 import { montarRelatorioFinanceiro } from "../../domain/relatorioFinanceiro.js";
 import { validarData, validarValor } from "../../domain/validacao.js";
+import { useContasReceber, useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   abrirRelatorioFinanceiroPDF,
@@ -289,25 +289,37 @@ export default function FinanceiroTab({ pix, deepLink }) {
           </div>
           <div className="grid lg:grid-cols-[340px_1fr] gap-6">
             <Card className="anim-fadeUp">
+              {/* Colunas com largura FIXA (não 1fr) — Safari/iOS tem um bug
+                  conhecido de `aspect-ratio` dentro de grid com colunas
+                  fluidas: em vez de manter a célula quadrada, ele deixa a
+                  linha gigante/desproporcional (relatado pelo dono no
+                  celular; não reproduz no Chromium, mas o fix não usa mais
+                  aspect-ratio em grid nenhum, então o bug não tem como
+                  acontecer independente da causa exata). */}
               <div
-                className="grid grid-cols-7 gap-1 text-center text-[10px] mb-1"
-                style={{ color: C.inkFaint }}
+                className="grid gap-1 text-center text-[10px] mb-1 justify-center"
+                style={{ color: C.inkFaint, gridTemplateColumns: "repeat(7, 34px)" }}
               >
                 {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
                   <div key={i}>{d}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div
+                className="grid gap-1 justify-center"
+                style={{ gridTemplateColumns: "repeat(7, 34px)" }}
+              >
                 {cells.map((d, i) => {
-                  if (!d) return <div key={i} />;
+                  if (!d) return <div key={i} style={{ width: 34, height: 34 }} />;
                   const { ds, lucro, temMovimento } = lucroPorDia(d);
                   const sel = ds === diaSel;
                   return (
                     <button
                       key={i}
                       onClick={() => setDiaSel(ds)}
-                      className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs"
+                      className="btn-press rounded-lg flex flex-col items-center justify-center text-xs"
                       style={{
+                        width: 34,
+                        height: 34,
                         background: sel ? C.amber : C.panel2,
                         color: sel ? C.onBrand : C.ink,
                         border:
@@ -887,142 +899,146 @@ function ContasReceberView({ pix }) {
             </span>
           )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
-                <th className="px-4 py-2 font-medium">Passageiro</th>
-                <th className="px-4 py-2 font-medium">Valor devido</th>
-                <th className="px-4 py-2 font-medium">Vencimento</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contas.map((c) => (
-                <React.Fragment key={c.reservation_id}>
-                  <tr className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
-                    <td className="px-4 py-2">
-                      <div>{c.nome}</div>
-                      <div className="text-xs" style={{ color: C.inkFaint }}>
-                        {c.telefone}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {fmtBRL(c.valor_devido)}
-                    </td>
-                    <td className="px-4 py-2" style={{ color: C.inkSoft }}>
-                      {c.vencimento ? fmtDate(c.vencimento) : "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Pill
-                        color={vencida(c.vencimento) ? C.red : C.amber}
-                        bg={vencida(c.vencimento) ? C.redSoft : C.amberSoft}
+        {contas.length === 0 && !loading ? (
+          // Sem dados: nada de tabela de 5 colunas — no celular ela força
+          // scroll horizontal mesmo vazia (a largura reservada pelas
+          // colunas independe de ter linha ou não) e cortava até esta
+          // própria mensagem.
+          <p className="text-center py-8 text-xs" style={{ color: C.inkFaint }}>
+            Nenhuma conta pendente — tudo em dia.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+                  <th className="px-4 py-2 font-medium">Passageiro</th>
+                  <th className="px-4 py-2 font-medium">Valor devido</th>
+                  <th className="px-4 py-2 font-medium">Vencimento</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contas.map((c) => (
+                  <React.Fragment key={c.reservation_id}>
+                    <tr className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                      <td className="px-4 py-2">
+                        <div>{c.nome}</div>
+                        <div className="text-xs" style={{ color: C.inkFaint }}>
+                          {c.telefone}
+                        </div>
+                      </td>
+                      <td
+                        className="px-4 py-2"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
                       >
-                        {vencida(c.vencimento) ? "Vencido" : "No prazo"}
-                      </Pill>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => abrirCobranca(c)}
-                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-                          style={{ background: C.greenSoft, color: C.green, fontWeight: 600 }}
+                        {fmtBRL(c.valor_devido)}
+                      </td>
+                      <td className="px-4 py-2" style={{ color: C.inkSoft }}>
+                        {c.vencimento ? fmtDate(c.vencimento) : "—"}
+                      </td>
+                      <td className="px-4 py-2">
+                        <Pill
+                          color={vencida(c.vencimento) ? C.red : C.amber}
+                          bg={vencida(c.vencimento) ? C.redSoft : C.amberSoft}
                         >
-                          <MessageCircle size={12} /> Cobrar no WhatsApp
-                        </button>
-                        <button
-                          onClick={() => iniciarAjuste(c.reservation_id)}
-                          className="btn-press text-xs px-2 py-1 rounded-md"
-                          style={{ background: C.panel2, color: C.inkSoft }}
-                        >
-                          Estorno/ajuste
-                        </button>
-                        {c.comprovante_recebido && (
+                          {vencida(c.vencimento) ? "Vencido" : "No prazo"}
+                        </Pill>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => abrirComprovante(c.comprovante_path)}
-                            disabled={!c.comprovante_path}
-                            className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md disabled:opacity-40"
-                            style={{ background: C.blueSoft, color: C.blue, fontWeight: 600 }}
+                            onClick={() => abrirCobranca(c)}
+                            className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                            style={{ background: C.greenSoft, color: C.green, fontWeight: 600 }}
                           >
-                            <Receipt size={12} /> Ver comprovante
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {ajusteAberto === c.reservation_id && (
-                    <tr
-                      className="border-t"
-                      style={{ borderColor: C.borderSoft, background: C.panel2 }}
-                    >
-                      <td colSpan={5} className="px-4 py-3">
-                        {erroAjuste && (
-                          <div className="mb-2 text-xs" style={{ color: C.red }}>
-                            {erroAjuste}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Select
-                            value={ajusteVal.categoria}
-                            onChange={(e) =>
-                              setAjusteVal({ ...ajusteVal, categoria: e.target.value })
-                            }
-                          >
-                            <option value="estorno">Estorno</option>
-                            <option value="reembolso">Reembolso</option>
-                            <option value="ajuste">Ajuste</option>
-                          </Select>
-                          <TextInput
-                            type="number"
-                            placeholder="Valor"
-                            value={ajusteVal.valor}
-                            onChange={(e) => setAjusteVal({ ...ajusteVal, valor: e.target.value })}
-                            className="w-28"
-                          />
-                          <TextInput
-                            placeholder="Descrição (opcional)"
-                            value={ajusteVal.descricao}
-                            onChange={(e) =>
-                              setAjusteVal({ ...ajusteVal, descricao: e.target.value })
-                            }
-                            className="flex-1 min-w-[160px]"
-                          />
-                          <button
-                            onClick={salvarAjuste}
-                            disabled={registrando || !ajusteVal.valor}
-                            className="btn-press text-xs px-3 py-1.5 rounded-md"
-                            style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
-                          >
-                            Registrar
+                            <MessageCircle size={12} /> Cobrar no WhatsApp
                           </button>
                           <button
-                            onClick={() => setAjusteAberto(null)}
-                            className="btn-press text-xs px-2 py-1.5 rounded-md"
-                            style={{ color: C.inkFaint }}
+                            onClick={() => iniciarAjuste(c.reservation_id)}
+                            className="btn-press text-xs px-2 py-1 rounded-md"
+                            style={{ background: C.panel2, color: C.inkSoft }}
                           >
-                            Cancelar
+                            Estorno/ajuste
                           </button>
+                          {c.comprovante_recebido && (
+                            <button
+                              onClick={() => abrirComprovante(c.comprovante_path)}
+                              disabled={!c.comprovante_path}
+                              className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md disabled:opacity-40"
+                              style={{ background: C.blueSoft, color: C.blue, fontWeight: 600 }}
+                            >
+                              <Receipt size={12} /> Ver comprovante
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-              {contas.length === 0 && !loading && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="text-center py-8 text-xs"
-                    style={{ color: C.inkFaint }}
-                  >
-                    Nenhuma conta pendente — tudo em dia.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {ajusteAberto === c.reservation_id && (
+                      <tr
+                        className="border-t"
+                        style={{ borderColor: C.borderSoft, background: C.panel2 }}
+                      >
+                        <td colSpan={5} className="px-4 py-3">
+                          {erroAjuste && (
+                            <div className="mb-2 text-xs" style={{ color: C.red }}>
+                              {erroAjuste}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select
+                              value={ajusteVal.categoria}
+                              onChange={(e) =>
+                                setAjusteVal({ ...ajusteVal, categoria: e.target.value })
+                              }
+                            >
+                              <option value="estorno">Estorno</option>
+                              <option value="reembolso">Reembolso</option>
+                              <option value="ajuste">Ajuste</option>
+                            </Select>
+                            <TextInput
+                              type="number"
+                              placeholder="Valor"
+                              value={ajusteVal.valor}
+                              onChange={(e) =>
+                                setAjusteVal({ ...ajusteVal, valor: e.target.value })
+                              }
+                              className="w-28"
+                            />
+                            <TextInput
+                              placeholder="Descrição (opcional)"
+                              value={ajusteVal.descricao}
+                              onChange={(e) =>
+                                setAjusteVal({ ...ajusteVal, descricao: e.target.value })
+                              }
+                              className="flex-1 min-w-[160px]"
+                            />
+                            <button
+                              onClick={salvarAjuste}
+                              disabled={registrando || !ajusteVal.valor}
+                              className="btn-press text-xs px-3 py-1.5 rounded-md"
+                              style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
+                            >
+                              Registrar
+                            </button>
+                            <button
+                              onClick={() => setAjusteAberto(null)}
+                              className="btn-press text-xs px-2 py-1.5 rounded-md"
+                              style={{ color: C.inkFaint }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );
