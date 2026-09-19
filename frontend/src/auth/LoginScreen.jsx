@@ -5,9 +5,9 @@
 // Users) ou por um futuro fluxo de convite. Ver AGENTS.md §papéis.
 
 import { useState } from "react";
-import { useAuth } from "./AuthProvider.jsx";
-import { ProgressBar } from "../ui/motion/index.js";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
+import { ProgressBar } from "../ui/motion/index.js";
+import { useAuth } from "./AuthProvider.jsx";
 
 const C = {
   bg: "#08090B",
@@ -45,6 +45,7 @@ export function LoginScreen() {
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [lembrar, setLembrar] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -53,7 +54,7 @@ export function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      await signIn(email.trim(), password);
+      await signIn(email.trim(), password, lembrar);
       // AuthProvider troca a tela sozinho ao receber a sessão.
     } catch (err) {
       setError(
@@ -136,6 +137,27 @@ export function LoginScreen() {
               onChange={(e) => setPassword(e.target.value)}
               style={{ ...inputStyle, marginTop: 4 }}
             />
+          </label>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: C.inkSoft,
+              marginTop: 16,
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={lembrar}
+              onChange={(e) => setLembrar(e.target.checked)}
+              style={{ width: 15, height: 15, accentColor: C.brand }}
+            />
+            Permanecer conectado
           </label>
 
           {error && <div style={{ color: C.red, fontSize: 12, marginTop: 12 }}>{error}</div>}

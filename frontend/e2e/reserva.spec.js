@@ -28,6 +28,17 @@ test("app passa da tela de login e mostra a navegação por papel", async ({ pag
   await expect(page.getByRole("button", { name: /^Sistema$/ })).toHaveCount(0);
 });
 
+test("botão Sair desloga e volta pra tela de login", async ({ page }) => {
+  await mockSupabase(page, { role: "atendente" });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Reservar/ }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Sair da conta" }).first().click();
+
+  await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+});
+
 // Regressão: a aba Sistema (só admin) precisa abrir sem quebrar. O PR #83
 // referenciou <SistemaCidades /> sem a definição do componente e nenhum
 // teste abria a aba como admin — o app quebrava só em produção.
