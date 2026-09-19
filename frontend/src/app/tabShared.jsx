@@ -70,8 +70,8 @@ export const PIX_NAME = "A O Castelo Transporte e Turismo";
 // aberto nem UTC puro — `new Date().toISOString()` é UTC e, das 21h à
 // meia-noite em São Luís, já mostra o dia seguinte (bug real: reserva
 // "de hoje" feita à noite ia pra Agenda de amanhã).
-export const FUSO_OPERACAO = "America/Fortaleza";
-export const fmtDiaFuso = new Intl.DateTimeFormat("en-CA", {
+const FUSO_OPERACAO = "America/Fortaleza";
+const fmtDiaFuso = new Intl.DateTimeFormat("en-CA", {
   timeZone: FUSO_OPERACAO,
   year: "numeric",
   month: "2-digit",
@@ -129,7 +129,7 @@ export function digitos(tel) {
 }
 
 /* ============================= bairros → precificação de busca em casa ============================= */
-export const BAIRROS_80 = [
+const BAIRROS_80 = [
   "Centro",
   "Apicum",
   "Camboa",
@@ -231,7 +231,7 @@ export const BAIRROS_80 = [
   "Recanto dos Pássaros",
   "Recanto dos Signos",
 ];
-export const BAIRROS_90 = [
+const BAIRROS_90 = [
   "Sol e Mar",
   "Vila Luizão",
   "Divinéia",
@@ -264,18 +264,18 @@ export const BAIRROS_90 = [
   "Vila São Luís",
   "Vila Tiradentes",
 ];
-export const BAIRROS_80_NORM = BAIRROS_80.map(normalizar);
-export const BAIRROS_90_NORM = BAIRROS_90.map(normalizar);
+const BAIRROS_80_NORM = BAIRROS_80.map(normalizar);
+const BAIRROS_90_NORM = BAIRROS_90.map(normalizar);
 // Fallback offline. Em produção o preço vem da tabela neighborhood_pricing
 // (useNeighborhoodPricing) via BairrosContext — editável na aba Sistema.
-export function precoBairro(bairro) {
+function precoBairro(bairro) {
   const n = normalizar(bairro);
   if (!n) return undefined;
   if (BAIRROS_80_NORM.includes(n)) return 80;
   if (BAIRROS_90_NORM.includes(n)) return 90;
   return null; // não reconhecido
 }
-export const BAIRROS_FALLBACK = {
+const BAIRROS_FALLBACK = {
   bairros: [],
   nomes: [...new Set([...BAIRROS_80, ...BAIRROS_90])].sort((a, b) => a.localeCompare(b, "pt-BR")),
   preco: precoBairro,
@@ -325,25 +325,25 @@ export const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
 
 /* ---- Desembarque (rota do motorista) — ver database/10-dropoff-plan.sql --- */
 // Baldes de entrega por direção, na ordem em que o ônibus os alcança.
-export const DESEMBARQUE_IDA = [
+const DESEMBARQUE_IDA = [
   { id: "cantanhede", label: "Cantanhede" },
   { id: "pirapemas", label: "Pirapemas" },
   { id: "outro", label: "Outros locais" },
 ];
-export const DESEMBARQUE_VOLTA = [
+const DESEMBARQUE_VOLTA = [
   { id: "br", label: "BR (ponto de referência)" },
   { id: "retorno", label: "Retorno" },
   { id: "rodoviaria", label: "Rodoviária" },
   { id: "casa", label: "Em casa (bairro)" },
 ];
-export const baldesDesembarque = (direcao) => (direcao === "ida" ? DESEMBARQUE_IDA : DESEMBARQUE_VOLTA);
-export const rotuloBalde = (direcao, id) =>
+const baldesDesembarque = (direcao) => (direcao === "ida" ? DESEMBARQUE_IDA : DESEMBARQUE_VOLTA);
+const rotuloBalde = (direcao, id) =>
   baldesDesembarque(direcao).find((b) => b.id === id)?.label || id;
 
 // Rótulo/placeholder do campo de detalhe do desembarque, por balde. `req`
 // = o cliente é obrigado a preencher (BR precisa de referência, casa
 // precisa do bairro, "outro" precisa dizer onde).
-export const DETALHE_DESEMBARQUE = {
+const DETALHE_DESEMBARQUE = {
   cantanhede: { label: "Onde em Cantanhede", ph: "Rua / ponto de referência", req: false },
   pirapemas: { label: "Onde em Pirapemas", ph: "Rua / ponto de referência", req: false },
   outro: { label: "Onde você vai ficar", ph: "Descreva o local", req: true },
@@ -352,13 +352,13 @@ export const DETALHE_DESEMBARQUE = {
   rodoviaria: { label: "Ponto de referência (opcional)", ph: "", req: false },
   casa: { label: "Bairro onde vai ficar", ph: "Ex.: Cohama", req: true },
 };
-export const detalheDesembarqueObrigatorio = (area) => !!DETALHE_DESEMBARQUE[area]?.req;
+const detalheDesembarqueObrigatorio = (area) => !!DETALHE_DESEMBARQUE[area]?.req;
 
 // Baldes de desembarque vivos (database/24-baldes-desembarque.sql) via
 // contexto — os arrays acima viram fallback offline. Mesmo contrato:
 //   porDirecao(dir) -> [{ code, label, ... }]
 //   rotulo(dir,code) / detalhe(dir,code) -> {label,ph,req} / obrigatorio(dir,code)
-export const DROPOFF_FALLBACK = (() => {
+const DROPOFF_FALLBACK = (() => {
   const norm = (dir, arr) =>
     arr.map((b) => ({
       code: b.id,
@@ -404,7 +404,7 @@ export const useDropoff = () => useContext(DropoffContext) || DROPOFF_FALLBACK;
 // Sino de notificações — provido uma vez no AppInner (uma assinatura de
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
 export const NotificacoesContext = React.createContext(null);
-export const useNotificacoesCtx = () => useContext(NotificacoesContext);
+const useNotificacoesCtx = () => useContext(NotificacoesContext);
 
 // String legível para dropoff_location (usada na Lista/Agenda e telas de
 // sucesso). O que estrutura a rota é dropoff_area/dropoff_detail.
@@ -509,7 +509,7 @@ export function HeroFX() {
 
 // Reconhece dd/mm, dd/mm/aaaa, dd-mm, aaaa-mm-dd → ISO aaaa-mm-dd.
 
-export const NOTIF_META = {
+const NOTIF_META = {
   lotacao: { label: "Lotação", Icon: Users },
   cancelamento: { label: "Cancelamento", Icon: X },
   mudanca_embarque: { label: "Mudança de embarque", Icon: MapPin },
@@ -935,7 +935,7 @@ export function TextArea(props) {
   );
 }
 
-export const PREFERS_REDUCED_MOTION =
+const PREFERS_REDUCED_MOTION =
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -992,7 +992,7 @@ export function useDeepLinkSubview(deepLink, setSubview) {
     }
   }, [deepLink, setSubview]);
 }
-export function pontoDe(reserva, trips) {
+function pontoDe(reserva, trips) {
   return trips[reserva.direcao]?.pontos.find((p) => p.id === reserva.pontoId);
 }
 export function labelLocal(reserva, trips) {
@@ -1091,7 +1091,7 @@ export function runDiagnostics(reservas, capacidade, trips) {
 }
 
 /* ============================= IA operacional & previsão de demanda ============================= */
-export const DIAS_SEMANA = [
+const DIAS_SEMANA = [
   "Domingo",
   "Segunda-feira",
   "Terça-feira",
@@ -1286,7 +1286,7 @@ export function BotaoAgendar({ onClick }) {
 // sozinhas via trigger (Operação), mas continuam escolhíveis aqui pra
 // cobrir um lançamento manual (ex.: abastecimento pago sem passar pela
 // aba Operação).
-export const CATEGORIAS_DESPESA = [
+const CATEGORIAS_DESPESA = [
   { id: "combustivel", label: "Combustível", icon: Fuel },
   { id: "alimentacao", label: "Alimentação", icon: UtensilsCrossed },
   { id: "motorista", label: "Motorista(s)", icon: Users },
@@ -1305,14 +1305,14 @@ export const CATEGORIAS_RECEITA = [
 // estorno/reembolso/ajuste são categorias de AJUSTE ligadas a uma reserva
 // (ver database/18-receita-automatica-contas-a-receber.sql) — não aparecem
 // nos botões rápidos de lançamento manual, só na tabela de lançamentos.
-export const ROTULOS_AJUSTE = { estorno: "Estorno", reembolso: "Reembolso", ajuste: "Ajuste" };
+const ROTULOS_AJUSTE = { estorno: "Estorno", reembolso: "Reembolso", ajuste: "Ajuste" };
 
 // --- Gestão Operacional: os 14 custos empresariais pedidos, agrupados
 // para uma leitura de DRE. São categorias de `financial_entries`
 // (type='despesa') distintas das do caixa do dia (combustível etc.) e da
 // manutenção preventiva (que é 'manutencao', automática da aba Operação).
 // Ver database/19-gestao-operacional.sql.
-export const CATEGORIAS_GESTAO = [
+const CATEGORIAS_GESTAO = [
   { id: "salario", label: "Salários", grupo: "Pessoal", icon: Users },
   { id: "pro_labore", label: "Pró-labore", grupo: "Pessoal", icon: Users },
   { id: "imposto", label: "Impostos", grupo: "Impostos & Taxas", icon: Landmark },
@@ -1333,7 +1333,7 @@ export const MESES_PT = [
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 ];
 
-export const rotuloCategoriaDespesa = (id) =>
+const rotuloCategoriaDespesa = (id) =>
   CATEGORIAS_DESPESA.find((c) => c.id === id)?.label ||
   ROTULOS_AJUSTE[id] ||
   CATEGORIAS_GESTAO.find((c) => c.id === id)?.label ||
@@ -1344,7 +1344,7 @@ export const rotuloCategoriaDespesa = (id) =>
 // constantes acima viram só o fallback (offline / e2e sem login / antes do
 // primeiro fetch). Assim as telas de Gestão e Financeiro passam a oferecer
 // as categorias personalizadas que o dono criar, sem prop-drilling.
-export const CATEGORIAS_FALLBACK = (() => {
+const CATEGORIAS_FALLBACK = (() => {
   const norm = (c, kind) => ({ slug: c.id, label: c.label, grupo: c.grupo || "Estrutura", kind });
   const gestao = CATEGORIAS_GESTAO.map((c) => norm(c, "gestao"));
   const despesa = CATEGORIAS_DESPESA.map((c) => norm(c, "despesa"));
@@ -1379,7 +1379,7 @@ export const CategoriasContext = React.createContext(CATEGORIAS_FALLBACK);
 export const useCategorias = () => useContext(CategoriasContext) || CATEGORIAS_FALLBACK;
 
 // nome (string, vindo do banco) -> componente de ícone lucide
-export const ICONE_CATEGORIA = {
+const ICONE_CATEGORIA = {
   Users, Landmark, CreditCard, ShieldCheck, Receipt, Bus, Sparkles, Package,
   Wrench, TrendingUp, Fuel, UtensilsCrossed,
 };
