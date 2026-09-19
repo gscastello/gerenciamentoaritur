@@ -4,10 +4,18 @@
 // perfil (users.role) sincronizados, e reage a login/logout/refresh de
 // token em qualquer aba.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient.js";
-import { usersService } from "../services/usersService.js";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { logTecnico } from "../lib/erros.js";
+import { setRememberMe, supabase } from "../lib/supabaseClient.js";
+import { usersService } from "../services/usersService.js";
 
 const AuthContext = createContext(null);
 
@@ -63,13 +71,18 @@ export function AuthProvider({ children }) {
     };
   }, [loadProfile]);
 
-  const signIn = useCallback(async (email, password) => {
+  const signIn = useCallback(async (email, password, remember = true) => {
+    // precisa vir ANTES do signInWithPassword: é o valor que o storage
+    // dinâmico do client (supabaseClient.js) lê no exato momento em que a
+    // sessão nova é salva.
+    setRememberMe(remember);
     await usersService.signInWithPassword(email, password);
     // onAuthStateChange cuida de setSession + loadProfile
   }, []);
 
   const signOut = useCallback(async () => {
     await usersService.signOut();
+    setRememberMe(true); // volta ao padrão pro próximo login (não herda "não lembrar" de um dispositivo compartilhado)
   }, []);
 
   const value = useMemo(

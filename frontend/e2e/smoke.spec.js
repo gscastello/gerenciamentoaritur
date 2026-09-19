@@ -17,6 +17,13 @@ test("a tela de login tem os campos de e-mail e senha", async ({ page }) => {
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
 
+test("a tela de login tem a opção de permanecer conectado, marcada por padrão", async ({ page }) => {
+  await page.goto("/");
+  const checkbox = page.getByRole("checkbox", { name: "Permanecer conectado" });
+  await expect(checkbox).toBeVisible();
+  await expect(checkbox).toBeChecked();
+});
+
 test("a tela de login tem o vídeo do ônibus AriTur de fundo", async ({ page }) => {
   await page.goto("/");
   const video = page.locator("video[src='/media/aritur-hero.mp4']");

@@ -8,6 +8,7 @@ import {
   Inbox,
   Landmark,
   LayoutDashboard,
+  LogOut,
   MessageCircle,
   MoreHorizontal,
   NotebookPen,
@@ -875,7 +876,7 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
 function AppInner() {
   // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
   // carregadas no index.html — valem também para a tela de login.
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const role = profile?.role ?? null;
   const [tab, setTab] = useState("dashboard");
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -1138,7 +1139,7 @@ function AppInner() {
                     >
                       {(usuario || "?").slice(0, 2).toUpperCase()}
                     </span>
-                    <span className="min-w-0 leading-tight">
+                    <span className="min-w-0 leading-tight flex-1">
                       <span
                         className="block text-xs font-semibold truncate"
                         style={{ color: C.ink }}
@@ -1149,6 +1150,16 @@ function AppInner() {
                         {profile?.role || "—"}
                       </span>
                     </span>
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      className="btn-press rounded-lg p-1.5 shrink-0"
+                      style={{ color: C.inkFaint }}
+                      title="Sair da conta"
+                      aria-label="Sair da conta"
+                    >
+                      <LogOut size={15} />
+                    </button>
                   </div>
                   <div
                     className="mt-2.5 text-[10px] leading-snug"
@@ -1182,7 +1193,19 @@ function AppInner() {
                   }}
                 >
                   <AriturLogo compact />
-                  <div className="aritur-road" style={{ width: 42 }} />
+                  <div className="flex items-center gap-2.5">
+                    <div className="aritur-road" style={{ width: 42 }} />
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      className="btn-press rounded-lg p-1.5"
+                      style={{ color: C.inkFaint }}
+                      title="Sair da conta"
+                      aria-label="Sair da conta"
+                    >
+                      <LogOut size={16} />
+                    </button>
+                  </div>
                 </div>
                 {R.error && !loading && (
                   <div

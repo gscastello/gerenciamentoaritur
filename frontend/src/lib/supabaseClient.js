@@ -16,6 +16,58 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// "Permanecer conectado" (tela de login): preferência lida ANTES do login
+// (setRememberMe) e usada por este storage pra decidir onde a sessão vive —
+// localStorage (sobrevive fechar o navegador) ou sessionStorage (só a aba
+// atual, some ao fechar). Um só cliente Supabase, storage dinâmico — trocar
+// de storage-adapter exigiria recriar o client a cada login.
+const REMEMBER_KEY = "aritur-remember-me";
+
+export function setRememberMe(remember) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+  } catch {
+    // localStorage indisponível (modo privado estrito) — sessionStorage
+    // ainda funciona, só não sobrevive fechar o navegador; sem problema.
+  }
+}
+
+function rememberMe() {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+const dynamicStorage = {
+  getItem: (key) => {
+    try {
+      return (rememberMe() ? localStorage : sessionStorage).getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      const ativo = rememberMe() ? localStorage : sessionStorage;
+      const outro = rememberMe() ? sessionStorage : localStorage;
+      ativo.setItem(key, value);
+      outro.removeItem(key); // sem sessão fantasma no storage que não é o ativo
+    } catch {
+      // ignora — pior caso, a sessão não persiste entre recarregamentos
+    }
+  },
+  removeItem: (key) => {
+    try {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch {
+      // ignora
+    }
+  },
+};
+
 /**
  * true quando as variáveis de ambiente estão presentes. A UI (AuthGate)
  * usa isto para mostrar uma tela de "configure o Supabase" em vez de
@@ -40,6 +92,7 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      storage: dynamicStorage,
     },
     realtime: {
       params: { eventsPerSecond: 10 },
