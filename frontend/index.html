@@ -2,7 +2,16 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- App fixo, não uma página de conteúdo: trava o zoom do navegador
+         (maximum-scale=1, user-scalable=no). Sem isso, qualquer elemento
+         que escape à regra de fonte >=16px em campo (ou o próprio
+         double-tap do iOS) deixa a tela inteira deslocando/dando zoom
+         sozinha ao tocar — reportado no celular real, App.jsx/GlobalStyles
+         já cobre a causa mais comum, isto fecha a classe inteira do bug. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="dark light" />
     <title>Gestão AriTur</title>
     <!-- PWA: instalar na tela inicial (celular do motorista/atendente) -->
