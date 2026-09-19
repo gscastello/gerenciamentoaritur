@@ -24,6 +24,13 @@ test("a tela de login tem a opção de permanecer conectado, marcada por padrão
   await expect(checkbox).toBeChecked();
 });
 
+test("viewport trava o zoom do navegador (app fixo, não página de conteúdo)", async ({ page }) => {
+  await page.goto("/");
+  const content = await page.locator('meta[name="viewport"]').getAttribute("content");
+  expect(content).toContain("maximum-scale=1");
+  expect(content).toContain("user-scalable=no");
+});
+
 test("a tela de login tem o vídeo do ônibus AriTur de fundo", async ({ page }) => {
   await page.goto("/");
   const video = page.locator("video[src='/media/aritur-hero.mp4']");
