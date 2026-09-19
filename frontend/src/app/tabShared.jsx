@@ -655,6 +655,35 @@ export function SinoNotificacoes() {
     </div>
   );
 }
+// Silhueta de ônibus para decoração (rodapé da barra lateral, login, hero).
+export function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 }) {
+  return (
+    <svg
+      className={className}
+      style={style}
+      viewBox="0 0 220 84"
+      fill="none"
+      aria-hidden="true"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <g fill={color} opacity={opacity}>
+        <path d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z" />
+      </g>
+      <g fill={C.bg} opacity={Math.min(opacity + 0.05, 1)}>
+        <rect x="18" y="20" width="26" height="18" rx="3" />
+        <rect x="50" y="20" width="26" height="18" rx="3" />
+        <rect x="82" y="20" width="26" height="18" rx="3" />
+        <rect x="114" y="20" width="26" height="18" rx="3" />
+        <rect x="148" y="20" width="22" height="18" rx="3" />
+      </g>
+      <g fill={color} opacity={Math.min(opacity + 0.25, 1)}>
+        <circle cx="54" cy="72" r="11" />
+        <circle cx="186" cy="72" r="11" />
+      </g>
+    </svg>
+  );
+}
+
 export function Header({ title, subtitle, right }) {
   return (
     <div className="relative px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">

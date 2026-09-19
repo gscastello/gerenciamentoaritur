@@ -109,22 +109,12 @@ import {
   validarValor,
 } from "../domain/validacao.js";
 import { mensagemAmigavel } from "../lib/erros.js";
-import {
-  abrirRelatorioPDF,
-  baixarCSVZip,
-  baixarExcel,
-  baixarJSON,
-} from "../lib/backupExport.js";
+import { abrirRelatorioPDF, baixarCSVZip, baixarExcel, baixarJSON } from "../lib/backupExport.js";
 import {
   abrirRelatorioFinanceiroPDF,
   baixarRelatorioFinanceiroXLSX,
 } from "../lib/relatorioFinanceiroExport.js";
-import {
-  getMotionPref,
-  resolveMotion,
-  setMotionPref,
-  watchSystemMotion,
-} from "../lib/motion.js";
+import { getMotionPref, resolveMotion, setMotionPref, watchSystemMotion } from "../lib/motion.js";
 import { EVENTS, emit } from "../observability/index.js";
 import { FadeIn, Presence, Skeleton } from "../ui/motion/index.js";
 import { ChartsSkeleton, TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
@@ -133,6 +123,7 @@ import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 // Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
 // do bundle inicial (ver vite.config.js manualChunks). Issue #2.
 const SevenDayCharts = React.lazy(() => import("../ui/charts/SevenDayCharts.jsx"));
+const BlocoDeNotasTab = React.lazy(() => import("./tabs/BlocoDeNotasTab.jsx"));
 
 import {
   BAIRROS_80,
@@ -145,6 +136,7 @@ import {
   BairrosContext,
   BotaoAgendar,
   BuscaChip,
+  BusSilhueta,
   C,
   CATEGORIAS_DESPESA,
   CATEGORIAS_FALLBACK,
@@ -463,42 +455,18 @@ function AriturLogo({ compact = false, tagline = false }) {
         {tagline && (
           <div
             className="mt-1.5"
-            style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "0.66rem", color: C.inkFaint }}
+            style={{
+              fontFamily: SERIF,
+              fontStyle: "italic",
+              fontSize: "0.66rem",
+              color: C.inkFaint,
+            }}
           >
             Conectando destinos, cuidando de cada viagem
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-// Silhueta de ônibus para decoração (rodapé da barra lateral, login, hero).
-function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 }) {
-  return (
-    <svg
-      className={className}
-      style={style}
-      viewBox="0 0 220 84"
-      fill="none"
-      aria-hidden="true"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <g fill={color} opacity={opacity}>
-        <path d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z" />
-      </g>
-      <g fill={C.bg} opacity={Math.min(opacity + 0.05, 1)}>
-        <rect x="18" y="20" width="26" height="18" rx="3" />
-        <rect x="50" y="20" width="26" height="18" rx="3" />
-        <rect x="82" y="20" width="26" height="18" rx="3" />
-        <rect x="114" y="20" width="26" height="18" rx="3" />
-        <rect x="148" y="20" width="22" height="18" rx="3" />
-      </g>
-      <g fill={color} opacity={Math.min(opacity + 0.25, 1)}>
-        <circle cx="54" cy="72" r="11" />
-        <circle cx="186" cy="72" r="11" />
-      </g>
-    </svg>
   );
 }
 
@@ -528,15 +496,46 @@ function termoParaData(termo) {
 const DESTINOS_BUSCA = [
   { tab: "dashboard", label: "Dashboard", termos: "visão geral indicadores gráficos" },
   { tab: "agenda", label: "Agenda de viagens", termos: "viagens dia pendentes confirmar" },
-  { tab: "lista", label: "Lista do dia", termos: "embarque desembarque motorista rota passageiros do dia" },
+  {
+    tab: "lista",
+    label: "Lista do dia",
+    termos: "embarque desembarque motorista rota passageiros do dia",
+  },
   { tab: "financeiro", label: "Financeiro", termos: "caixa receita despesa lucro lançamento" },
-  { tab: "financeiro", sub: "contas_receber", label: "Contas a receber", termos: "cobrança pendente devendo whatsapp pagamento" },
-  { tab: "gestao", sub: "resultado", label: "Gestão Operacional", termos: "resultado líquido dre margem empresarial" },
-  { tab: "gestao", sub: "recorrentes", label: "Custos recorrentes", termos: "salário pró-labore imposto seguro ipva depreciação automação" },
-  { tab: "passageiros", label: "Passageiros / CRM", termos: "clientes histórico contatos telefone" },
+  {
+    tab: "financeiro",
+    sub: "contas_receber",
+    label: "Contas a receber",
+    termos: "cobrança pendente devendo whatsapp pagamento",
+  },
+  {
+    tab: "gestao",
+    sub: "resultado",
+    label: "Gestão Operacional",
+    termos: "resultado líquido dre margem empresarial",
+  },
+  {
+    tab: "gestao",
+    sub: "recorrentes",
+    label: "Custos recorrentes",
+    termos: "salário pró-labore imposto seguro ipva depreciação automação",
+  },
+  {
+    tab: "passageiros",
+    label: "Passageiros / CRM",
+    termos: "clientes histórico contatos telefone",
+  },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
-  { tab: "operacao", label: "Manutenção preventiva", termos: "troca óleo revisão preventiva veículo" },
-  { tab: "sistema", label: "Sistema / Configurações", termos: "backup usuários pontos valores horários pix" },
+  {
+    tab: "operacao",
+    label: "Manutenção preventiva",
+    termos: "troca óleo revisão preventiva veículo",
+  },
+  {
+    tab: "sistema",
+    label: "Sistema / Configurações",
+    termos: "backup usuários pontos valores horários pix",
+  },
   { tab: "sistema", label: "Backup completo", termos: "exportar json csv excel pdf cópia dados" },
   { tab: "reservar", label: "Reservar passagem", termos: "nova reserva atendimento whatsapp bot" },
 ];
@@ -557,7 +556,12 @@ function FabItem({ icon: Icon, label, onClick, accent = C.panel }) {
       type="button"
       onClick={onClick}
       className="btn-press flex items-center gap-2 rounded-full border pl-3 pr-4 py-2 text-sm font-medium"
-      style={{ background: accent, borderColor: C.border, color: C.ink, boxShadow: "0 2px 10px rgba(0,0,0,.35)" }}
+      style={{
+        background: accent,
+        borderColor: C.border,
+        color: C.ink,
+        boxShadow: "0 2px 10px rgba(0,0,0,.35)",
+      }}
     >
       <Icon size={16} />
       {label}
@@ -579,9 +583,7 @@ function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar
           onClick={fechar}
         />
       )}
-      <div
-        className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6"
-      >
+      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6">
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
             {mostrarHoje && (
@@ -754,7 +756,8 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
 
           {t.length < 2 && (
             <div className="px-4 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
-              Digite ao menos 2 caracteres. Ex.: nome do passageiro, telefone, “05/09”, “financeiro”.
+              Digite ao menos 2 caracteres. Ex.: nome do passageiro, telefone, “05/09”,
+              “financeiro”.
             </div>
           )}
 
@@ -770,13 +773,17 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
                 icon={Calendar}
                 titulo={`Agenda de ${fmtDate(dataAlvo)}`}
                 sub="Ver viagens e reservas do dia"
-                onClick={() => onNavigate({ tab: "agenda", deepLink: { kind: "data", data: dataAlvo } })}
+                onClick={() =>
+                  onNavigate({ tab: "agenda", deepLink: { kind: "data", data: dataAlvo } })
+                }
               />
               <ItemResultado
                 icon={ClipboardList}
                 titulo={`Lista do dia — ${fmtDate(dataAlvo)}`}
                 sub="Embarque e desembarque"
-                onClick={() => onNavigate({ tab: "lista", deepLink: { kind: "data", data: dataAlvo } })}
+                onClick={() =>
+                  onNavigate({ tab: "lista", deepLink: { kind: "data", data: dataAlvo } })
+                }
               />
             </GrupoResultados>
           )}
@@ -978,10 +985,7 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
             style={{ background: C.panel, borderColor: C.border }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="w-9 h-1 rounded-full mx-auto mb-3"
-              style={{ background: C.border }}
-            />
+            <div className="w-9 h-1 rounded-full mx-auto mb-3" style={{ background: C.border }} />
             <div className="grid grid-cols-4 gap-2">
               {extras.map((n) => (
                 <MobileNavItem
@@ -1132,292 +1136,305 @@ function AppInner() {
 
   return (
     <NotificacoesContext.Provider value={notif}>
-    <CategoriasContext.Provider value={categorias}>
-    <BairrosContext.Provider value={bairros}>
-    <DropoffContext.Provider value={dropoff}>
-    <div
-      className="min-h-screen w-full flex relative"
-      style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
-    >
-      <GlobalStyles />
-      <VideoBackdrop variant="app" />
-      <QuickActionsFab
-        onBuscar={() => setBuscaAberta(true)}
-        onAgendar={() => setAgendarAberto(true)}
-        onHoje={irParaHoje}
-        mostrarHoje={tabComData}
-        podeAgendar={podeAgendar}
-      />
-      {buscaAberta && (
-        <GlobalSearchOverlay
-          onClose={() => setBuscaAberta(false)}
-          onNavigate={irParaBusca}
-          navIds={NAV.map((n) => n.id)}
-        />
-      )}
-      {agendarAberto && (
-        <NovaReservaModal
-          dataInicial={deepLink?.kind === "data" ? deepLink.data : todayStr()}
-          trips={trips}
-          capacidade={capacidadeAtiva}
-          onCriar={R.createReservation}
-          onClose={(r) => {
-            setAgendarAberto(false);
-            if (r?.ok) {
-              setTab("lista");
-              setDeepLink({ kind: "data", data: r.data, at: Date.now() });
-              setAgendou(
-                r.status === "pendente"
-                  ? `${r.nome} agendado(a) como pendente.`
-                  : r.status === "espera"
-                    ? `${r.nome} entrou na lista de espera.`
-                    : `${r.nome} agendado(a) e confirmado(a).`,
-              );
-            }
-          }}
-        />
-      )}
-      {agendou && (
-        <div
-          className="anim-slideDown fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 text-xs rounded-lg px-4 py-2.5 max-w-[92vw]"
-          style={{
-            top: "max(0.75rem, env(safe-area-inset-top))",
-            background: C.panel2,
-            color: C.ink,
-            border: `1px solid ${C.border}`,
-            boxShadow: "0 4px 16px rgba(0,0,0,.4)",
-          }}
-        >
-          <CheckCircle2 size={15} />
-          <span className="font-medium">{agendou}</span>
-          <button type="button" onClick={() => setAgendou("")} className="ml-1">
-            <X size={13} />
-          </button>
-        </div>
-      )}
-      <div
-        className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden z-10"
-        style={{ borderColor: C.border, background: C.panel }}
-      >
-        <div
-          className="px-5 pt-6 pb-5 border-b relative"
-          style={{
-            borderColor: C.border,
-            background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
-          }}
-        >
-          <AriturLogo />
-          <div className="aritur-road mt-3" style={{ width: 72 }} />
-          <div className="text-[11px] mt-2 flex items-center gap-1.5" style={{ color: C.inkFaint }}>
-            <Wifi
-              size={11}
-              className={R.loading ? "pulse-dot" : ""}
-              style={{ color: R.error ? C.red : C.green }}
-            />
-            {R.error ? "Sem conexão…" : "Sincronizado"} ·{" "}
-            {modoAtendimento === "ia" ? "IA atendendo" : "Atend. manual"}
-          </div>
-        </div>
-        <nav className="flex-1 py-3 px-3 overflow-y-auto relative z-10">
-          {NAV_GRUPOS.map((grupo) => {
-            const itens = NAV.filter((n) => n.grupo === grupo);
-            if (itens.length === 0) return null;
-            return (
-              <div key={grupo} className="mb-1.5">
-                {grupo !== "Principal" && (
+      <CategoriasContext.Provider value={categorias}>
+        <BairrosContext.Provider value={bairros}>
+          <DropoffContext.Provider value={dropoff}>
+            <div
+              className="min-h-screen w-full flex relative"
+              style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
+            >
+              <GlobalStyles />
+              <VideoBackdrop variant="app" />
+              <QuickActionsFab
+                onBuscar={() => setBuscaAberta(true)}
+                onAgendar={() => setAgendarAberto(true)}
+                onHoje={irParaHoje}
+                mostrarHoje={tabComData}
+                podeAgendar={podeAgendar}
+              />
+              {buscaAberta && (
+                <GlobalSearchOverlay
+                  onClose={() => setBuscaAberta(false)}
+                  onNavigate={irParaBusca}
+                  navIds={NAV.map((n) => n.id)}
+                />
+              )}
+              {agendarAberto && (
+                <NovaReservaModal
+                  dataInicial={deepLink?.kind === "data" ? deepLink.data : todayStr()}
+                  trips={trips}
+                  capacidade={capacidadeAtiva}
+                  onCriar={R.createReservation}
+                  onClose={(r) => {
+                    setAgendarAberto(false);
+                    if (r?.ok) {
+                      setTab("lista");
+                      setDeepLink({ kind: "data", data: r.data, at: Date.now() });
+                      setAgendou(
+                        r.status === "pendente"
+                          ? `${r.nome} agendado(a) como pendente.`
+                          : r.status === "espera"
+                            ? `${r.nome} entrou na lista de espera.`
+                            : `${r.nome} agendado(a) e confirmado(a).`,
+                      );
+                    }
+                  }}
+                />
+              )}
+              {agendou && (
+                <div
+                  className="anim-slideDown fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 text-xs rounded-lg px-4 py-2.5 max-w-[92vw]"
+                  style={{
+                    top: "max(0.75rem, env(safe-area-inset-top))",
+                    background: C.panel2,
+                    color: C.ink,
+                    border: `1px solid ${C.border}`,
+                    boxShadow: "0 4px 16px rgba(0,0,0,.4)",
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  <span className="font-medium">{agendou}</span>
+                  <button type="button" onClick={() => setAgendou("")} className="ml-1">
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+              <div
+                className="hidden md:flex flex-col w-64 shrink-0 border-r relative overflow-hidden z-10"
+                style={{ borderColor: C.border, background: C.panel }}
+              >
+                <div
+                  className="px-5 pt-6 pb-5 border-b relative"
+                  style={{
+                    borderColor: C.border,
+                    background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
+                  }}
+                >
+                  <AriturLogo />
+                  <div className="aritur-road mt-3" style={{ width: 72 }} />
                   <div
-                    className="px-3 pt-3 pb-1 text-[10px] font-semibold tracking-[0.18em]"
+                    className="text-[11px] mt-2 flex items-center gap-1.5"
                     style={{ color: C.inkFaint }}
                   >
-                    {grupo.toUpperCase()}
+                    <Wifi
+                      size={11}
+                      className={R.loading ? "pulse-dot" : ""}
+                      style={{ color: R.error ? C.red : C.green }}
+                    />
+                    {R.error ? "Sem conexão…" : "Sincronizado"} ·{" "}
+                    {modoAtendimento === "ia" ? "IA atendendo" : "Atend. manual"}
                   </div>
-                )}
-                {itens.map((n) => {
-                  const Icon = n.icon;
-                  const active = tab === n.id;
-                  return (
-                    <button
-                      key={n.id}
-                      onClick={() => mudarAba(n.id)}
-                      className="nav-item tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm relative my-0.5"
+                </div>
+                <nav className="flex-1 py-3 px-3 overflow-y-auto relative z-10">
+                  {NAV_GRUPOS.map((grupo) => {
+                    const itens = NAV.filter((n) => n.grupo === grupo);
+                    if (itens.length === 0) return null;
+                    return (
+                      <div key={grupo} className="mb-1.5">
+                        {grupo !== "Principal" && (
+                          <div
+                            className="px-3 pt-3 pb-1 text-[10px] font-semibold tracking-[0.18em]"
+                            style={{ color: C.inkFaint }}
+                          >
+                            {grupo.toUpperCase()}
+                          </div>
+                        )}
+                        {itens.map((n) => {
+                          const Icon = n.icon;
+                          const active = tab === n.id;
+                          return (
+                            <button
+                              key={n.id}
+                              onClick={() => mudarAba(n.id)}
+                              className="nav-item tab-btn btn-press w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm relative my-0.5"
+                              style={{
+                                background: active ? C.brand : "transparent",
+                                color: active ? C.onBrand : C.inkSoft,
+                                fontWeight: active ? 600 : 500,
+                                boxShadow: active ? `0 8px 20px -8px ${C.brandGlow}` : "none",
+                              }}
+                            >
+                              {active && (
+                                <span
+                                  className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
+                                  style={{ width: 3, height: 18, background: "#fff" }}
+                                />
+                              )}
+                              <Icon size={16} />
+                              {n.label}
+                              {((n.id === "agenda" && pendentesCount > 0) ||
+                                (n.id === "pendencias" && pendenciasCount > 0)) && (
+                                <span
+                                  className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                                  style={{
+                                    background: active ? "rgba(255,255,255,.22)" : C.panel2,
+                                    color: active ? C.onBrand : C.ink,
+                                  }}
+                                >
+                                  {n.id === "agenda" ? pendentesCount : pendenciasCount}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </nav>
+                <div className="px-4 py-3 border-t relative" style={{ borderColor: C.border }}>
+                  <div
+                    className="flex items-center gap-2.5 rounded-xl px-2.5 py-2"
+                    style={{ background: C.panel2 }}
+                  >
+                    <span
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                       style={{
-                        background: active ? C.brand : "transparent",
-                        color: active ? C.onBrand : C.inkSoft,
-                        fontWeight: active ? 600 : 500,
-                        boxShadow: active ? `0 8px 20px -8px ${C.brandGlow}` : "none",
+                        background: C.brand,
+                        color: "#fff",
+                        fontFamily: "'Space Grotesk', sans-serif",
                       }}
                     >
-                      {active && (
-                        <span
-                          className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
-                          style={{ width: 3, height: 18, background: "#fff" }}
+                      {(usuario || "?").slice(0, 2).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 leading-tight">
+                      <span
+                        className="block text-xs font-semibold truncate"
+                        style={{ color: C.ink }}
+                      >
+                        {usuario}
+                      </span>
+                      <span className="block text-[10px] capitalize" style={{ color: C.inkFaint }}>
+                        {profile?.role || "—"}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="mt-2.5 text-[10px] leading-snug"
+                    style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
+                  >
+                    Mais que transporte, <span style={{ color: C.brand }}>conectamos pessoas.</span>
+                  </div>
+                </div>
+                <BusSilhueta
+                  className="absolute pointer-events-none bus-drift"
+                  style={{ width: 240, bottom: -12, left: -30, opacity: 0.9 }}
+                  opacity={0.055}
+                />
+              </div>
+
+              <MobileNav
+                nav={NAV}
+                tab={tab}
+                onSelect={mudarAba}
+                pendentesCount={pendentesCount}
+                pendenciasCount={pendenciasCount}
+              />
+
+              <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden relative z-10">
+                <div
+                  className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
+                  style={{
+                    background: C.panel,
+                    borderColor: C.border,
+                    paddingTop: "max(0.6rem, env(safe-area-inset-top))",
+                  }}
+                >
+                  <AriturLogo compact />
+                  <div className="aritur-road" style={{ width: 42 }} />
+                </div>
+                {R.error && !loading && (
+                  <div
+                    className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
+                    style={{ borderColor: C.red, background: C.redSoft }}
+                  >
+                    <div className="flex items-center gap-2 text-xs" style={{ color: C.red }}>
+                      <AlertTriangle size={14} className="shrink-0" />
+                      <span>Não foi possível carregar as reservas do servidor.</span>
+                    </div>
+                    <button
+                      onClick={R.refetch}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.red, color: C.onBrand }}
+                    >
+                      Tentar de novo
+                    </button>
+                  </div>
+                )}
+                {loading || !ready || !tabPermitida ? (
+                  <TabSkeleton tab={tab} />
+                ) : (
+                  <Suspense fallback={<TabSkeleton tab={tab} />}>
+                    <div className="anim-fadeIn">
+                      {tab === "reservar" && (
+                        <ReservarTab
+                          reservas={reservas}
+                          R={R}
+                          capacidade={capacidadeAtiva}
+                          modoAtendimento={modoAtendimento}
+                          trips={trips}
+                          segundaAtiva={cfg.segundaAtiva}
+                          segundaHoras={cfg.segundaHoras}
+                          pix={cfgSettings.pix}
+                          cidadesIntermediarias={cfgSettings.intermediateCities}
                         />
                       )}
-                      <Icon size={16} />
-                      {n.label}
-                      {((n.id === "agenda" && pendentesCount > 0) ||
-                        (n.id === "pendencias" && pendenciasCount > 0)) && (
-                        <span
-                          className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                          style={{
-                            background: active ? "rgba(255,255,255,.22)" : C.panel2,
-                            color: active ? C.onBrand : C.ink,
-                          }}
-                        >
-                          {n.id === "agenda" ? pendentesCount : pendenciasCount}
-                        </span>
+                      {tab === "agenda" && (
+                        <AgendaTab
+                          reservas={reservas}
+                          R={R}
+                          capacidade={capacidadeAtiva}
+                          trips={trips}
+                          segundaAtiva={cfg.segundaAtiva}
+                          segundaHoras={cfg.segundaHoras}
+                          deepLink={deepLink}
+                          onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
+                        />
                       )}
-                    </button>
-                  );
-                })}
+                      {tab === "lista" && (
+                        <ListaTab
+                          reservas={reservas}
+                          R={R}
+                          trips={trips}
+                          deepLink={deepLink}
+                          onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
+                        />
+                      )}
+                      {tab === "bloco" && <BlocoDeNotasTab />}
+                      {tab === "pendencias" && <PendenciasTab pend={pend} />}
+                      {tab === "passageiros" && (
+                        <PassageirosTab trips={trips} deepLink={deepLink} />
+                      )}
+                      {tab === "financeiro" && (
+                        <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />
+                      )}
+                      {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
+                      {tab === "operacao" && <OperacaoTab />}
+                      {tab === "dashboard" && (
+                        <DashboardTab
+                          reservas={reservas}
+                          capacidade={capacidadeAtiva}
+                          trips={trips}
+                          segundaAtiva={cfg.segundaAtiva}
+                          segundaHoras={cfg.segundaHoras}
+                        />
+                      )}
+                      {tab === "sistema" && (
+                        <SistemaTab
+                          reservas={reservas}
+                          capacidade={capacidadeAtiva}
+                          cfg={cfg}
+                          modoAtendimento={modoAtendimento}
+                          onSetModo={cfgSettings.setAttendanceMode}
+                        />
+                      )}
+                    </div>
+                  </Suspense>
+                )}
               </div>
-            );
-          })}
-        </nav>
-        <div className="px-4 py-3 border-t relative" style={{ borderColor: C.border }}>
-          <div
-            className="flex items-center gap-2.5 rounded-xl px-2.5 py-2"
-            style={{ background: C.panel2 }}
-          >
-            <span
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ background: C.brand, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              {(usuario || "?").slice(0, 2).toUpperCase()}
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block text-xs font-semibold truncate" style={{ color: C.ink }}>
-                {usuario}
-              </span>
-              <span className="block text-[10px] capitalize" style={{ color: C.inkFaint }}>
-                {profile?.role || "—"}
-              </span>
-            </span>
-          </div>
-          <div
-            className="mt-2.5 text-[10px] leading-snug"
-            style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
-          >
-            Mais que transporte,{" "}
-            <span style={{ color: C.brand }}>conectamos pessoas.</span>
-          </div>
-        </div>
-        <BusSilhueta
-          className="absolute pointer-events-none bus-drift"
-          style={{ width: 240, bottom: -12, left: -30, opacity: 0.9 }}
-          opacity={0.055}
-        />
-      </div>
-
-      <MobileNav
-        nav={NAV}
-        tab={tab}
-        onSelect={mudarAba}
-        pendentesCount={pendentesCount}
-        pendenciasCount={pendenciasCount}
-      />
-
-      <div className="flex-1 min-w-0 pb-20 md:pb-0 overflow-x-hidden relative z-10">
-        <div
-          className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
-          style={{
-            background: C.panel,
-            borderColor: C.border,
-            paddingTop: "max(0.6rem, env(safe-area-inset-top))",
-          }}
-        >
-          <AriturLogo compact />
-          <div className="aritur-road" style={{ width: 42 }} />
-        </div>
-        {R.error && !loading && (
-          <div
-            className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
-            style={{ borderColor: C.red, background: C.redSoft }}
-          >
-            <div className="flex items-center gap-2 text-xs" style={{ color: C.red }}>
-              <AlertTriangle size={14} className="shrink-0" />
-              <span>Não foi possível carregar as reservas do servidor.</span>
             </div>
-            <button
-              onClick={R.refetch}
-              className="btn-press text-xs px-2 py-1 rounded-md"
-              style={{ background: C.red, color: C.onBrand }}
-            >
-              Tentar de novo
-            </button>
-          </div>
-        )}
-        {loading || !ready || !tabPermitida ? (
-          <TabSkeleton tab={tab} />
-        ) : (
-          <div className="anim-fadeIn">
-            {tab === "reservar" && (
-              <ReservarTab
-                reservas={reservas}
-                R={R}
-                capacidade={capacidadeAtiva}
-                modoAtendimento={modoAtendimento}
-                trips={trips}
-                segundaAtiva={cfg.segundaAtiva}
-                segundaHoras={cfg.segundaHoras}
-                pix={cfgSettings.pix}
-                cidadesIntermediarias={cfgSettings.intermediateCities}
-              />
-            )}
-            {tab === "agenda" && (
-              <AgendaTab
-                reservas={reservas}
-                R={R}
-                capacidade={capacidadeAtiva}
-                trips={trips}
-                segundaAtiva={cfg.segundaAtiva}
-                segundaHoras={cfg.segundaHoras}
-                deepLink={deepLink}
-                onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
-              />
-            )}
-            {tab === "lista" && (
-              <ListaTab
-                reservas={reservas}
-                R={R}
-                trips={trips}
-                deepLink={deepLink}
-                onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
-              />
-            )}
-            {tab === "bloco" && <BlocoDeNotasTab />}
-            {tab === "pendencias" && <PendenciasTab pend={pend} />}
-            {tab === "passageiros" && <PassageirosTab trips={trips} deepLink={deepLink} />}
-            {tab === "financeiro" && (
-              <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />
-            )}
-            {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
-            {tab === "operacao" && <OperacaoTab />}
-            {tab === "dashboard" && (
-              <DashboardTab
-                reservas={reservas}
-                capacidade={capacidadeAtiva}
-                trips={trips}
-                segundaAtiva={cfg.segundaAtiva}
-                segundaHoras={cfg.segundaHoras}
-              />
-            )}
-            {tab === "sistema" && (
-              <SistemaTab
-                reservas={reservas}
-                capacidade={capacidadeAtiva}
-                cfg={cfg}
-                modoAtendimento={modoAtendimento}
-                onSetModo={cfgSettings.setAttendanceMode}
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-    </DropoffContext.Provider>
-    </BairrosContext.Provider>
-    </CategoriasContext.Provider>
+          </DropoffContext.Provider>
+        </BairrosContext.Provider>
+      </CategoriasContext.Provider>
     </NotificacoesContext.Provider>
   );
 }
@@ -1552,7 +1569,11 @@ function ReservarTab({
         pickupDetail: form.localExato || form.localOutro || null,
         street: form.rua || null,
         referencePoint: form.referencia || null,
-        dropoffLocation: textoDesembarque(form.direcao, form.desembarqueArea, form.desembarqueDetalhe),
+        dropoffLocation: textoDesembarque(
+          form.direcao,
+          form.desembarqueArea,
+          form.desembarqueDetalhe,
+        ),
         dropoffArea: form.desembarqueArea || null,
         dropoffDetail: form.desembarqueDetalhe.trim() || null,
         pendingReason: pendente
@@ -2588,7 +2609,11 @@ function AgendaTab({
           ? { paid: pagamento.paid, amount: pagamento.amount, method: pagamento.method }
           : null,
         proof: comprovante
-          ? { received: comprovante.received, amount: comprovante.amount, method: comprovante.method }
+          ? {
+              received: comprovante.received,
+              amount: comprovante.amount,
+              method: comprovante.method,
+            }
           : null,
       });
       emit(EVENTS.RESERVA_EDITADA, {
@@ -2627,9 +2652,7 @@ function AgendaTab({
     if (!achado.ok) return { ok: false, erro: achado.erro };
 
     const ehBairro = ponto.campo === "bairro";
-    const precoAuto = ehBairro
-      ? (bairrosAnotacao.preco(achado.local) ?? 80)
-      : (ponto.valor ?? 60);
+    const precoAuto = ehBairro ? (bairrosAnotacao.preco(achado.local) ?? 80) : (ponto.valor ?? 60);
 
     try {
       const nomeExistente = await buscarClientePorTelefone(achado.telefone);
@@ -2709,24 +2732,38 @@ function AgendaTab({
             </div>
             <div className="flex gap-4">
               <div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
                   Pendentes
                 </div>
                 <div
                   className="font-bold"
-                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.1rem" }}
+                  style={{
+                    color: "#fff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "1.1rem",
+                  }}
                 >
                   {pendentesDoDia.length}
                 </div>
               </div>
               {esperaTodos.length > 0 && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                  <div
+                    className="text-[10px] uppercase tracking-wide"
+                    style={{ color: "rgba(255,255,255,.6)" }}
+                  >
                     Na espera
                   </div>
                   <div
                     className="font-bold"
-                    style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.1rem" }}
+                    style={{
+                      color: "#fff",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "1.1rem",
+                    }}
                   >
                     {esperaTodos.length}
                   </div>
@@ -2762,8 +2799,7 @@ function AgendaTab({
             <div className="flex items-center gap-2 mb-3">
               <Hourglass size={16} style={{ color: C.inkSoft }} />
               <div className="text-sm font-semibold" style={{ color: C.ink }}>
-                Lista de espera{" "}
-                <span style={{ color: C.inkFaint }}>({esperaTodos.length})</span>
+                Lista de espera <span style={{ color: C.inkFaint }}>({esperaTodos.length})</span>
               </div>
             </div>
             <div className="space-y-2">
@@ -2953,10 +2989,7 @@ function QuickActions({ r, onStatus, onEditar }) {
   );
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {tel &&
-        btn(MessageCircle, "WhatsApp", () =>
-          window.open(`https://wa.me/55${tel}`, "_blank"),
-        )}
+      {tel && btn(MessageCircle, "WhatsApp", () => window.open(`https://wa.me/55${tel}`, "_blank"))}
       {btn(Pencil, "Editar", () => onEditar(r))}
       {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
     </div>
@@ -2985,7 +3018,10 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
           <div className="flex items-baseline gap-1.5">
             <span
               className="text-[13px] font-bold shrink-0"
-              style={{ fontFamily: "'JetBrains Mono', monospace", color: marcado ? C.inkFaint : C.ink }}
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                color: marcado ? C.inkFaint : C.ink,
+              }}
             >
               {r.quantidade}P
             </span>
@@ -3001,12 +3037,18 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
             </span>
           </div>
           {/* nome em segundo plano */}
-          <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
+          <div
+            className="text-[11px] mt-0.5"
+            style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
+          >
             {r.nome || "—"}
             {r.desembarque ? ` · desembarque: ${r.desembarque}` : ""}
             {r.pagamento === "pix" ? " · Pix" : ""}
           </div>
-          <div className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: C.inkFaint }}>
+          <div
+            className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap"
+            style={{ color: C.inkFaint }}
+          >
             <StatusPill status={r.status} />
             {onBusca && r.pontoId === "busca" && <BuscaChip r={r} onCycle={onBusca} dense />}
           </div>
@@ -3308,7 +3350,9 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     const problema = primeiroErro([
       validarNome(f.nome),
       validarTelefone(f.telefone),
-      validarData(f.data, { min: reserva.data && reserva.data < todayStr() ? reserva.data : todayStr() }),
+      validarData(f.data, {
+        min: reserva.data && reserva.data < todayStr() ? reserva.data : todayStr(),
+      }),
       validarQuantidade(Number.parseInt(f.quantidade, 10), { min: 1 }),
       campoDetalhe === "bairro" ? validarObrigatorio(f.bairro, "Bairro") : null,
     ]);
@@ -3507,8 +3551,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
               checked={!!f.pago}
               onChange={(e) => setF({ ...f, pago: e.target.checked })}
             />
-            Pagamento recebido{" "}
-            {reserva.valorTotal ? `(${fmtBRL(reserva.valorTotal)})` : ""}
+            Pagamento recebido {reserva.valorTotal ? `(${fmtBRL(reserva.valorTotal)})` : ""}
           </label>
           <label className="flex items-center gap-2 text-xs" style={{ color: C.inkSoft }}>
             <input
@@ -3585,10 +3628,8 @@ function NovaReservaModal({
   const precoBairroAtual = campoDetalhe === "bairro" ? bairros.preco(f.bairro) : undefined;
   const bairroNaoReconhecido =
     campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
-  const precoAuto =
-    campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
-  const valorUnit =
-    f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
+  const precoAuto = campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
+  const valorUnit = f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
   const qtd = Number.parseInt(f.quantidade, 10) || 1;
   const podeEnviar =
     f.nome.trim() &&
@@ -3614,8 +3655,7 @@ function NovaReservaModal({
     referencePoint: null,
     dropoffLocation: f.desembarque.trim() || null,
     status,
-    pendingReason:
-      status === "pendente" ? "Agendamento manual — aguardando confirmação." : null,
+    pendingReason: status === "pendente" ? "Agendamento manual — aguardando confirmação." : null,
     extraData: { origem: "agendamento_manual" },
   });
 
@@ -3666,7 +3706,10 @@ function NovaReservaModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <div className="font-semibold text-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          <div
+            className="font-semibold text-sm"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
             Agendar passagem
           </div>
           <button type="button" onClick={() => onClose()}>
@@ -3784,10 +3827,7 @@ function NovaReservaModal({
 
         <div className="grid grid-cols-2 gap-2 mb-3">
           <Field label="Pagamento">
-            <Select
-              value={f.pagamento}
-              onChange={(e) => setF({ ...f, pagamento: e.target.value })}
-            >
+            <Select value={f.pagamento} onChange={(e) => setF({ ...f, pagamento: e.target.value })}>
               <option value="dinheiro">Dinheiro</option>
               <option value="pix">Pix</option>
             </Select>
@@ -3851,144 +3891,6 @@ function NovaReservaModal({
             {salvando ? "Agendando…" : "Agendar"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-
-/* ===================== BLOCO DE NOTAS DA AGENDA (issue #90) ================
-   Notas soltas, sem data obrigatória — bloco de notas de verdade
-   (substituiu o antigo bloco por data, que era só rede de segurança pra
-   colar a lista do Evernote). Cada card salva sozinho enquanto edita. */
-function fmtNotaStamp(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const hoje = d.toDateString() === new Date().toDateString();
-  return hoje
-    ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-function NotaCard({ nota, onChange, onBlur, onTogglePin, onRemove }) {
-  return (
-    <div
-      className="rounded-xl border p-3 flex flex-col gap-2"
-      style={{
-        background: C.panel,
-        borderColor: nota.pinned ? C.brandDim : C.border,
-        minHeight: 180,
-      }}
-    >
-      <textarea
-        value={nota.content}
-        onChange={(e) => onChange(nota.id, e.target.value)}
-        onBlur={(e) => onBlur(nota.id, e.target.value)}
-        spellCheck={false}
-        placeholder="Escreva aqui…"
-        className="w-full flex-1 bg-transparent outline-none resize-none leading-relaxed"
-        style={{ color: C.ink, fontSize: "0.85rem", minHeight: 110 }}
-      />
-      <div className="flex items-center justify-between text-[11px]" style={{ color: C.inkFaint }}>
-        <span>{fmtNotaStamp(nota.updated_at)}</span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onTogglePin(nota.id, nota.pinned)}
-            className="btn-press rounded-md p-1.5"
-            style={{ color: nota.pinned ? C.brand : C.inkFaint }}
-            aria-label={nota.pinned ? "Desafixar" : "Fixar"}
-            title={nota.pinned ? "Desafixar" : "Fixar"}
-          >
-            {nota.pinned ? <Pin size={14} /> : <PinOff size={14} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => onRemove(nota.id)}
-            className="btn-press rounded-md p-1.5"
-            style={{ color: C.inkFaint }}
-            aria-label="Apagar"
-            title="Apagar"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BlocoDeNotasTab() {
-  const { notes, loading, error, create, creating, scheduleSave, flush, togglePin, remove } =
-    useNotes();
-
-  return (
-    <div>
-      <Header
-        title="Bloco de notas"
-        subtitle="Notas soltas para o que quiser — recados, listas, rascunhos. Salva sozinho, sincroniza com a equipe na hora."
-        right={
-          <button
-            type="button"
-            onClick={create}
-            disabled={creating}
-            className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium"
-            style={{ background: C.brand, color: "#fff", opacity: creating ? 0.7 : 1 }}
-          >
-            <Plus size={14} />
-            Nova nota
-          </button>
-        }
-      />
-      <div className="px-6 md:px-10 pb-10">
-        {error && (
-          <div
-            className="text-xs rounded-lg px-3 py-2 mb-3"
-            style={{ background: C.redSoft, color: C.red }}
-          >
-            Não foi possível carregar as notas. {error?.message}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} height={180} rounded={12} />
-            ))}
-          </div>
-        ) : notes.length === 0 ? (
-          <div
-            className="rounded-xl border p-8 text-center"
-            style={{ borderColor: C.border, color: C.inkFaint }}
-          >
-            <NotebookPen size={22} className="mx-auto mb-2" style={{ color: C.inkFaint }} />
-            <div className="text-sm" style={{ color: C.inkSoft }}>Nenhuma nota ainda.</div>
-            <button
-              type="button"
-              onClick={create}
-              className="btn-press text-xs px-3 py-2 rounded-lg font-medium mt-3"
-              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
-            >
-              Criar a primeira
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-            {notes.map((nota) => (
-              <NotaCard
-                key={nota.id}
-                nota={nota}
-                onChange={scheduleSave}
-                onBlur={flush}
-                onTogglePin={togglePin}
-                onRemove={(id) => {
-                  if (window.confirm("Apagar esta nota? Não dá para desfazer.")) remove(id);
-                }}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -4096,11 +3998,17 @@ function PendenciasTab({ pend }) {
           const tel = digitos(p.phone);
           return (
             <Card key={p.id}>
-              <div className="text-sm font-semibold" style={{ color: C.ink, overflowWrap: "anywhere" }}>
+              <div
+                className="text-sm font-semibold"
+                style={{ color: C.ink, overflowWrap: "anywhere" }}
+              >
                 {p.assunto}
               </div>
               {p.detail && (
-                <div className="text-xs mt-0.5" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+                <div
+                  className="text-xs mt-0.5"
+                  style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+                >
                   {p.detail}
                 </div>
               )}
@@ -4301,25 +4209,41 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </div>
             <div className="flex gap-5">
               <div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
                   Passageiros
                 </div>
                 <div
                   className="font-bold"
-                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.15rem" }}
+                  style={{
+                    color: "#fff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "1.15rem",
+                  }}
                 >
                   {ativos.reduce((s, r) => s + r.quantidade, 0)}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
                   Embarcados
                 </div>
                 <div
                   className="font-bold"
-                  style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "1.15rem" }}
+                  style={{
+                    color: "#fff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "1.15rem",
+                  }}
                 >
-                  {ativos.filter((r) => r.status === "embarcado").reduce((s, r) => s + r.quantidade, 0)}
+                  {ativos
+                    .filter((r) => r.status === "embarcado")
+                    .reduce((s, r) => s + r.quantidade, 0)}
                 </div>
               </div>
             </div>
@@ -4333,63 +4257,61 @@ function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             { id: "desembarque", label: "Desembarque (rota)", Icon: MapPin },
           ]}
         />
-        {subview === "desembarque" && (
-          <DesembarqueView reservas={reservas} R={R} data={data} />
-        )}
+        {subview === "desembarque" && <DesembarqueView reservas={reservas} R={R} data={data} />}
         {subview === "embarque" && (
           <>
-        {pendentes.length > 0 && (
-          <Card style={{ borderColor: C.purple }}>
-            <div
-              className="text-xs font-semibold mb-2 flex items-center gap-1.5"
-              style={{ color: C.purple }}
-            >
-              <AlertTriangle size={13} /> Pendentes (fora da rota padrão)
-            </div>
-            <div className="space-y-1.5">
-              {pendentes.map((r) => (
+            {pendentes.length > 0 && (
+              <Card style={{ borderColor: C.purple }}>
                 <div
-                  key={r.id}
-                  className="text-xs rounded-md px-2 py-1.5"
-                  style={{ background: C.purpleSoft }}
+                  className="text-xs font-semibold mb-2 flex items-center gap-1.5"
+                  style={{ color: C.purple }}
                 >
-                  {linhaReserva(r, trips)} — {r.desembarque}
+                  <AlertTriangle size={13} /> Pendentes (fora da rota padrão)
                 </div>
-              ))}
-            </div>
-          </Card>
-        )}
-        <DirecaoDivisor label="IDA" cor={C.inkSoft} />
-        <ListaSecao
-          titulo="BUSCAR EM CASA"
-          itens={buscaItens}
-          trips={trips}
-          marcar={marcar}
-          buscar={ciclarBusca}
-          onAbrir={setResumo}
-        />
-        <ListaSecao
-          titulo="RODOVIÁRIA / RETORNO / POSTO CARONE / BR / OUTROS"
-          itens={agrupadosIda}
-          trips={trips}
-          marcar={marcar}
-          onAbrir={setResumo}
-        />
-        <DirecaoDivisor label="VOLTA" cor={C.inkSoft} />
-        <ListaSecao
-          titulo="CANTANHEDE"
-          itens={cantanhedeItens}
-          trips={trips}
-          marcar={marcar}
-          onAbrir={setResumo}
-        />
-        <ListaSecao
-          titulo="PIRAPEMAS"
-          itens={[...pirapemasItens, ...outrasVolta]}
-          trips={trips}
-          marcar={marcar}
-          onAbrir={setResumo}
-        />
+                <div className="space-y-1.5">
+                  {pendentes.map((r) => (
+                    <div
+                      key={r.id}
+                      className="text-xs rounded-md px-2 py-1.5"
+                      style={{ background: C.purpleSoft }}
+                    >
+                      {linhaReserva(r, trips)} — {r.desembarque}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+            <DirecaoDivisor label="IDA" cor={C.inkSoft} />
+            <ListaSecao
+              titulo="BUSCAR EM CASA"
+              itens={buscaItens}
+              trips={trips}
+              marcar={marcar}
+              buscar={ciclarBusca}
+              onAbrir={setResumo}
+            />
+            <ListaSecao
+              titulo="RODOVIÁRIA / RETORNO / POSTO CARONE / BR / OUTROS"
+              itens={agrupadosIda}
+              trips={trips}
+              marcar={marcar}
+              onAbrir={setResumo}
+            />
+            <DirecaoDivisor label="VOLTA" cor={C.inkSoft} />
+            <ListaSecao
+              titulo="CANTANHEDE"
+              itens={cantanhedeItens}
+              trips={trips}
+              marcar={marcar}
+              onAbrir={setResumo}
+            />
+            <ListaSecao
+              titulo="PIRAPEMAS"
+              itens={[...pirapemasItens, ...outrasVolta]}
+              trips={trips}
+              marcar={marcar}
+              onAbrir={setResumo}
+            />
           </>
         )}
       </div>
@@ -4436,8 +4358,7 @@ function DesembarqueView({ reservas, R, data }) {
       setSalvando(false);
     }
   };
-  const mudarBalde = (r, area) =>
-    acao(R.setDropoff(r.id, { area, detail: detalheDesembarque(r) }));
+  const mudarBalde = (r, area) => acao(R.setDropoff(r.id, { area, detail: detalheDesembarque(r) }));
   const mudarDetalhe = (r, detalhe) => {
     if ((detalhe || "") === (detalheDesembarque(r) || "")) return;
     acao(R.setDropoff(r.id, { area: inferirBaldeDesembarque(r), detail: detalhe }));
@@ -4449,8 +4370,8 @@ function DesembarqueView({ reservas, R, data }) {
   return (
     <div className="space-y-6">
       <div className="text-xs" style={{ color: C.inkFaint }}>
-        Ordem de entrega por local, editável. Base: o desembarque que o cliente
-        informou no agendamento — ajuste o balde e a ordem para montar a rota.
+        Ordem de entrega por local, editável. Base: o desembarque que o cliente informou no
+        agendamento — ajuste o balde e a ordem para montar a rota.
         {salvando && " · salvando…"}
       </div>
       {erro && (
@@ -4670,7 +4591,6 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir }) {
   );
 }
 
-
 // Linha de passageiro na Lista do Dia — é o que o MOTORISTA olha. Só o
 // essencial: caixa de embarque (1 toque, otimista), nº de passagens,
 // endereço completo e contato. Tudo o resto (status, pagamento, mover,
@@ -4811,7 +4731,10 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
         <div className="space-y-1.5">
           {linha("Embarque", endereco)}
           {linha("Desembarque", r.desembarque)}
-          {linha("Pagamento", `${r.pagamento === "pix" ? "Pix" : "Dinheiro"} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`)}
+          {linha(
+            "Pagamento",
+            `${r.pagamento === "pix" ? "Pix" : "Dinheiro"} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`,
+          )}
           {linha("Telefone", r.telefone)}
         </div>
 
@@ -4994,10 +4917,15 @@ function PassageirosTab({ trips, deepLink }) {
             </div>
           </div>
           <div className="relative">
-            <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
+            <div
+              className="text-[10px] uppercase tracking-wide"
+              style={{ color: "rgba(255,255,255,.6)" }}
+            >
               Valor gerado (nesta página)
             </div>
-            <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+            <div
+              style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}
+            >
               {fmtBRL(valorPagina)}
             </div>
           </div>
@@ -5136,14 +5064,8 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
           style={{ borderColor: C.borderSoft }}
         >
           <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-            <EnderecosFreq
-              titulo="Embarque (ida)"
-              itens={loading ? [] : enderecosIda}
-            />
-            <EnderecosFreq
-              titulo="Desembarque (volta)"
-              itens={loading ? [] : enderecosVolta}
-            />
+            <EnderecosFreq titulo="Embarque (ida)" itens={loading ? [] : enderecosIda} />
+            <EnderecosFreq titulo="Desembarque (volta)" itens={loading ? [] : enderecosVolta} />
           </div>
           <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
             <div>
@@ -5174,7 +5096,9 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
               <textarea
                 key={p.customer_id}
                 defaultValue={p.notes || ""}
-                onBlur={(e) => e.target.value !== (p.notes || "") && onSalvarNota(p.customer_id, e.target.value)}
+                onBlur={(e) =>
+                  e.target.value !== (p.notes || "") && onSalvarNota(p.customer_id, e.target.value)
+                }
                 rows={4}
                 className={inputCls}
                 style={inputStyle}
@@ -5335,379 +5259,414 @@ function FinanceiroTab({ pix, deepLink }) {
       {subview === "contas_receber" && <ContasReceberView pix={pix} />}
       {subview === "relatorio" && <RelatorioFinanceiroView />}
       {subview === "lancamentos" && (
-      <div className="px-6 md:px-10 pb-10 space-y-5">
-        <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
-          style={{ borderColor: C.brandDim }}
-        >
-          <HeroFX />
-          <div className="relative flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
-              className="btn-press p-1.5 rounded-lg"
-              style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div
-              className="capitalize text-center min-w-[130px]"
-              style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.15rem", color: "#fff" }}
-            >
-              {MESES_PT[mes]} <span style={{ fontWeight: 400, opacity: 0.7 }}>{ano}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
-              className="btn-press p-1.5 rounded-lg"
-              style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="relative flex flex-wrap gap-5">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
-                Receitas
-              </div>
-              <div style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
-                {fmtBRL(receitaMes)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
-                Despesas
-              </div>
-              <div style={{ color: "rgba(255,255,255,.72)", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
-                {fmtBRL(despesaMes)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide" style={{ color: "rgba(255,255,255,.6)" }}>
-                Resultado do mês
-              </div>
+        <div className="px-6 md:px-10 pb-10 space-y-5">
+          <div
+            className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
+            style={{ borderColor: C.brandDim }}
+          >
+            <HeroFX />
+            <div className="relative flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
+                className="btn-press p-1.5 rounded-lg"
+                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
+              >
+                <ChevronLeft size={16} />
+              </button>
               <div
+                className="capitalize text-center min-w-[130px]"
                 style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1.15rem",
                   color: "#fff",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 800,
-                  fontSize: "1.1rem",
                 }}
               >
-                {fmtBRL(resultadoMes)}
+                {MESES_PT[mes]} <span style={{ fontWeight: 400, opacity: 0.7 }}>{ano}</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
+                className="btn-press p-1.5 rounded-lg"
+                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
+              >
+                <ChevronRight size={16} />
+              </button>
             </div>
-          </div>
-        </div>
-      <div className="grid lg:grid-cols-[340px_1fr] gap-6">
-        <Card className="anim-fadeUp">
-          <div
-            className="grid grid-cols-7 gap-1 text-center text-[10px] mb-1"
-            style={{ color: C.inkFaint }}
-          >
-            {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
-              <div key={i}>{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((d, i) => {
-              if (!d) return <div key={i} />;
-              const { ds, lucro, temMovimento } = lucroPorDia(d);
-              const sel = ds === diaSel;
-              return (
-                <button
-                  key={i}
-                  onClick={() => setDiaSel(ds)}
-                  className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs"
+            <div className="relative flex flex-wrap gap-5">
+              <div>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
+                  Receitas
+                </div>
+                <div
                   style={{
-                    background: sel ? C.amber : C.panel2,
-                    color: sel ? C.onBrand : C.ink,
-                    border:
-                      ds === todayStr() && !sel ? `1px solid ${C.amber}` : "1px solid transparent",
+                    color: "#fff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 700,
                   }}
                 >
-                  {d}
-                  {temMovimento && (
-                    <span
-                      className="w-1 h-1 rounded-full mt-0.5"
-                      style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            <StatCard
-              label={`Faturamento ${fmtDate(diaSel)}`}
-              value={fmtBRL(receitaDia)}
-              icon={Wallet}
-              accent={C.green}
-            />
-            <StatCard
-              label="Despesas (total)"
-              value={fmtBRL(despesaDia)}
-              icon={TrendingUp}
-              accent={C.red}
-            />
-            <StatCard
-              label="Combustível + manut."
-              value={fmtBRL(despesaAutoDia)}
-              icon={Fuel}
-              accent={C.warn}
-            />
-            <StatCard
-              label="Lucro do dia"
-              value={fmtBRL(lucroReal)}
-              icon={Route}
-              accent={lucroReal >= 0 ? C.blue : C.red}
-            />
-          </div>
-          <Card>
-            <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
-            <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
-              Despesa rápida — escolhe a categoria e só falta o valor
+                  {fmtBRL(receitaMes)}
+                </div>
+              </div>
+              <div>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
+                  Despesas
+                </div>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,.72)",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 700,
+                  }}
+                >
+                  {fmtBRL(despesaMes)}
+                </div>
+              </div>
+              <div>
+                <div
+                  className="text-[10px] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,.6)" }}
+                >
+                  Resultado do mês
+                </div>
+                <div
+                  style={{
+                    color: "#fff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 800,
+                    fontSize: "1.1rem",
+                  }}
+                >
+                  {fmtBRL(resultadoMes)}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {cats.despesa.map((c) => {
-                const Icon = iconeCategoria(c.icon);
-                const ativo = novo.tipo === "despesa" && novo.categoria === c.slug;
-                return (
-                  <button
-                    key={c.slug}
-                    type="button"
-                    onClick={() => {
-                      setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.slug }));
-                      document.getElementById("financeiro-valor-input")?.focus();
-                    }}
-                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
-                    style={{
-                      background: ativo ? C.amberSoft : C.panel2,
-                      color: ativo ? C.amber : C.inkSoft,
-                      fontWeight: ativo ? 600 : 500,
-                      border: `1px solid ${ativo ? C.amber : C.border}`,
+          </div>
+          <div className="grid lg:grid-cols-[340px_1fr] gap-6">
+            <Card className="anim-fadeUp">
+              <div
+                className="grid grid-cols-7 gap-1 text-center text-[10px] mb-1"
+                style={{ color: C.inkFaint }}
+              >
+                {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
+                  <div key={i}>{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map((d, i) => {
+                  if (!d) return <div key={i} />;
+                  const { ds, lucro, temMovimento } = lucroPorDia(d);
+                  const sel = ds === diaSel;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setDiaSel(ds)}
+                      className="btn-press aspect-square rounded-lg flex flex-col items-center justify-center text-xs"
+                      style={{
+                        background: sel ? C.amber : C.panel2,
+                        color: sel ? C.onBrand : C.ink,
+                        border:
+                          ds === todayStr() && !sel
+                            ? `1px solid ${C.amber}`
+                            : "1px solid transparent",
+                      }}
+                    >
+                      {d}
+                      {temMovimento && (
+                        <span
+                          className="w-1 h-1 rounded-full mt-0.5"
+                          style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                <StatCard
+                  label={`Faturamento ${fmtDate(diaSel)}`}
+                  value={fmtBRL(receitaDia)}
+                  icon={Wallet}
+                  accent={C.green}
+                />
+                <StatCard
+                  label="Despesas (total)"
+                  value={fmtBRL(despesaDia)}
+                  icon={TrendingUp}
+                  accent={C.red}
+                />
+                <StatCard
+                  label="Combustível + manut."
+                  value={fmtBRL(despesaAutoDia)}
+                  icon={Fuel}
+                  accent={C.warn}
+                />
+                <StatCard
+                  label="Lucro do dia"
+                  value={fmtBRL(lucroReal)}
+                  icon={Route}
+                  accent={lucroReal >= 0 ? C.blue : C.red}
+                />
+              </div>
+              <Card>
+                <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
+                <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
+                  Despesa rápida — escolhe a categoria e só falta o valor
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {cats.despesa.map((c) => {
+                    const Icon = iconeCategoria(c.icon);
+                    const ativo = novo.tipo === "despesa" && novo.categoria === c.slug;
+                    return (
+                      <button
+                        key={c.slug}
+                        type="button"
+                        onClick={() => {
+                          setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.slug }));
+                          document.getElementById("financeiro-valor-input")?.focus();
+                        }}
+                        className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
+                        style={{
+                          background: ativo ? C.amberSoft : C.panel2,
+                          color: ativo ? C.amber : C.inkSoft,
+                          fontWeight: ativo ? 600 : 500,
+                          border: `1px solid ${ativo ? C.amber : C.border}`,
+                        }}
+                      >
+                        <Icon size={13} />
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid sm:grid-cols-3 gap-2">
+                  <Select
+                    value={novo.tipo}
+                    onChange={(e) => {
+                      const tipo = e.target.value;
+                      setNovo((n) => ({
+                        ...n,
+                        tipo,
+                        categoria:
+                          tipo === "receita" ? "passagem" : (cats.despesa[0]?.slug ?? "outro"),
+                      }));
                     }}
                   >
-                    <Icon size={13} />
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="grid sm:grid-cols-3 gap-2">
-              <Select
-                value={novo.tipo}
-                onChange={(e) => {
-                  const tipo = e.target.value;
-                  setNovo((n) => ({
-                    ...n,
-                    tipo,
-                    categoria: tipo === "receita" ? "passagem" : (cats.despesa[0]?.slug ?? "outro"),
-                  }));
-                }}
-              >
-                <option value="receita">Receita</option>
-                <option value="despesa">Despesa</option>
-              </Select>
-              {novo.tipo === "despesa" ? (
-                <Select
-                  value={novo.categoria}
-                  onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
-                >
-                  {cats.despesa.map((c) => (
-                    <option key={c.slug} value={c.slug}>
-                      {c.label}
-                    </option>
-                  ))}
-                  {!cats.existe(novo.categoria) && novo.categoria ? (
-                    <option value={novo.categoria}>{novo.categoria}</option>
-                  ) : null}
-                </Select>
-              ) : (
-                <Select
-                  value={novo.categoria}
-                  onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
-                >
-                  {CATEGORIAS_RECEITA.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
-              )}
-              <TextInput
-                id="financeiro-valor-input"
-                placeholder="Valor"
-                type="number"
-                value={novo.valor}
-                onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
-                onKeyDown={(e) => e.key === "Enter" && add()}
-              />
-            </div>
-            <div className="mt-2">
-              <TextInput
-                placeholder="Descrição"
-                className="w-full"
-                value={novo.descricao}
-                onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
-                onKeyDown={(e) => e.key === "Enter" && add()}
-              />
-            </div>
-            <button
-              onClick={add}
-              disabled={salvando || !novo.valor}
-              className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-              style={{
-                background: salvando || !novo.valor ? C.border : C.amber,
-                color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
-              }}
-            >
-              <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
-            </button>
-          </Card>
-          <Card style={{ padding: 0, overflow: "hidden" }}>
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ background: C.panel2, color: C.inkSoft }}>
-                  <th className="text-left px-4 py-2.5 font-medium">Tipo</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Categoria</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Valor</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Descrição</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {[...doDia].reverse().map((f) =>
-                  editId === f.id ? (
-                    <tr
-                      key={f.id}
-                      className="border-t anim-slideDown"
-                      style={{ borderColor: C.borderSoft, background: C.panel2 }}
+                    <option value="receita">Receita</option>
+                    <option value="despesa">Despesa</option>
+                  </Select>
+                  {novo.tipo === "despesa" ? (
+                    <Select
+                      value={novo.categoria}
+                      onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
                     >
-                      <td className="px-2 py-2">
-                        <Select
-                          value={editVal.tipo}
-                          onChange={(e) => setEditVal({ ...editVal, tipo: e.target.value })}
-                          className="text-xs py-1"
-                        >
-                          <option value="receita">Receita</option>
-                          <option value="despesa">Despesa</option>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-2">
-                        {editVal.tipo === "despesa" ? (
-                          <Select
-                            value={editVal.categoria || "outro"}
-                            onChange={(e) => setEditVal({ ...editVal, categoria: e.target.value })}
-                            className="text-xs py-1"
-                          >
-                            {cats.despesa.map((c) => (
-                              <option key={c.slug} value={c.slug}>
-                                {c.label}
-                              </option>
-                            ))}
-                            {editVal.categoria && !cats.existe(editVal.categoria) ? (
-                              <option value={editVal.categoria}>{cats.rotulo(editVal.categoria)}</option>
-                            ) : null}
-                          </Select>
-                        ) : (
-                          <span className="text-xs" style={{ color: C.inkFaint }}>
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-2">
-                        <TextInput
-                          type="number"
-                          value={editVal.valor}
-                          onChange={(e) => setEditVal({ ...editVal, valor: e.target.value })}
-                          className="text-xs py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <TextInput
-                          value={editVal.descricao}
-                          onChange={(e) => setEditVal({ ...editVal, descricao: e.target.value })}
-                          className="text-xs py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <button onClick={salvarEdicao}>
-                          <Save size={13} style={{ color: C.green }} />
-                        </button>
-                      </td>
-                    </tr>
+                      {cats.despesa.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.label}
+                        </option>
+                      ))}
+                      {!cats.existe(novo.categoria) && novo.categoria ? (
+                        <option value={novo.categoria}>{novo.categoria}</option>
+                      ) : null}
+                    </Select>
                   ) : (
-                    <tr
-                      key={f.id}
-                      className="row-hover border-t"
-                      style={{ borderColor: C.borderSoft }}
+                    <Select
+                      value={novo.categoria}
+                      onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
                     >
-                      <td className="px-4 py-2">
-                        <Pill
-                          color={f.tipo === "receita" ? C.green : C.red}
-                          bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}
-                        >
-                          {f.tipo}
-                        </Pill>
-                      </td>
-                      <td className="px-4 py-2 text-xs" style={{ color: C.inkSoft }}>
-                        {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
-                      </td>
-                      <td
-                        className="px-4 py-2"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                      >
-                        {fmtBRL(f.valor)}
-                      </td>
-                      <td className="px-4 py-2" style={{ color: C.inkSoft }}>
-                        {f.descricao}
-                        {f.auto ? (
-                          <span className="ml-1.5 text-[10px]" style={{ color: C.inkFaint }}>
-                            · automático
-                          </span>
-                        ) : (
-                          ""
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        {f.auto ? (
-                          <span className="text-[10px]" style={{ color: C.inkFaint }}>
-                            da operação
-                          </span>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button onClick={() => iniciarEdicao(f)}>
-                              <Pencil size={12} style={{ color: C.inkFaint }} />
-                            </button>
-                            <button onClick={() => remove(f.id)}>
-                              <X size={13} style={{ color: C.inkFaint }} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
+                      {CATEGORIAS_RECEITA.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <TextInput
+                    id="financeiro-valor-input"
+                    placeholder="Valor"
+                    type="number"
+                    value={novo.valor}
+                    onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
+                    onKeyDown={(e) => e.key === "Enter" && add()}
+                  />
+                </div>
+                <div className="mt-2">
+                  <TextInput
+                    placeholder="Descrição"
+                    className="w-full"
+                    value={novo.descricao}
+                    onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
+                    onKeyDown={(e) => e.key === "Enter" && add()}
+                  />
+                </div>
+                <button
+                  onClick={add}
+                  disabled={salvando || !novo.valor}
+                  className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+                  style={{
+                    background: salvando || !novo.valor ? C.border : C.amber,
+                    color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
+                  }}
+                >
+                  <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
+                </button>
+              </Card>
+              <Card style={{ padding: 0, overflow: "hidden" }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ background: C.panel2, color: C.inkSoft }}>
+                      <th className="text-left px-4 py-2.5 font-medium">Tipo</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Categoria</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Valor</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Descrição</th>
+                      <th />
                     </tr>
-                  ),
-                )}
-                {doDia.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-8 text-xs"
-                      style={{ color: C.inkFaint }}
-                    >
-                      Nenhum lançamento neste dia.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </Card>
+                  </thead>
+                  <tbody>
+                    {[...doDia].reverse().map((f) =>
+                      editId === f.id ? (
+                        <tr
+                          key={f.id}
+                          className="border-t anim-slideDown"
+                          style={{ borderColor: C.borderSoft, background: C.panel2 }}
+                        >
+                          <td className="px-2 py-2">
+                            <Select
+                              value={editVal.tipo}
+                              onChange={(e) => setEditVal({ ...editVal, tipo: e.target.value })}
+                              className="text-xs py-1"
+                            >
+                              <option value="receita">Receita</option>
+                              <option value="despesa">Despesa</option>
+                            </Select>
+                          </td>
+                          <td className="px-2 py-2">
+                            {editVal.tipo === "despesa" ? (
+                              <Select
+                                value={editVal.categoria || "outro"}
+                                onChange={(e) =>
+                                  setEditVal({ ...editVal, categoria: e.target.value })
+                                }
+                                className="text-xs py-1"
+                              >
+                                {cats.despesa.map((c) => (
+                                  <option key={c.slug} value={c.slug}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                                {editVal.categoria && !cats.existe(editVal.categoria) ? (
+                                  <option value={editVal.categoria}>
+                                    {cats.rotulo(editVal.categoria)}
+                                  </option>
+                                ) : null}
+                              </Select>
+                            ) : (
+                              <span className="text-xs" style={{ color: C.inkFaint }}>
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2">
+                            <TextInput
+                              type="number"
+                              value={editVal.valor}
+                              onChange={(e) => setEditVal({ ...editVal, valor: e.target.value })}
+                              className="text-xs py-1"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <TextInput
+                              value={editVal.descricao}
+                              onChange={(e) =>
+                                setEditVal({ ...editVal, descricao: e.target.value })
+                              }
+                              className="text-xs py-1"
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <button onClick={salvarEdicao}>
+                              <Save size={13} style={{ color: C.green }} />
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr
+                          key={f.id}
+                          className="row-hover border-t"
+                          style={{ borderColor: C.borderSoft }}
+                        >
+                          <td className="px-4 py-2">
+                            <Pill
+                              color={f.tipo === "receita" ? C.green : C.red}
+                              bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}
+                            >
+                              {f.tipo}
+                            </Pill>
+                          </td>
+                          <td className="px-4 py-2 text-xs" style={{ color: C.inkSoft }}>
+                            {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
+                          </td>
+                          <td
+                            className="px-4 py-2"
+                            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                          >
+                            {fmtBRL(f.valor)}
+                          </td>
+                          <td className="px-4 py-2" style={{ color: C.inkSoft }}>
+                            {f.descricao}
+                            {f.auto ? (
+                              <span className="ml-1.5 text-[10px]" style={{ color: C.inkFaint }}>
+                                · automático
+                              </span>
+                            ) : (
+                              ""
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            {f.auto ? (
+                              <span className="text-[10px]" style={{ color: C.inkFaint }}>
+                                da operação
+                              </span>
+                            ) : (
+                              <div className="flex gap-2">
+                                <button onClick={() => iniciarEdicao(f)}>
+                                  <Pencil size={12} style={{ color: C.inkFaint }} />
+                                </button>
+                                <button onClick={() => remove(f.id)}>
+                                  <X size={13} style={{ color: C.inkFaint }} />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                    {doDia.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="text-center py-8 text-xs"
+                          style={{ color: C.inkFaint }}
+                        >
+                          Nenhum lançamento neste dia.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </Card>
+            </div>
+          </div>
         </div>
-      </div>
-      </div>
       )}
     </div>
   );
@@ -5794,7 +5753,11 @@ function RelatorioFinanceiroView() {
         <div className="flex flex-wrap items-end gap-4">
           <label className="text-xs" style={{ color: C.inkSoft }}>
             Ano
-            <Select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="mt-1 block">
+            <Select
+              value={ano}
+              onChange={(e) => setAno(Number(e.target.value))}
+              className="mt-1 block"
+            >
               {anos.map((a) => (
                 <option key={a} value={a}>
                   {a}
@@ -5854,8 +5817,18 @@ function RelatorioFinanceiroView() {
         <FadeIn>
           <Card>
             <div className="grid grid-cols-3 gap-3 mb-4">
-              <StatCard label="Faturamento" value={fmtBRL(relatorio.totais.faturamento)} icon={Wallet} accent={C.green} />
-              <StatCard label="Despesa" value={fmtBRL(relatorio.totais.despesa)} icon={TrendingUp} accent={C.red} />
+              <StatCard
+                label="Faturamento"
+                value={fmtBRL(relatorio.totais.faturamento)}
+                icon={Wallet}
+                accent={C.green}
+              />
+              <StatCard
+                label="Despesa"
+                value={fmtBRL(relatorio.totais.despesa)}
+                icon={TrendingUp}
+                accent={C.red}
+              />
               <StatCard
                 label="Lucro"
                 value={fmtBRL(relatorio.totais.lucro)}
@@ -5875,13 +5848,20 @@ function RelatorioFinanceiroView() {
                 </thead>
                 <tbody style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                   {relatorio.linhas.map((l) => (
-                    <tr key={l.periodo} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                    <tr
+                      key={l.periodo}
+                      className="row-hover border-t"
+                      style={{ borderColor: C.borderSoft }}
+                    >
                       <td className="px-3 py-2" style={{ fontFamily: "inherit", color: C.inkSoft }}>
                         {rotuloPeriodoRelatorio(l.periodo, gran)}
                       </td>
                       <td className="px-3 py-2 text-right">{fmtBRL(l.faturamento)}</td>
                       <td className="px-3 py-2 text-right">{fmtBRL(l.despesa)}</td>
-                      <td className="px-3 py-2 text-right" style={{ color: l.lucro >= 0 ? C.green : C.red }}>
+                      <td
+                        className="px-3 py-2 text-right"
+                        style={{ color: l.lucro >= 0 ? C.green : C.red }}
+                      >
                         {fmtBRL(l.lucro)}
                       </td>
                     </tr>
@@ -5901,7 +5881,8 @@ function RelatorioFinanceiroView() {
    A receita nasce sozinha (trigger); esta tela é só cobrança do que falta
    receber, com botão de cobrança direta pelo WhatsApp. --- */
 function ContasReceberView({ pix }) {
-  const { contas, loading, error, registrarAjuste, registrando, verComprovante } = useContasReceber();
+  const { contas, loading, error, registrarAjuste, registrando, verComprovante } =
+    useContasReceber();
   const pixKey = pix?.key || PIX_KEY;
   const [ajusteAberto, setAjusteAberto] = useState(null); // reservation_id em edição
   const [ajusteVal, setAjusteVal] = useState({ categoria: "estorno", valor: "", descricao: "" });
@@ -5955,7 +5936,8 @@ function ContasReceberView({ pix }) {
           className="mb-3 flex items-center gap-2 text-xs rounded-lg px-3 py-2"
           style={{ background: C.redSoft, color: C.red }}
         >
-          <AlertTriangle size={14} /> {mensagemAmigavel(error, "Erro ao carregar contas a receber.")}
+          <AlertTriangle size={14} />{" "}
+          {mensagemAmigavel(error, "Erro ao carregar contas a receber.")}
         </div>
       )}
       <Card className="anim-fadeUp">
@@ -6032,7 +6014,10 @@ function ContasReceberView({ pix }) {
                     </td>
                   </tr>
                   {ajusteAberto === c.reservation_id && (
-                    <tr className="border-t" style={{ borderColor: C.borderSoft, background: C.panel2 }}>
+                    <tr
+                      className="border-t"
+                      style={{ borderColor: C.borderSoft, background: C.panel2 }}
+                    >
                       <td colSpan={5} className="px-4 py-3">
                         {erroAjuste && (
                           <div className="mb-2 text-xs" style={{ color: C.red }}>
@@ -6042,7 +6027,9 @@ function ContasReceberView({ pix }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <Select
                             value={ajusteVal.categoria}
-                            onChange={(e) => setAjusteVal({ ...ajusteVal, categoria: e.target.value })}
+                            onChange={(e) =>
+                              setAjusteVal({ ...ajusteVal, categoria: e.target.value })
+                            }
                           >
                             <option value="estorno">Estorno</option>
                             <option value="reembolso">Reembolso</option>
@@ -6058,7 +6045,9 @@ function ContasReceberView({ pix }) {
                           <TextInput
                             placeholder="Descrição (opcional)"
                             value={ajusteVal.descricao}
-                            onChange={(e) => setAjusteVal({ ...ajusteVal, descricao: e.target.value })}
+                            onChange={(e) =>
+                              setAjusteVal({ ...ajusteVal, descricao: e.target.value })
+                            }
                             className="flex-1 min-w-[160px]"
                           />
                           <button
@@ -6084,7 +6073,11 @@ function ContasReceberView({ pix }) {
               ))}
               {contas.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-xs" style={{ color: C.inkFaint }}>
+                  <td
+                    colSpan={5}
+                    className="text-center py-8 text-xs"
+                    style={{ color: C.inkFaint }}
+                  >
                     Nenhuma conta pendente — tudo em dia.
                   </td>
                 </tr>
@@ -6290,7 +6283,14 @@ function GestaoTab({ deepLink }) {
           <GestaoRecorrentes rec={rec} cats={cats} run={run} onGerar={gerarAgora} />
         )}
         {aba === "lancamentos" && (
-          <GestaoLancamentos entries={entries} fin={fin} ano={ano} mes={mes} run={run} cats={cats} />
+          <GestaoLancamentos
+            entries={entries}
+            fin={fin}
+            ano={ano}
+            mes={mes}
+            run={run}
+            cats={cats}
+          />
         )}
       </div>
     </div>
@@ -6334,8 +6334,8 @@ function GestaoResultado({
       <Card>
         <div className="text-sm font-semibold mb-1">Demonstrativo do mês</div>
         <div className="text-xs mb-2" style={{ color: C.inkFaint }}>
-          Tudo que entrou menos tudo que saiu — inclui combustível, manutenção e os custos recorrentes da
-          empresa.
+          Tudo que entrou menos tudo que saiu — inclui combustível, manutenção e os custos
+          recorrentes da empresa.
         </div>
         <LinhaDRE label="Receita bruta" valor={receita} forte />
         <LinhaDRE
@@ -6376,7 +6376,9 @@ function GestaoResultado({
                         style={{ color: v > 0 ? C.ink : C.inkFaint }}
                       >
                         <span>{c.label}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtBRL(v)}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          {fmtBRL(v)}
+                        </span>
                       </div>
                     );
                   })}
@@ -6646,13 +6648,19 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                 onChange={(e) => setNovaCat({ ...novaCat, grupo: e.target.value })}
                 className="w-40"
               >
-                {[...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"])].map(
-                  (g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ),
-                )}
+                {[
+                  ...new Set([
+                    ...cats.gruposGestao,
+                    "Pessoal",
+                    "Impostos & Taxas",
+                    "Veículo",
+                    "Estrutura",
+                  ]),
+                ].map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
               </Select>
             </div>
             <button
@@ -6761,11 +6769,15 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                               <td className="px-3 py-2">
                                 <TextInput
                                   value={editVal.label}
-                                  onChange={(e) => setEditVal({ ...editVal, label: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditVal({ ...editVal, label: e.target.value })
+                                  }
                                 />
                                 <TextInput
                                   value={editVal.notes ?? ""}
-                                  onChange={(e) => setEditVal({ ...editVal, notes: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditVal({ ...editVal, notes: e.target.value })
+                                  }
                                   placeholder="observação"
                                   className="mt-1 text-xs"
                                 />
@@ -6774,7 +6786,9 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                                 <TextInput
                                   type="number"
                                   value={editVal.amount}
-                                  onChange={(e) => setEditVal({ ...editVal, amount: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditVal({ ...editVal, amount: e.target.value })
+                                  }
                                   className="w-24"
                                 />
                               </td>
@@ -6921,7 +6935,11 @@ function GestaoCategorias({ cats, run }) {
   const criar = () =>
     run(async () => {
       if (!nova.label.trim()) return;
-      await cats.criar({ label: nova.label.trim(), grupo: nova.grupo.trim() || "Estrutura", kind: "gestao" });
+      await cats.criar({
+        label: nova.label.trim(),
+        grupo: nova.grupo.trim() || "Estrutura",
+        kind: "gestao",
+      });
       setNova({ label: "", grupo: nova.grupo });
     }, "Não foi possível criar a categoria.");
 
@@ -6934,7 +6952,9 @@ function GestaoCategorias({ cats, run }) {
       setEditId(null);
     }, "Não foi possível salvar a categoria.");
 
-  const grupos = [...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"])];
+  const grupos = [
+    ...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"]),
+  ];
 
   return (
     <Card>
@@ -7024,7 +7044,11 @@ function GestaoCategorias({ cats, run }) {
                   </td>
                 </tr>
               ) : (
-                <tr key={c.slug} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
+                <tr
+                  key={c.slug}
+                  className="row-hover border-t"
+                  style={{ borderColor: C.borderSoft }}
+                >
                   <td className="px-3 py-2">{c.label}</td>
                   <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
                     {c.grupo}
@@ -7040,7 +7064,10 @@ function GestaoCategorias({ cats, run }) {
                       >
                         <Pencil size={12} style={{ color: C.inkFaint }} />
                       </button>
-                      <button type="button" onClick={() => run(() => cats.remover(c.id), "Não foi possível remover.")}>
+                      <button
+                        type="button"
+                        onClick={() => run(() => cats.remover(c.id), "Não foi possível remover.")}
+                      >
                         <X size={13} style={{ color: C.inkFaint }} />
                       </button>
                     </div>
@@ -7065,9 +7092,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
 
-  const doMes = entries.filter(
-    (e) => e.tipo === "despesa" && cats.slugsGestao.has(e.categoria),
-  );
+  const doMes = entries.filter((e) => e.tipo === "despesa" && cats.slugsGestao.has(e.categoria));
   const totalMes = doMes.reduce((s, e) => s + e.valor, 0);
   const ordenados = [...doMes].sort((a, b) => a.data.localeCompare(b.data));
 
@@ -7283,7 +7308,11 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
               )}
               {ordenados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-xs" style={{ color: C.inkFaint }}>
+                  <td
+                    colSpan={6}
+                    className="text-center py-8 text-xs"
+                    style={{ color: C.inkFaint }}
+                  >
                     Nenhum custo empresarial lançado neste mês.
                   </td>
                 </tr>
@@ -7478,7 +7507,12 @@ function OperacaoTab() {
               </div>
               <div>
                 <div
-                  style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.15rem", color: "#fff" }}
+                  style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontWeight: 700,
+                    fontSize: "1.15rem",
+                    color: "#fff",
+                  }}
                 >
                   {defaultVehicle.name}
                 </div>
@@ -8022,10 +8056,7 @@ function DashboardHero({ paxIda, paxVolta, capacidade, faturamento, pendencias }
           >
             {saud}, {nome}!
           </h1>
-          <p
-            className="hero-t hero-t-2 text-sm mt-1"
-            style={{ color: "rgba(255,255,255,.82)" }}
-          >
+          <p className="hero-t hero-t-2 text-sm mt-1" style={{ color: "rgba(255,255,255,.82)" }}>
             Aqui está o resumo da operação de hoje.
           </p>
           <div
@@ -8114,7 +8145,9 @@ function DashboardTab({ reservas, capacidade, trips }) {
   }, [financeiro, hoje]);
   // Lucro real = receita − despesa (a mesma conta da aba Financeiro),
   // em 3 janelas: hoje, mês corrente (até hoje) e ano corrente (até hoje).
-  const despesaHoje = financeiro.filter((f) => f.data === hoje && f.tipo === "despesa").reduce((s, f) => s + f.valor, 0);
+  const despesaHoje = financeiro
+    .filter((f) => f.data === hoje && f.tipo === "despesa")
+    .reduce((s, f) => s + f.valor, 0);
   const lucroHoje = receitaHoje - despesaHoje;
   const despesaMes = useMemo(() => {
     const m = hoje.slice(0, 7);
@@ -8340,7 +8373,12 @@ function ListaChips({ titulo, ajuda, itens, onSalvar, salvando }) {
             style={{ background: C.panel2, color: C.inkSoft }}
           >
             {c}
-            <button type="button" onClick={() => remove(c)} disabled={salvando} aria-label={`remover ${c}`}>
+            <button
+              type="button"
+              onClick={() => remove(c)}
+              disabled={salvando}
+              aria-label={`remover ${c}`}
+            >
               <X size={11} />
             </button>
           </span>
@@ -8381,12 +8419,15 @@ function SistemaCidades() {
         <Route size={16} style={{ color: C.amber }} /> Cidades da rota
       </div>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
-        No fluxo de reserva, embarque/desembarque que menciona uma cidade{" "}
-        <b>intermediária</b> faz a reserva nascer <b>pendente</b> (não ocupa vaga, a equipe confirma).
-        As <b>atendidas</b> são a rota normal. O bot do WhatsApp usa as mesmas listas.
+        No fluxo de reserva, embarque/desembarque que menciona uma cidade <b>intermediária</b> faz a
+        reserva nascer <b>pendente</b> (não ocupa vaga, a equipe confirma). As <b>atendidas</b> são
+        a rota normal. O bot do WhatsApp usa as mesmas listas.
       </p>
       {s.error && (
-        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
           {mensagemAmigavel(s.error, "Erro ao carregar as configurações.")}
         </div>
       )}
@@ -8419,7 +8460,12 @@ function SistemaCidades() {
 function SistemaBaldes() {
   const dropoff = useDropoff();
   const [erro, setErro] = useState("");
-  const [novo, setNovo] = useState({ direction: "ida", label: "", detailLabel: "", detailRequired: false });
+  const [novo, setNovo] = useState({
+    direction: "ida",
+    label: "",
+    detailLabel: "",
+    detailRequired: false,
+  });
   const [editId, setEditId] = useState(null);
   const [ev, setEv] = useState({});
 
@@ -8461,7 +8507,11 @@ function SistemaBaldes() {
     editId === b.id ? (
       <tr key={b.id} style={{ background: C.panel2 }}>
         <td className="px-2 py-1.5">
-          <TextInput value={ev.label} onChange={(e) => setEv({ ...ev, label: e.target.value })} className="text-xs" />
+          <TextInput
+            value={ev.label}
+            onChange={(e) => setEv({ ...ev, label: e.target.value })}
+            className="text-xs"
+          />
         </td>
         <td className="px-2 py-1.5">
           <TextInput
@@ -8530,7 +8580,10 @@ function SistemaBaldes() {
             >
               <Pencil size={12} style={{ color: C.inkFaint }} />
             </button>
-            <button type="button" onClick={() => run(() => dropoff.remover(b.id), "Não foi possível remover.")}>
+            <button
+              type="button"
+              onClick={() => run(() => dropoff.remover(b.id), "Não foi possível remover.")}
+            >
               <X size={13} style={{ color: C.inkFaint }} />
             </button>
           </div>
@@ -8544,11 +8597,14 @@ function SistemaBaldes() {
         <MapPin size={16} style={{ color: C.amber }} /> Locais de desembarque
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        O passo "Onde você vai ficar" da reserva e os grupos da rota do motorista. Renomeie, defina se
-        o detalhe é obrigatório e a ordem em que o ônibus alcança cada local.
+        O passo "Onde você vai ficar" da reserva e os grupos da rota do motorista. Renomeie, defina
+        se o detalhe é obrigatório e a ordem em que o ônibus alcança cada local.
       </p>
       {erro && (
-        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
           {erro}
         </div>
       )}
@@ -8649,7 +8705,10 @@ function SistemaBairros() {
   const filtro = normalizar(busca);
   const lista = bairros.bairros
     .filter((b) => !filtro || normalizar(b.neighborhood).includes(filtro))
-    .sort((a, b) => Number(a.price) - Number(b.price) || a.neighborhood.localeCompare(b.neighborhood, "pt-BR"));
+    .sort(
+      (a, b) =>
+        Number(a.price) - Number(b.price) || a.neighborhood.localeCompare(b.neighborhood, "pt-BR"),
+    );
 
   return (
     <Card>
@@ -8657,12 +8716,16 @@ function SistemaBairros() {
         <MapPin size={16} style={{ color: C.amber }} /> Preços por bairro (Buscar em Casa)
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do bairro.
-        Bairro não cadastrado → a reserva vai para confirmação manual. {bairros.bairros.length} bairros.
+        Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do
+        bairro. Bairro não cadastrado → a reserva vai para confirmação manual.{" "}
+        {bairros.bairros.length} bairros.
       </p>
 
       {erro && (
-        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
           {erro}
         </div>
       )}
@@ -8722,13 +8785,19 @@ function SistemaBairros() {
                     onBlur={(e) => {
                       const v = e.target.value;
                       if (v && Number(v) !== Number(b.price)) salvar(b.neighborhood, v);
-                      setPrecoEdit((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== b.id)));
+                      setPrecoEdit((p) =>
+                        Object.fromEntries(Object.entries(p).filter(([k]) => k !== b.id)),
+                      );
                     }}
                     className="w-20 text-xs py-1"
                   />
                 </td>
                 <td className="px-2 py-1.5 w-8">
-                  <button type="button" onClick={() => remover(b)} aria-label={`remover ${b.neighborhood}`}>
+                  <button
+                    type="button"
+                    onClick={() => remover(b)}
+                    aria-label={`remover ${b.neighborhood}`}
+                  >
                     <X size={13} style={{ color: C.inkFaint }} />
                   </button>
                 </td>
@@ -8737,7 +8806,7 @@ function SistemaBairros() {
             {lista.length === 0 && (
               <tr>
                 <td className="px-2 py-4 text-xs" style={{ color: C.inkFaint }}>
-                  {bairros.loading ? "carregando…" : "Nenhum bairro." }
+                  {bairros.loading ? "carregando…" : "Nenhum bairro."}
                 </td>
               </tr>
             )}
@@ -8794,8 +8863,15 @@ function SistemaEquipe() {
       if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Informe um e-mail válido.");
       if (!novo.name.trim()) throw new Error("Informe o nome.");
       if (novo.password.length < 8) throw new Error("A senha temporária precisa de 8+ caracteres.");
-      await equipe.createUser({ email, name: novo.name.trim(), role: novo.role, password: novo.password });
-      setOk(`Login criado para ${email}. Senha temporária: ${novo.password} — passe para a pessoa; ela troca depois.`);
+      await equipe.createUser({
+        email,
+        name: novo.name.trim(),
+        role: novo.role,
+        password: novo.password,
+      });
+      setOk(
+        `Login criado para ${email}. Senha temporária: ${novo.password} — passe para a pessoa; ela troca depois.`,
+      );
       setNovo({ email: "", name: "", role: "atendente", password: "" });
     }, "Não foi possível criar o login.");
 
@@ -8815,7 +8891,11 @@ function SistemaEquipe() {
       return (
         <tr key={u.id} style={{ background: C.panel2 }}>
           <td className="px-2 py-1.5">
-            <TextInput value={ev.name} onChange={(e) => setEv({ ...ev, name: e.target.value })} className="text-xs" />
+            <TextInput
+              value={ev.name}
+              onChange={(e) => setEv({ ...ev, name: e.target.value })}
+              className="text-xs"
+            />
           </td>
           <td className="px-2 py-1.5">
             <TextInput
@@ -8872,7 +8952,9 @@ function SistemaEquipe() {
         <td className="px-2 py-1.5 text-center">
           <button
             type="button"
-            onClick={() => run(() => equipe.setActive(u.id, !u.active), "Não foi possível alterar.")}
+            onClick={() =>
+              run(() => equipe.setActive(u.id, !u.active), "Não foi possível alterar.")
+            }
             disabled={euMesmo || equipe.salvando}
             className="text-xs px-2 py-0.5 rounded-full disabled:opacity-40"
             style={{
@@ -8920,16 +9002,22 @@ function SistemaEquipe() {
         <Users size={16} style={{ color: C.amber }} /> Equipe e logins
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        Quem entra no sistema e com qual papel. Desativar bloqueia o acesso sem apagar o histórico. O
-        banco não deixa você remover/desativar a si mesmo nem o último admin ativo.
+        Quem entra no sistema e com qual papel. Desativar bloqueia o acesso sem apagar o histórico.
+        O banco não deixa você remover/desativar a si mesmo nem o último admin ativo.
       </p>
       {erro && (
-        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
           {erro}
         </div>
       )}
       {ok && (
-        <div className="mb-3 text-xs rounded-lg px-3 py-2" style={{ background: C.greenSoft, color: C.green }}>
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.greenSoft, color: C.green }}
+        >
           {ok}
         </div>
       )}
@@ -8955,7 +9043,10 @@ function SistemaEquipe() {
       </div>
 
       <div className="pt-3 border-t" style={{ borderColor: C.borderSoft }}>
-        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+        <div
+          className="text-xs font-semibold mb-2 flex items-center gap-1.5"
+          style={{ color: C.inkSoft }}
+        >
           <UserCog size={13} /> Criar um login novo
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -9111,15 +9202,14 @@ function MovimentoControl() {
         <Sparkles size={16} style={{ color: C.amber }} /> Movimento e animações
       </div>
       <p className="text-xs mb-1" style={{ color: C.inkSoft }}>
-        Heros, estrada e ônibus animados. No <b>Automático</b> o app respeita o
-        ajuste de <i>reduzir animações</i> do seu computador — se estiver ligado
-        lá, as decorações ficam paradas. Escolha <b>Ligado</b> para animar mesmo
-        assim.
+        Heros, estrada e ônibus animados. No <b>Automático</b> o app respeita o ajuste de{" "}
+        <i>reduzir animações</i> do seu computador — se estiver ligado lá, as decorações ficam
+        paradas. Escolha <b>Ligado</b> para animar mesmo assim.
       </p>
       {pref === "auto" && efetivo === "off" && (
         <p className="text-xs mb-2" style={{ color: C.warn }}>
-          Seu sistema está pedindo menos movimento agora — por isso está tudo
-          parado. Coloque em <b>Ligado</b> para reativar só neste dispositivo.
+          Seu sistema está pedindo menos movimento agora — por isso está tudo parado. Coloque em{" "}
+          <b>Ligado</b> para reativar só neste dispositivo.
         </p>
       )}
       <div className="flex flex-wrap gap-2 mt-2">
@@ -9135,8 +9225,7 @@ function MovimentoControl() {
               border: `1px solid ${pref === o.v ? C.brand : C.border}`,
             }}
           >
-            {o.label}{" "}
-            <span style={{ opacity: 0.65 }}>· {o.desc}</span>
+            {o.label} <span style={{ opacity: 0.65 }}>· {o.desc}</span>
           </button>
         ))}
       </div>
@@ -9222,7 +9311,9 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
   };
   const trocarModo = (v) => {
     setErro("");
-    onSetModo(v).catch((e) => setErro(mensagemAmigavel(e, "Não foi possível trocar o modo (só admin).")));
+    onSetModo(v).catch((e) =>
+      setErro(mensagemAmigavel(e, "Não foi possível trocar o modo (só admin).")),
+    );
   };
   const atualizarPonto = (p, campo, valor) => {
     setErro("");
@@ -9527,7 +9618,8 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
             </p>
             {diagServidor && (
               <div className="anim-slideDown text-xs mb-2" style={{ color: C.inkSoft }}>
-                Última execução: {diagServidor.quando} — {diagServidor.novos_alertas} novo(s) alerta(s).
+                Última execução: {diagServidor.quando} — {diagServidor.novos_alertas} novo(s)
+                alerta(s).
               </div>
             )}
             <div className="space-y-1.5">
@@ -9555,9 +9647,9 @@ function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
           </div>
           <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
             Gerado pelo servidor com <b>todas</b> as tabelas — clientes, reservas, viagens,
-            veículos, motoristas, combustível, manutenções, financeiro, configurações, usuários
-            e logs — nunca só o que está carregado na tela. Um backup automático roda sozinho
-            todo dia às 3h (São Luís) e fica guardado por 30 dias.
+            veículos, motoristas, combustível, manutenções, financeiro, configurações, usuários e
+            logs — nunca só o que está carregado na tela. Um backup automático roda sozinho todo dia
+            às 3h (São Luís) e fica guardado por 30 dias.
           </p>
           <button
             type="button"
