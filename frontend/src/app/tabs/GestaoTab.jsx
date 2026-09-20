@@ -1,7 +1,7 @@
 import {
   AlertTriangle,
-  Calculator,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Landmark,
@@ -10,14 +10,15 @@ import {
   Receipt,
   RefreshCw,
   Save,
+  Tag,
   TrendingUp,
   Wallet,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { validarValor } from "../../domain/validacao.js";
 import { useFinanceMonth } from "../../hooks/useFinance.js";
 import { useRecurringExpenses } from "../../hooks/useRecurringExpenses.js";
-import { validarValor } from "../../domain/validacao.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   C,
@@ -208,6 +209,7 @@ export default function GestaoTab({ deepLink }) {
           onChange={setAba}
           options={[
             { id: "resultado", label: "Resultado", Icon: TrendingUp },
+            { id: "categorias", label: "Categorias", Icon: Tag },
             { id: "recorrentes", label: "Custos recorrentes", Icon: RefreshCw },
             { id: "lancamentos", label: "Lançamentos do mês", Icon: Receipt },
           ]}
@@ -227,6 +229,7 @@ export default function GestaoTab({ deepLink }) {
             cats={cats}
           />
         )}
+        {aba === "categorias" && <GestaoCategorias cats={cats} run={run} />}
         {aba === "recorrentes" && (
           <GestaoRecorrentes rec={rec} cats={cats} run={run} onGerar={gerarAgora} />
         )}
@@ -255,6 +258,8 @@ function GestaoResultado({
   porCategoria,
   cats,
 }) {
+  const [grupoAberto, setGrupoAberto] = useState(null);
+
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -283,7 +288,7 @@ function GestaoResultado({
         <div className="text-sm font-semibold mb-1">Demonstrativo do mês</div>
         <div className="text-xs mb-2" style={{ color: C.inkFaint }}>
           Tudo que entrou menos tudo que saiu — inclui combustível, manutenção e os custos
-          recorrentes da empresa.
+          recorrentes da empresa. Clique num grupo pra ver as categorias por trás do valor.
         </div>
         <LinhaDRE label="Receita bruta" valor={receita} forte />
         <LinhaDRE
@@ -292,29 +297,27 @@ function GestaoResultado({
           negativo
           indent
         />
-        {cats.gruposGestao.map((g) => (
-          <LinhaDRE key={g} label={g} valor={totalPorGrupo[g] || 0} negativo indent />
-        ))}
-        <LinhaDRE label="Resultado líquido" valor={resultado} forte />
-      </Card>
-
-      <Card>
-        <div className="text-sm font-semibold mb-3">Custos empresariais por categoria</div>
-        <div className="space-y-4">
-          {cats.gruposGestao.map((g) => {
-            const catsDoGrupo = cats.gestao.filter((c) => c.grupo === g);
-            return (
-              <div key={g}>
-                <div
-                  className="flex items-center justify-between text-xs font-semibold mb-1"
-                  style={{ color: C.inkSoft }}
-                >
-                  <span>{g}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                    {fmtBRL(totalPorGrupo[g] || 0)}
-                  </span>
+        {cats.gruposGestao.map((g) => {
+          const aberto = grupoAberto === g;
+          const catsDoGrupo = cats.gestao.filter((c) => c.grupo === g);
+          return (
+            <div key={g}>
+              <button
+                type="button"
+                onClick={() => setGrupoAberto(aberto ? null : g)}
+                className="w-full flex items-center gap-1 text-left"
+              >
+                {aberto ? (
+                  <ChevronDown size={12} style={{ color: C.inkFaint }} />
+                ) : (
+                  <ChevronRight size={12} style={{ color: C.inkFaint }} />
+                )}
+                <div className="flex-1">
+                  <LinhaDRE label={g} valor={totalPorGrupo[g] || 0} negativo indent />
                 </div>
-                <div className="space-y-1">
+              </button>
+              {aberto && (
+                <div className="pl-8 pb-1.5 space-y-1">
                   {catsDoGrupo.map((c) => {
                     const v = porCategoria[c.slug] || 0;
                     return (
@@ -331,17 +334,18 @@ function GestaoResultado({
                     );
                   })}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          );
+        })}
+        <LinhaDRE label="Resultado líquido" valor={resultado} forte />
       </Card>
     </>
   );
 }
 
 function GestaoRecorrentes({ rec, cats, run, onGerar }) {
-  const catInicial = cats.gestao[0]?.slug ?? "outro_recorrente";
+  const catInicial = cats.gestao[0]?.slug ?? "";
   const [form, setForm] = useState({
     category: catInicial,
     label: "",
@@ -351,15 +355,12 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
     dueMonth: "1",
     notes: "",
   });
-  const [depBem, setDepBem] = useState("");
-  const [depMeses, setDepMeses] = useState("60");
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
-  const [novaCat, setNovaCat] = useState(null); // { label, grupo } quando o form "nova categoria" está aberto
 
   const resetForm = () =>
     setForm({
-      category: cats.gestao[0]?.slug ?? "outro_recorrente",
+      category: cats.gestao[0]?.slug ?? "",
       label: "",
       amount: "",
       frequency: "mensal",
@@ -386,7 +387,7 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
   const salvarEdicao = () =>
     run(async () => {
       await rec.updateTemplate(editId, {
-        category: editVal.category || "outro_recorrente",
+        category: editVal.category || cats.gestao[0]?.slug || "",
         label: editVal.label?.trim() || "Custo",
         amount: Number.parseFloat(editVal.amount) || 0,
         frequency: editVal.frequency,
@@ -402,27 +403,10 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
     run(() => rec.updateTemplate(t.id, { active: !t.active }), "Não foi possível alterar.");
   const excluir = (t) => run(() => rec.removeTemplate(t.id), "Não foi possível excluir.");
 
-  // seletor de categoria reutilizado no form de novo custo e na edição
-  const onCategoriaChange = (setter, value) => {
-    if (value === "__nova__") {
-      setNovaCat({ label: "", grupo: cats.gruposGestao[0] || "Estrutura", aplicar: setter });
-      return;
-    }
-    setter(value);
-  };
-  const criarCategoriaInline = () =>
-    run(async () => {
-      const r = await cats.criar({
-        label: novaCat.label,
-        grupo: novaCat.grupo || "Estrutura",
-        kind: "gestao",
-      });
-      novaCat.aplicar?.(r.slug);
-      setNovaCat(null);
-    }, "Não foi possível criar a categoria.");
-
+  // seletor de categoria reutilizado no form de novo custo e na edição —
+  // criar categoria nova agora é só na aba "Categorias".
   const categoriaSelect = (value, onChange) => (
-    <Select value={value} onChange={(e) => onCategoriaChange(onChange, e.target.value)}>
+    <Select value={value} onChange={(e) => onChange(e.target.value)}>
       {cats.gruposGestao.map((g) => (
         <optgroup key={g} label={g}>
           {cats.gestao
@@ -435,22 +419,8 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
         </optgroup>
       ))}
       {!cats.existe(value) && value ? <option value={value}>{value}</option> : null}
-      <option value="__nova__">➕ Nova categoria…</option>
     </Select>
   );
-
-  const aplicarDepreciacao = () => {
-    const bem = Number.parseFloat(depBem);
-    const meses = Number.parseInt(depMeses, 10);
-    if (bem > 0 && meses > 0)
-      setForm((f) => ({
-        ...f,
-        category: "depreciacao",
-        frequency: "mensal",
-        amount: (bem / meses).toFixed(2),
-        label: f.label || "Depreciação do veículo",
-      }));
-  };
 
   return (
     <>
@@ -571,110 +541,6 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
             </button>
           </div>
         </div>
-        {novaCat && (
-          <div
-            className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
-            style={{ background: C.panel2 }}
-          >
-            <div>
-              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
-                Nome da nova categoria
-              </label>
-              <TextInput
-                value={novaCat.label}
-                onChange={(e) => setNovaCat({ ...novaCat, label: e.target.value })}
-                placeholder="Ex.: Aluguel do galpão"
-                className="w-48"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
-                Grupo
-              </label>
-              <Select
-                value={novaCat.grupo}
-                onChange={(e) => setNovaCat({ ...novaCat, grupo: e.target.value })}
-                className="w-40"
-              >
-                {[
-                  ...new Set([
-                    ...cats.gruposGestao,
-                    "Pessoal",
-                    "Impostos & Taxas",
-                    "Veículo",
-                    "Estrutura",
-                  ]),
-                ].map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <button
-              type="button"
-              disabled={!novaCat.label.trim() || cats.salvando}
-              onClick={criarCategoriaInline}
-              className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
-              style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
-            >
-              Criar e usar
-            </button>
-            <button
-              type="button"
-              onClick={() => setNovaCat(null)}
-              className="btn-press text-xs px-3 py-2 rounded-md"
-              style={{ background: C.panel, color: C.inkSoft }}
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
-        {form.category === "depreciacao" && (
-          <div
-            className="mt-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
-            style={{ background: C.panel2 }}
-          >
-            <Calculator size={14} style={{ color: C.inkFaint, marginBottom: 8 }} />
-            <span className="text-xs pb-2" style={{ color: C.inkSoft }}>
-              Calcular:
-            </span>
-            <div>
-              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
-                Valor do bem
-              </label>
-              <TextInput
-                type="number"
-                value={depBem}
-                onChange={(e) => setDepBem(e.target.value)}
-                placeholder="200000"
-                className="w-32"
-              />
-            </div>
-            <span className="text-xs pb-2" style={{ color: C.inkFaint }}>
-              ÷
-            </span>
-            <div>
-              <label className="text-[10px] block" style={{ color: C.inkFaint }}>
-                Meses de vida útil
-              </label>
-              <TextInput
-                type="number"
-                value={depMeses}
-                onChange={(e) => setDepMeses(e.target.value)}
-                className="w-24"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={aplicarDepreciacao}
-              className="btn-press text-xs px-3 py-2 rounded-md"
-              style={{ background: C.blueSoft, color: C.blue }}
-            >
-              Usar no valor
-            </button>
-          </div>
-        )}
       </Card>
 
       <Card>
@@ -867,16 +733,44 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
           </div>
         )}
       </Card>
-
-      <GestaoCategorias cats={cats} run={run} />
     </>
   );
 }
 
-// Cadastro livre das categorias de custo empresarial (issue: liberdade
-// pra criar). Renomear, reagrupar, pausar e remover (se ninguém usa).
+// Cadastro livre das categorias de custo — Gestão (kind="gestao", entra no
+// DRE/custos recorrentes) e Caixa do dia (kind="despesa", entra nos botões
+// rápidos do Financeiro). Renomear, reagrupar, pausar e remover (se ninguém
+// usa) valem pros dois tipos.
 function GestaoCategorias({ cats, run }) {
-  const [nova, setNova] = useState({ label: "", grupo: "Estrutura" });
+  return (
+    <>
+      <CategoriaCard
+        titulo="Custos empresariais (Gestão)"
+        descricao="Entram no Demonstrativo do mês e nos custos recorrentes — ex.: salários, seguro, IPVA."
+        kind="gestao"
+        lista={cats.gestao}
+        grupos={cats.gruposGestao}
+        gruposSugeridos={["Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"]}
+        cats={cats}
+        run={run}
+      />
+      <CategoriaCard
+        titulo="Caixa do dia (Financeiro)"
+        descricao="Aparecem como botão rápido na tela de Financeiro — ex.: combustível, diárias, manutenção."
+        kind="despesa"
+        lista={cats.despesa}
+        grupos={cats.gruposDespesa}
+        gruposSugeridos={["Caixa do dia"]}
+        cats={cats}
+        run={run}
+      />
+    </>
+  );
+}
+
+function CategoriaCard({ titulo, descricao, kind, lista, grupos, gruposSugeridos, cats, run }) {
+  const grupoPadrao = gruposSugeridos[0] || "Estrutura";
+  const [nova, setNova] = useState({ label: "", grupo: grupoPadrao });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
 
@@ -885,8 +779,8 @@ function GestaoCategorias({ cats, run }) {
       if (!nova.label.trim()) return;
       await cats.criar({
         label: nova.label.trim(),
-        grupo: nova.grupo.trim() || "Estrutura",
-        kind: "gestao",
+        grupo: nova.grupo.trim() || grupoPadrao,
+        kind,
       });
       setNova({ label: "", grupo: nova.grupo });
     }, "Não foi possível criar a categoria.");
@@ -895,21 +789,18 @@ function GestaoCategorias({ cats, run }) {
     run(async () => {
       await cats.editar(editId, {
         label: (editVal.label ?? "").trim() || "Categoria",
-        grupo: (editVal.grupo ?? "").trim() || "Estrutura",
+        grupo: (editVal.grupo ?? "").trim() || grupoPadrao,
       });
       setEditId(null);
     }, "Não foi possível salvar a categoria.");
 
-  const grupos = [
-    ...new Set([...cats.gruposGestao, "Pessoal", "Impostos & Taxas", "Veículo", "Estrutura"]),
-  ];
+  const gruposDisponiveis = [...new Set([...grupos, ...gruposSugeridos])];
 
   return (
     <Card>
-      <div className="text-sm font-semibold mb-1">Categorias de custo</div>
+      <div className="text-sm font-semibold mb-1">{titulo}</div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        Crie, renomeie ou reagrupe as categorias usadas nos custos recorrentes e no DRE. Uma
-        categoria só pode ser removida quando nenhum custo ativo está usando ela.
+        {descricao} Uma categoria só pode ser removida quando nenhum custo ativo está usando ela.
       </p>
       <div className="flex flex-wrap items-end gap-2 mb-4">
         <div>
@@ -932,7 +823,7 @@ function GestaoCategorias({ cats, run }) {
             onChange={(e) => setNova({ ...nova, grupo: e.target.value })}
             className="w-44"
           >
-            {grupos.map((g) => (
+            {gruposDisponiveis.map((g) => (
               <option key={g} value={g}>
                 {g}
               </option>
@@ -959,7 +850,14 @@ function GestaoCategorias({ cats, run }) {
             </tr>
           </thead>
           <tbody>
-            {cats.gestao.map((c) =>
+            {lista.length === 0 && (
+              <tr>
+                <td colSpan={3} className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
+                  Nenhuma categoria ainda — crie a primeira acima.
+                </td>
+              </tr>
+            )}
+            {lista.map((c) =>
               editId === c.id ? (
                 <tr key={c.slug} style={{ background: C.panel2 }}>
                   <td className="px-3 py-2">
@@ -973,7 +871,7 @@ function GestaoCategorias({ cats, run }) {
                       value={editVal.grupo}
                       onChange={(e) => setEditVal({ ...editVal, grupo: e.target.value })}
                     >
-                      {grupos.map((g) => (
+                      {gruposDisponiveis.map((g) => (
                         <option key={g} value={g}>
                           {g}
                         </option>
@@ -1032,7 +930,7 @@ function GestaoCategorias({ cats, run }) {
 
 function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
   const [novo, setNovo] = useState({
-    category: "manutencao_corretiva",
+    category: cats.gestao[0]?.slug ?? "",
     dia: "",
     valor: "",
     descricao: "",

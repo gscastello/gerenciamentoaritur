@@ -23,21 +23,21 @@ import {
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
-import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
-import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
-import { useExpenseCategories } from "../hooks/useExpenseCategories.js";
 import { useDropoffAreas } from "../hooks/useDropoffAreas.js";
+import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
+import { useExpenseCategories } from "../hooks/useExpenseCategories.js";
+import { useGlobalSearch } from "../hooks/useGlobalSearch.js";
 import { useNeighborhoodPricing } from "../hooks/useNeighborhoodPricing.js";
+import { useNotifications } from "../hooks/useNotifications.js";
+import { usePendencias } from "../hooks/usePendencias.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
-import { useNotifications } from "../hooks/useNotifications.js";
-import { usePendencias } from "../hooks/usePendencias.js";
 
 import { useVehicles } from "../hooks/useVehicles.js";
 
-import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
+import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
 const BlocoDeNotasTab = React.lazy(() => import("./tabs/BlocoDeNotasTab.jsx"));
 const PendenciasTab = React.lazy(() => import("./tabs/PendenciasTab.jsx"));
@@ -726,7 +726,7 @@ const TAB_ROLES = {
   reservar: ["admin", "atendente"],
   agenda: ["admin", "atendente", "motorista", "financeiro"],
   lista: ["admin", "atendente", "motorista", "financeiro"],
-  bloco: ["admin", "atendente"],
+  bloco: ["admin", "atendente", "motorista"],
   passageiros: ["admin", "atendente", "financeiro"],
   pendencias: ["admin", "atendente"],
   financeiro: ["admin"],

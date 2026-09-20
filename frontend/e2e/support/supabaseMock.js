@@ -37,10 +37,66 @@ function fakeSession() {
 }
 
 const ROUTE_POINTS = [
-  { id: "rp-busca", direction: "ida", code: "busca", name: "Buscar em Casa", base_time: "05:00:00", price: null, requires_detail: true, detail_label: "Bairro", boarding_window: null, is_core: true, display_order: 0, active: true, deleted_at: null },
-  { id: "rp-rodoviaria", direction: "ida", code: "rodoviaria", name: "Rodoviária", base_time: "05:40:00", price: 60, requires_detail: false, detail_label: null, boarding_window: null, is_core: true, display_order: 1, active: true, deleted_at: null },
-  { id: "rp-br", direction: "ida", code: "br", name: "BR (Posto)", base_time: "06:00:00", price: 60, requires_detail: true, detail_label: "Ponto na BR", boarding_window: null, is_core: true, display_order: 2, active: true, deleted_at: null },
-  { id: "rp-pirapemas", direction: "volta", code: "pirapemas", name: "Pirapemas centro", base_time: "13:00:00", price: 60, requires_detail: false, detail_label: null, boarding_window: "12:00 – 13:00", is_core: true, display_order: 1, active: true, deleted_at: null },
+  {
+    id: "rp-busca",
+    direction: "ida",
+    code: "busca",
+    name: "Buscar em Casa",
+    base_time: "05:00:00",
+    price: null,
+    requires_detail: true,
+    detail_label: "Bairro",
+    boarding_window: null,
+    is_core: true,
+    display_order: 0,
+    active: true,
+    deleted_at: null,
+  },
+  {
+    id: "rp-rodoviaria",
+    direction: "ida",
+    code: "rodoviaria",
+    name: "Rodoviária",
+    base_time: "05:40:00",
+    price: 60,
+    requires_detail: false,
+    detail_label: null,
+    boarding_window: null,
+    is_core: true,
+    display_order: 1,
+    active: true,
+    deleted_at: null,
+  },
+  {
+    id: "rp-br",
+    direction: "ida",
+    code: "br",
+    name: "BR (Posto)",
+    base_time: "06:00:00",
+    price: 60,
+    requires_detail: true,
+    detail_label: "Ponto na BR",
+    boarding_window: null,
+    is_core: true,
+    display_order: 2,
+    active: true,
+    deleted_at: null,
+  },
+  {
+    id: "rp-pirapemas",
+    direction: "volta",
+    code: "pirapemas",
+    name: "Pirapemas centro",
+    base_time: "13:00:00",
+    price: 60,
+    requires_detail: false,
+    detail_label: null,
+    boarding_window: "12:00 – 13:00",
+    is_core: true,
+    display_order: 1,
+    active: true,
+    deleted_at: null,
+  },
 ];
 
 const SETTINGS = [
@@ -77,7 +133,12 @@ export async function mockSupabase(page, opts = {}) {
   const {
     role = "atendente",
     occupancy = {},
-    createResult = { success: true, reservation_id: "e2e-res-1", status: "confirmada", message: "created" },
+    createResult = {
+      success: true,
+      reservation_id: "e2e-res-1",
+      status: "confirmada",
+      message: "created",
+    },
     onCreate,
     onEdit,
     notifications = [],
@@ -97,7 +158,9 @@ export async function mockSupabase(page, opts = {}) {
   await page.route("**/realtime/v1/**", (route) => route.abort());
 
   // Edge Functions (ex.: create-user da aba Sistema → Equipe)
-  await page.route("**/functions/v1/**", (route) => route.fulfill(json({ success: true, id: "e2e-new-user" })));
+  await page.route("**/functions/v1/**", (route) =>
+    route.fulfill(json({ success: true, id: "e2e-new-user" })),
+  );
 
   // auth: getUser / refresh
   await page.route("**/auth/v1/**", (route) => {
@@ -111,6 +174,43 @@ export async function mockSupabase(page, opts = {}) {
   // bloco de notas (issue #90 → notas soltas) — stateful dentro do cenário
   let notesRows = (opts.notes ?? []).map((n) => ({ ...n }));
   let noteSeq = 0;
+  // categorias de despesa (Gestão + Financeiro, database/22 e 43) — stateful,
+  // pra testar criar/editar/remover pela aba Categorias.
+  let expenseCategories = (
+    opts.expenseCategories ?? [
+      {
+        id: "ec-1",
+        slug: "lavagem",
+        label: "Lavagem",
+        grupo: "Veículo",
+        kind: "gestao",
+        icon: "Sparkles",
+        sort_order: 10,
+        active: true,
+      },
+      {
+        id: "ec-2",
+        slug: "combustivel",
+        label: "Combustível",
+        grupo: "Caixa do dia",
+        kind: "despesa",
+        icon: "Fuel",
+        sort_order: 10,
+        active: true,
+      },
+      {
+        id: "ec-3",
+        slug: "outro",
+        label: "Outro",
+        grupo: "Caixa do dia",
+        kind: "despesa",
+        icon: "Receipt",
+        sort_order: 50,
+        active: true,
+      },
+    ]
+  ).map((c) => ({ ...c }));
+  let categorySeq = 0;
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
@@ -128,7 +228,11 @@ export async function mockSupabase(page, opts = {}) {
     if (path === "notes") {
       if (req.method === "GET") {
         const sorted = [...notesRows].sort((a, b) =>
-          a.pinned === b.pinned ? new Date(b.updated_at) - new Date(a.updated_at) : a.pinned ? -1 : 1,
+          a.pinned === b.pinned
+            ? new Date(b.updated_at) - new Date(a.updated_at)
+            : a.pinned
+              ? -1
+              : 1,
         );
         return route.fulfill(json(wantsObject ? (sorted[0] ?? null) : sorted));
       }
@@ -193,7 +297,11 @@ export async function mockSupabase(page, opts = {}) {
               valorTotal: b.p_details?.unit_price != null ? b.p_details.unit_price : r.valorTotal,
               quantidade: b.p_quantity ?? r.quantidade,
               ...(b.p_move
-                ? { data: b.p_move.trip_date, direcao: b.p_move.direction, pontoId: b.p_move.route_point_code }
+                ? {
+                    data: b.p_move.trip_date,
+                    direcao: b.p_move.direction,
+                    pontoId: b.p_move.route_point_code,
+                  }
                 : {}),
               ...(b.p_contact
                 ? { nome: b.p_contact.name ?? r.nome, telefone: b.p_contact.phone ?? r.telefone }
@@ -205,6 +313,47 @@ export async function mockSupabase(page, opts = {}) {
         }
         onEdit?.(route);
         return route.fulfill(json({ success: true, message: "edited" }));
+      }
+      if (fn === "rpc_upsert_expense_category") {
+        const b = req.postDataJSON?.() ?? {};
+        const slug =
+          b.p_slug ||
+          b.p_label
+            .normalize("NFD")
+            .replace(/\p{Diacritic}/gu, "")
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        const existente = expenseCategories.find((c) => c.slug === slug);
+        if (existente) {
+          Object.assign(existente, {
+            label: b.p_label,
+            grupo: b.p_grupo ?? existente.grupo,
+            kind: b.p_kind ?? existente.kind,
+            icon: b.p_icon ?? existente.icon,
+          });
+        } else {
+          categorySeq += 1;
+          expenseCategories.push({
+            id: `ec-novo-${categorySeq}`,
+            slug,
+            label: b.p_label,
+            grupo: b.p_grupo ?? "Estrutura",
+            kind: b.p_kind ?? "gestao",
+            icon: b.p_icon ?? null,
+            sort_order: b.p_sort_order ?? 100,
+            active: true,
+          });
+        }
+        return route.fulfill(
+          json({ success: true, id: (existente ?? expenseCategories.at(-1)).id, slug }),
+        );
+      }
+      if (fn === "rpc_soft_delete_expense_category") {
+        const b = req.postDataJSON?.() ?? {};
+        expenseCategories = expenseCategories.filter((c) => c.id !== b.p_id);
+        return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_mark_notifications_read") {
         const b = req.postDataJSON?.() ?? {};
@@ -248,8 +397,22 @@ export async function mockSupabase(page, opts = {}) {
     let rows;
     if (table === "users")
       rows = [
-        { id: FAKE_USER.id, name: "Atendente E2E", phone: null, role, active: true, deleted_at: null },
-        { id: "u-motorista", name: "Motorista E2E", phone: "98999990000", role: "motorista", active: true, deleted_at: null },
+        {
+          id: FAKE_USER.id,
+          name: "Atendente E2E",
+          phone: null,
+          role,
+          active: true,
+          deleted_at: null,
+        },
+        {
+          id: "u-motorista",
+          name: "Motorista E2E",
+          phone: "98999990000",
+          role: "motorista",
+          active: true,
+          deleted_at: null,
+        },
       ];
     else if (table === "route_points") rows = ROUTE_POINTS;
     else if (table === "settings") rows = SETTINGS;
@@ -263,13 +426,15 @@ export async function mockSupabase(page, opts = {}) {
         return { trip_id: `trip-${k}`, trip_date, direction, ...v };
       });
     } else if (table === "trips") rows = [];
-    else if (table === "vehicles") rows = [{ id: "veh-1", name: "Ônibus", capacity: 31, is_default: true, active: true }];
-    else if (table === "expense_categories")
-      rows = [
-        { id: "ec-1", slug: "salario", label: "Salários", grupo: "Pessoal", kind: "gestao", icon: "Users", sort_order: 10, active: true },
-        { id: "ec-2", slug: "combustivel", label: "Combustível", grupo: "Caixa do dia", kind: "despesa", icon: "Fuel", sort_order: 10, active: true },
-        { id: "ec-3", slug: "outro", label: "Outro", grupo: "Caixa do dia", kind: "despesa", icon: "Receipt", sort_order: 50, active: true },
-      ];
+    else if (table === "vehicles")
+      rows = [{ id: "veh-1", name: "Ônibus", capacity: 31, is_default: true, active: true }];
+    else if (table === "expense_categories" && req.method === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      expenseCategories = expenseCategories.map((c) => (c.id === id ? { ...c, ...body } : c));
+      const updated = expenseCategories.find((c) => c.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "expense_categories") rows = expenseCategories;
     else if (table === "neighborhood_pricing")
       rows = [
         { id: "np-1", neighborhood: "Cohama", price: 80 },
@@ -277,10 +442,50 @@ export async function mockSupabase(page, opts = {}) {
       ];
     else if (table === "dropoff_areas")
       rows = [
-        { id: "da-1", direction: "ida", code: "cantanhede", label: "Cantanhede", detail_label: "Onde em Cantanhede", detail_placeholder: "", detail_required: false, sort_order: 10, active: true },
-        { id: "da-2", direction: "ida", code: "pirapemas", label: "Pirapemas", detail_label: "Onde em Pirapemas", detail_placeholder: "", detail_required: false, sort_order: 20, active: true },
-        { id: "da-3", direction: "ida", code: "outro", label: "Outros locais", detail_label: "Onde você vai ficar", detail_placeholder: "Descreva o local", detail_required: true, sort_order: 30, active: true },
-        { id: "da-4", direction: "volta", code: "casa", label: "Em casa (bairro)", detail_label: "Bairro onde vai ficar", detail_placeholder: "Ex.: Cohama", detail_required: true, sort_order: 40, active: true },
+        {
+          id: "da-1",
+          direction: "ida",
+          code: "cantanhede",
+          label: "Cantanhede",
+          detail_label: "Onde em Cantanhede",
+          detail_placeholder: "",
+          detail_required: false,
+          sort_order: 10,
+          active: true,
+        },
+        {
+          id: "da-2",
+          direction: "ida",
+          code: "pirapemas",
+          label: "Pirapemas",
+          detail_label: "Onde em Pirapemas",
+          detail_placeholder: "",
+          detail_required: false,
+          sort_order: 20,
+          active: true,
+        },
+        {
+          id: "da-3",
+          direction: "ida",
+          code: "outro",
+          label: "Outros locais",
+          detail_label: "Onde você vai ficar",
+          detail_placeholder: "Descreva o local",
+          detail_required: true,
+          sort_order: 30,
+          active: true,
+        },
+        {
+          id: "da-4",
+          direction: "volta",
+          code: "casa",
+          label: "Em casa (bairro)",
+          detail_label: "Bairro onde vai ficar",
+          detail_placeholder: "Ex.: Cohama",
+          detail_required: true,
+          sort_order: 40,
+          active: true,
+        },
       ];
     else if (table === "customers") rows = [];
     else if (table === "v_contas_a_receber") rows = [];

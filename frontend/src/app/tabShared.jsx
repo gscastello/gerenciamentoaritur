@@ -83,7 +83,8 @@ const fmtDiaFuso = new Intl.DateTimeFormat("en-CA", {
 export const dataOperacao = (offsetDias = 0) =>
   fmtDiaFuso.format(new Date(Date.now() + offsetDias * 86400000));
 export const todayStr = () => dataOperacao();
-export const fmtBRL = (n) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const fmtBRL = (n) =>
+  (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const fmtDate = (d) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
@@ -110,7 +111,8 @@ export const isMonday = (d) => new Date(`${d}T12:00:00`).getDay() === 1;
 // Dia do mês para custo recorrente: 1–31. Em meses mais curtos, o banco
 // lança no último dia (fn_generate_recurring_expenses).
 export const clampDia = (v) => Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), 31);
-export const diaSemana = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
+export const diaSemana = (d) =>
+  new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long" });
 export const shiftHour = (hhmm, ativo, horas = 1) => {
   if (!ativo) return hhmm;
   let [h, m] = hhmm.split(":").map(Number);
@@ -476,7 +478,12 @@ export function HeroFX() {
   return (
     <div className="hero-fx" aria-hidden="true">
       <div className="hero-fx-bus">
-        <svg viewBox="0 0 232 84" fill="none" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+        <svg
+          viewBox="0 0 232 84"
+          fill="none"
+          aria-hidden="true"
+          preserveAspectRatio="xMidYMid meet"
+        >
           <path d="M226 42 L232 26 L232 62 Z" fill="#ffdca6" opacity="0.4" />
           <path
             d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v7c0 4-3 7-7 7h-12a15 15 0 0 0-30 0H70a15 15 0 0 0-30 0H14c-4 0-8-3-8-8V20Z"
@@ -613,7 +620,11 @@ export function SinoNotificacoes() {
                     >
                       <span
                         className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
-                        style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
+                        style={{
+                          background: C.panel,
+                          border: `1px solid ${C.border}`,
+                          color: C.inkSoft,
+                        }}
                       >
                         <Icon size={14} />
                       </span>
@@ -755,10 +766,7 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
         style={{ width: 3, background: accent, opacity: 0.9 }}
       />
       <div className="flex items-start justify-between gap-2">
-        <div
-          className="text-[11px] leading-tight"
-          style={{ color: C.inkSoft, minHeight: "2.2em" }}
-        >
+        <div className="text-[11px] leading-tight" style={{ color: C.inkSoft, minHeight: "2.2em" }}>
           {label}
         </div>
         <div
@@ -827,7 +835,10 @@ export function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true
             {ocupados}/{total}
             {prefixo ? "" : " passageiros"}
           </span>
-          <span className="font-bold" style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}>
+          <span
+            className="font-bold"
+            style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}
+          >
             {pct}%{lotado ? " · LOTADO" : ""}
           </span>
         </div>
@@ -936,8 +947,7 @@ export function TextArea(props) {
 }
 
 const PREFERS_REDUCED_MOTION =
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // Anima um número de 0 até `target` na montagem (e a cada mudança de
 // target). Respeita prefers-reduced-motion.
@@ -972,11 +982,7 @@ export function useCountUp(target, duration = 900) {
 export function useDeepLinkData(deepLink, setData) {
   const aplicadoEm = useRef(null);
   useEffect(() => {
-    if (
-      deepLink?.kind === "data" &&
-      deepLink.data &&
-      deepLink.at !== aplicadoEm.current
-    ) {
+    if (deepLink?.kind === "data" && deepLink.data && deepLink.at !== aplicadoEm.current) {
       aplicadoEm.current = deepLink.at;
       setData(deepLink.data);
     }
@@ -1307,30 +1313,35 @@ export const CATEGORIAS_RECEITA = [
 // nos botões rápidos de lançamento manual, só na tabela de lançamentos.
 const ROTULOS_AJUSTE = { estorno: "Estorno", reembolso: "Reembolso", ajuste: "Ajuste" };
 
-// --- Gestão Operacional: os 14 custos empresariais pedidos, agrupados
-// para uma leitura de DRE. São categorias de `financial_entries`
-// (type='despesa') distintas das do caixa do dia (combustível etc.) e da
-// manutenção preventiva (que é 'manutencao', automática da aba Operação).
-// Ver database/19-gestao-operacional.sql.
+// --- Gestão Operacional: custos empresariais com uso real (ver
+// database/43-limpeza-categorias-gestao.sql — os demais itens do seed
+// original nunca tiveram lançamento e foram removidos; o dono cria as
+// próprias categorias do zero pela aba Categorias). São categorias de
+// `financial_entries` (type='despesa') distintas das do caixa do dia
+// (combustível etc.) e da manutenção preventiva (que é 'manutencao',
+// automática da aba Operação). Ver database/19-gestao-operacional.sql.
 const CATEGORIAS_GESTAO = [
-  { id: "salario", label: "Salários", grupo: "Pessoal", icon: Users },
-  { id: "pro_labore", label: "Pró-labore", grupo: "Pessoal", icon: Users },
-  { id: "imposto", label: "Impostos", grupo: "Impostos & Taxas", icon: Landmark },
-  { id: "taxa_bancaria", label: "Taxas bancárias", grupo: "Impostos & Taxas", icon: Landmark },
-  { id: "taxa_cartao", label: "Taxas de cartão", grupo: "Impostos & Taxas", icon: CreditCard },
-  { id: "seguro", label: "Seguro", grupo: "Veículo", icon: ShieldCheck },
-  { id: "ipva", label: "IPVA / Licenciamento", grupo: "Veículo", icon: Receipt },
-  { id: "pneu", label: "Pneus", grupo: "Veículo", icon: Bus },
   { id: "lavagem", label: "Lavagem", grupo: "Veículo", icon: Sparkles },
-  { id: "peca", label: "Peças", grupo: "Veículo", icon: Package },
-  { id: "manutencao_corretiva", label: "Manutenção corretiva", grupo: "Veículo", icon: Wrench },
-  { id: "depreciacao", label: "Depreciação", grupo: "Estrutura", icon: TrendingUp },
-  { id: "despesa_administrativa", label: "Despesas administrativas", grupo: "Estrutura", icon: Receipt },
-  { id: "outro_recorrente", label: "Outras despesas recorrentes", grupo: "Estrutura", icon: Receipt },
+  {
+    id: "despesa_administrativa",
+    label: "Despesas administrativas",
+    grupo: "Estrutura",
+    icon: Receipt,
+  },
 ];
 export const MESES_PT = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
 ];
 
 const rotuloCategoriaDespesa = (id) =>
@@ -1380,8 +1391,18 @@ export const useCategorias = () => useContext(CategoriasContext) || CATEGORIAS_F
 
 // nome (string, vindo do banco) -> componente de ícone lucide
 const ICONE_CATEGORIA = {
-  Users, Landmark, CreditCard, ShieldCheck, Receipt, Bus, Sparkles, Package,
-  Wrench, TrendingUp, Fuel, UtensilsCrossed,
+  Users,
+  Landmark,
+  CreditCard,
+  ShieldCheck,
+  Receipt,
+  Bus,
+  Sparkles,
+  Package,
+  Wrench,
+  TrendingUp,
+  Fuel,
+  UtensilsCrossed,
 };
 export const iconeCategoria = (nome) => ICONE_CATEGORIA[nome] || Receipt;
 
