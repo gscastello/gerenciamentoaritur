@@ -16,13 +16,19 @@ const RE_QUANTIDADE = /^\s*(\d{1,2})\s*p\.?\s+/i;
 // telefone = último trecho que começa em dígito/"+" e só tem dígito,
 // espaço, parênteses, ponto ou traço até o fim da linha.
 const RE_TELEFONE_FINAL = /([+\d][\d\s().-]*\d)\s*$/;
+// WhatsApp/iOS "linkam" o telefone ao detectar o número e, ao colar o
+// texto copiado, vêm junto marcas de controle bidirecional invisíveis
+// (LRM, isolamento direcional etc.) grudadas no fim do número. O
+// telefone aparece certinho pra quem lê, mas essas marcas ficam depois
+// do último dígito e quebram a âncora de fim de linha do regex acima.
+const RE_INVISIVEIS = /[​-‏‪-‮⁦-⁩﻿]/g;
 
 /**
  * @param {string} textoBruto
  * @returns {{ok:true, quantidade:number, local:string, telefone:string} | {ok:false, erro:string}}
  */
 export function parseAnotacaoRapida(textoBruto) {
-  const texto = String(textoBruto ?? "").trim();
+  const texto = String(textoBruto ?? "").replace(RE_INVISIVEIS, "").trim();
   if (!texto) return { ok: false, erro: "Escreva ao menos o telefone do passageiro." };
 
   let quantidade = 1;
