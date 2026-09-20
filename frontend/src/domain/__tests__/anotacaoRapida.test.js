@@ -42,6 +42,17 @@ describe("parseAnotacaoRapida", () => {
     expect(r.local).toBe("Cohatrac perto do posto");
   });
 
+  it("telefone colado do WhatsApp/iOS com marcas bidirecionais invisíveis coladas no fim", () => {
+    const r = parseAnotacaoRapida("1P Cohatrac ⁦98999998888⁩");
+    expect(r.ok).toBe(true);
+    expect(r.local).toBe("Cohatrac");
+    expect(r.telefone).toBe("98999998888");
+
+    const r2 = parseAnotacaoRapida("1P Cohatrac 98999998888‎");
+    expect(r2.ok).toBe(true);
+    expect(r2.telefone).toBe("98999998888");
+  });
+
   it("vazio => erro", () => {
     expect(parseAnotacaoRapida("").ok).toBe(false);
     expect(parseAnotacaoRapida("   ").ok).toBe(false);
