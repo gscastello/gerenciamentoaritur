@@ -22,8 +22,6 @@ import {
   X as XIcon,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
-import { useTrips } from "../../hooks/useTrips.js";
 import { parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
 import {
   primeiroErro,
@@ -34,6 +32,8 @@ import {
   validarTelefone,
   validarValor,
 } from "../../domain/validacao.js";
+import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
+import { useTrips } from "../../hooks/useTrips.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
 import { Presence } from "../../ui/motion/index.js";
@@ -42,8 +42,8 @@ import {
   BotaoAgendar,
   BuscaChip,
   C,
-  Card,
   CapacidadeBar,
+  Card,
   Field,
   Header,
   HeroFX,
@@ -86,6 +86,7 @@ export default function AgendaTab({
   const [data, setData] = useState(todayStr());
   useDeepLinkData(deepLink, setData);
   const [editando, setEditando] = useState(null);
+  const [encomendaModal, setEncomendaModal] = useState(null); // null = fechado; {} = nova; {pendente:r} = agendando uma pendente
   const [acaoErro, setAcaoErro] = useState("");
   const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
@@ -93,6 +94,12 @@ export default function AgendaTab({
   if (editando) modalHeld.current = editando;
   const segunda = isMonday(data) && segundaAtiva;
   const doDia = reservas.filter((r) => r.data === data && !["frete", "encomenda"].includes(r.tipo));
+  // Encomendas já agendadas (com viagem/ponto reais) pro dia selecionado —
+  // ver database/42. Nunca entram em `doDia`: têm remetente/destinatário,
+  // não "passageiro", e desembarque próprio, então ganham seção à parte.
+  const encomendasAgendadas = reservas.filter(
+    (r) => r.tipo === "encomenda" && r.data === data && r.status !== "cancelada",
+  );
   const pendentesDoDia = doDia.filter((r) => r.status === "pendente");
   // Lista de espera: TODA (não só o dia selecionado) — é assim que a
   // equipe vê quem está aguardando vaga em qualquer data e chama quando
@@ -215,6 +222,22 @@ export default function AgendaTab({
       "Não foi possível mudar quem busca.",
     );
   const dataFrete = (r) => r.data || r.extra?.data || null;
+
+  // Nova encomenda OU agendar uma pendente (database/42): o modal decide
+  // pelo payload (tem `id` = está agendando uma existente, chama a edição;
+  // sem `id` = criando do zero).
+  const salvarEncomenda = async ({ id, ...payload }) => {
+    if (id) {
+      await R.editReservationFull(id, payload);
+    } else {
+      await R.createReservation(payload);
+    }
+  };
+  const entregarEncomenda = (id) =>
+    acao(
+      R.editReservationFull(id, { status: "embarcado" }),
+      "Não foi possível marcar como entregue.",
+    );
 
   // Anotação rápida direto no ponto/horário da Agenda: "1P Cohatrac
   // 98999998888" cria a reserva sem abrir modal nenhum. O ponto já é
@@ -496,18 +519,95 @@ export default function AgendaTab({
                     {r.extra?.encEmbarque || "?"} → {r.extra?.encDesembarque || "?"} · recebe:{" "}
                     {r.nome} ({r.telefone}){dataFrete(r) ? ` · ${fmtDate(dataFrete(r))}` : ""}
                   </div>
-                  <button
-                    onClick={() => atualizarStatus(r.id, "cancelada")}
-                    className="btn-press text-xs px-2 py-1 rounded-md"
-                    style={{ background: C.border, color: C.inkSoft }}
-                  >
-                    Arquivar
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEncomendaModal({ pendente: r })}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.greenSoft, color: C.green }}
+                    >
+                      Agendar
+                    </button>
+                    <button
+                      onClick={() => atualizarStatus(r.id, "cancelada")}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.border, color: C.inkSoft }}
+                    >
+                      Arquivar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </Card>
         )}
+
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Package size={16} style={{ color: C.inkSoft }} />
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                Encomendas do dia{" "}
+                {encomendasAgendadas.length > 0 && (
+                  <span style={{ color: C.inkFaint }}>({encomendasAgendadas.length})</span>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEncomendaModal({})}
+              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
+              style={{ background: C.amberSoft, color: C.amber }}
+            >
+              <Plus size={13} /> Nova
+            </button>
+          </div>
+          {encomendasAgendadas.length === 0 ? (
+            <p className="text-xs" style={{ color: C.inkFaint }}>
+              Nenhuma encomenda agendada pra {fmtDate(data)}.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {encomendasAgendadas.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
+                  style={{ background: C.panel2, opacity: r.status === "embarcado" ? 0.6 : 1 }}
+                >
+                  <div className="text-xs">
+                    <span className="font-semibold">{r.direcao === "ida" ? "Ida" : "Volta"}</span> ·{" "}
+                    {r.extra?.encItem || "encomenda"} ·{" "}
+                    {trips[r.direcao]?.pontos.find((p) => p.id === r.pontoId)?.nome || "?"} →{" "}
+                    {r.desembarque || "?"}
+                    <br />
+                    <span style={{ color: C.inkFaint }}>
+                      entrega: {r.extra?.encRemetenteNome || "—"} (
+                      {r.extra?.encRemetenteTelefone || "—"}){" · "}recebe: {r.nome} ({r.telefone})
+                      {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {r.status !== "embarcado" && (
+                      <button
+                        onClick={() => entregarEncomenda(r.id)}
+                        className="btn-press text-xs px-2 py-1 rounded-md"
+                        style={{ background: C.greenSoft, color: C.green }}
+                      >
+                        Entregue
+                      </button>
+                    )}
+                    <button
+                      onClick={() => atualizarStatus(r.id, "cancelada")}
+                      className="btn-press text-xs px-2 py-1 rounded-md"
+                      style={{ background: C.redSoft, color: C.red }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {["ida", "volta"].map((dir) => (
           <ViagemOperacional
@@ -545,6 +645,15 @@ export default function AgendaTab({
           )
         }
       </Presence>
+      {encomendaModal && (
+        <NovaEncomendaModal
+          pendente={encomendaModal.pendente}
+          dataInicial={data}
+          trips={trips}
+          onClose={() => setEncomendaModal(null)}
+          onSalvar={salvarEncomenda}
+        />
+      )}
     </div>
   );
 }
@@ -1466,6 +1575,241 @@ export function NovaReservaModal({
             }}
           >
             {salvando ? "Agendando…" : "Agendar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================= Encomendas ============================= *
+ * Agendar uma encomenda nova, ou pegar uma que o cliente já mandou pelo
+ * WhatsApp (pendente, sem viagem/ponto ainda — ver database/42) e
+ * encaixar numa viagem/ponto real. Mesmo modal serve pros dois casos:
+ * `pendente` presente = está agendando; ausente = está criando do zero.
+ * Nunca ocupa vaga (database/42 mantém reservation_passengers em
+ * 'cancelado' sempre pra este tipo). */
+function NovaEncomendaModal({
+  pendente,
+  dataInicial,
+  direcaoInicial = "ida",
+  trips,
+  onClose,
+  onSalvar,
+}) {
+  const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
+  const direcaoBase = pendente?.direcao || direcaoInicial;
+  const [f, setF] = useState({
+    direcao: direcaoBase,
+    data: dataInicial || todayStr(),
+    pontoId: primeiroPonto(direcaoBase),
+    desembarque: pendente?.extra?.encDesembarque || "",
+    item: pendente?.extra?.encItem || "",
+    remetenteNome: pendente?.extra?.encRemetenteNome || "",
+    remetenteTelefone: pendente?.extra?.encRemetenteTelefone || "",
+    destinatarioNome: pendente?.nome || "",
+    destinatarioTelefone: pendente?.telefone || "",
+    valor: "",
+  });
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const viagem = trips[f.direcao] || trips.ida;
+  const trocarDirecao = (dir) => setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir) }));
+
+  const podeEnviar =
+    f.destinatarioNome.trim() && f.destinatarioTelefone.trim() && f.pontoId && f.data;
+
+  const salvar = async () => {
+    setErro("");
+    const problema = primeiroErro([
+      validarNome(f.destinatarioNome),
+      validarTelefone(f.destinatarioTelefone),
+      validarData(f.data, { min: pendente ? undefined : todayStr() }),
+      f.valor !== "" ? validarValor(f.valor, { min: 0 }) : null,
+    ]);
+    if (problema) {
+      setErro(problema);
+      return;
+    }
+    setSalvando(true);
+    try {
+      const extraData = {
+        encItem: f.item.trim() || null,
+        encRemetenteNome: f.remetenteNome.trim() || null,
+        encRemetenteTelefone: f.remetenteTelefone.trim() || null,
+      };
+      if (pendente) {
+        await onSalvar({
+          id: pendente.id,
+          move: { trip_date: f.data, direction: f.direcao, route_point_code: f.pontoId },
+          details: {
+            dropoff_location: f.desembarque.trim() || null,
+            ...(f.valor !== "" ? { unit_price: Number.parseFloat(f.valor) || 0 } : {}),
+          },
+          contact: {
+            customer_id: pendente.customer_id,
+            name: f.destinatarioNome.trim(),
+            phone: f.destinatarioTelefone.trim(),
+          },
+          extraData,
+          status: "confirmada",
+        });
+      } else {
+        await onSalvar({
+          tripDate: f.data,
+          direction: f.direcao,
+          type: "encomenda",
+          customerName: f.destinatarioNome.trim(),
+          customerPhone: f.destinatarioTelefone.trim(),
+          routePointCode: f.pontoId,
+          unitPrice: f.valor !== "" ? Number.parseFloat(f.valor) || 0 : 0,
+          dropoffLocation: f.desembarque.trim() || null,
+          status: "confirmada",
+          extraData,
+        });
+      }
+      onClose({ ok: true });
+    } catch (e) {
+      setErro(mensagemAmigavel(e, "Não foi possível salvar a encomenda."));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-4 anim-fadeIn"
+      style={{ background: "rgba(0,0,0,.65)" }}
+      onClick={() => onClose()}
+    >
+      <div
+        className="anim-pop w-full max-w-lg rounded-xl border p-5 max-h-[90vh] overflow-y-auto"
+        style={{ background: C.panel, borderColor: C.border }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div
+            className="font-semibold text-sm flex items-center gap-1.5"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            <Package size={15} /> {pendente ? "Agendar encomenda" : "Nova encomenda"}
+          </div>
+          <button type="button" onClick={() => onClose()}>
+            <X size={16} style={{ color: C.inkSoft }} />
+          </button>
+        </div>
+
+        {erro && (
+          <div
+            className="mb-3 flex items-start gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>{erro}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Data">
+            <TextInput
+              type="date"
+              value={f.data}
+              onChange={(e) => setF({ ...f, data: e.target.value })}
+            />
+          </Field>
+          <Field label="Direção">
+            <Select value={f.direcao} onChange={(e) => trocarDirecao(e.target.value)}>
+              <option value="ida">Ida</option>
+              <option value="volta">Volta</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Ponto de embarque">
+            <Select value={f.pontoId} onChange={(e) => setF({ ...f, pontoId: e.target.value })}>
+              {viagem.pontos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Ponto de desembarque">
+            <TextInput
+              value={f.desembarque}
+              onChange={(e) => setF({ ...f, desembarque: e.target.value })}
+              placeholder="Ex.: Pirapemas centro"
+            />
+          </Field>
+        </div>
+
+        <div className="mb-2">
+          <Field label="O que é (opcional)">
+            <TextInput
+              value={f.item}
+              onChange={(e) => setF({ ...f, item: e.target.value })}
+              placeholder="Ex.: caixa de sapato, documentos…"
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Quem entrega (nome)">
+            <TextInput
+              value={f.remetenteNome}
+              onChange={(e) => setF({ ...f, remetenteNome: e.target.value })}
+            />
+          </Field>
+          <Field label="Quem entrega (telefone)">
+            <TextInput
+              inputMode="tel"
+              value={f.remetenteTelefone}
+              onChange={(e) => setF({ ...f, remetenteTelefone: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Quem recebe (nome) *">
+            <TextInput
+              value={f.destinatarioNome}
+              onChange={(e) => setF({ ...f, destinatarioNome: e.target.value })}
+            />
+          </Field>
+          <Field label="Quem recebe (telefone) *">
+            <TextInput
+              inputMode="tel"
+              value={f.destinatarioTelefone}
+              onChange={(e) => setF({ ...f, destinatarioTelefone: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="mb-4">
+          <Field label="Valor do frete (opcional — vira receita no Financeiro)">
+            <TextInput
+              type="number"
+              value={f.valor}
+              onChange={(e) => setF({ ...f, valor: e.target.value })}
+              placeholder="0,00"
+            />
+          </Field>
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            disabled={salvando || !podeEnviar}
+            onClick={salvar}
+            className="btn-press text-sm px-4 py-2 rounded-lg font-medium"
+            style={{
+              background: salvando || !podeEnviar ? C.border : C.amber,
+              color: salvando || !podeEnviar ? C.inkFaint : C.onBrand,
+            }}
+          >
+            {salvando ? "Salvando…" : pendente ? "Agendar" : "Criar"}
           </button>
         </div>
       </div>
