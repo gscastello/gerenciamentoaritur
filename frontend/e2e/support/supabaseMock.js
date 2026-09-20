@@ -68,6 +68,7 @@ function json(body, status = 200, headers = null) {
  * @param {object} [opts.occupancy]        { [`${data}|${direcao}`]: {capacity, occupied, available} }
  * @param {object} [opts.createResult]     resposta de rpc_create_reservation
  * @param {(route)=>void} [opts.onCreate]  callback quando rpc_create_reservation é chamado
+ * @param {(route)=>void} [opts.onEdit]    callback quando rpc_edit_reservation é chamado
  * @param {Array}  [opts.notifications=[]]  linhas de v_app_notifications
  * @param {Array}  [opts.pendencias=[]]     linhas de v_pendencias_atendimento
  * @param {Array}  [opts.notes=[]]          linhas iniciais de notes (bloco de notas)
@@ -78,6 +79,7 @@ export async function mockSupabase(page, opts = {}) {
     occupancy = {},
     createResult = { success: true, reservation_id: "e2e-res-1", status: "confirmada", message: "created" },
     onCreate,
+    onEdit,
     notifications = [],
     pendencias = [],
   } = opts;
@@ -180,19 +182,28 @@ export async function mockSupabase(page, opts = {}) {
       }
       if (fn === "rpc_edit_reservation") {
         const b = req.postDataJSON?.() ?? {};
-        // aplica o que dá no array em memória (só o desembarque/pagamento
-        // simples, o suficiente pros testes)
+        // aplica o que dá no array em memória — o suficiente pros testes
+        // (inclui mover/status/extra_data, usado pra agendar encomenda).
         if (b.p_reservation_id) {
-          reservations = reservations.map((r) =>
-            r.id === b.p_reservation_id
-              ? {
-                  ...r,
-                  desembarque: b.p_details?.dropoff_location ?? r.desembarque,
-                  quantidade: b.p_quantity ?? r.quantidade,
-                }
-              : r,
-          );
+          reservations = reservations.map((r) => {
+            if (r.id !== b.p_reservation_id) return r;
+            return {
+              ...r,
+              desembarque: b.p_details?.dropoff_location ?? r.desembarque,
+              valorTotal: b.p_details?.unit_price != null ? b.p_details.unit_price : r.valorTotal,
+              quantidade: b.p_quantity ?? r.quantidade,
+              ...(b.p_move
+                ? { data: b.p_move.trip_date, direcao: b.p_move.direction, pontoId: b.p_move.route_point_code }
+                : {}),
+              ...(b.p_contact
+                ? { nome: b.p_contact.name ?? r.nome, telefone: b.p_contact.phone ?? r.telefone }
+                : {}),
+              ...(b.p_status ? { status: b.p_status } : {}),
+              extra: b.p_extra_data ? { ...r.extra, ...b.p_extra_data } : r.extra,
+            };
+          });
         }
+        onEdit?.(route);
         return route.fulfill(json({ success: true, message: "edited" }));
       }
       if (fn === "rpc_mark_notifications_read") {

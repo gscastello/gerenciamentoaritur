@@ -185,11 +185,16 @@ export const reservationsService = {
 
   /**
    * Edição INTEIRA de uma reserva numa transação só (rpc_edit_reservation,
-   * database/33): detalhes + quantidade + contato + mover + pagamento +
-   * comprovante. Se a capacidade recusar (mover / nova quantidade), nada
-   * é gravado. Cada bloco é opcional.
+   * database/33 + database/42): detalhes (inclui unit_price) + quantidade +
+   * contato + mover + pagamento + comprovante + extraData (merge em
+   * extra_data) + status (só aplica em frete/encomenda — é como se agenda
+   * uma encomenda pendente numa viagem/ponto real). Se a capacidade recusar
+   * (mover / nova quantidade), nada é gravado. Cada bloco é opcional.
    */
-  async editReservationFull(reservationId, { details, quantity, contact, move, paid, proof } = {}) {
+  async editReservationFull(
+    reservationId,
+    { details, quantity, contact, move, paid, proof, extraData, status } = {},
+  ) {
     const actor = await getCurrentUserId();
     const { data, error } = await supabase.rpc("rpc_edit_reservation", {
       p_reservation_id: reservationId,
@@ -199,6 +204,10 @@ export const reservationsService = {
       p_move: move ?? null,
       p_paid: paid ?? null,
       p_proof: proof ?? null,
+      // merge em extra_data e troca direta de status — só valem pra
+      // frete/encomenda (a RPC recusa status pra passagem: ver database/42).
+      p_extra_data: extraData ?? null,
+      p_status: status ?? null,
       p_actor: actor,
     });
     if (error) {

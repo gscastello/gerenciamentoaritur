@@ -7,6 +7,7 @@ import {
   ClipboardList,
   MapPin,
   MessageCircle,
+  Package,
   PhoneCall,
   X,
   XIcon,
@@ -58,6 +59,20 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   );
   const pendentes = doDia.filter((r) => r.status === "pendente");
   const ativos = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
+  // Encomendas agendadas pro dia — não entram em `doDia` (não são
+  // "passageiro"). Visível em qualquer sub-aba: quem tá na rua precisa
+  // ver o que tem pra pegar/entregar independente de Embarque/Desembarque.
+  const encomendasDoDia = reservas.filter(
+    (r) => r.tipo === "encomenda" && r.data === data && r.status !== "cancelada",
+  );
+  const entregarEncomenda = async (id) => {
+    setErro("");
+    try {
+      await R.editReservationFull(id, { status: "embarcado" });
+    } catch (e) {
+      setErro(mensagemAmigavel(e, "Não foi possível marcar como entregue."));
+    }
+  };
   const alvos = useMemo(
     () => [
       ...trips.ida.pontos.map((p) => ({
@@ -231,6 +246,63 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </div>
           </div>
         </div>
+        {encomendasDoDia.length > 0 && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Package size={16} style={{ color: C.inkSoft }} />
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                Encomendas do dia{" "}
+                <span style={{ color: C.inkFaint }}>({encomendasDoDia.length})</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {encomendasDoDia.map((r) => {
+                const ponto = trips[r.direcao]?.pontos.find((p) => p.id === r.pontoId);
+                const entregue = r.status === "embarcado";
+                return (
+                  <div
+                    key={r.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
+                    style={{ background: C.panel2, opacity: entregue ? 0.6 : 1 }}
+                  >
+                    <div className="text-xs">
+                      <span className="font-semibold">{r.direcao === "ida" ? "Ida" : "Volta"}</span>{" "}
+                      · {r.extra?.encItem || "encomenda"} · {ponto?.nome || "?"} →{" "}
+                      {r.desembarque || "?"}
+                      <br />
+                      <span style={{ color: C.inkFaint }}>
+                        entrega: {r.extra?.encRemetenteNome || "—"} (
+                        {r.extra?.encRemetenteTelefone || "—"}) · recebe: {r.nome} ({r.telefone})
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      {r.telefone && (
+                        <button
+                          onClick={() =>
+                            window.open(`https://wa.me/55${digitos(r.telefone)}`, "_blank")
+                          }
+                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                          style={{ background: C.panel, color: C.inkSoft }}
+                        >
+                          <MessageCircle size={12} /> WhatsApp
+                        </button>
+                      )}
+                      {!entregue && (
+                        <button
+                          onClick={() => entregarEncomenda(r.id)}
+                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                          style={{ background: C.greenSoft, color: C.green }}
+                        >
+                          <Check size={12} /> Entregue
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
         <SubTabs
           value={subview}
           onChange={setSubview}
