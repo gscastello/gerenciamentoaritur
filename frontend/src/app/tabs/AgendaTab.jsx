@@ -22,7 +22,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
+import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
 import {
   primeiroErro,
   validarData,
@@ -244,10 +244,40 @@ export default function AgendaTab({
   // conhecido (é o da linha clicada) — só quantidade/local/telefone vêm
   // do texto. Mesma RPC de sempre (rpc_create_reservation via
   // R.createReservation); capacidade e duplicidade continuam decididas
-  // pelo banco.
+  // pelo banco. Prefixo "E" na mesma caixinha agenda uma encomenda em vez
+  // de passagem — embarque é o próprio ponto/horário da caixinha, só
+  // item (opcional) + telefone de quem recebe vêm do texto (database/42:
+  // nunca ocupa vaga).
   const bairrosAnotacao = useBairros();
   const buscarClientePorTelefone = useCustomerLookup();
   const criarViaAnotacao = async (direcao, ponto, texto) => {
+    const encomenda = parseAnotacaoEncomenda(texto);
+    if (!encomenda.semPrefixo) {
+      if (!encomenda.ok) return { ok: false, erro: encomenda.erro };
+      try {
+        const nomeExistente = await buscarClientePorTelefone(encomenda.telefone);
+        const res = await R.createReservation({
+          tripDate: data,
+          direction: direcao,
+          customerName: nomeExistente || "Encomenda",
+          customerPhone: encomenda.telefone,
+          type: "encomenda",
+          routePointCode: ponto.id,
+          unitPrice: 0,
+          status: "confirmada",
+          extraData: { encItem: encomenda.item || null, origem: "anotacao_agenda" },
+        });
+        emit(EVENTS.RESERVA_CRIADA, {
+          via: "anotacao_agenda_encomenda",
+          status: res?.status || "confirmada",
+          duplicada: res?.message === "duplicate_ignored",
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, erro: mensagemAmigavel(e, "Não foi possível criar a encomenda.") };
+      }
+    }
+
     const achado = parseAnotacaoRapida(texto);
     if (!achado.ok) return { ok: false, erro: achado.erro };
 
@@ -776,7 +806,7 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
             if (erro) setErro("");
           }}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
-          placeholder="Anotar reserva — ex.: 1P Cohatrac 98999998888"
+          placeholder="Anotar — 1P Cohatrac 98999998888 · encomenda: E 98999998888"
           aria-label={`Anotar reserva — ${nomePonto}`}
           className="text-xs py-1.5"
           disabled={salvando}

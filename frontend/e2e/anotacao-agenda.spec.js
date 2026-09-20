@@ -36,6 +36,34 @@ test("Agenda: anotação rápida no ponto cria a reserva sem abrir modal", async
   await expect(campo).toHaveValue("");
 });
 
+test("Agenda: anotação rápida com prefixo 'E' agenda uma encomenda no ponto, sem abrir modal", async ({ page }) => {
+  let corpo = null;
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    onCreate: (route) => {
+      corpo = JSON.parse(route.request().postData() || "{}");
+    },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+
+  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  await expect(campo).toBeVisible();
+  await campo.fill("E Documentos 98988887777");
+  await campo.press("Enter");
+
+  await expect.poll(() => corpo?.p_customer_phone).toBe("98988887777");
+  expect(corpo.p_type).toBe("encomenda");
+  expect(corpo.p_direction).toBe("ida");
+  expect(corpo.p_route_point_code).toBe("busca");
+  expect(corpo.p_unit_price).toBe(0);
+  expect(corpo.p_status).toBe("confirmada");
+  expect(corpo.p_extra_data).toMatchObject({ encItem: "Documentos" });
+
+  await expect(campo).toHaveValue("");
+});
+
 test("Agenda: anotação sem telefone reconhecível mostra erro e não chama a RPC", async ({ page }) => {
   let chamouRpc = false;
   await mockSupabase(page, {

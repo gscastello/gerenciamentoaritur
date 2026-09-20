@@ -4,6 +4,7 @@
 // a reserva direto no ponto/horário escolhido. Ex.:
 //   "1P Cohatrac 98999998888"
 //   "2p Miranda +55 98 8516-6052"
+//   "E 98999998888"                (encomenda — ver parseAnotacaoEncomenda)
 //
 // Formato: "<quantidade>P <local/bairro> <telefone>". A quantidade é
 // opcional (assume 1 quando não vem na frente); o telefone é sempre o
@@ -13,6 +14,7 @@
 import { validarTelefone } from "./validacao.js";
 
 const RE_QUANTIDADE = /^\s*(\d{1,2})\s*p\.?\s+/i;
+const RE_ENCOMENDA_PREFIXO = /^\s*e\.?\s+/i;
 // telefone = último trecho que começa em dígito/"+" e só tem dígito,
 // espaço, parênteses, ponto ou traço até o fim da linha.
 const RE_TELEFONE_FINAL = /([+\d][\d\s().-]*\d)\s*$/;
@@ -54,4 +56,35 @@ export function parseAnotacaoRapida(textoBruto) {
   const local = resto.slice(0, mFone.index).trim().replace(/\s+/g, " ");
 
   return { ok: true, quantidade, local, telefone: telefone.valor };
+}
+
+/**
+ * Anotação rápida de ENCOMENDA: "E <item opcional> <telefone>". O "E" no
+ * início distingue de uma anotação de passagem comum (sem prefixo, ou
+ * "<n>P"); o ponto de embarque é o da caixinha onde foi digitado, então
+ * não faz parte do texto — só sobra item (opcional) + telefone de quem
+ * recebe.
+ * @param {string} textoBruto
+ * @returns {{ok:true, item:string, telefone:string} | {ok:false, erro:string, semPrefixo?:boolean}}
+ */
+export function parseAnotacaoEncomenda(textoBruto) {
+  const texto = String(textoBruto ?? "").replace(RE_INVISIVEIS, "").trim();
+  const mPrefixo = RE_ENCOMENDA_PREFIXO.exec(texto);
+  if (!mPrefixo) {
+    return { ok: false, erro: "Comece com \"E\" pra anotar uma encomenda.", semPrefixo: true };
+  }
+
+  const resto = texto.slice(mPrefixo[0].length);
+  const mFone = RE_TELEFONE_FINAL.exec(resto);
+  if (!mFone) {
+    return { ok: false, erro: "Não encontrei um telefone no final do texto." };
+  }
+  const telefone = validarTelefone(mFone[1]);
+  if (!telefone.ok) {
+    return { ok: false, erro: telefone.erro };
+  }
+
+  const item = resto.slice(0, mFone.index).trim().replace(/\s+/g, " ");
+
+  return { ok: true, item, telefone: telefone.valor };
 }
