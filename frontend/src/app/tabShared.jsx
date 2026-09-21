@@ -83,6 +83,20 @@ const fmtDiaFuso = new Intl.DateTimeFormat("en-CA", {
 export const dataOperacao = (offsetDias = 0) =>
   fmtDiaFuso.format(new Date(Date.now() + offsetDias * 86400000));
 export const todayStr = () => dataOperacao();
+// hourCycle:"h23" (em vez de hour12:false) evita a meia-noite virar "24"
+// em vez de "0" — bug de Intl conhecido que faria a Agenda pular pro dia
+// seguinte já à meia-noite, cedo demais.
+const fmtHoraFuso = new Intl.DateTimeFormat("en-US", {
+  timeZone: FUSO_OPERACAO,
+  hour: "numeric",
+  hourCycle: "h23",
+});
+// A volta pra São Luís termina por volta das 14h (pedido do dono) — depois
+// disso não sobra mais nenhum embarque pra "hoje", então a Agenda deve
+// abrir direto no dia seguinte em vez de mostrar um dia já encerrado.
+const HORA_FIM_OPERACAO_DIA = 14;
+export const diaAgendaPadrao = () =>
+  dataOperacao(Number(fmtHoraFuso.format(new Date())) >= HORA_FIM_OPERACAO_DIA ? 1 : 0);
 export const fmtBRL = (n) =>
   (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const fmtDate = (d) => {
@@ -108,6 +122,13 @@ export const fmtDataHora = (iso) =>
     minute: "2-digit",
   });
 export const isMonday = (d) => new Date(`${d}T12:00:00`).getDay() === 1;
+// Desloca uma data "YYYY-MM-DD" (a já selecionada na tela, não "agora") em
+// N dias — meio-dia local evita cair no dia errado por causa de DST/fuso.
+export const deslocarDia = (ds, dias) => {
+  const d = new Date(`${ds}T12:00:00`);
+  d.setDate(d.getDate() + dias);
+  return fmtDiaFuso.format(d);
+};
 // Dia do mês para custo recorrente: 1–31. Em meses mais curtos, o banco
 // lança no último dia (fn_generate_recurring_expenses).
 export const clampDia = (v) => Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), 31);
