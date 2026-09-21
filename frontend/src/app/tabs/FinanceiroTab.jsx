@@ -474,7 +474,127 @@ export default function FinanceiroTab({ pix, deepLink }) {
                   <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
                 </button>
               </Card>
-              <Card style={{ padding: 0, overflow: "hidden" }}>
+              {/* Lista de cards no celular em vez de <table>: 5 colunas
+                  (tipo/categoria/valor/descrição/ação) não cabem numa tela
+                  estreita — o Card tinha overflow:hidden (não scroll), então
+                  nos dias COM lançamento as colunas de trás simplesmente
+                  desapareciam cortadas, e os campos de edição ficavam
+                  espremidos a ponto de precisar de zoom pra mexer neles.
+                  É por isso que o problema só aparecia em dias que já
+                  tinham valor lançado — dia vazio nunca renderizava essa
+                  tabela. */}
+              <div className="sm:hidden space-y-2">
+                {[...doDia].reverse().map((f) =>
+                  editId === f.id ? (
+                    <Card key={f.id} className="anim-slideDown space-y-2">
+                      <Select
+                        value={editVal.tipo}
+                        onChange={(e) => setEditVal({ ...editVal, tipo: e.target.value })}
+                      >
+                        <option value="receita">Receita</option>
+                        <option value="despesa">Despesa</option>
+                      </Select>
+                      {editVal.tipo === "despesa" && (
+                        <Select
+                          value={editVal.categoria || "outro"}
+                          onChange={(e) => setEditVal({ ...editVal, categoria: e.target.value })}
+                        >
+                          {cats.despesa.map((c) => (
+                            <option key={c.slug} value={c.slug}>
+                              {c.label}
+                            </option>
+                          ))}
+                          {editVal.categoria && !cats.existe(editVal.categoria) ? (
+                            <option value={editVal.categoria}>{cats.rotulo(editVal.categoria)}</option>
+                          ) : null}
+                        </Select>
+                      )}
+                      <TextInput
+                        type="number"
+                        placeholder="Valor"
+                        value={editVal.valor}
+                        onChange={(e) => setEditVal({ ...editVal, valor: e.target.value })}
+                      />
+                      <TextInput
+                        placeholder="Descrição"
+                        value={editVal.descricao}
+                        onChange={(e) => setEditVal({ ...editVal, descricao: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={salvarEdicao}
+                        className="btn-press flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-sm font-medium"
+                        style={{ background: C.greenSoft, color: C.green }}
+                      >
+                        <Save size={14} /> Salvar
+                      </button>
+                    </Card>
+                  ) : (
+                    <Card key={f.id} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Pill
+                            color={f.tipo === "receita" ? C.green : C.red}
+                            bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}
+                          >
+                            {f.tipo}
+                          </Pill>
+                          <span
+                            className="font-semibold"
+                            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                          >
+                            {fmtBRL(f.valor)}
+                          </span>
+                        </div>
+                        <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
+                          {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
+                          {f.descricao ? ` · ${f.descricao}` : ""}
+                          {f.auto ? (
+                            <span style={{ color: C.inkFaint }}> · automático</span>
+                          ) : (
+                            ""
+                          )}
+                        </div>
+                      </div>
+                      {f.auto ? (
+                        <span
+                          className="text-[10px] shrink-0"
+                          style={{ color: C.inkFaint }}
+                        >
+                          da operação
+                        </span>
+                      ) : (
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => iniciarEdicao(f)}
+                            className="btn-press p-2 rounded-lg"
+                            aria-label="Editar lançamento"
+                          >
+                            <Pencil size={14} style={{ color: C.inkFaint }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => remove(f.id)}
+                            className="btn-press p-2 rounded-lg"
+                            aria-label="Remover lançamento"
+                          >
+                            <X size={14} style={{ color: C.inkFaint }} />
+                          </button>
+                        </div>
+                      )}
+                    </Card>
+                  ),
+                )}
+                {doDia.length === 0 && (
+                  <Card>
+                    <p className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
+                      Nenhum lançamento neste dia.
+                    </p>
+                  </Card>
+                )}
+              </div>
+              <Card className="hidden sm:block" style={{ padding: 0, overflow: "hidden" }}>
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ background: C.panel2, color: C.inkSoft }}>
@@ -790,7 +910,11 @@ function RelatorioFinanceiroView() {
                 accent={relatorio.totais.lucro >= 0 ? C.green : C.red}
               />
             </div>
-            <div className="overflow-x-auto">
+            {/* Lista de cards em vez de <table>: 4 colunas com valores em
+                R$ não cabem lado a lado num celular sem rolagem — e o
+                dono não quer precisar deslizar pra ver o resultado de
+                cada período. */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
@@ -822,6 +946,49 @@ function RelatorioFinanceiroView() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="sm:hidden space-y-2">
+              {relatorio.linhas.map((l) => (
+                <div
+                  key={l.periodo}
+                  className="rounded-lg border p-2.5 text-sm"
+                  style={{ borderColor: C.borderSoft, background: C.panel2 }}
+                >
+                  <div className="text-xs font-medium mb-1.5" style={{ color: C.inkFaint }}>
+                    {rotuloPeriodoRelatorio(l.periodo, gran)}
+                  </div>
+                  <div
+                    className="flex items-center justify-between"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    <span className="text-xs" style={{ color: C.inkSoft }}>
+                      Faturamento
+                    </span>
+                    {fmtBRL(l.faturamento)}
+                  </div>
+                  <div
+                    className="flex items-center justify-between"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    <span className="text-xs" style={{ color: C.inkSoft }}>
+                      Despesa
+                    </span>
+                    {fmtBRL(l.despesa)}
+                  </div>
+                  <div
+                    className="flex items-center justify-between font-semibold"
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: l.lucro >= 0 ? C.green : C.red,
+                    }}
+                  >
+                    <span className="text-xs font-normal" style={{ color: C.inkSoft }}>
+                      Lucro
+                    </span>
+                    {fmtBRL(l.lucro)}
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
         </FadeIn>

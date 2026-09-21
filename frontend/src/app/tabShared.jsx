@@ -879,10 +879,13 @@ export function DirecaoDivisor({ label, cor }) {
 
 // Sub-navegação em pílulas (usada em Lista, Financeiro, Gestão).
 export function SubTabs({ value, onChange, options }) {
+  // flex-wrap em vez de rolagem horizontal: o dono não quer precisar
+  // deslizar pra achar uma aba — se não couber tudo numa linha só, quebra
+  // pra segunda linha, mas fica tudo à vista e clicável de cara.
   return (
     <div
-      className="flex gap-1 rounded-xl p-1 max-w-full overflow-x-auto"
-      style={{ background: C.panel2, border: `1px solid ${C.border}`, WebkitOverflowScrolling: "touch" }}
+      className="flex flex-wrap gap-1 rounded-xl p-1 max-w-full"
+      style={{ background: C.panel2, border: `1px solid ${C.border}` }}
     >
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
@@ -891,7 +894,7 @@ export function SubTabs({ value, onChange, options }) {
             key={id}
             type="button"
             onClick={() => onChange(id)}
-            className="btn-press flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg shrink-0"
+            className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg"
             style={{
               background: active ? C.brand : "transparent",
               color: active ? C.onBrand : C.inkSoft,

@@ -100,8 +100,10 @@ test("Relatório: cards de totais mostram o valor completo no celular", async ({
 // Regressão (2026-09-21): a barra de sub-abas do Financeiro/Gestão
 // (SubTabs) não tinha overflow nem scroll — com 4 abas (caso da Gestão),
 // a última ("Lançamentos do mês") ficava completamente fora da tela, sem
-// nenhum jeito de alcançá-la no celular.
-test("Gestão: as 4 sub-abas continuam alcançáveis (scroll horizontal) no celular", async ({
+// nenhum jeito de alcançá-la no celular. Corrigido com flex-wrap (quebra
+// pra 2ª linha) em vez de rolagem — o dono não quer precisar deslizar
+// pra achar uma opção, quer tudo à vista.
+test("Gestão: as 4 sub-abas ficam todas à vista (sem precisar deslizar) no celular", async ({
   page,
 }) => {
   await mockSupabase(page, { role: "admin" });
@@ -117,8 +119,66 @@ test("Gestão: as 4 sub-abas continuam alcançáveis (scroll horizontal) no celu
   await botao.click();
 
   const aba = page.getByRole("button", { name: "Lançamentos do mês" });
-  await aba.scrollIntoViewIfNeeded();
   await expect(aba).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
   await aba.click();
   await expect(page.getByText("Lançar custo do mês")).toBeVisible();
+});
+
+// Regressão (2026-09-21): a lista de lançamentos do dia usava <table> de
+// 5 colunas dentro de um Card com overflow:hidden (sem scroll) — em
+// celular, colunas ficavam cortadas e os campos de edição, espremidos
+// numa célula estreitíssima, dificultavam o toque (dono relatou "zoom"
+// só nos dias que já tinham lançamento — dia vazio nem renderiza essa
+// tabela). Vira lista de cards empilhados no celular.
+test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", async ({
+  page,
+}) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
+  await mockSupabase(page, {
+    role: "admin",
+    financialEntries: [
+      {
+        id: "e1",
+        entry_date: hoje,
+        type: "despesa",
+        category: "combustivel",
+        amount: 180,
+        description: "Abastecimento posto BR",
+      },
+    ],
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
+    timeout: 10000,
+  });
+  let botao = page.getByRole("button", { name: /^Financeiro$/ });
+  if ((await botao.count()) === 0) {
+    await page.getByRole("button", { name: "Mais" }).click();
+    botao = page.getByRole("button", { name: /^Financeiro$/ });
+  }
+  await botao.click();
+
+  // a tabela de desktop continua no DOM (hidden sm:block) — só não pode
+  // estar visível no celular. Escopa a busca do texto na lista de cards
+  // (não na <td> escondida, que tem o mesmo texto).
+  await expect(page.locator("table")).not.toBeVisible();
+  const listaCards = page.locator(".sm\\:hidden.space-y-2");
+  await expect(listaCards.getByText("Abastecimento posto BR")).toBeVisible();
+
+  await listaCards.getByLabel("Editar lançamento").click();
+  const valorInput = listaCards.locator("input[type=number]");
+  await expect(valorInput).toBeVisible();
+  const fontSize = await valorInput.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+  expect(fontSize).toBeGreaterThanOrEqual(16);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
 });
