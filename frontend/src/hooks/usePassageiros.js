@@ -5,10 +5,10 @@
 // passageiro carrega só quando o card abre (carregarDetalhe).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { customersService } from "../services/customersService";
-import { useRealtimeTable } from "./useRealtimeTable";
-import { useAsyncAction } from "./useAsyncAction";
 import { logTecnico, mensagemAmigavel } from "../lib/erros.js";
+import { customersService } from "../services/customersService";
+import { useAsyncAction } from "./useAsyncAction";
+import { useRealtimeTable } from "./useRealtimeTable";
 
 const PAGINA = 25;
 
@@ -61,22 +61,60 @@ export function usePassageiros(busca) {
   const salvarNota = useCallback(
     async (customerId, notes) => {
       await notaAction.run(customerId, notes);
-      setLinhas((atual) =>
-        atual.map((p) => (p.customer_id === customerId ? { ...p, notes } : p)),
-      );
+      setLinhas((atual) => atual.map((p) => (p.customer_id === customerId ? { ...p, notes } : p)));
     },
     [notaAction],
+  );
+
+  // cadastro editável (nome, telefone, ponto/pagamento padrão) — um único
+  // "Salvar" na tela, aplica só os campos que mudaram.
+  const perfilAction = useAsyncAction(customersService.updateProfile);
+  const salvarPerfil = useCallback(
+    async (customerId, { name, phone, defaultRoutePointCode, defaultPaymentMethod }) => {
+      await perfilAction.run(customerId, {
+        name,
+        phone,
+        defaultRoutePointCode,
+        defaultPaymentMethod,
+      });
+      setLinhas((atual) =>
+        atual.map((p) =>
+          p.customer_id === customerId
+            ? {
+                ...p,
+                ...(name !== undefined ? { nome: name } : {}),
+                ...(phone !== undefined ? { telefone: phone } : {}),
+                ...(defaultRoutePointCode !== undefined
+                  ? { ponto_padrao: defaultRoutePointCode }
+                  : {}),
+                ...(defaultPaymentMethod !== undefined
+                  ? { pagamento_padrao: defaultPaymentMethod }
+                  : {}),
+              }
+            : p,
+        ),
+      );
+    },
+    [perfilAction],
   );
 
   return {
     passageiros: linhas,
     total,
     loading,
-    erro: erro || (notaAction.error ? mensagemAmigavel(notaAction.error, "Não foi possível salvar a nota.") : ""),
+    erro:
+      erro ||
+      (notaAction.error
+        ? mensagemAmigavel(notaAction.error, "Não foi possível salvar a nota.")
+        : "") ||
+      (perfilAction.error
+        ? mensagemAmigavel(perfilAction.error, "Não foi possível salvar o cadastro.")
+        : ""),
     temMais: linhas.length < total,
     carregarMais,
     recarregar,
     salvarNota,
+    salvarPerfil,
   };
 }
 

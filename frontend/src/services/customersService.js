@@ -1,10 +1,16 @@
 // src/services/customersService.js
-import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
+import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
-function isNetworkish(error) { return /fetch|network|timeout/i.test(error?.message || ""); }
+function isNetworkish(error) {
+  return /fetch|network|timeout/i.test(error?.message || "");
+}
 async function handle(promise, context) {
   const { data, error } = await promise;
-  if (error) throw new ServiceError(`${context}: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+  if (error)
+    throw new ServiceError(`${context}: ${error.message}`, {
+      cause: error,
+      retryable: isNetworkish(error),
+    });
   return data;
 }
 
@@ -39,14 +45,17 @@ export const customersService = {
     let query = supabase
       .from("v_customers_stats")
       .select(
-        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total",
+        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao",
         { count: "exact" },
       )
       .order("total_gasto", { ascending: false })
       .order("ultima_data", { ascending: false, nullsFirst: false })
       .range(de, ate);
     if (search) {
-      const termo = String(search).replace(/[,()*:\\%]/g, " ").trim().slice(0, 80);
+      const termo = String(search)
+        .replace(/[,()*:\\%]/g, " ")
+        .trim()
+        .slice(0, 80);
       if (termo) query = query.or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`);
     }
     const { data, error, count } = await query;
@@ -56,7 +65,7 @@ export const customersService = {
         retryable: isNetworkish(error),
       });
     }
-    return { linhas: data ?? [], total: count ?? (data?.length ?? 0) };
+    return { linhas: data ?? [], total: count ?? data?.length ?? 0 };
   },
 
   /**
@@ -80,7 +89,12 @@ export const customersService = {
 
   async getByPhone(phone) {
     return handle(
-      supabase.from("customers").select(CUSTOMER_COLS).eq("phone", phone).is("deleted_at", null).maybeSingle(),
+      supabase
+        .from("customers")
+        .select(CUSTOMER_COLS)
+        .eq("phone", phone)
+        .is("deleted_at", null)
+        .maybeSingle(),
       "getByPhone",
     );
   },
@@ -94,15 +108,40 @@ export const customersService = {
         .eq("customer_id", customerId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false }),
-      "getHistory"
+      "getHistory",
     );
   },
 
   async updateNotes(customerId, notes) {
     const actor = await getCurrentUserId();
     return handle(
-      supabase.from("customers").update({ notes, updated_by: actor }).eq("id", customerId).select().single(),
-      "updateNotes"
+      supabase
+        .from("customers")
+        .update({ notes, updated_by: actor })
+        .eq("id", customerId)
+        .select()
+        .single(),
+      "updateNotes",
+    );
+  },
+
+  /** Edição do cadastro em Passageiros: nome, telefone e as preferências
+   * fixas (ponto de embarque e pagamento padrão — usadas pela Central de
+   * Atendimento como sugestão prioritária sobre o cálculo do histórico).
+   * `null` limpa a preferência; campos omitidos não mudam. */
+  async updateProfile(
+    customerId,
+    { name, phone, defaultRoutePointCode, defaultPaymentMethod } = {},
+  ) {
+    const actor = await getCurrentUserId();
+    const patch = { updated_by: actor };
+    if (name !== undefined) patch.name = name;
+    if (phone !== undefined) patch.phone = phone;
+    if (defaultRoutePointCode !== undefined) patch.default_route_point_code = defaultRoutePointCode;
+    if (defaultPaymentMethod !== undefined) patch.default_payment_method = defaultPaymentMethod;
+    return handle(
+      supabase.from("customers").update(patch).eq("id", customerId).select().single(),
+      "updateProfile",
     );
   },
 
@@ -113,16 +152,29 @@ export const customersService = {
       return handle(
         supabase
           .from("customers")
-          .update({ name: name || existing.name, default_neighborhood: defaultNeighborhood ?? existing.default_neighborhood, updated_by: actor })
+          .update({
+            name: name || existing.name,
+            default_neighborhood: defaultNeighborhood ?? existing.default_neighborhood,
+            updated_by: actor,
+          })
           .eq("id", existing.id)
           .select()
           .single(),
-        "upsertByPhone(update)"
+        "upsertByPhone(update)",
       );
     }
     return handle(
-      supabase.from("customers").insert({ name, phone, default_neighborhood: defaultNeighborhood ?? null, created_by: actor }).select().single(),
-      "upsertByPhone(insert)"
+      supabase
+        .from("customers")
+        .insert({
+          name,
+          phone,
+          default_neighborhood: defaultNeighborhood ?? null,
+          created_by: actor,
+        })
+        .select()
+        .single(),
+      "upsertByPhone(insert)",
     );
   },
 };

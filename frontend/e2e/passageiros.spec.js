@@ -37,7 +37,9 @@ test("Passageiros: lista do servidor, busca e abre o detalhe", async ({ page }) 
   await page.getByPlaceholder("Buscar por nome ou telefone…").fill("Passageiro 1");
   await expect(page.getByText("Passageiro 1")).toBeVisible();
 
-  // abre o detalhe (carrega o histórico sob demanda)
-  await page.getByRole("button", { name: /Passageiro 1/ }).click();
+  // abre o detalhe (carrega o histórico sob demanda) — o nome bate tanto
+  // com o botão de expandir quanto com o de "Editar cadastro de …", então
+  // a âncora no início do nome (P1, as iniciais) desambigua.
+  await page.getByRole("button", { name: /^P1 Passageiro 1/ }).click();
   await expect(page.getByText("Notas do CRM")).toBeVisible();
 });
