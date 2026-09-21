@@ -934,48 +934,39 @@ function SistemaErros() {
         </div>
       )}
       {erros.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left" style={{ color: C.inkFaint }}>
-                <th className="py-1 pr-3 font-medium">Quando</th>
-                <th className="py-1 pr-3 font-medium">Código</th>
-                <th className="py-1 font-medium">Mensagem</th>
-                <th className="py-1 pr-1 font-medium" aria-label="ações" />
-              </tr>
-            </thead>
-            <tbody>
-              {erros.map((e) => (
-                <tr key={e.id} className="border-t" style={{ borderColor: C.borderSoft }}>
-                  <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: C.inkSoft }}>
-                    {fmtDataHora(e.at)}
-                  </td>
-                  <td className="py-1.5 pr-3 whitespace-nowrap" style={{ color: C.inkFaint }}>
-                    {e.code || "—"}
-                  </td>
-                  <td
-                    className="py-1.5"
-                    style={{ color: C.ink, overflowWrap: "anywhere" }}
-                    title={e.context ? JSON.stringify(e.context) : ""}
-                  >
-                    {e.message}
-                  </td>
-                  <td className="py-1.5 pl-2 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => resolver(e.id)}
-                      disabled={resolvendo}
-                      aria-label={`Resolver: ${e.message}`}
-                      className="btn-press flex items-center gap-1 text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
-                      style={{ background: C.greenSoft, color: C.green }}
-                    >
-                      <Check size={11} /> Resolver
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        // lista de cards em vez de <table>: numa tela de celular estreita,
+        // 4 colunas (quando/código/mensagem/ação) espremem a mensagem numa
+        // faixa minúscula e o botão "Resolver" acaba colado na borda.
+        <div className="space-y-2 text-xs">
+          {erros.map((e) => (
+            <div
+              key={e.id}
+              className="rounded-lg border p-2.5"
+              style={{ borderColor: C.borderSoft, background: C.panel2 }}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span style={{ color: C.inkSoft }}>{fmtDataHora(e.at)}</span>
+                <span style={{ color: C.inkFaint }}>{e.code || "—"}</span>
+              </div>
+              <div
+                className="mt-1.5"
+                style={{ color: C.ink, overflowWrap: "anywhere" }}
+                title={e.context ? JSON.stringify(e.context) : ""}
+              >
+                {e.message}
+              </div>
+              <button
+                type="button"
+                onClick={() => resolver(e.id)}
+                disabled={resolvendo}
+                aria-label={`Resolver: ${e.message}`}
+                className="btn-press mt-2 flex items-center gap-1 text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
+                style={{ background: C.greenSoft, color: C.green }}
+              >
+                <Check size={11} /> Resolver
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </Card>

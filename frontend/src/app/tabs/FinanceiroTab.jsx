@@ -298,18 +298,22 @@ export default function FinanceiroTab({ pix, deepLink }) {
                   acontecer independente da causa exata). */}
               <div
                 className="grid gap-1 text-center text-[10px] mb-1 justify-center"
-                style={{ color: C.inkFaint, gridTemplateColumns: "repeat(7, 34px)" }}
+                style={{ color: C.inkFaint, gridTemplateColumns: "repeat(7, 40px)" }}
               >
                 {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
                   <div key={i}>{d}</div>
                 ))}
               </div>
+              {/* touch-action:manipulation no wrapper (não só nos botões)
+                  evita que um toque que caia no gap entre células — muito
+                  provável em células pequenas — seja lido como o primeiro
+                  toque de um double-tap-zoom do Safari/iOS. */}
               <div
                 className="grid gap-1 justify-center"
-                style={{ gridTemplateColumns: "repeat(7, 34px)" }}
+                style={{ gridTemplateColumns: "repeat(7, 40px)", touchAction: "manipulation" }}
               >
                 {cells.map((d, i) => {
-                  if (!d) return <div key={i} style={{ width: 34, height: 34 }} />;
+                  if (!d) return <div key={i} style={{ width: 40, height: 40 }} />;
                   const { ds, lucro, temMovimento } = lucroPorDia(d);
                   const sel = ds === diaSel;
                   return (
@@ -318,8 +322,8 @@ export default function FinanceiroTab({ pix, deepLink }) {
                       onClick={() => setDiaSel(ds)}
                       className="btn-press rounded-lg flex flex-col items-center justify-center text-xs"
                       style={{
-                        width: 34,
-                        height: 34,
+                        width: 40,
+                        height: 40,
                         background: sel ? C.amber : C.panel2,
                         color: sel ? C.onBrand : C.ink,
                         border:
@@ -766,7 +770,7 @@ function RelatorioFinanceiroView() {
       ) : (
         <FadeIn>
           <Card>
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid sm:grid-cols-3 gap-3 mb-4">
               <StatCard
                 label="Faturamento"
                 value={fmtBRL(relatorio.totais.faturamento)}

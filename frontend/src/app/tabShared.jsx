@@ -881,8 +881,8 @@ export function DirecaoDivisor({ label, cor }) {
 export function SubTabs({ value, onChange, options }) {
   return (
     <div
-      className="inline-flex gap-1 rounded-xl p-1"
-      style={{ background: C.panel2, border: `1px solid ${C.border}` }}
+      className="flex gap-1 rounded-xl p-1 max-w-full overflow-x-auto"
+      style={{ background: C.panel2, border: `1px solid ${C.border}`, WebkitOverflowScrolling: "touch" }}
     >
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
@@ -891,7 +891,7 @@ export function SubTabs({ value, onChange, options }) {
             key={id}
             type="button"
             onClick={() => onChange(id)}
-            className="btn-press flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg"
+            className="btn-press flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-lg shrink-0"
             style={{
               background: active ? C.brand : "transparent",
               color: active ? C.onBrand : C.inkSoft,
