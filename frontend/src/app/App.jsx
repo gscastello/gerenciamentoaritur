@@ -471,14 +471,14 @@ function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar
           aria-label="Ações rápidas"
           className="btn-press rounded-full flex items-center justify-center"
           style={{
-            width: 56,
-            height: 56,
+            width: 48,
+            height: 48,
             background: C.amber,
             color: C.onBrand,
             boxShadow: "0 4px 18px rgba(0,0,0,.45)",
           }}
         >
-          {aberto ? <X size={24} /> : <Plus size={26} />}
+          {aberto ? <X size={20} /> : <Plus size={22} />}
         </button>
       </div>
     </>
@@ -787,7 +787,7 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
         {badge > 0 && (
           <span
             className="absolute -top-1.5 -right-2.5 text-[8px] font-bold px-1 rounded-full"
-            style={{ background: C.purple, color: "#fff" }}
+            style={{ background: C.purple, color: "#fff", pointerEvents: "none" }}
           >
             {badge}
           </span>

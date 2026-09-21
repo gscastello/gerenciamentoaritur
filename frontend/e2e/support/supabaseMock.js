@@ -556,6 +556,7 @@ export async function mockSupabase(page, opts = {}) {
         },
       ];
     else if (table === "customers") rows = [];
+    else if (table === "financial_entries") rows = opts.financialEntries ?? [];
     else if (table === "v_contas_a_receber") rows = [];
     else if (table === "v_app_notifications")
       rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
