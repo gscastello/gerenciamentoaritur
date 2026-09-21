@@ -65,3 +65,32 @@ test("Gestão: Resultado — grupo do DRE expande e recolhe a lista de categoria
   await page.getByText("Veículo", { exact: true }).click();
   await expect(page.getByText("Lavagem", { exact: true })).toHaveCount(0);
 });
+
+// Pedido do dono (2026-09-21): "custos de operação" misturava combustível,
+// diárias de motorista e manutenção numa linha só do DRE — agora cada um
+// vira sua própria linha.
+test("Gestão: Resultado — combustível, motorista e manutenção aparecem em linhas separadas", async ({
+  page,
+}) => {
+  const hoje = new Date();
+  const ym = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+  await mockSupabase(page, {
+    role: "admin",
+    financialEntries: [
+      { id: "e1", entry_date: `${ym}-05`, type: "receita", category: "passagem", amount: 10000 },
+      { id: "e2", entry_date: `${ym}-05`, type: "despesa", category: "combustivel", amount: 800 },
+      { id: "e3", entry_date: `${ym}-06`, type: "despesa", category: "motorista", amount: 300 },
+      { id: "e4", entry_date: `${ym}-07`, type: "despesa", category: "manutencao", amount: 500 },
+    ],
+  });
+  await page.goto("/");
+  await abrirGestao(page);
+
+  await expect(page.getByText("Combustível", { exact: true })).toBeVisible();
+  await expect(page.getByText("− R$ 800,00")).toBeVisible();
+  await expect(page.getByText("Diárias de motorista(s)", { exact: true })).toBeVisible();
+  await expect(page.getByText("− R$ 300,00")).toBeVisible();
+  await expect(page.getByText("Manutenção", { exact: true })).toBeVisible();
+  await expect(page.getByText("− R$ 500,00")).toBeVisible();
+  await expect(page.getByText(/Custos de operação/)).toHaveCount(0);
+});

@@ -4,6 +4,8 @@ import {
   ArrowRight,
   Bus,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Hourglass,
   Megaphone,
@@ -57,6 +59,8 @@ import {
   TextInput,
   VOLTA_ORDEM,
   anotacaoBase,
+  deslocarDia,
+  diaAgendaPadrao,
   diaSemana,
   digitos,
   enderecoEmbarque,
@@ -83,7 +87,7 @@ export default function AgendaTab({
   deepLink,
   onAgendar,
 }) {
-  const [data, setData] = useState(todayStr());
+  const [data, setData] = useState(diaAgendaPadrao());
   useDeepLinkData(deepLink, setData);
   const [editando, setEditando] = useState(null);
   const [encomendaModal, setEncomendaModal] = useState(null); // null = fechado; {} = nova; {pendente:r} = agendando uma pendente
@@ -339,53 +343,74 @@ export default function AgendaTab({
           style={{ borderColor: C.brandDim }}
         >
           <HeroFX />
-          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
-            <div>
-              <div
-                className="capitalize"
-                style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
-                  fontWeight: 700,
-                  fontSize: "1.35rem",
-                  color: "#fff",
-                }}
+          <div className="relative">
+            {/* Dia em destaque, centralizado — é em torno dele que toda a
+                tela opera, então vira o elemento visual dominante, com
+                setas pra andar dia a dia sem precisar abrir o calendário. */}
+            <div className="flex items-center justify-center gap-3 md:gap-6">
+              <button
+                type="button"
+                onClick={() => setData(deslocarDia(data, -1))}
+                aria-label="Dia anterior"
+                className="btn-press p-2 rounded-full shrink-0"
+                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
               >
-                {data === todayStr() ? "Hoje" : diaSemana(data)}
-              </div>
-              <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
-                {fmtDate(data)} · <span className="capitalize">{diaSemana(data)}</span>
-              </div>
-            </div>
-            <div className="min-w-[200px] flex-1 max-w-xs space-y-2">
-              <CapacidadeBar prefixo="IDA" ocupados={paxIda} total={capacidade} altura={8} />
-              <CapacidadeBar prefixo="VOLTA" ocupados={paxVolta} total={capacidade} altura={8} />
-            </div>
-            <div className="flex gap-4">
-              <div>
+                <ChevronLeft size={20} />
+              </button>
+              <div className="text-center min-w-0">
+                {data === todayStr() ? (
+                  <div
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "rgba(255,255,255,.75)" }}
+                  >
+                    Hoje
+                  </div>
+                ) : data === deslocarDia(todayStr(), 1) ? (
+                  <div
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "rgba(255,255,255,.75)" }}
+                  >
+                    Amanhã
+                  </div>
+                ) : null}
                 <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
-                >
-                  Pendentes
-                </div>
-                <div
-                  className="font-bold"
+                  className="capitalize truncate"
                   style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontWeight: 800,
+                    fontSize: "1.7rem",
+                    lineHeight: 1.1,
                     color: "#fff",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "1.1rem",
                   }}
                 >
-                  {pendentesDoDia.length}
+                  {diaSemana(data)}
+                </div>
+                <div className="text-sm" style={{ color: "rgba(255,255,255,.75)" }}>
+                  {fmtDate(data)}
                 </div>
               </div>
-              {esperaTodos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setData(deslocarDia(data, 1))}
+                aria-label="Próximo dia"
+                className="btn-press p-2 rounded-full shrink-0"
+                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+              <div className="min-w-[200px] flex-1 max-w-xs space-y-2">
+                <CapacidadeBar prefixo="IDA" ocupados={paxIda} total={capacidade} altura={8} />
+                <CapacidadeBar prefixo="VOLTA" ocupados={paxVolta} total={capacidade} altura={8} />
+              </div>
+              <div className="flex gap-4">
                 <div>
                   <div
                     className="text-[10px] uppercase tracking-wide"
                     style={{ color: "rgba(255,255,255,.6)" }}
                   >
-                    Na espera
+                    Pendentes
                   </div>
                   <div
                     className="font-bold"
@@ -395,10 +420,30 @@ export default function AgendaTab({
                       fontSize: "1.1rem",
                     }}
                   >
-                    {esperaTodos.length}
+                    {pendentesDoDia.length}
                   </div>
                 </div>
-              )}
+                {esperaTodos.length > 0 && (
+                  <div>
+                    <div
+                      className="text-[10px] uppercase tracking-wide"
+                      style={{ color: "rgba(255,255,255,.6)" }}
+                    >
+                      Na espera
+                    </div>
+                    <div
+                      className="font-bold"
+                      style={{
+                        color: "#fff",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: "1.1rem",
+                      }}
+                    >
+                      {esperaTodos.length}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

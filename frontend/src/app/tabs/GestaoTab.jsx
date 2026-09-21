@@ -117,6 +117,13 @@ export default function GestaoTab({ deepLink }) {
   }, [porCategoria, cats.gestao, cats.gruposGestao]);
   const totalGestao = cats.gruposGestao.reduce((s, g) => s + (totalPorGrupo[g] || 0), 0);
   const custoOperacao = despesaTotal - totalGestao;
+  // pedido do dono: não misturar combustível/motorista/manutenção num
+  // "custos de operação" só — cada um vira uma linha própria no DRE.
+  const combustivelTotal = porCategoria.combustivel || 0;
+  const motoristaTotal = porCategoria.motorista || 0;
+  const manutencaoTotal = porCategoria.manutencao || 0;
+  const outrasOperacao =
+    custoOperacao - combustivelTotal - motoristaTotal - manutencaoTotal;
 
   const run = async (fn, msgErro) => {
     setErro("");
@@ -223,7 +230,10 @@ export default function GestaoTab({ deepLink }) {
             despesaTotal={despesaTotal}
             resultado={resultado}
             margem={margem}
-            custoOperacao={custoOperacao}
+            combustivelTotal={combustivelTotal}
+            motoristaTotal={motoristaTotal}
+            manutencaoTotal={manutencaoTotal}
+            outrasOperacao={outrasOperacao}
             totalPorGrupo={totalPorGrupo}
             porCategoria={porCategoria}
             cats={cats}
@@ -253,7 +263,10 @@ function GestaoResultado({
   despesaTotal,
   resultado,
   margem,
-  custoOperacao,
+  combustivelTotal,
+  motoristaTotal,
+  manutencaoTotal,
+  outrasOperacao,
   totalPorGrupo,
   porCategoria,
   cats,
@@ -291,12 +304,12 @@ function GestaoResultado({
           recorrentes da empresa. Clique num grupo pra ver as categorias por trás do valor.
         </div>
         <LinhaDRE label="Receita bruta" valor={receita} forte />
-        <LinhaDRE
-          label="Custos de operação (combustível, manutenção, diárias…)"
-          valor={custoOperacao}
-          negativo
-          indent
-        />
+        <LinhaDRE label="Combustível" valor={combustivelTotal} negativo indent />
+        <LinhaDRE label="Diárias de motorista(s)" valor={motoristaTotal} negativo indent />
+        <LinhaDRE label="Manutenção" valor={manutencaoTotal} negativo indent />
+        {outrasOperacao > 0 && (
+          <LinhaDRE label="Outras despesas operacionais" valor={outrasOperacao} negativo indent />
+        )}
         {cats.gruposGestao.map((g) => {
           const aberto = grupoAberto === g;
           const catsDoGrupo = cats.gestao.filter((c) => c.grupo === g);
