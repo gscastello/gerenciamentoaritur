@@ -1298,6 +1298,7 @@ function AppInner() {
                           cfg={cfg}
                           modoAtendimento={modoAtendimento}
                           onSetModo={cfgSettings.setAttendanceMode}
+                          onNavigate={irParaBusca}
                         />
                       )}
                     </div>

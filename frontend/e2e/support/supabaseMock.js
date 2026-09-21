@@ -228,6 +228,8 @@ export async function mockSupabase(page, opts = {}) {
     ]
   ).map((t) => ({ ...t }));
   let maintenanceTypeSeq = 0;
+  // log de erros (database/36+47) — stateful pra testar "Resolver"
+  let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
@@ -558,7 +560,14 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "v_app_notifications")
       rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
-    else if (table === "app_error_log") rows = opts.errorLog ?? [];
+    else if (table === "app_error_log" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      errorLogRows = errorLogRows.map((e) => (e.id === id ? { ...e, ...body } : e));
+      const updated = errorLogRows.find((e) => e.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "app_error_log") rows = errorLogRows.filter((e) => !e.resolved_at);
+    else if (table === "v_diagnostico_reservas") rows = opts.diagnostico ?? [];
     else if (table === "v_customers_stats") {
       rows = opts.customersStats ?? [];
       return route.fulfill(
