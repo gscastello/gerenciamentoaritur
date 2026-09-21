@@ -1,6 +1,8 @@
-import { AlertTriangle, ChevronRight, MessageCircle, Search } from "lucide-react";
+import { AlertTriangle, ChevronRight, MessageCircle, Pencil, Save, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
+import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   C,
   Card,
@@ -8,6 +10,7 @@ import {
   Header,
   HeroFX,
   Pill,
+  Select,
   TextInput,
   digitos,
   enderecoEmbarque,
@@ -67,7 +70,7 @@ export default function PassageirosTab({ trips, deepLink }) {
     }
   }, [deepLink]);
 
-  const { passageiros, total, loading, erro, temMais, carregarMais, salvarNota } =
+  const { passageiros, total, loading, erro, temMais, carregarMais, salvarNota, salvarPerfil } =
     usePassageiros(busca);
   const valorPagina = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
 
@@ -151,6 +154,7 @@ export default function PassageirosTab({ trips, deepLink }) {
               aberto={aberto === p.customer_id}
               onToggle={() => setAberto(aberto === p.customer_id ? null : p.customer_id)}
               onSalvarNota={salvarNota}
+              onSalvarPerfil={salvarPerfil}
             />
           ))}
           {loading && (
@@ -180,7 +184,9 @@ function classificacao(viagensCount) {
   return "Novo";
 }
 
-function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
+const ROTULO_PAGAMENTO = { dinheiro: "Dinheiro", pix: "Pix" };
+
+function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerfil }) {
   const { viagens, loading } = usePassageiroDetalhe(aberto ? p.customer_id : null);
   const enderecosIda = useMemo(
     () =>
@@ -198,6 +204,44 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
       ),
     [viagens, trips],
   );
+  const [editando, setEditando] = useState(false);
+  const [form, setForm] = useState(null);
+  const [erroForm, setErroForm] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const abrirEdicao = () => {
+    setForm({
+      nome: p.nome || "",
+      telefone: p.telefone || "",
+      pontoPadrao: p.ponto_padrao || "",
+      pagamentoPadrao: p.pagamento_padrao || "",
+    });
+    setErroForm("");
+    setEditando(true);
+  };
+
+  const salvarEdicao = async () => {
+    const problema = primeiroErro([validarNome(form.nome), validarTelefone(form.telefone)]);
+    if (problema) {
+      setErroForm(problema);
+      return;
+    }
+    setSalvando(true);
+    try {
+      await onSalvarPerfil(p.customer_id, {
+        name: form.nome.trim(),
+        phone: digitos(form.telefone),
+        defaultRoutePointCode: form.pontoPadrao || null,
+        defaultPaymentMethod: form.pagamentoPadrao || null,
+      });
+      setEditando(false);
+    } catch (e) {
+      setErroForm(mensagemAmigavel(e, "Não foi possível salvar o cadastro."));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const tel = digitos(p.telefone);
   const iniciais = (p.nome || "?")
     .split(/\s+/)
@@ -208,12 +252,12 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
 
   return (
     <Card className="anim-fadeUp">
-      <button
-        type="button"
-        className="w-full flex items-center justify-between text-left gap-3"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="w-full flex items-center justify-between gap-3">
+        <button
+          type="button"
+          className="flex-1 flex items-center gap-3 min-w-0 text-left"
+          onClick={onToggle}
+        >
           <span
             className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
             style={{
@@ -237,19 +281,33 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
               <b style={{ color: C.brand }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
             </span>
           </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Pill>{classificacao(p.viagens_count)}</Pill>
-          <ChevronRight
-            size={14}
-            style={{
-              color: C.inkFaint,
-              transform: aberto ? "rotate(90deg)" : "none",
-              transition: "transform .15s",
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (!aberto) onToggle();
+              abrirEdicao();
             }}
-          />
+            aria-label={`Editar cadastro de ${p.nome}`}
+            className="btn-press p-1.5 rounded-md"
+            style={{ color: C.inkFaint }}
+          >
+            <Pencil size={13} />
+          </button>
+          <Pill>{classificacao(p.viagens_count)}</Pill>
+          <button type="button" onClick={onToggle} aria-label={aberto ? "Recolher" : "Expandir"}>
+            <ChevronRight
+              size={14}
+              style={{
+                color: C.inkFaint,
+                transform: aberto ? "rotate(90deg)" : "none",
+                transition: "transform .15s",
+              }}
+            />
+          </button>
         </div>
-      </button>
+      </div>
       {aberto && (
         <div
           className="anim-slideDown mt-3 pt-3 border-t grid sm:grid-cols-2 gap-3"
@@ -297,6 +355,94 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota }) {
                 placeholder="Preferências, observações, combinados…"
               />
             </Field>
+          </div>
+          <div className="sm:col-span-2 rounded-lg p-3" style={{ background: C.panel2 }}>
+            {editando && form ? (
+              <>
+                <div className="text-xs font-semibold mb-2" style={{ color: C.ink }}>
+                  Editar cadastro
+                </div>
+                {erroForm && (
+                  <div className="text-xs mb-2" style={{ color: C.red }}>
+                    {erroForm}
+                  </div>
+                )}
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <Field label="Nome">
+                    <TextInput
+                      value={form.nome}
+                      onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Telefone">
+                    <TextInput
+                      inputMode="tel"
+                      value={form.telefone}
+                      onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Ponto de embarque padrão (opcional)">
+                    <Select
+                      value={form.pontoPadrao}
+                      onChange={(e) => setForm({ ...form, pontoPadrao: e.target.value })}
+                    >
+                      <option value="">— nenhum —</option>
+                      {(trips?.ida?.pontos || []).map((pt) => (
+                        <option key={pt.id} value={pt.id}>
+                          {pt.nome}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Pagamento padrão (opcional)">
+                    <Select
+                      value={form.pagamentoPadrao}
+                      onChange={(e) => setForm({ ...form, pagamentoPadrao: e.target.value })}
+                    >
+                      <option value="">— nenhum —</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="pix">Pix</option>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={salvarEdicao}
+                    disabled={salvando}
+                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
+                    style={{ background: C.amber, color: C.onBrand }}
+                  >
+                    <Save size={13} /> {salvando ? "Salvando…" : "Salvar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(false)}
+                    disabled={salvando}
+                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
+                    style={{ background: C.panel, color: C.inkSoft }}
+                  >
+                    <X size={13} /> Cancelar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.inkSoft }}>
+                <span>
+                  Ponto padrão:{" "}
+                  <b style={{ color: C.ink }}>
+                    {(trips?.ida?.pontos || []).find((pt) => pt.id === p.ponto_padrao)?.nome ||
+                      "não definido"}
+                  </b>
+                </span>
+                <span>
+                  Pagamento padrão:{" "}
+                  <b style={{ color: C.ink }}>
+                    {ROTULO_PAGAMENTO[p.pagamento_padrao] || "não definido"}
+                  </b>
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
