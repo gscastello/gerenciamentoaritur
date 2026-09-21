@@ -211,6 +211,23 @@ export async function mockSupabase(page, opts = {}) {
     ]
   ).map((c) => ({ ...c }));
   let categorySeq = 0;
+  // Frota (database/46) — veículos, manutenção e tipos de manutenção,
+  // stateful pra testar criar/remover veículo, editar manutenção etc.
+  let vehiclesRows = (
+    opts.vehicles ?? [
+      { id: "veh-1", name: "Ônibus", plate: "ABC-1234", type: "onibus", capacity: 31, is_default: true, active: true },
+    ]
+  ).map((v) => ({ ...v }));
+  let vehicleSeq = 0;
+  let maintenanceRows = (opts.maintenance ?? []).map((m) => ({ ...m }));
+  let maintenanceSeq = 0;
+  let maintenanceTypesRows = (
+    opts.maintenanceTypes ?? [
+      { id: "mt-1", label: "Troca de óleo", active: true, sort_order: 10 },
+      { id: "mt-2", label: "Revisão geral", active: true, sort_order: 20 },
+    ]
+  ).map((t) => ({ ...t }));
+  let maintenanceTypeSeq = 0;
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
@@ -226,7 +243,7 @@ export async function mockSupabase(page, opts = {}) {
     const wantsObject = (req.headers().accept || "").includes("pgrst.object");
 
     if (path === "notes") {
-      if (req.method === "GET") {
+      if (req.method() === "GET") {
         const sorted = [...notesRows].sort((a, b) =>
           a.pinned === b.pinned
             ? new Date(b.updated_at) - new Date(a.updated_at)
@@ -236,7 +253,7 @@ export async function mockSupabase(page, opts = {}) {
         );
         return route.fulfill(json(wantsObject ? (sorted[0] ?? null) : sorted));
       }
-      if (req.method === "POST") {
+      if (req.method() === "POST") {
         const body = req.postDataJSON?.() ?? {};
         noteSeq += 1;
         const now = new Date().toISOString();
@@ -251,7 +268,7 @@ export async function mockSupabase(page, opts = {}) {
         notesRows = [row, ...notesRows];
         return route.fulfill(json(wantsObject ? row : [row]));
       }
-      if (req.method === "PATCH") {
+      if (req.method() === "PATCH") {
         const id = url.searchParams.get("id")?.replace("eq.", "");
         const body = req.postDataJSON?.() ?? {};
         notesRows = notesRows.map((n) =>
@@ -260,7 +277,7 @@ export async function mockSupabase(page, opts = {}) {
         const updated = notesRows.find((n) => n.id === id) ?? null;
         return route.fulfill(json(wantsObject ? updated : [updated]));
       }
-      if (req.method === "DELETE") {
+      if (req.method() === "DELETE") {
         const id = url.searchParams.get("id")?.replace("eq.", "");
         notesRows = notesRows.filter((n) => n.id !== id);
         return route.fulfill(json([]));
@@ -355,6 +372,18 @@ export async function mockSupabase(page, opts = {}) {
         expenseCategories = expenseCategories.filter((c) => c.id !== b.p_id);
         return route.fulfill(json({ success: true }));
       }
+      if (fn === "rpc_soft_delete_vehicle") {
+        const b = req.postDataJSON?.() ?? {};
+        const alvo = vehiclesRows.find((v) => v.id === b.p_id);
+        if (!alvo) return route.fulfill(json({ success: false, message: "Veículo não encontrado." }));
+        if (alvo.is_default) {
+          return route.fulfill(
+            json({ success: false, message: "Defina outro veículo como padrão antes de remover este." }),
+          );
+        }
+        vehiclesRows = vehiclesRows.filter((v) => v.id !== b.p_id);
+        return route.fulfill(json({ success: true }));
+      }
       if (fn === "rpc_mark_notifications_read") {
         const b = req.postDataJSON?.() ?? {};
         for (const id of b.p_ids ?? []) lidas.add(id);
@@ -426,9 +455,46 @@ export async function mockSupabase(page, opts = {}) {
         return { trip_id: `trip-${k}`, trip_date, direction, ...v };
       });
     } else if (table === "trips") rows = [];
-    else if (table === "vehicles")
-      rows = [{ id: "veh-1", name: "Ônibus", capacity: 31, is_default: true, active: true }];
-    else if (table === "expense_categories" && req.method === "PATCH") {
+    else if (table === "vehicles" && req.method() === "POST") {
+      const body = req.postDataJSON?.() ?? {};
+      vehicleSeq += 1;
+      const row = { id: `veh-novo-${vehicleSeq}`, is_default: false, active: true, ...body };
+      vehiclesRows = [...vehiclesRows, row];
+      return route.fulfill(json(wantsObject ? row : [row]));
+    } else if (table === "vehicles" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      vehiclesRows = vehiclesRows.map((v) => (v.id === id ? { ...v, ...body } : v));
+      const updated = vehiclesRows.find((v) => v.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "vehicles") rows = vehiclesRows;
+    else if (table === "maintenance" && req.method() === "POST") {
+      const body = req.postDataJSON?.() ?? {};
+      maintenanceSeq += 1;
+      const row = { id: `maint-novo-${maintenanceSeq}`, deleted_at: null, ...body };
+      maintenanceRows = [row, ...maintenanceRows];
+      return route.fulfill(json(wantsObject ? row : [row]));
+    } else if (table === "maintenance" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      maintenanceRows = maintenanceRows.map((m) => (m.id === id ? { ...m, ...body } : m));
+      const updated = maintenanceRows.find((m) => m.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "maintenance") rows = maintenanceRows;
+    else if (table === "maintenance_types" && req.method() === "POST") {
+      const body = req.postDataJSON?.() ?? {};
+      maintenanceTypeSeq += 1;
+      const row = { id: `mt-novo-${maintenanceTypeSeq}`, active: true, sort_order: 100, ...body };
+      maintenanceTypesRows = [...maintenanceTypesRows, row];
+      return route.fulfill(json(wantsObject ? row : [row]));
+    } else if (table === "maintenance_types" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      maintenanceTypesRows = maintenanceTypesRows.map((t) => (t.id === id ? { ...t, ...body } : t));
+      const updated = maintenanceTypesRows.find((t) => t.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "maintenance_types") rows = maintenanceTypesRows;
+    else if (table === "expense_categories" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
       expenseCategories = expenseCategories.map((c) => (c.id === id ? { ...c, ...body } : c));

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useMaintenanceTypes } from "../../hooks/useMaintenanceTypes.js";
 import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useDrivers, useVehicles } from "../../hooks/useVehicles.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -36,11 +37,18 @@ import {
 /* ============================= 6. OPERAÇÃO (combustível + manutenção preventiva) ============================= */
 
 export default function OperacaoTab() {
-  const { vehicles, defaultVehicle, setDefault, updateVehicle } = useVehicles();
+  const { vehicles, defaultVehicle, setDefault, updateVehicle, addVehicle, removeVehicle } =
+    useVehicles();
   const { drivers, addDriver, updateDriver, removeDriver } = useDrivers();
-  const veiculoId = defaultVehicle?.id ?? null;
+  const tiposManut = useMaintenanceTypes();
+  const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState(null);
+  const veiculoId = veiculoSelecionadoId ?? defaultVehicle?.id ?? null;
   const fuel = useFuelRecords(veiculoId);
   const manut = useMaintenance(veiculoId);
+  // frota inteira, sem filtro de veículo — só pro comparativo (seção
+  // separada da gestão detalhada do veículo selecionado acima).
+  const fuelFrota = useFuelRecords(undefined);
+  const manutFrota = useMaintenance(undefined);
 
   const [reg, setReg] = useState({
     data: todayStr(),
@@ -51,11 +59,21 @@ export default function OperacaoTab() {
   });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
+  const [editManutId, setEditManutId] = useState(null);
+  const [editManutVal, setEditManutVal] = useState({});
   const [periodo, setPeriodo] = useState("dia");
   const [editandoVeiculo, setEditandoVeiculo] = useState(null);
   const [veiculoForm, setVeiculoForm] = useState({});
+  const [criandoVeiculo, setCriandoVeiculo] = useState(false);
+  const [novoVeiculo, setNovoVeiculo] = useState({
+    name: "",
+    plate: "",
+    type: "onibus",
+    capacity: "",
+  });
   const [editandoMotorista, setEditandoMotorista] = useState(null);
   const [motoristaForm, setMotoristaForm] = useState({});
+  const [novoTipoManut, setNovoTipoManut] = useState(null); // texto quando o mini-form "novo tipo" está aberto
   const [novaManut, setNovaManut] = useState({
     tipo: "",
     intervaloKm: 5000,
@@ -67,6 +85,11 @@ export default function OperacaoTab() {
 
   const registros = useMemo(() => (fuel.records || []).map(mapFuel), [fuel.records]);
   const manutencoes = useMemo(() => (manut.records || []).map(mapManut), [manut.records]);
+  const registrosFrota = useMemo(() => (fuelFrota.records || []).map(mapFuel), [fuelFrota.records]);
+  const manutencoesFrota = useMemo(
+    () => (manutFrota.records || []).map(mapManut),
+    [manutFrota.records],
+  );
   const motoristas = useMemo(
     () => (drivers || []).map((d) => ({ id: d.id, nome: d.name, telefone: d.phone || "" })),
     [drivers],
@@ -85,6 +108,27 @@ export default function OperacaoTab() {
       () => updateVehicle(id, campos).then(() => setEditandoVeiculo(null)),
       "Não foi possível salvar o veículo.",
     );
+  const criarVeiculo = () => {
+    if (!novoVeiculo.name.trim() || !novoVeiculo.plate.trim() || !novoVeiculo.capacity) return;
+    run(async () => {
+      await addVehicle({
+        name: novoVeiculo.name.trim(),
+        plate: novoVeiculo.plate.trim(),
+        type: novoVeiculo.type,
+        capacity: Number.parseInt(novoVeiculo.capacity, 10) || 1,
+      });
+      setNovoVeiculo({ name: "", plate: "", type: "onibus", capacity: "" });
+      setCriandoVeiculo(false);
+    }, "Não foi possível criar o veículo.");
+  };
+  const removerVeiculo = (v) => {
+    if (!window.confirm(`Remover o veículo ${v.name} (${v.plate})? Não afeta viagens já feitas.`))
+      return;
+    run(async () => {
+      await removeVehicle(v.id);
+      if (veiculoSelecionadoId === v.id) setVeiculoSelecionadoId(null);
+    }, "Não foi possível remover o veículo.");
+  };
   const addRegistro = () => {
     if (!reg.km || !veiculoId) return;
     run(async () => {
@@ -142,6 +186,35 @@ export default function OperacaoTab() {
       setNovaManut({ tipo: "", intervaloKm: 5000, kmAtual: "", custo: "", data: todayStr() });
     }, "Não foi possível registrar a manutenção.");
   };
+  const onTipoManutChange = (setter) => (v) => {
+    if (v === "__novo__") {
+      setNovoTipoManut("");
+      return;
+    }
+    setter(v);
+  };
+  const criarTipoManut = (aplicarEm) =>
+    run(async () => {
+      if (!novoTipoManut?.trim()) return;
+      const r = await tiposManut.criar(novoTipoManut.trim());
+      aplicarEm(r.label);
+      setNovoTipoManut(null);
+    }, "Não foi possível criar o tipo de manutenção.");
+  const iniciarEdicaoManut = (m) => {
+    setEditManutId(m.id);
+    setEditManutVal({ ...m });
+  };
+  const salvarEdicaoManut = () =>
+    run(async () => {
+      await manut.updateRecord(editManutId, {
+        type: editManutVal.tipo,
+        performed_at: editManutVal.data,
+        odometer_km: Number.parseFloat(editManutVal.kmAtual) || 0,
+        interval_km: Number.parseFloat(editManutVal.intervaloKm) || 5000,
+        cost: Number.parseFloat(editManutVal.custo) || 0,
+      });
+      setEditManutId(null);
+    }, "Não foi possível salvar a manutenção.");
   const removerManutencao = (id) =>
     run(() => manut.removeRecord(id), "Não foi possível remover a manutenção.");
 
@@ -168,6 +241,29 @@ export default function OperacaoTab() {
   };
   const kmAcumuladoDesde = (data) =>
     registros.filter((r) => r.data >= data).reduce((s, r) => s + r.km, 0);
+
+  // comparativo da frota: mesmos totais do período, um agrupamento por
+  // veículo em vez de só o selecionado.
+  const fuelFrotaDoPeriodo = registrosFrota.filter((r) => dentroDoPeriodo(r.data));
+  const manutFrotaDoPeriodo = manutencoesFrota.filter((m) => dentroDoPeriodo(m.data));
+  const comparativoFrota = vehicles.map((v) => {
+    const fuelDoVeiculo = fuelFrotaDoPeriodo.filter((r) => r.veiculoId === v.id);
+    const km = fuelDoVeiculo.reduce((s, r) => s + r.km, 0);
+    const combustivel = fuelDoVeiculo.reduce((s, r) => s + r.combustivel, 0);
+    const litros = fuelDoVeiculo.reduce((s, r) => s + r.litros, 0);
+    const manutencao = manutFrotaDoPeriodo
+      .filter((m) => m.veiculoId === v.id)
+      .reduce((s, m) => s + m.custo, 0);
+    return {
+      id: v.id,
+      nome: v.name,
+      km,
+      combustivel,
+      manutencao,
+      consumoMedio: litros > 0 ? km / litros : null,
+      custoPorKm: km > 0 ? combustivel / km : 0,
+    };
+  });
 
   return (
     <div>
@@ -232,7 +328,58 @@ export default function OperacaoTab() {
           </div>
         )}
         <Card className="anim-fadeUp">
-          <div className="text-sm font-semibold mb-3">Veículo em operação</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold">Veículo em operação</div>
+            <button
+              type="button"
+              onClick={() => setCriandoVeiculo((s) => !s)}
+              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
+              style={{ background: C.amberSoft, color: C.amber }}
+            >
+              <Plus size={13} /> Novo veículo
+            </button>
+          </div>
+          {criandoVeiculo && (
+            <div
+              className="mb-3 grid sm:grid-cols-2 gap-2 rounded-lg p-3 anim-pop"
+              style={{ background: C.panel2 }}
+            >
+              <TextInput
+                value={novoVeiculo.name}
+                onChange={(e) => setNovoVeiculo({ ...novoVeiculo, name: e.target.value })}
+                placeholder="Nome (ex.: Ônibus 2)"
+              />
+              <TextInput
+                value={novoVeiculo.plate}
+                onChange={(e) => setNovoVeiculo({ ...novoVeiculo, plate: e.target.value })}
+                placeholder="Placa"
+              />
+              <Select
+                value={novoVeiculo.type}
+                onChange={(e) => setNovoVeiculo({ ...novoVeiculo, type: e.target.value })}
+              >
+                <option value="onibus">Ônibus</option>
+                <option value="van">Van</option>
+              </Select>
+              <TextInput
+                type="number"
+                value={novoVeiculo.capacity}
+                onChange={(e) => setNovoVeiculo({ ...novoVeiculo, capacity: e.target.value })}
+                placeholder="Capacidade (lugares)"
+              />
+              <button
+                type="button"
+                onClick={criarVeiculo}
+                disabled={
+                  !novoVeiculo.name.trim() || !novoVeiculo.plate.trim() || !novoVeiculo.capacity
+                }
+                className="btn-press sm:col-span-2 text-xs px-3 py-2 rounded-md font-medium disabled:opacity-40"
+                style={{ background: C.amber, color: C.onBrand }}
+              >
+                Criar veículo
+              </button>
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-3">
             {vehicles.map((v) => {
               const ativo = v.is_default;
@@ -286,17 +433,29 @@ export default function OperacaoTab() {
                     background: ativo ? C.amberSoft : C.panel2,
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditandoVeiculo(v.id);
-                      setVeiculoForm({ name: v.name, plate: v.plate, capacity: v.capacity });
-                    }}
-                    className="btn-press absolute top-2 right-2"
-                    title="Editar veículo"
-                  >
-                    <Pencil size={12} style={{ color: C.inkFaint }} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditandoVeiculo(v.id);
+                        setVeiculoForm({ name: v.name, plate: v.plate, capacity: v.capacity });
+                      }}
+                      className="btn-press"
+                      title="Editar veículo"
+                    >
+                      <Pencil size={12} style={{ color: C.inkFaint }} />
+                    </button>
+                    {!ativo && (
+                      <button
+                        type="button"
+                        onClick={() => removerVeiculo(v)}
+                        className="btn-press"
+                        title="Remover veículo"
+                      >
+                        <X size={13} style={{ color: C.red }} />
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() =>
@@ -338,6 +497,24 @@ export default function OperacaoTab() {
               { id: "ano", label: "Este ano" },
             ]}
           />
+          {vehicles.length > 1 && (
+            <>
+              <span className="text-xs" style={{ color: C.inkSoft }}>
+                do veículo:
+              </span>
+              <Select
+                value={veiculoId ?? ""}
+                onChange={(e) => setVeiculoSelecionadoId(e.target.value)}
+                className="w-auto"
+              >
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </Select>
+            </>
+          )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
           <StatCard
@@ -370,6 +547,44 @@ export default function OperacaoTab() {
             accent={C.green}
           />
         </div>
+
+        {vehicles.length > 1 && (
+          <Card>
+            <div className="text-sm font-semibold mb-3">Comparativo da frota</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
+                    <th className="px-3 py-1.5 font-medium">Veículo</th>
+                    <th className="px-3 py-1.5 font-medium">Km</th>
+                    <th className="px-3 py-1.5 font-medium">Combustível</th>
+                    <th className="px-3 py-1.5 font-medium">Manutenção</th>
+                    <th className="px-3 py-1.5 font-medium">Consumo médio</th>
+                    <th className="px-3 py-1.5 font-medium">Custo/km</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparativoFrota.map((c) => (
+                    <tr
+                      key={c.id}
+                      className="row-hover border-t"
+                      style={{ borderColor: C.borderSoft }}
+                    >
+                      <td className="px-3 py-2 text-xs font-medium">{c.nome}</td>
+                      <td className="px-3 py-2 text-xs">{c.km.toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 text-xs">{fmtBRL(c.combustivel)}</td>
+                      <td className="px-3 py-2 text-xs">{fmtBRL(c.manutencao)}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {c.consumoMedio ? `${c.consumoMedio.toFixed(1)} km/L` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-xs">{fmtBRL(c.custoPorKm)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
 
         <Card>
           <div className="text-sm font-semibold mb-3">Motoristas</div>
@@ -574,11 +789,21 @@ export default function OperacaoTab() {
             A despesa da manutenção entra sozinha no Financeiro do dia.
           </div>
           <div className="grid sm:grid-cols-5 gap-2">
-            <TextInput
-              placeholder="Tipo (ex.: troca de óleo)"
+            <Select
               value={novaManut.tipo}
-              onChange={(e) => setNovaManut({ ...novaManut, tipo: e.target.value })}
-            />
+              onChange={(e) =>
+                onTipoManutChange((v) => setNovaManut({ ...novaManut, tipo: v }))(e.target.value)
+              }
+              aria-label="Tipo de manutenção"
+            >
+              <option value="">Tipo…</option>
+              {tiposManut.tipos.map((t) => (
+                <option key={t.id} value={t.label}>
+                  {t.label}
+                </option>
+              ))}
+              <option value="__novo__">➕ Novo tipo…</option>
+            </Select>
             <TextInput
               type="date"
               value={novaManut.data}
@@ -603,6 +828,38 @@ export default function OperacaoTab() {
               onChange={(e) => setNovaManut({ ...novaManut, custo: e.target.value })}
             />
           </div>
+          {novoTipoManut !== null && (
+            <div
+              className="mt-2 flex flex-wrap items-end gap-2 rounded-lg p-3"
+              style={{ background: C.panel2 }}
+            >
+              <TextInput
+                value={novoTipoManut}
+                onChange={(e) => setNovoTipoManut(e.target.value)}
+                placeholder="Nome do novo tipo"
+                className="w-48"
+              />
+              <button
+                type="button"
+                disabled={!novoTipoManut.trim() || tiposManut.salvando}
+                onClick={() =>
+                  criarTipoManut((label) => setNovaManut((s) => ({ ...s, tipo: label })))
+                }
+                className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
+                style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+              >
+                Criar e usar
+              </button>
+              <button
+                type="button"
+                onClick={() => setNovoTipoManut(null)}
+                className="btn-press text-xs px-3 py-2 rounded-md"
+                style={{ background: C.panel, color: C.inkSoft }}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
           <button
             onClick={addManutencao}
             disabled={!novaManut.tipo || !veiculoId}
@@ -620,7 +877,64 @@ export default function OperacaoTab() {
               const pct = Math.min(100, Math.round((kmDesde / m.intervaloKm) * 100));
               const vencida = pct >= 100;
               const proxima = pct >= 80 && !vencida;
-              return (
+              return editManutId === m.id ? (
+                <div
+                  key={m.id}
+                  className="grid sm:grid-cols-5 gap-2 rounded-lg px-2 py-2 anim-pop"
+                  style={{ background: C.panel2 }}
+                >
+                  <Select
+                    value={editManutVal.tipo}
+                    onChange={(e) =>
+                      onTipoManutChange((v) => setEditManutVal({ ...editManutVal, tipo: v }))(
+                        e.target.value,
+                      )
+                    }
+                    className="text-xs py-1"
+                  >
+                    {tiposManut.tipos.map((t) => (
+                      <option key={t.id} value={t.label}>
+                        {t.label}
+                      </option>
+                    ))}
+                    {!tiposManut.tipos.some((t) => t.label === editManutVal.tipo) && (
+                      <option value={editManutVal.tipo}>{editManutVal.tipo}</option>
+                    )}
+                  </Select>
+                  <TextInput
+                    type="date"
+                    value={editManutVal.data}
+                    onChange={(e) => setEditManutVal({ ...editManutVal, data: e.target.value })}
+                    className="text-xs py-1"
+                  />
+                  <TextInput
+                    type="number"
+                    value={editManutVal.intervaloKm}
+                    onChange={(e) =>
+                      setEditManutVal({ ...editManutVal, intervaloKm: e.target.value })
+                    }
+                    className="text-xs py-1"
+                  />
+                  <TextInput
+                    type="number"
+                    value={editManutVal.kmAtual}
+                    onChange={(e) => setEditManutVal({ ...editManutVal, kmAtual: e.target.value })}
+                    className="text-xs py-1"
+                  />
+                  <div className="flex gap-2">
+                    <TextInput
+                      type="number"
+                      value={editManutVal.custo}
+                      onChange={(e) => setEditManutVal({ ...editManutVal, custo: e.target.value })}
+                      className="text-xs py-1"
+                      aria-label="Custo da manutenção"
+                    />
+                    <button onClick={salvarEdicaoManut} aria-label="Salvar manutenção">
+                      <Save size={14} style={{ color: C.green }} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <div key={m.id} className="rounded-lg px-3 py-2" style={{ background: C.panel2 }}>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium">
@@ -641,7 +955,16 @@ export default function OperacaoTab() {
                           🟢 em dia
                         </Pill>
                       )}
-                      <button onClick={() => removerManutencao(m.id)}>
+                      <button
+                        onClick={() => iniciarEdicaoManut(m)}
+                        aria-label={`Editar manutenção: ${m.tipo}`}
+                      >
+                        <Pencil size={12} style={{ color: C.inkFaint }} />
+                      </button>
+                      <button
+                        onClick={() => removerManutencao(m.id)}
+                        aria-label={`Remover manutenção: ${m.tipo}`}
+                      >
                         <X size={12} style={{ color: C.red }} />
                       </button>
                     </div>
