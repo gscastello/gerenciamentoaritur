@@ -1,10 +1,16 @@
 // src/services/usersService.js
-import { supabase, ServiceError } from "../lib/supabaseClient";
+import { ServiceError, supabase } from "../lib/supabaseClient";
 
-function isNetworkish(error) { return /fetch|network|timeout/i.test(error?.message || ""); }
+function isNetworkish(error) {
+  return /fetch|network|timeout/i.test(error?.message || "");
+}
 async function handle(promise, context) {
   const { data, error } = await promise;
-  if (error) throw new ServiceError(`${context}: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+  if (error)
+    throw new ServiceError(`${context}: ${error.message}`, {
+      cause: error,
+      retryable: isNetworkish(error),
+    });
   return data;
 }
 
@@ -13,7 +19,10 @@ export const usersService = {
   async getCurrentProfile() {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData?.user) return null;
-    return handle(supabase.from("users").select("*").eq("id", authData.user.id).single(), "getCurrentProfile");
+    return handle(
+      supabase.from("users").select("*").eq("id", authData.user.id).single(),
+      "getCurrentProfile",
+    );
   },
 
   /** Só admin consegue de fato listar/alterar por causa da RLS — a UI deve esconder isso para os demais papéis. */
@@ -22,26 +31,45 @@ export const usersService = {
   },
 
   async updateRole(userId, role) {
-    return handle(supabase.from("users").update({ role }).eq("id", userId).select().single(), "updateRole");
+    return handle(
+      supabase.from("users").update({ role }).eq("id", userId).select().single(),
+      "updateRole",
+    );
   },
 
   /** Editar nome / telefone / papel de um usuário (só admin — RLS). */
   async update(userId, fields) {
-    return handle(supabase.from("users").update(fields).eq("id", userId).select().single(), "update");
+    return handle(
+      supabase.from("users").update(fields).eq("id", userId).select().single(),
+      "update",
+    );
   },
 
   /** Ativar/desativar (RPC com guarda: nunca o último admin nem a si mesmo). */
   async setActive(userId, active) {
-    const { data, error } = await supabase.rpc("rpc_set_user_active", { p_id: userId, p_active: active });
-    if (error) throw new ServiceError(`setActive: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar.", { retryable: false });
+    const { data, error } = await supabase.rpc("rpc_set_user_active", {
+      p_id: userId,
+      p_active: active,
+    });
+    if (error)
+      throw new ServiceError(`setActive: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível alterar.", { retryable: false });
     return data;
   },
 
   async remove(userId) {
     const { data, error } = await supabase.rpc("rpc_soft_delete_user", { p_id: userId });
-    if (error) throw new ServiceError(`remove: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover.", { retryable: false });
+    if (error)
+      throw new ServiceError(`remove: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível remover.", { retryable: false });
     return data;
   },
 
@@ -65,13 +93,46 @@ export const usersService = {
       }
       throw new ServiceError(`create: ${msg}`, { cause: error, retryable: false });
     }
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível criar o login.", { retryable: false });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível criar o login.", {
+        retryable: false,
+      });
+    return data;
+  },
+
+  /**
+   * Redefine a senha de um login já existente via Edge Function
+   * `reset-user-password` (mesma razão de `create`: Auth exige
+   * service_role). O admin comunica a nova senha temporária à pessoa.
+   */
+  async resetPassword(userId, password) {
+    const { data, error } = await supabase.functions.invoke("reset-user-password", {
+      body: { userId, password },
+    });
+    if (error) {
+      let msg = error.message;
+      try {
+        const body = await error.context?.json?.();
+        if (body?.message) msg = body.message;
+      } catch {
+        /* usa error.message */
+      }
+      throw new ServiceError(`resetPassword: ${msg}`, { cause: error, retryable: false });
+    }
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível redefinir a senha.", {
+        retryable: false,
+      });
     return data;
   },
 
   async signInWithPassword(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new ServiceError(`signIn: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error)
+      throw new ServiceError(`signIn: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     return data;
   },
 

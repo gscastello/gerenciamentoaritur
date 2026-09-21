@@ -10,7 +10,7 @@
 // trigger. Overbooking, ponto removido, telefone ausente etc. são só
 // reportados (viram alerta interno em `notifications`).
 
-import { supabase, ServiceError } from "../lib/supabaseClient";
+import { ServiceError, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
   return /fetch|network|timeout/i.test(error?.message || "");
@@ -21,10 +21,15 @@ export const diagnosticsService = {
   async runNow() {
     const { data, error } = await supabase.rpc("rpc_run_reservation_diagnostics");
     if (error) {
-      throw new ServiceError(`runNow: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+      throw new ServiceError(`runNow: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     }
     if (!data?.success) {
-      throw new ServiceError(data?.message || "Não foi possível rodar o diagnóstico.", { retryable: false });
+      throw new ServiceError(data?.message || "Não foi possível rodar o diagnóstico.", {
+        retryable: false,
+      });
     }
     return data; // { success, corrigidas, novos_alertas, por_tipo }
   },
@@ -33,9 +38,12 @@ export const diagnosticsService = {
   async listFindings() {
     const { data, error } = await supabase
       .from("v_diagnostico_reservas")
-      .select("kind, reservation_id, trip_id, detail");
+      .select("kind, reservation_id, trip_id, detail, trip_date");
     if (error) {
-      throw new ServiceError(`listFindings: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+      throw new ServiceError(`listFindings: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     }
     return data ?? [];
   },

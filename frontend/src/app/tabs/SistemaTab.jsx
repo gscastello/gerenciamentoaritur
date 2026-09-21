@@ -3,6 +3,7 @@ import {
   Bot,
   Check,
   Download,
+  KeyRound,
   MapPin,
   Pencil,
   Plus,
@@ -25,13 +26,13 @@ import { useDiagnostics } from "../../hooks/useDiagnostics.js";
 import { useErrorLog } from "../../hooks/useErrorLog.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { useUsersList } from "../../hooks/useUsers.js";
-import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   abrirRelatorioPDF,
   baixarCSVZip,
   baixarExcel,
   baixarJSON,
 } from "../../lib/backupExport.js";
+import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   getMotionPref,
   resolveMotion,
@@ -561,6 +562,8 @@ function SistemaEquipe() {
   const [editId, setEditId] = useState(null);
   const [ev, setEv] = useState({});
   const [novo, setNovo] = useState({ email: "", name: "", role: "atendente", password: "" });
+  const [resetId, setResetId] = useState(null);
+  const [resetSenha, setResetSenha] = useState("");
 
   const run = async (fn, msgFalha) => {
     setErro("");
@@ -602,8 +605,64 @@ function SistemaEquipe() {
       setEditId(null);
     }, "Não foi possível salvar.");
 
+  const salvarNovaSenha = (u) =>
+    run(async () => {
+      if (resetSenha.length < 8) throw new Error("A senha precisa de 8+ caracteres.");
+      await equipe.resetPassword(u.id, resetSenha);
+      setOk(`Senha de ${u.name} redefinida. Nova senha: ${resetSenha} — passe para a pessoa.`);
+      setResetId(null);
+      setResetSenha("");
+    }, "Não foi possível redefinir a senha.");
+
   const linha = (u) => {
     const euMesmo = u.id === profile?.id;
+    if (resetId === u.id) {
+      return (
+        <tr key={u.id} style={{ background: C.panel2 }}>
+          <td className="px-2 py-1.5 text-xs" colSpan={4}>
+            Nova senha de <b>{u.name}</b>:
+            <div className="flex items-center gap-1 mt-1">
+              <TextInput
+                value={resetSenha}
+                onChange={(e) => setResetSenha(e.target.value)}
+                placeholder="senha temporária"
+                className="w-40 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setResetSenha(senhaTemporaria())}
+                className="btn-press text-xs px-2 py-2 rounded-md shrink-0"
+                style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                gerar
+              </button>
+            </div>
+          </td>
+          <td className="px-2 py-1.5">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => salvarNovaSenha(u)}
+                disabled={equipe.salvando}
+                aria-label="salvar nova senha"
+              >
+                <Save size={13} style={{ color: C.green }} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetId(null);
+                  setResetSenha("");
+                }}
+                aria-label="cancelar"
+              >
+                <X size={13} style={{ color: C.inkFaint }} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
     if (editId === u.id) {
       return (
         <tr key={u.id} style={{ background: C.panel2 }}>
@@ -693,6 +752,16 @@ function SistemaEquipe() {
               }}
             >
               <Pencil size={12} style={{ color: C.inkFaint }} />
+            </button>
+            <button
+              type="button"
+              aria-label={`redefinir senha de ${u.name}`}
+              onClick={() => {
+                setResetId(u.id);
+                setResetSenha("");
+              }}
+            >
+              <KeyRound size={12} style={{ color: C.inkFaint }} />
             </button>
             <button
               type="button"
@@ -832,7 +901,7 @@ function SistemaEquipe() {
 // Erros recentes do app (database/36) — o admin vê o que os usuários
 // viram, com detalhe técnico. Alimentado por logTecnico() em lib/erros.js.
 function SistemaErros() {
-  const { erros, loading, error, recarregar } = useErrorLog();
+  const { erros, loading, error, recarregar, resolver, resolvendo } = useErrorLog();
   return (
     <Card className="anim-fadeUp">
       <div className="flex items-center justify-between mb-3">
@@ -872,6 +941,7 @@ function SistemaErros() {
                 <th className="py-1 pr-3 font-medium">Quando</th>
                 <th className="py-1 pr-3 font-medium">Código</th>
                 <th className="py-1 font-medium">Mensagem</th>
+                <th className="py-1 pr-1 font-medium" aria-label="ações" />
               </tr>
             </thead>
             <tbody>
@@ -889,6 +959,18 @@ function SistemaErros() {
                     title={e.context ? JSON.stringify(e.context) : ""}
                   >
                     {e.message}
+                  </td>
+                  <td className="py-1.5 pl-2 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => resolver(e.id)}
+                      disabled={resolvendo}
+                      aria-label={`Resolver: ${e.message}`}
+                      className="btn-press flex items-center gap-1 text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
+                      style={{ background: C.greenSoft, color: C.green }}
+                    >
+                      <Check size={11} /> Resolver
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -953,7 +1035,14 @@ function MovimentoControl() {
   );
 }
 
-export default function SistemaTab({ reservas, capacidade, cfg, modoAtendimento, onSetModo }) {
+export default function SistemaTab({
+  reservas,
+  capacidade,
+  cfg,
+  modoAtendimento,
+  onSetModo,
+  onNavigate,
+}) {
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
@@ -1348,10 +1437,28 @@ export default function SistemaTab({ reservas, capacidade, cfg, modoAtendimento,
               {serverDiag.achados.map((a, i) => (
                 <div
                   key={`${a.kind}-${a.reservation_id ?? a.trip_id ?? i}`}
-                  className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5"
+                  className="text-xs rounded-md px-2 py-1.5 flex items-center justify-between gap-1.5"
                   style={{ background: C.warnSoft, color: C.warn }}
                 >
-                  <AlertTriangle size={12} /> {DIAG_KIND_LABEL[a.kind] || a.kind}
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle size={12} /> {DIAG_KIND_LABEL[a.kind] || a.kind}
+                  </span>
+                  {a.trip_date && onNavigate && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onNavigate({ tab: "agenda", deepLink: { kind: "data", data: a.trip_date } })
+                      }
+                      className="btn-press shrink-0 text-[11px] px-2 py-1 rounded-md font-medium"
+                      style={{
+                        background: C.panel,
+                        color: C.warn,
+                        border: `1px solid ${C.warn}55`,
+                      }}
+                    >
+                      Ver reserva
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
