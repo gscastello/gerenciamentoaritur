@@ -1430,6 +1430,7 @@ export function somaTipo(lista, tipo) {
 // mapeamentos banco -> formato da tela
 export const mapFuel = (r) => ({
   id: r.id,
+  veiculoId: r.vehicle_id,
   data: r.record_date,
   direcao: r.direction,
   km: Number(r.km) || 0,
@@ -1438,6 +1439,7 @@ export const mapFuel = (r) => ({
 });
 export const mapManut = (m) => ({
   id: m.id,
+  veiculoId: m.vehicle_id,
   tipo: m.type,
   data: m.performed_at,
   kmAtual: Number(m.odometer_km) || 0,
