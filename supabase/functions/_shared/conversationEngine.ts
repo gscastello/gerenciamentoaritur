@@ -15,6 +15,7 @@ import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { interpretMessage, type ExtractedIntent } from "./nluService.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { hojeSaoLuis } from "./dataOperacao.ts";
 
 type IncomingMessage = {
   from: string;
@@ -78,7 +79,7 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
 
     const extraction = await interpretMessage({
       text,
-      today: new Date().toISOString().slice(0, 10),
+      today: hojeSaoLuis(),
       validRoutePoints: validRoutePointsBoth.map((p: any) => ({ code: p.code, name: p.name, direction: p.direction })),
       conversationSummary: `etapa atual: ${state.step ?? "idle"}${state.direction ? `, direção já escolhida: ${state.direction}` : ""}`,
     });
