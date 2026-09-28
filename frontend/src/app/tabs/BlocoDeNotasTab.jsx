@@ -1,9 +1,14 @@
-import { NotebookPen, Pin, PinOff, Plus, Trash2, X } from "lucide-react";
+import { NotebookPen, Pin, PinOff, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNotes } from "../../hooks/useNotes.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
-import { Skeleton } from "../../ui/motion/index.js";
-import { C, Header } from "../tabShared.jsx";
+import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
+import { C, ErrorBanner, Header } from "../tabShared.jsx";
+
+// Duração da saída antes de tirar a nota da lista de verdade — precisa
+// bater com o `duration` passado pro Presence abaixo (o padrão dele é
+// 240ms, mas deixamos explícito nos dois lugares pra não desalinhar).
+const SAIDA_MS = 200;
 
 /* ===================== BLOCO DE NOTAS DA AGENDA (issue #90) ================
    Notas soltas, sem data obrigatória — bloco de notas de verdade
@@ -73,9 +78,21 @@ function NotaCard({ nota, onChange, onBlur, onTogglePin, onRemove }) {
 }
 
 export default function BlocoDeNotasTab() {
-  const { notes, loading, error, create, creating, scheduleSave, flush, saveError, togglePin, remove } =
-    useNotes();
+  const {
+    notes,
+    loading,
+    error,
+    recarregar,
+    create,
+    creating,
+    scheduleSave,
+    flush,
+    saveError,
+    togglePin,
+    remove,
+  } = useNotes();
   const [erroLocal, setErroLocal] = useState("");
+  const [saindo, setSaindo] = useState(() => new Set());
 
   const criar = async () => {
     setErroLocal("");
@@ -86,14 +103,24 @@ export default function BlocoDeNotasTab() {
     }
   };
 
-  const apagar = async (id) => {
+  // Anima a saída (Presence) antes de tirar a nota da lista de verdade —
+  // sem isso o card sumia na hora, sem transição (AGENTS.md §5).
+  const apagar = (id) => {
     if (!window.confirm("Apagar esta nota? Não dá para desfazer.")) return;
     setErroLocal("");
-    try {
-      await remove(id);
-    } catch (e) {
-      setErroLocal(mensagemAmigavel(e, "Não foi possível apagar a nota."));
-    }
+    setSaindo((prev) => new Set(prev).add(id));
+    setTimeout(async () => {
+      try {
+        await remove(id);
+      } catch (e) {
+        setErroLocal(mensagemAmigavel(e, "Não foi possível apagar a nota."));
+        setSaindo((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    }, SAIDA_MS);
   };
 
   return (
@@ -116,31 +143,19 @@ export default function BlocoDeNotasTab() {
       />
       <div className="px-6 md:px-10 pb-10">
         {error && (
-          <div
-            className="text-xs rounded-lg px-3 py-2 mb-3"
-            style={{ background: C.redSoft, color: C.red }}
-          >
+          <ErrorBanner onRetry={recarregar} className="mb-3">
             {mensagemAmigavel(error, "Não foi possível carregar as notas.")}
-          </div>
+          </ErrorBanner>
         )}
         {erroLocal && (
-          <div
-            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2 mb-3"
-            style={{ background: C.redSoft, color: C.red }}
-          >
-            <span>{erroLocal}</span>
-            <button type="button" onClick={() => setErroLocal("")}>
-              <X size={13} />
-            </button>
-          </div>
+          <ErrorBanner onDismiss={() => setErroLocal("")} className="mb-3">
+            {erroLocal}
+          </ErrorBanner>
         )}
         {saveError && (
-          <div
-            className="text-xs rounded-lg px-3 py-2 mb-3"
-            style={{ background: C.redSoft, color: C.red }}
-          >
+          <ErrorBanner className="mb-3">
             {mensagemAmigavel(saveError, "Não foi possível salvar uma das notas — tente editar de novo.")}
-          </div>
+          </ErrorBanner>
         )}
 
         {loading ? (
@@ -176,14 +191,15 @@ export default function BlocoDeNotasTab() {
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
           >
             {notes.map((nota) => (
-              <NotaCard
-                key={nota.id}
-                nota={nota}
-                onChange={scheduleSave}
-                onBlur={flush}
-                onTogglePin={togglePin}
-                onRemove={apagar}
-              />
+              <Presence key={nota.id} when={!saindo.has(nota.id)} duration={SAIDA_MS} {...fadeScale}>
+                <NotaCard
+                  nota={nota}
+                  onChange={scheduleSave}
+                  onBlur={flush}
+                  onTogglePin={togglePin}
+                  onRemove={apagar}
+                />
+              </Presence>
             ))}
           </div>
         )}

@@ -90,6 +90,7 @@ export function useNotes() {
     notes: query.data ?? [],
     loading: query.loading,
     error: query.error,
+    recarregar: query.refetch,
     create,
     creating: creator.loading,
     scheduleSave,
