@@ -974,8 +974,20 @@ function AppInner() {
   const tabComData = tab === "agenda" || tab === "lista";
 
   const ready = useLazyTab(tab);
+  // primeiraCargaRef trava em `false` assim que R e cfg terminam de
+  // carregar pela primeira vez. Sem isso, `loading` reagia a QUALQUER
+  // refetch de R (ex.: o que roda depois de criar uma reserva) sempre que
+  // a janela de reservas ainda estivesse vazia — trocando a árvore
+  // Suspense/aba pela <TabSkeleton>, o que desmonta a aba ativa e perde
+  // seu estado local (ex.: o wizard de Reservar voltava pro passo 0 após
+  // "Encomenda registrada!" nunca aparecer).
+  const primeiraCargaRef = useRef(true);
+  useEffect(() => {
+    if (!R.loading && !cfg.loading) primeiraCargaRef.current = false;
+  });
   const loading =
-    (R.loading && reservas.length === 0) || (cfg.loading && cfg.trips.ida.pontos.length === 0);
+    primeiraCargaRef.current &&
+    ((R.loading && reservas.length === 0) || (cfg.loading && cfg.trips.ida.pontos.length === 0));
   const pendentesCount = reservas.filter(
     (r) => r.status === "pendente" || r.status === "espera",
   ).length;
