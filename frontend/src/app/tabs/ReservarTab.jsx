@@ -71,7 +71,12 @@ export default function ReservarTab({
   const bairros = useBairros();
   const dropoff = useDropoff();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({
+  // formInicial é a ÚNICA fonte do estado vazio — usado tanto no useState
+  // quanto em reiniciar() (eram dois literais duplicados antes, e o de
+  // reiniciar() tinha esquecido os campos enc*, deixando dado de um
+  // atendimento vazar pro próximo quando o atendente reiniciava o
+  // simulador entre um cliente e outro).
+  const formInicial = () => ({
     data: todayStr(),
     direcao: "",
     pontoId: "",
@@ -93,6 +98,7 @@ export default function ReservarTab({
     encRecebedorNome: "",
     encRecebedorTelefone: "",
   });
+  const [form, setForm] = useState(formInicial);
   const [done, setDone] = useState(null);
   const [copied, setCopied] = useState(false);
   const [erroEnvio, setErroEnvio] = useState("");
@@ -218,6 +224,7 @@ export default function ReservarTab({
         paymentMethod: form.pagamento,
         status: "espera",
       });
+      emit(EVENTS.RESERVA_CRIADA, { via: "roteiro-espera", status: res?.status || "espera" });
       setDone(resumoLocal(res?.status || "espera"));
       setStep(10);
     } catch (e) {
@@ -227,22 +234,7 @@ export default function ReservarTab({
     }
   };
   const reiniciar = () => {
-    setForm({
-      data: todayStr(),
-      direcao: "",
-      pontoId: "",
-      quantidade: 1,
-      bairro: "",
-      localExato: "",
-      localOutro: "",
-      rua: "",
-      referencia: "",
-      desembarqueArea: "",
-      desembarqueDetalhe: "",
-      nome: "",
-      telefone: "",
-      pagamento: "dinheiro",
-    });
+    setForm(formInicial());
     setStep(0);
     setDone(null);
     setCopied(false);
@@ -268,6 +260,7 @@ export default function ReservarTab({
         status: "pendente",
         extraData: { data: form.data },
       });
+      emit(EVENTS.RESERVA_CRIADA, { via: "roteiro-frete", status: "pendente" });
       setStep(7);
     } catch (e) {
       setErroEnvio(mensagemAmigavel(e, "Não foi possível registrar o frete."));
@@ -296,6 +289,7 @@ export default function ReservarTab({
           encDesembarque: form.encDesembarque,
         },
       });
+      emit(EVENTS.RESERVA_CRIADA, { via: "roteiro-encomenda", status: "pendente" });
       setStep(11);
     } catch (e) {
       setErroEnvio(mensagemAmigavel(e, "Não foi possível registrar a encomenda."));

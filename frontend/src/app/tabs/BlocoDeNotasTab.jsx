@@ -1,5 +1,7 @@
-import { NotebookPen, Pin, PinOff, Plus, Trash2 } from "lucide-react";
+import { NotebookPen, Pin, PinOff, Plus, Trash2, X } from "lucide-react";
+import { useState } from "react";
 import { useNotes } from "../../hooks/useNotes.js";
+import { mensagemAmigavel } from "../../lib/erros.js";
 import { Skeleton } from "../../ui/motion/index.js";
 import { C, Header } from "../tabShared.jsx";
 
@@ -71,8 +73,28 @@ function NotaCard({ nota, onChange, onBlur, onTogglePin, onRemove }) {
 }
 
 export default function BlocoDeNotasTab() {
-  const { notes, loading, error, create, creating, scheduleSave, flush, togglePin, remove } =
+  const { notes, loading, error, create, creating, scheduleSave, flush, saveError, togglePin, remove } =
     useNotes();
+  const [erroLocal, setErroLocal] = useState("");
+
+  const criar = async () => {
+    setErroLocal("");
+    try {
+      await create();
+    } catch (e) {
+      setErroLocal(mensagemAmigavel(e, "Não foi possível criar a nota."));
+    }
+  };
+
+  const apagar = async (id) => {
+    if (!window.confirm("Apagar esta nota? Não dá para desfazer.")) return;
+    setErroLocal("");
+    try {
+      await remove(id);
+    } catch (e) {
+      setErroLocal(mensagemAmigavel(e, "Não foi possível apagar a nota."));
+    }
+  };
 
   return (
     <div>
@@ -82,7 +104,7 @@ export default function BlocoDeNotasTab() {
         right={
           <button
             type="button"
-            onClick={create}
+            onClick={criar}
             disabled={creating}
             className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium"
             style={{ background: C.brand, color: "#fff", opacity: creating ? 0.7 : 1 }}
@@ -98,7 +120,26 @@ export default function BlocoDeNotasTab() {
             className="text-xs rounded-lg px-3 py-2 mb-3"
             style={{ background: C.redSoft, color: C.red }}
           >
-            Não foi possível carregar as notas. {error?.message}
+            {mensagemAmigavel(error, "Não foi possível carregar as notas.")}
+          </div>
+        )}
+        {erroLocal && (
+          <div
+            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2 mb-3"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <span>{erroLocal}</span>
+            <button type="button" onClick={() => setErroLocal("")}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
+        {saveError && (
+          <div
+            className="text-xs rounded-lg px-3 py-2 mb-3"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            {mensagemAmigavel(saveError, "Não foi possível salvar uma das notas — tente editar de novo.")}
           </div>
         )}
 
@@ -122,7 +163,7 @@ export default function BlocoDeNotasTab() {
             </div>
             <button
               type="button"
-              onClick={create}
+              onClick={criar}
               className="btn-press text-xs px-3 py-2 rounded-lg font-medium mt-3"
               style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
             >
@@ -141,9 +182,7 @@ export default function BlocoDeNotasTab() {
                 onChange={scheduleSave}
                 onBlur={flush}
                 onTogglePin={togglePin}
-                onRemove={(id) => {
-                  if (window.confirm("Apagar esta nota? Não dá para desfazer.")) remove(id);
-                }}
+                onRemove={apagar}
               />
             ))}
           </div>

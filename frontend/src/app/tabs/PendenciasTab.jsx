@@ -1,6 +1,7 @@
-import { Check, MessageCircle, PhoneCall, X } from "lucide-react";
+import { Check, MessageCircle, PhoneCall, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import { mensagemAmigavel } from "../../lib/erros.js";
+import { Skeleton } from "../../ui/motion/index.js";
 import { C, Card, Header, TextInput, digitos, tempoRelativo } from "../tabShared.jsx";
 
 /* ===================== PENDÊNCIAS (fila de atendimento) ===================== */
@@ -39,7 +40,7 @@ export default function PendenciasTab({ pend }) {
         title="Pendências"
         subtitle="Atendimentos que precisam da equipe — do bot de WhatsApp ou abertos à mão."
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4">
+      <div className="px-6 md:px-10 pb-10 space-y-4 stagger">
         {erro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -48,6 +49,21 @@ export default function PendenciasTab({ pend }) {
             <span>{erro}</span>
             <button type="button" onClick={() => setErro("")}>
               <X size={13} />
+            </button>
+          </div>
+        )}
+        {pend.error && (
+          <div
+            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.redSoft, color: C.red }}
+          >
+            <span>{mensagemAmigavel(pend.error, "Não foi possível carregar as pendências.")}</span>
+            <button
+              type="button"
+              onClick={pend.recarregar}
+              className="btn-press flex items-center gap-1"
+            >
+              <RefreshCw size={12} /> Tentar de novo
             </button>
           </div>
         )}
@@ -88,13 +104,13 @@ export default function PendenciasTab({ pend }) {
         </Card>
 
         {pend.loading && pend.pendencias.length === 0 && (
-          <Card>
-            <div className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
-              carregando…
-            </div>
-          </Card>
+          <div className="space-y-4">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} height={96} rounded={12} />
+            ))}
+          </div>
         )}
-        {!pend.loading && pend.pendencias.length === 0 && (
+        {!pend.loading && !pend.error && pend.pendencias.length === 0 && (
           <Card>
             <div className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
               Nenhuma pendência aberta.
