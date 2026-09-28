@@ -1,13 +1,4 @@
-import {
-  AlertTriangle,
-  ChevronRight,
-  MessageCircle,
-  Pencil,
-  RefreshCw,
-  Save,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronRight, MessageCircle, Pencil, Save, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
@@ -16,6 +7,7 @@ import { Skeleton } from "../../ui/motion/index.js";
 import {
   C,
   Card,
+  ErrorBanner,
   Field,
   Header,
   HeroFX,
@@ -103,17 +95,9 @@ export default function PassageirosTab({ trips, deepLink }) {
       />
       <div className="px-6 md:px-10 pb-10">
         {erro && (
-          <div
-            className="mb-3 flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.redSoft, color: C.red }}
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle size={14} /> {erro}
-            </span>
-            <button type="button" onClick={recarregar} className="btn-press flex items-center gap-1">
-              <RefreshCw size={12} /> Tentar de novo
-            </button>
-          </div>
+          <ErrorBanner onRetry={recarregar} className="mb-3">
+            {erro}
+          </ErrorBanner>
         )}
         <div
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-4 flex flex-wrap items-center justify-between gap-4"
@@ -362,14 +346,15 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
               Não compareceu: <b style={{ color: C.ink }}>{p.nao_compareceu}</b>
             </div>
             {tel && (
-              <button
-                type="button"
-                onClick={() => window.open(`https://wa.me/55${tel}`, "_blank")}
+              <a
+                href={`https://wa.me/55${tel}`}
+                target="_blank"
+                rel="noreferrer"
                 className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
                 style={{ background: C.panel2, color: C.inkSoft }}
               >
                 <MessageCircle size={12} /> Abrir WhatsApp
-              </button>
+              </a>
             )}
           </div>
           <div>

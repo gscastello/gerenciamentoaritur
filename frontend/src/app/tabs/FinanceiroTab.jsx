@@ -1021,13 +1021,13 @@ function ContasReceberView({ pix }) {
 
   const vencida = (venc) => !!venc && venc < todayStr();
 
-  const abrirCobranca = (c) => {
+  const urlCobranca = (c) => {
     const venc = c.vencimento ? fmtDate(c.vencimento) : "sem data definida";
     const msg =
       `Olá, ${c.nome}! Tudo bem? Aqui é da Rota Pirapemas. ` +
       `Notamos que sua passagem de ${venc} no valor de ${fmtBRL(c.valor_devido)} ainda está pendente de pagamento. ` +
       `Você pode pagar via Pix na chave ${pixKey}. Qualquer dúvida, estamos à disposição!`;
-    window.open(`https://wa.me/55${digitos(c.telefone)}?text=${encodeURIComponent(msg)}`, "_blank");
+    return `https://wa.me/55${digitos(c.telefone)}?text=${encodeURIComponent(msg)}`;
   };
 
   const iniciarAjuste = (reservationId) => {
@@ -1119,13 +1119,15 @@ function ContasReceberView({ pix }) {
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => abrirCobranca(c)}
+                          <a
+                            href={urlCobranca(c)}
+                            target="_blank"
+                            rel="noreferrer"
                             className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
                             style={{ background: C.greenSoft, color: C.green, fontWeight: 600 }}
                           >
                             <MessageCircle size={12} /> Cobrar no WhatsApp
-                          </button>
+                          </a>
                           <button
                             onClick={() => iniciarAjuste(c.reservation_id)}
                             className="btn-press text-xs px-2 py-1 rounded-md"

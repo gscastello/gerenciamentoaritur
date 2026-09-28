@@ -10,7 +10,6 @@ import {
   Package,
   PhoneCall,
   X,
-  XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -23,6 +22,7 @@ import {
   C,
   Card,
   DirecaoDivisor,
+  ErrorBanner,
   Header,
   HeroFX,
   IDA_PRIORIDADE,
@@ -169,19 +169,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
         }
       />
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
-        {erro && (
-          <div
-            className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.redSoft, color: C.red }}
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle size={14} /> {erro}
-            </span>
-            <button onClick={() => setErro("")}>
-              <XIcon size={13} />
-            </button>
-          </div>
-        )}
+        {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
         <div
           className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
           style={{ borderColor: C.brandDim }}
@@ -277,15 +265,15 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
                     </div>
                     <div className="flex gap-2">
                       {r.telefone && (
-                        <button
-                          onClick={() =>
-                            window.open(`https://wa.me/55${digitos(r.telefone)}`, "_blank")
-                          }
+                        <a
+                          href={`https://wa.me/55${digitos(r.telefone)}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
                           style={{ background: C.panel, color: C.inkSoft }}
                         >
                           <MessageCircle size={12} /> WhatsApp
-                        </button>
+                        </a>
                       )}
                       {!entregue && (
                         <button
@@ -428,19 +416,7 @@ function DesembarqueView({ reservas, R, data }) {
         agendamento — ajuste o balde e a ordem para montar a rota.
         {salvando && " · salvando…"}
       </div>
-      {erro && (
-        <div
-          className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
-          style={{ background: C.redSoft, color: C.red }}
-        >
-          <span className="flex items-center gap-2">
-            <AlertTriangle size={14} /> {erro}
-          </span>
-          <button type="button" onClick={() => setErro("")}>
-            <XIcon size={13} />
-          </button>
-        </div>
-      )}
+      {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
       {!temAlguem && (
         <div className="text-sm" style={{ color: C.inkFaint }}>
           Nenhum passageiro confirmado nesse dia.

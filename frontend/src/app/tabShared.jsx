@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bell,
   Bus,
   Car,
@@ -11,6 +12,7 @@ import {
   Package,
   Plus,
   Receipt,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -751,6 +753,38 @@ export function Header({ title, subtitle, right }) {
     </div>
   );
 }
+// Banner de erro padrão — antes reimplementado à mão em 4+ telas
+// (Lista, Passageiros, Pendências, Bloco de notas), cada uma com um
+// pouco de deriva (algumas sem botão de fechar, ícone diferente etc.).
+// `onDismiss` mostra um X, `onRetry` mostra "Tentar de novo" — passe só
+// o(s) que fizer(em) sentido pro erro em questão; sem nenhum dos dois, o
+// banner fica só informativo.
+export function ErrorBanner({ children, onDismiss, onRetry, className = "" }) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2 ${className}`}
+      style={{ background: C.redSoft, color: C.red }}
+    >
+      <span className="flex items-center gap-2">
+        <AlertTriangle size={14} /> {children}
+      </span>
+      {(onDismiss || onRetry) && (
+        <div className="flex items-center gap-2 shrink-0">
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="btn-press flex items-center gap-1">
+              <RefreshCw size={12} /> Tentar de novo
+            </button>
+          )}
+          {onDismiss && (
+            <button type="button" onClick={onDismiss}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 export function Card({ children, style, className = "" }) {
   return (
     <div
@@ -1039,14 +1073,17 @@ export function linhaReserva(r, trips) {
     return `${r.quantidade}P - ${(r.bairro || "bairro não informado").toUpperCase()} - ${r.telefone}`;
   return `${r.quantidade}P ${labelLocal(r, trips)} (${r.telefone})`;
 }
-// Endereço de embarque legível e COMPLETO (nunca cortado) para o celular
-// do motorista: local/bairro + rua + ponto de referência, na ordem útil.
-// Junta os campos estruturados de detalhe/rua/referência num só texto —
-// é o valor de partida do campo "Anotação" ao editar (rescrever à mão em
-// vez de mexer em 3 caixinhas separadas). Ver EditarReservaModal.
+// Só o DETALHE do embarque (localExato + rua + referência) — de propósito
+// SEM o local/bairro (labelLocal), porque no EditarReservaModal o local já
+// aparece como campo estruturado à parte; isto vira o valor de partida do
+// campo "Anotação" de texto livre (rescrever à mão em vez de mexer em 3
+// caixinhas separadas). Não confundir com enderecoEmbarque() abaixo, que é
+// o endereço COMPLETO (com local/bairro) usado pra exibição.
 export function anotacaoBase(r) {
   return [r.localExato, r.rua, r.referencia && `ref.: ${r.referencia}`].filter(Boolean).join(" · ");
 }
+// Endereço de embarque legível e COMPLETO (nunca cortado) para o celular
+// do motorista: local/bairro + rua + ponto de referência, na ordem útil.
 export function enderecoEmbarque(r, trips) {
   const partes = [];
   const local = labelLocal(r, trips);
