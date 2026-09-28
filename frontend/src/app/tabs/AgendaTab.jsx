@@ -738,19 +738,20 @@ export default function AgendaTab({
 // dentro de "Editar reserva".
 function QuickActions({ r, onStatus, onEditar }) {
   const tel = digitos(r.telefone);
+  const classeAcao = "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
+  const estiloAcao = { background: C.panel2, color: C.inkSoft };
   const btn = (Icon, label, onClick) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className="btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
-      style={{ background: C.panel2, color: C.inkSoft }}
-    >
+    <button type="button" onClick={onClick} className={classeAcao} style={estiloAcao}>
       <Icon size={13} /> <span>{label}</span>
     </button>
   );
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {tel && btn(MessageCircle, "WhatsApp", () => window.open(`https://wa.me/55${tel}`, "_blank"))}
+      {tel && (
+        <a href={`https://wa.me/55${tel}`} target="_blank" rel="noreferrer" className={classeAcao} style={estiloAcao}>
+          <MessageCircle size={13} /> <span>WhatsApp</span>
+        </a>
+      )}
       {btn(Pencil, "Editar", () => onEditar(r))}
       {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
     </div>

@@ -144,15 +144,52 @@ const SistemaSkel = () => (
   </div>
 );
 
+const PendenciasSkel = () => (
+  <div style={wrap}>
+    <HeaderSkel />
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Skeleton height={14} width={140} />
+      <div style={grid(3)}>
+        <Skeleton height={38} rounded={10} />
+        <Skeleton height={38} rounded={10} />
+        <Skeleton height={38} rounded={10} />
+      </div>
+    </div>
+    <ListSkel rows={2} h={96} />
+  </div>
+);
+
+const BlocoSkel = () => (
+  <div style={wrap}>
+    <HeaderSkel />
+    <div style={grid(3)}>
+      <Skeleton height={180} rounded={12} />
+      <Skeleton height={180} rounded={12} />
+      <Skeleton height={180} rounded={12} />
+    </div>
+  </div>
+);
+
+const GestaoSkel = () => (
+  <div style={wrap}>
+    <HeaderSkel />
+    <StatRow n={4} />
+    <Skeleton height={260} rounded={12} />
+  </div>
+);
+
 const MAP = {
   reservar: ReservarSkel,
   agenda: AgendaSkel,
   lista: ListaSkel,
+  bloco: BlocoSkel,
   passageiros: PassageirosSkel,
   financeiro: FinanceiroSkel,
+  gestao: GestaoSkel,
   operacao: OperacaoSkel,
   dashboard: DashboardSkel,
   sistema: SistemaSkel,
+  pendencias: PendenciasSkel,
 };
 
 /** Skeleton da aba atual. Fallback: o do dashboard (o mais completo). */
