@@ -306,3 +306,4 @@ test("Reservar: viagem lotada → lista de espera → confirmação (RPC com sta
   await expect(page.getByText("Você entrou na lista de espera!", { exact: true })).toBeVisible();
   expect(createBody?.p_status).toBe("espera");
 });
+

@@ -49,3 +49,31 @@ test("Pendências: lista, abre manual e resolve", async ({ page }) => {
     .click();
   await expect(page.getByText("Ligar para o Sr. José")).toHaveCount(0);
 });
+
+// Regressão (2026-09-28): quando a busca de pendências falhava, a tela
+// caía direto no estado vazio ("Nenhuma pendência aberta") em vez de
+// mostrar o erro — a equipe achava que não tinha nada pra fazer quando na
+// verdade a busca tinha quebrado.
+test("Pendências: erro ao carregar mostra aviso, não a mensagem de lista vazia", async ({
+  page,
+}) => {
+  await mockSupabase(page, { role: "atendente", pendencias: [] });
+  // sobrepõe o handler genérico só pra essa view, depois que o
+  // mockSupabase já registrou o dele (Playwright usa o último route
+  // registrado primeiro).
+  await page.route("**/rest/v1/v_pendencias_atendimento*", (route) =>
+    route.fulfill({ status: 500, contentType: "application/json", body: "{}" }),
+  );
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
+  let aba = page.getByRole("button", { name: "Pendências" });
+  if ((await aba.count()) === 0) {
+    await page.getByRole("button", { name: "Mais" }).click();
+    aba = page.getByRole("button", { name: "Pendências" });
+  }
+  await aba.first().click();
+
+  await expect(page.getByText(/Não foi possível carregar as pendências/)).toBeVisible();
+  await expect(page.getByText("Nenhuma pendência aberta.")).toHaveCount(0);
+});

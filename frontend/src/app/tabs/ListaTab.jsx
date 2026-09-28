@@ -452,18 +452,10 @@ function DesembarqueView({ reservas, R, data }) {
           if (itens.length === 0) return null;
           return (
             <div key={direcao} className="space-y-3">
-              <div className="text-center">
-                <span
-                  className="inline-block px-4 py-1 rounded-full text-sm font-bold tracking-wide"
-                  style={{
-                    background: direcao === "ida" ? C.amberSoft : C.blueSoft,
-                    color: direcao === "ida" ? C.amber : C.blue,
-                    fontFamily: "'Space Grotesk', sans-serif",
-                  }}
-                >
-                  {direcao === "ida" ? "IDA — desembarque" : "VOLTA — desembarque"}
-                </span>
-              </div>
+              <DirecaoDivisor
+                label={direcao === "ida" ? "IDA — DESEMBARQUE" : "VOLTA — DESEMBARQUE"}
+                cor={C.inkSoft}
+              />
               {dropoff.porDirecao(direcao).map((balde) => {
                 const doBalde = itens
                   .filter((r) => inferirBaldeDesembarque(r) === balde.code)

@@ -1,8 +1,18 @@
-import { AlertTriangle, ChevronRight, MessageCircle, Pencil, Save, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  MessageCircle,
+  Pencil,
+  RefreshCw,
+  Save,
+  Search,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
+import { Skeleton } from "../../ui/motion/index.js";
 import {
   C,
   Card,
@@ -70,9 +80,20 @@ export default function PassageirosTab({ trips, deepLink }) {
     }
   }, [deepLink]);
 
-  const { passageiros, total, loading, erro, temMais, carregarMais, salvarNota, salvarPerfil } =
-    usePassageiros(busca);
-  const valorPagina = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
+  const {
+    passageiros,
+    total,
+    loading,
+    erro,
+    temMais,
+    carregarMais,
+    recarregar,
+    salvarNota,
+    salvarPerfil,
+  } = usePassageiros(busca);
+  // acumula com cada "Carregar mais" (usePassageiros.js mantém a lista
+  // inteira, não só a página atual) — o rótulo tem que refletir isso.
+  const valorCarregado = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
 
   return (
     <div>
@@ -89,6 +110,9 @@ export default function PassageirosTab({ trips, deepLink }) {
             <span className="flex items-center gap-2">
               <AlertTriangle size={14} /> {erro}
             </span>
+            <button type="button" onClick={recarregar} className="btn-press flex items-center gap-1">
+              <RefreshCw size={12} /> Tentar de novo
+            </button>
           </div>
         )}
         <div
@@ -116,12 +140,12 @@ export default function PassageirosTab({ trips, deepLink }) {
               className="text-[10px] uppercase tracking-wide"
               style={{ color: "rgba(255,255,255,.6)" }}
             >
-              Valor gerado (nesta página)
+              Valor gerado (carregado)
             </div>
             <div
               style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}
             >
-              {fmtBRL(valorPagina)}
+              {fmtBRL(valorCarregado)}
             </div>
           </div>
         </div>
@@ -139,6 +163,13 @@ export default function PassageirosTab({ trips, deepLink }) {
           />
         </div>
         <div className="space-y-2 stagger">
+          {loading && passageiros.length === 0 && (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} height={64} rounded={12} />
+              ))}
+            </div>
+          )}
           {!loading && passageiros.length === 0 && (
             <Card>
               <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
@@ -157,9 +188,9 @@ export default function PassageirosTab({ trips, deepLink }) {
               onSalvarPerfil={salvarPerfil}
             />
           ))}
-          {loading && (
+          {loading && passageiros.length > 0 && (
             <div className="text-center py-3 text-xs" style={{ color: C.inkFaint }}>
-              carregando…
+              carregando mais…
             </div>
           )}
           {temMais && !loading && (
