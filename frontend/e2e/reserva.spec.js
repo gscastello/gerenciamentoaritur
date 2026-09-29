@@ -272,6 +272,43 @@ test("Reservar: desembarque em cidade intermediária → reserva pendente (issue
   await expect
     .poll(() => createBody?.p_status, { timeout: 10000 })
     .toBe("pendente");
+  // regressão: o refetch da janela de reservas (disparado depois de criar)
+  // não pode derrubar o wizard de volta pro passo 0 antes de mostrar a
+  // tela de sucesso — ver o teste de encomenda logo abaixo.
+  await expect(page.getByText("Recebemos sua solicitação!")).toBeVisible();
+});
+
+// Regressão: criar a PRIMEIRA reserva de uma janela vazia disparava um
+// refetch (App.jsx) que reacendia o `loading` de página inteira e
+// trocava a árvore <ReservarTab> pela <TabSkeleton> no mesmo lugar do
+// JSX — como são elementos estruturalmente diferentes, React desmontava
+// o wizard e perdia o `step`/`done` locais, voltando pra "Para quando é
+// a viagem?" em vez de mostrar "Encomenda registrada!".
+test("Reservar: encomenda chega na tela de sucesso (não perde o wizard no refetch)", async ({
+  page,
+}) => {
+  await mockSupabase(page, {
+    role: "atendente",
+    createResult: { success: true, reservation_id: "e2e-enc-1", status: "pendente", message: "created" },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Reservar/ }).first().click();
+
+  await page.locator('input[type="date"]').fill(proximaTerca());
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  await page.getByRole("button", { name: /Enviar uma encomenda/ }).click();
+  await page.getByLabel("O que é a encomenda?").fill("Documentos");
+  await page.getByLabel("Local de embarque").fill("Rodoviária");
+  await page.getByLabel("Local de desembarque").fill("Pirapemas centro");
+  await page.getByLabel("Nome de quem vai receber").fill("Maria Receptora");
+  await page.getByLabel("Telefone de contato de quem recebe").fill("98988887777");
+
+  await page.getByRole("button", { name: "Encaminhar para a equipe" }).click();
+
+  await expect(page.getByText("Encomenda registrada!")).toBeVisible();
+  // a tela de "Para quando é a viagem?" (passo 0) não pode ter voltado
+  await expect(page.getByText("Para quando é a viagem?")).toHaveCount(0);
 });
 
 test("Reservar: viagem lotada → lista de espera → confirmação (RPC com status espera)", async ({
