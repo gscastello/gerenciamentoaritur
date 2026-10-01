@@ -87,6 +87,20 @@ export const customersService = {
     );
   },
 
+  async removeCustomer(customerId) {
+    const { data, error } = await supabase.rpc("rpc_soft_delete_customer", { p_id: customerId });
+    if (error)
+      throw new ServiceError(`removeCustomer: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível remover o passageiro.", {
+        retryable: false,
+      });
+    return data;
+  },
+
   async getByPhone(phone) {
     return handle(
       supabase
