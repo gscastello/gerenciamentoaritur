@@ -98,6 +98,16 @@ export function usePassageiros(busca) {
     [perfilAction],
   );
 
+  const removerAction = useAsyncAction(customersService.removeCustomer);
+  const removerPassageiro = useCallback(
+    async (customerId) => {
+      await removerAction.run(customerId);
+      setLinhas((atual) => atual.filter((p) => p.customer_id !== customerId));
+      setTotal((atual) => Math.max(0, atual - 1));
+    },
+    [removerAction],
+  );
+
   return {
     passageiros: linhas,
     total,
@@ -109,12 +119,16 @@ export function usePassageiros(busca) {
         : "") ||
       (perfilAction.error
         ? mensagemAmigavel(perfilAction.error, "Não foi possível salvar o cadastro.")
+        : "") ||
+      (removerAction.error
+        ? mensagemAmigavel(removerAction.error, "Não foi possível remover o passageiro.")
         : ""),
     temMais: linhas.length < total,
     carregarMais,
     recarregar,
     salvarNota,
     salvarPerfil,
+    removerPassageiro,
   };
 }
 

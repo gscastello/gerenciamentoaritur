@@ -153,6 +153,15 @@ export default function ReservarTab({
     telefone: form.telefone,
     status,
   });
+  // Normaliza antes de mandar pro backend: sem isso, o mesmo número
+  // digitado uma vez ("98999998888") e colado outra vez do WhatsApp
+  // ("+55 98 99999-8888") vira dois clientes diferentes (o app "não
+  // reconhece" o número). Campo opcional/incompleto cai no fallback de
+  // só tirar os não-dígitos, sem travar o envio.
+  const normalizarFone = (v) => {
+    const r = validarTelefone(v);
+    return r.ok ? r.valor : String(v ?? "").replace(/\D/g, "");
+  };
   const confirmar = async () => {
     setErroEnvio("");
     const problema = primeiroErro([
@@ -172,7 +181,7 @@ export default function ReservarTab({
         tripDate: form.data,
         direction: form.direcao,
         customerName: form.nome,
-        customerPhone: form.telefone,
+        customerPhone: normalizarFone(form.telefone),
         routePointCode: form.pontoId || null,
         quantity: Number.parseInt(form.quantidade, 10) || 1,
         unitPrice: valorUnit,
@@ -217,7 +226,7 @@ export default function ReservarTab({
         tripDate: form.data,
         direction: form.direcao === "espera" ? form._direcaoOriginal : form.direcao,
         customerName: form.nome,
-        customerPhone: form.telefone,
+        customerPhone: normalizarFone(form.telefone),
         routePointCode: form.pontoId || null,
         quantity: Number.parseInt(form.quantidade, 10) || 1,
         unitPrice: valorUnit,
@@ -255,7 +264,7 @@ export default function ReservarTab({
         direction: "ida",
         type: "frete",
         customerName: form.nome || "(a coletar no atendimento)",
-        customerPhone: form.telefone || "",
+        customerPhone: normalizarFone(form.telefone),
         pendingReason: "Pedido de frete — encaminhar para atendimento humano.",
         status: "pendente",
         extraData: { data: form.data },
@@ -277,7 +286,7 @@ export default function ReservarTab({
         direction: "ida",
         type: "encomenda",
         customerName: form.encRecebedorNome,
-        customerPhone: form.encRecebedorTelefone,
+        customerPhone: normalizarFone(form.encRecebedorTelefone),
         pendingReason:
           "Encomenda — encaminhar para atendimento humano (sem valor definido no fluxo automático).",
         status: "pendente",

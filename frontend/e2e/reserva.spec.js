@@ -194,6 +194,10 @@ test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page
   });
   await page.goto("/");
   await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
+  // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
+  // reserva em vez de depender do default.
+  await page.locator('input[type="date"]').first().fill(hoje);
 
   const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
   await expect(chip).toHaveText(/Táxi/);

@@ -1,9 +1,9 @@
-import { ChevronRight, MessageCircle, Pencil, Save, Search, X } from "lucide-react";
+import { ChevronRight, MessageCircle, Pencil, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
-import { Skeleton } from "../../ui/motion/index.js";
+import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import {
   C,
   Card,
@@ -54,6 +54,11 @@ function EnderecosFreq({ titulo, itens }) {
   );
 }
 
+// Duração da saída antes de tirar o passageiro da lista de verdade —
+// precisa bater com o `duration` do Presence abaixo (AGENTS.md §5, mesmo
+// padrão de BlocoDeNotasTab.jsx).
+const SAIDA_MS = 200;
+
 // CRM paginado: lista agregada vem do banco (v_customers_stats), página
 // a página, busca no servidor. O histórico de cada passageiro (para os
 // endereços mais usados) carrega só quando o card abre.
@@ -82,10 +87,29 @@ export default function PassageirosTab({ trips, deepLink }) {
     recarregar,
     salvarNota,
     salvarPerfil,
+    removerPassageiro,
   } = usePassageiros(busca);
   // acumula com cada "Carregar mais" (usePassageiros.js mantém a lista
   // inteira, não só a página atual) — o rótulo tem que refletir isso.
   const valorCarregado = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
+
+  const [saindo, setSaindo] = useState(() => new Set());
+  const iniciarRemocao = (customerId) => {
+    setSaindo((prev) => new Set(prev).add(customerId));
+    setTimeout(async () => {
+      try {
+        await removerPassageiro(customerId);
+      } catch {
+        // erro fica visível no ErrorBanner de cima (usePassageiros.erro) —
+        // o card volta a aparecer.
+        setSaindo((prev) => {
+          const next = new Set(prev);
+          next.delete(customerId);
+          return next;
+        });
+      }
+    }, SAIDA_MS);
+  };
 
   return (
     <div>
@@ -162,15 +186,22 @@ export default function PassageirosTab({ trips, deepLink }) {
             </Card>
           )}
           {passageiros.map((p) => (
-            <PassageiroCard
+            <Presence
               key={p.customer_id}
-              p={p}
-              trips={trips}
-              aberto={aberto === p.customer_id}
-              onToggle={() => setAberto(aberto === p.customer_id ? null : p.customer_id)}
-              onSalvarNota={salvarNota}
-              onSalvarPerfil={salvarPerfil}
-            />
+              when={!saindo.has(p.customer_id)}
+              duration={SAIDA_MS}
+              {...fadeScale}
+            >
+              <PassageiroCard
+                p={p}
+                trips={trips}
+                aberto={aberto === p.customer_id}
+                onToggle={() => setAberto(aberto === p.customer_id ? null : p.customer_id)}
+                onSalvarNota={salvarNota}
+                onSalvarPerfil={salvarPerfil}
+                onRemover={iniciarRemocao}
+              />
+            </Presence>
           ))}
           {loading && passageiros.length > 0 && (
             <div className="text-center py-3 text-xs" style={{ color: C.inkFaint }}>
@@ -201,7 +232,7 @@ function classificacao(viagensCount) {
 
 const ROTULO_PAGAMENTO = { dinheiro: "Dinheiro", pix: "Pix" };
 
-function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerfil }) {
+function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerfil, onRemover }) {
   const { viagens, loading } = usePassageiroDetalhe(aberto ? p.customer_id : null);
   const enderecosIda = useMemo(
     () =>
@@ -245,7 +276,7 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
     try {
       await onSalvarPerfil(p.customer_id, {
         name: form.nome.trim(),
-        phone: digitos(form.telefone),
+        phone: validarTelefone(form.telefone).valor,
         defaultRoutePointCode: form.pontoPadrao || null,
         defaultPaymentMethod: form.pagamentoPadrao || null,
       });
@@ -255,6 +286,16 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
     } finally {
       setSalvando(false);
     }
+  };
+
+  const removerCadastro = () => {
+    if (
+      !window.confirm(
+        `Remover o cadastro de ${p.nome}? O histórico de viagens é mantido, mas o passageiro some da lista.`,
+      )
+    )
+      return;
+    onRemover(p.customer_id);
   };
 
   const tel = digitos(p.telefone);
@@ -439,6 +480,16 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
                     style={{ background: C.panel, color: C.inkSoft }}
                   >
                     <X size={13} /> Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removerCadastro}
+                    disabled={salvando}
+                    aria-label={`Remover cadastro de ${p.nome}`}
+                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md ml-auto disabled:opacity-40"
+                    style={{ background: C.redSoft, color: C.red }}
+                  >
+                    <Trash2 size={13} /> Remover cadastro
                   </button>
                 </div>
               </>

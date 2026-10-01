@@ -230,6 +230,8 @@ export async function mockSupabase(page, opts = {}) {
   let maintenanceTypeSeq = 0;
   // log de erros (database/36+47) — stateful pra testar "Resolver"
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
+  // passageiros/CRM (database/49) — stateful pra testar remover cadastro
+  let customersStatsRows = (opts.customersStats ?? []).map((c) => ({ ...c }));
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
@@ -384,6 +386,14 @@ export async function mockSupabase(page, opts = {}) {
           );
         }
         vehiclesRows = vehiclesRows.filter((v) => v.id !== b.p_id);
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_soft_delete_customer") {
+        const b = req.postDataJSON?.() ?? {};
+        const alvo = customersStatsRows.find((c) => c.customer_id === b.p_id);
+        if (!alvo)
+          return route.fulfill(json({ success: false, message: "Passageiro não encontrado." }));
+        customersStatsRows = customersStatsRows.filter((c) => c.customer_id !== b.p_id);
         return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_mark_notifications_read") {
@@ -570,7 +580,7 @@ export async function mockSupabase(page, opts = {}) {
     } else if (table === "app_error_log") rows = errorLogRows.filter((e) => !e.resolved_at);
     else if (table === "v_diagnostico_reservas") rows = opts.diagnostico ?? [];
     else if (table === "v_customers_stats") {
-      rows = opts.customersStats ?? [];
+      rows = customersStatsRows;
       return route.fulfill(
         json(rows, 200, { "content-range": `0-${Math.max(rows.length - 1, 0)}/${rows.length}` }),
       );
