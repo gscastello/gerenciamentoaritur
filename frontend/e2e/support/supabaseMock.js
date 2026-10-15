@@ -105,6 +105,7 @@ const SETTINGS = [
   { key: "pix", value: { key: "98981012388", name: "A O Castelo Transporte e Turismo" } },
   { key: "served_cities", value: ["sao luis", "cantanhede", "pirapemas"] },
   { key: "intermediate_cities", value: ["bacabeira", "santa rita"] },
+  { key: "chatwoot", value: { url: "https://chatwoot.e2e.local/app/accounts/1" } },
 ];
 
 function json(body, status = 200, headers = null) {
@@ -230,6 +231,9 @@ export async function mockSupabase(page, opts = {}) {
   let maintenanceTypeSeq = 0;
   // log de erros (database/36+47) — stateful pra testar "Resolver"
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
+  // painel de atendimento (database/52): fila espelhada do Chatwoot + perguntas sem resposta
+  const atendimentoRows = (opts.atendimento ?? []).map((c) => ({ ...c }));
+  let botUnansweredRows = (opts.botUnanswered ?? []).map((q) => ({ resolved_at: null, ...q }));
   // base de conhecimento do bot (database/50) — stateful pra testar o CRUD
   let botKnowledgeRows = (opts.botKnowledge ?? []).map((k) => ({ ...k }));
   let botKnowledgeSeq = 0;
@@ -509,6 +513,13 @@ export async function mockSupabase(page, opts = {}) {
       const updated = maintenanceTypesRows.find((t) => t.id === id) ?? null;
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
+    else if (table === "v_atendimento_whatsapp") rows = atendimentoRows;
+    else if (table === "bot_unanswered" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      botUnansweredRows = botUnansweredRows.map((q) => (q.id === id ? { ...q, ...body } : q));
+      return route.fulfill(json([]));
+    } else if (table === "bot_unanswered") rows = botUnansweredRows.filter((q) => !q.resolved_at);
     else if (table === "bot_knowledge" && req.method() === "POST") {
       const body = req.postDataJSON?.() ?? {};
       botKnowledgeSeq += 1;

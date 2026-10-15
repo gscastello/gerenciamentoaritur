@@ -12,45 +12,6 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // sempre no mesmo formato (DDD + 8/9 dígitos, sem +55), não importa como
 // foi digitado.
 
-function proximaTerca() {
-  const d = new Date();
-  do {
-    d.setDate(d.getDate() + 1);
-  } while (d.getDay() !== 2);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(d);
-}
-
-test("Reservar: telefone colado com formatação do WhatsApp (+55, parênteses, traço) é normalizado antes de ir pra RPC", async ({
-  page,
-}) => {
-  let createBody = null;
-  await mockSupabase(page, {
-    role: "atendente",
-    occupancy: {},
-    onCreate: (route) => {
-      createBody = JSON.parse(route.request().postData() || "{}");
-    },
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
-
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: /Ida ·/ }).click();
-  await page.getByRole("button", { name: /Rodoviária/ }).click();
-
-  await expect(page.getByText("Dados da reserva")).toBeVisible();
-  await page.getByLabel("Onde você vai ficar (desembarque)").selectOption("pirapemas");
-  await page.getByLabel("Nome completo").fill("Cliente Colado E2E");
-  // exatamente como o WhatsApp formata ao colar um número salvo nos contatos
-  await page.getByLabel("WhatsApp", { exact: true }).fill("+55 (98) 99999-8888");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Dinheiro" }).click();
-  await page.getByRole("button", { name: "Confirmar reserva" }).click();
-
-  await expect.poll(() => createBody?.p_customer_phone, { timeout: 10000 }).toBe("98999998888");
-});
-
 test("Agenda: Agendar passagem manual também normaliza o telefone antes de enviar", async ({
   page,
 }) => {

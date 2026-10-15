@@ -64,7 +64,6 @@ export const C = {
   graySoft: "#232427",
 };
 export const PIX_KEY = "98981012388";
-export const PIX_NAME = "A O Castelo Transporte e Turismo";
 
 // A operação é em São Luís (MA) — UTC-3 o ano inteiro (Brasil não observa
 // mais horário de verão desde 2019). "Hoje"/"agora" tem que ser sempre o
@@ -430,15 +429,6 @@ export const useDropoff = () => useContext(DropoffContext) || DROPOFF_FALLBACK;
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
 export const NotificacoesContext = React.createContext(null);
 const useNotificacoesCtx = () => useContext(NotificacoesContext);
-
-// String legível para dropoff_location (usada na Lista/Agenda e telas de
-// sucesso). O que estrutura a rota é dropoff_area/dropoff_detail.
-export function textoDesembarque(direcao, area, detalhe) {
-  if (!area) return null;
-  const rotulo = rotuloBalde(direcao, area);
-  const d = (detalhe || "").trim();
-  return d ? `${rotulo} — ${d}` : rotulo;
-}
 
 // Balde da reserva: usa a classificação manual (dropoff_area) se existir;
 // senão chuta pelo texto livre que o cliente deu no agendamento.
@@ -1107,13 +1097,6 @@ export function enderecosFrequentes(viagens, getTexto) {
   }
   return [...cont.values()].sort((a, b) => b.n - a.n).slice(0, 3);
 }
-export function vagasDisponiveis(reservas, data, direcao, capacidade) {
-  const usados = reservas
-    .filter((r) => r.data === data && r.direcao === direcao && OCUPA_VAGA.includes(r.status))
-    .reduce((s, r) => s + (r.quantidade || 1), 0);
-  return Math.max(0, capacidade - usados);
-}
-
 /* diagnóstico e auto-correção */
 export function runDiagnostics(reservas, capacidade, trips) {
   const issues = [];

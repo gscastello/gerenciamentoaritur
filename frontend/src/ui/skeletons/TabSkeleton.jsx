@@ -1,4 +1,4 @@
-import { Skeleton, SkeletonStat, SkeletonText } from "../motion/index.js";
+import { Skeleton, SkeletonStat } from "../motion/index.js";
 
 // Skeletons no formato real de cada aba. Regra do AGENTS.md §5: nada de
 // bloco genérico — o esqueleto tem que prever o layout que vai chegar,
@@ -39,18 +39,20 @@ function ListSkel({ rows = 5, h = 56 }) {
   );
 }
 
-const ReservarSkel = () => (
+const AtendimentoSkel = () => (
   <div style={wrap}>
     <HeaderSkel />
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
-      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
-        <Skeleton height={4} rounded={999} />
-        <Skeleton height={16} width="55%" />
-        <ListSkel rows={3} h={64} />
-      </div>
-      <div style={card}>
-        <SkeletonText lines={5} />
-      </div>
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Skeleton height={16} width="40%" />
+      <Skeleton height={12} width="65%" />
+    </div>
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Skeleton height={14} width={160} />
+      <ListSkel rows={3} h={72} />
+    </div>
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Skeleton height={14} width={200} />
+      <ListSkel rows={2} h={56} />
     </div>
   </div>
 );
@@ -179,7 +181,7 @@ const GestaoSkel = () => (
 );
 
 const MAP = {
-  reservar: ReservarSkel,
+  atendimento: AtendimentoSkel,
   agenda: AgendaSkel,
   lista: ListaSkel,
   bloco: BlocoSkel,

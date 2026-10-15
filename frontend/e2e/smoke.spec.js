@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // Smoke da fundação. O app agora é fechado por login (Supabase Auth), então
 // sem sessão o que carrega é a tela de login. Os fluxos autenticados
-// (Agenda, Reservar, etc.) precisam de um projeto Supabase de teste —
+// (Agenda, Atendimento, etc.) precisam de um projeto Supabase de teste —
 // entram na issue #4 (testing).
 
 test("carrega a tela de login", async ({ page }) => {

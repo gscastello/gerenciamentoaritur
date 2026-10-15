@@ -33,6 +33,8 @@ export function useSettings() {
     intermediateCities: Array.isArray(settings.intermediate_cities) ? settings.intermediate_cities : [],
 
     botStyleGuide: settings.bot_style_guide?.text ?? "",
+    // link base da conta no Chatwoot (database/52) pro "Abrir no Chatwoot"
+    chatwootUrl: settings.chatwoot?.url ?? null,
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),

@@ -16,7 +16,7 @@ const TABS = [
   "Passageiros",
   "Pendências",
   "Sistema",
-  "Reservar",
+  "Atendimento",
 ];
 
 test("todas as abas abrem sem erro com reservas/clientes vazios (admin)", async ({ page }) => {
