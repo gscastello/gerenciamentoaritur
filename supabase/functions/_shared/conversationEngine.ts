@@ -24,7 +24,7 @@ type IncomingMessage = {
   waMessageId: string;
   text?: string;
   interactiveId?: string;
-  media?: { mediaId: string; mimeType?: string; caption?: string; kind: "image" | "document" | "audio" };
+  media?: { mediaId: string; mimeType?: string; caption?: string; kind: "image" | "document" | "audio" | "sticker" };
   raw: unknown;
 };
 
@@ -51,6 +51,9 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     content: msg.raw,
   });
 
+  // Figurinha: não é pedido nem comprovante — só fica no histórico, sem resposta.
+  if (msg.media?.kind === "sticker") return;
+
   // Áudio: o modelo não entende voz. Pede pra escrever e, se insistir,
   // passa pra equipe — só quando a conversa está com o bot.
   if (msg.media?.kind === "audio") {
@@ -58,10 +61,12 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     return;
   }
 
-  // Comprovante Pix (imagem/documento) — issue #8. Arquiva a mídia e liga
-  // ao pagamento pendente, em QUALQUER modo (não é a IA decidindo nada).
+  // Imagem/documento (possível comprovante Pix — issue #8). Arquiva e liga ao
+  // pagamento pendente em QUALQUER modo (não é a IA decidindo nada), mas só
+  // FALA com o cliente quando a conversa está com o bot.
   if (msg.media) {
-    await handleProofUpload(conversation, msg);
+    const { data: modoMidia } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
+    await handleProofUpload(conversation, msg, modoMidia === "ia");
     return;
   }
 
@@ -337,8 +342,13 @@ async function sendText(conversationId: string, to: string, text: string) {
   await whatsappService.reply(conversationId, to, () => whatsappClient.sendText(to, text), { type: "text", content: { text } });
 }
 
-/** Comprovante Pix recebido como mídia (issue #8). */
-async function handleProofUpload(conversation: any, msg: IncomingMessage) {
+/**
+ * Imagem/documento recebido (issue #8). Se há Pix pendente do cliente, arquiva
+ * como comprovante. `falar` = a conversa está com o bot: só então responde ao
+ * cliente. Sem Pix pendente NÃO assume que era comprovante nem tira o bot da
+ * conversa — avisa a equipe (pendência) e responde de forma neutra.
+ */
+async function handleProofUpload(conversation: any, msg: IncomingMessage, falar: boolean) {
   const to = msg.from;
   try {
     const result = await whatsappService.receivePaymentProof(to, {
@@ -347,19 +357,21 @@ async function handleProofUpload(conversation: any, msg: IncomingMessage) {
       caption: msg.media!.caption,
       waMessageId: msg.waMessageId,
     });
+    if (!falar) return;
     if (result.matched) {
       await sendText(conversation.id, to,
         "Comprovante recebido! 🧾 Nossa equipe confere o pagamento e confirma a sua reserva por aqui. Obrigado!");
     } else {
-      await whatsappService.transferToHuman(conversation.id, "Comprovante recebido sem reserva Pix pendente para associar.");
+      await whatsappService.avisarEquipe(conversation.id, "Cliente enviou imagem/arquivo sem Pix pendente para associar.");
       await sendText(conversation.id, to,
-        "Recebi seu comprovante, mas não achei uma reserva com Pix pendente no seu número. Já pedi para um atendente conferir. 🙏");
+        "Recebi seu arquivo! 🙏 Não encontrei um pagamento por Pix pendente no seu número, então avisei a equipe para conferir. Se quiser reservar, é só dizer *quero reservar* ou digitar *menu*.");
     }
   } catch (err) {
     console.error("Erro ao processar comprovante:", err);
-    await whatsappService.transferToHuman(conversation.id, `Falha ao processar comprovante: ${String(err)}`);
+    if (!falar) return;
+    await whatsappService.avisarEquipe(conversation.id, `Falha ao processar arquivo/comprovante: ${String(err)}`);
     await sendText(conversation.id, to,
-      "Recebi seu comprovante, mas tive um problema para registrar. Um atendente vai conferir manualmente. 🙏");
+      "Recebi seu arquivo, mas tive um problema para registrar. Já avisei a equipe para conferir. 🙏");
   }
 }
 

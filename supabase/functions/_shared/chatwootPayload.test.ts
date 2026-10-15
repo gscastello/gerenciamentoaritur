@@ -61,6 +61,20 @@ Deno.test("anexos: áudio, imagem e arquivo", () => {
   assertEquals(extrairMensagemDeCliente(com("image"))?.texto, undefined);
 });
 
+Deno.test("anexo WebP é figurinha, não imagem/comprovante", () => {
+  const com = (a: Record<string, unknown>) => ({ ...base(), content: "", attachments: [a] });
+  const sticker = { url: "https://x/y.webp?sig=1", tipo: "sticker" };
+  assertEquals(extrairMensagemDeCliente(com({ file_type: "image", data_url: "https://x/y.webp?sig=1" }))?.anexo, sticker);
+  assertEquals(
+    extrairMensagemDeCliente(com({ file_type: "image", extension: "webp", data_url: "https://x/y" }))?.anexo,
+    { url: "https://x/y", tipo: "sticker" },
+  );
+  // foto de verdade continua imagem
+  assertEquals(extrairMensagemDeCliente(com({ file_type: "image", data_url: "https://x/y.jpg" }))?.anexo, {
+    url: "https://x/y.jpg", tipo: "image",
+  });
+});
+
 Deno.test("message_type numérico 0 (versões antigas) também é entrada", () => {
   assertEquals(extrairMensagemDeCliente({ ...base(), message_type: 0 })?.chatwootMessageId, 901);
 });

@@ -102,7 +102,8 @@ IA automática (a troca vale na hora, para todos os sócios).
 3. Peça "falar com atendente" → nota "Transferiria…" (em IA real: conversa vira Aberta).
 4. Pergunte algo que está na base (ex.: bagagem) e algo que não está → responde / transfere.
 5. Mande um áudio → pede pra escrever; um segundo áudio → transfere.
-6. Reserve ida de ponta a ponta → nota "Criaria a reserva…", **nenhuma** reserva nova no app.
+6. Mande uma **figurinha** → o bot ignora (sem resposta). Mande uma foto qualquer sem Pix pendente → resposta neutra + pendência para a equipe, **sem** tirar o bot da conversa. Com Pix pendente → arquiva como comprovante. Em modo **manual** ou conversa em atendimento humano, o bot só arquiva comprovante, sem responder.
+7. Reserve ida de ponta a ponta → nota "Criaria a reserva…", **nenhuma** reserva nova no app.
 
 ## 8. Limites conhecidos
 

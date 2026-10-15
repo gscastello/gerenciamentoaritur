@@ -91,6 +91,36 @@ async function assertAiIsAllowedToAct(conversationId: string) {
   }
 }
 
+/**
+ * Avisa a equipe pela aba Pendências + sino (database/32). O destinatário aqui
+ * é a EQUIPE, não o cliente — por isso rpc_open_support_ticket, não um envio
+ * de WhatsApp (a tabela `notifications` é fila de saída pro cliente; um
+ * registro sem customer_id ali nunca teria telefone pra mandar).
+ */
+async function abrirPendenciaDeAtendimento(
+  conversationId: string,
+  reason: string,
+  assunto = "Cliente pediu atendente no WhatsApp",
+) {
+  const { data: conversation } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .select("phone, customer_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
+    p_subject: assunto,
+    p_detail: reason,
+    p_phone: conversation?.phone ?? null,
+    p_customer_id: conversation?.customer_id ?? null,
+    p_source: "whatsapp",
+    p_meta: {
+      conversation_id: conversationId,
+      chatwoot_conversation_id: getBotContext()?.chatwootConversationId ?? null,
+    },
+  });
+  if (error) console.error("Falha ao abrir pendência de atendimento:", error.message);
+}
+
 export const whatsappService = {
   // =====================================================================
   // 1) recebimento / log de mensagens
@@ -456,6 +486,15 @@ export const whatsappService = {
   // =====================================================================
   // 11) transferência para atendente humano
   // =====================================================================
+  /** Abre pendência para a equipe SEM tirar o bot da conversa (ex.: imagem que não casa com nenhum Pix). */
+  async avisarEquipe(conversationId: string, reason: string) {
+    if (emSombra()) {
+      await notaSombra(`Avisaria a equipe (pendência). Motivo: ${reason}`);
+      return;
+    }
+    await abrirPendenciaDeAtendimento(conversationId, reason, "Cliente enviou arquivo no WhatsApp");
+  },
+
   async transferToHuman(conversationId: string, reason: string) {
     if (emSombra()) {
       await notaSombra(`Transferiria para um atendente humano. Motivo: ${reason}`);
@@ -467,30 +506,7 @@ export const whatsappService = {
     });
     if (error) throw new WhatsappServiceError(`Falha ao transferir: ${error.message}`);
 
-    // Avisa a equipe pela aba Pendências + sino (database/32). O destinatário
-    // aqui é a EQUIPE, não o cliente — por isso é rpc_open_support_ticket,
-    // não um envio de WhatsApp (a tabela `notifications` é fila de saída
-    // pro cliente; um registro sem customer_id ali nunca teria telefone
-    // pra mandar e falharia sempre).
-    const { data: conversation } = await supabaseAdmin
-      .from("whatsapp_conversations")
-      .select("phone, customer_id")
-      .eq("id", conversationId)
-      .maybeSingle();
-    const { error: ticketError } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
-      p_subject: "Cliente pediu atendente no WhatsApp",
-      p_detail: reason,
-      p_phone: conversation?.phone ?? null,
-      p_customer_id: conversation?.customer_id ?? null,
-      p_source: "whatsapp",
-      p_meta: {
-        conversation_id: conversationId,
-        chatwoot_conversation_id: getBotContext()?.chatwootConversationId ?? null,
-      },
-    });
-    if (ticketError) {
-      console.error("Falha ao abrir pendência de atendimento:", ticketError.message);
-    }
+    await abrirPendenciaDeAtendimento(conversationId, reason);
 
     // Entrega a conversa à equipe no Chatwoot: status "aberta" tira do bot e
     // aparece pros atendentes, com o motivo numa nota privada.
