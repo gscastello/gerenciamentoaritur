@@ -7,6 +7,23 @@
 //
 // Módulo sem dependências de propósito (testável sem env vars).
 
+export type TipoAnexo = "audio" | "image" | "document" | "sticker";
+
+/**
+ * Figurinha do WhatsApp chega do Chatwoot como imagem WebP. Foto de verdade
+ * (comprovante, print) vem como JPEG/PNG — então WebP = figurinha.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: anexo externo do Chatwoot
+export function tipoDoAnexo(a: any): TipoAnexo {
+  if (a?.file_type === "audio") return "audio";
+  if (a?.file_type === "image") {
+    const ext = String(a.extension ?? "").toLowerCase().replace(".", "");
+    const url = String(a.data_url ?? "").split("?")[0].toLowerCase();
+    return ext === "webp" || url.endsWith(".webp") ? "sticker" : "image";
+  }
+  return "document";
+}
+
 export type MensagemDeCliente = {
   chatwootMessageId: number;
   chatwootConversationId: number;
@@ -14,7 +31,7 @@ export type MensagemDeCliente = {
   /** E.164 sem "+", ex.: 5598981012388 */
   telefone: string;
   texto?: string;
-  anexo?: { url: string; tipo: "audio" | "image" | "document" };
+  anexo?: { url: string; tipo: TipoAnexo };
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
@@ -37,8 +54,7 @@ export function extrairMensagemDeCliente(body: any, inboxIdEsperado = 0): Mensag
   const anexo = a?.data_url
     ? {
         url: String(a.data_url),
-        tipo: (a.file_type === "audio" ? "audio" : a.file_type === "image" ? "image" : "document") as
-          | "audio" | "image" | "document",
+        tipo: tipoDoAnexo(a),
       }
     : undefined;
 
@@ -93,10 +109,11 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     if (tipo === "incoming" || tipo === 0) autor = "cliente";
     else if (tipo === "outgoing" || tipo === 1) autor = body.sender?.type === "agent_bot" ? "bot" : "equipe";
     else return null;
-    const anexo = body.attachments?.[0]?.file_type;
+    const a = body.attachments?.[0];
+    const anexo = a ? tipoDoAnexo(a) : null;
     const texto = typeof body.content === "string" ? body.content.trim() : "";
-    previa = (texto || (anexo === "audio" ? "[áudio]" : anexo === "image" ? "[imagem]" : anexo ? "[arquivo]" : ""))
-      .slice(0, PREVIA_MAX) || undefined;
+    const rotulo = { audio: "[áudio]", image: "[imagem]", sticker: "[figurinha]", document: "[arquivo]" };
+    previa = (texto || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
   }
 
   const conv = ehMensagem ? (body.conversation ?? {}) : (body.conversation ?? body);
