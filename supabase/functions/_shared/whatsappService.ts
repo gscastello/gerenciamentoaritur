@@ -17,6 +17,9 @@
 //      atendimento efetivo da conversa. Se estiver em HUMANO, a função
 //      lança WhatsappServiceError e a ação não acontece.
 
+import { getBotContext } from "./botContext.ts";
+import { chatwootClient } from "./chatwootClient.ts";
+import { normalizarTelefone } from "./telefone.ts";
 import { supabaseAdmin, getBotUserId } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 
@@ -48,6 +51,25 @@ function semAcento(s?: string | null): string {
 const CIDADES_INTERMEDIARIAS_FALLBACK = [
   "bacabeira", "santa rita", "entroncamento", "colombo", "miranda", "matoes",
 ];
+
+/**
+ * Modo sombra: o bot roda o roteiro inteiro, mas nada é gravado no negócio
+ * (reserva, cancelamento, comprovante, transferência) — o que ele FARIA vira
+ * nota privada no Chatwoot, pra o dono conferir antes de ligar o automático.
+ */
+function emSombra(): boolean {
+  return getBotContext()?.shadow === true;
+}
+
+async function notaSombra(texto: string) {
+  const ctx = getBotContext();
+  if (!ctx) return;
+  try {
+    await chatwootClient.postMessage(ctx.chatwootConversationId, `🤖 [SOMBRA] ${texto}`, { private: true });
+  } catch (err) {
+    console.error("Falha ao registrar nota do modo sombra:", err);
+  }
+}
 
 async function logAiAction(entityTable: string, entityId: string | null, action: string, afterData: unknown) {
   const botId = await getBotUserId();
@@ -122,7 +144,12 @@ export const whatsappService = {
   // 2) identificação do cliente pelo telefone
   // =====================================================================
   async identifyCustomer(phone: string) {
-    const { data } = await supabaseAdmin.from("customers").select("*").eq("phone", phone).is("deleted_at", null).maybeSingle();
+    const { data } = await supabaseAdmin
+      .from("customers")
+      .select("*")
+      .eq("phone", normalizarTelefone(phone))
+      .is("deleted_at", null)
+      .maybeSingle();
     return data ?? null; // null = cliente novo, ainda não cadastrado
   },
 
@@ -173,6 +200,10 @@ export const whatsappService = {
   // =====================================================================
   async createReservation(conversationId: string, payload: Record<string, unknown>) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Criaria a reserva: ${JSON.stringify(payload)}`);
+      return { success: true, reservation_id: "sombra", status: payload.status ?? "confirmada", message: "sombra" };
+    }
     const botId = await getBotUserId();
 
     const { data, error } = await supabaseAdmin.rpc("rpc_create_reservation", {
@@ -224,6 +255,7 @@ export const whatsappService = {
 
   /** Avisa a equipe (fila interna) que uma reserva ficou pendente por área. */
   async enqueueAreaReviewAlert(reservationId: string, detail: Record<string, unknown>) {
+    if (emSombra()) return;
     await supabaseAdmin.from("notifications").insert({
       reservation_id: reservationId,
       channel: "whatsapp",
@@ -238,6 +270,10 @@ export const whatsappService = {
   // =====================================================================
   async confirmReservation(conversationId: string, reservationId: string, routePointCode?: string) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Confirmaria a reserva ${reservationId}.`);
+      return { success: true };
+    }
     const botId = await getBotUserId();
     const { data, error } = await supabaseAdmin.rpc("rpc_confirm_reservation", {
       p_reservation_id: reservationId, p_route_point_code: routePointCode ?? null, p_actor: botId,
@@ -253,6 +289,10 @@ export const whatsappService = {
   // =====================================================================
   async cancelReservation(conversationId: string, reservationId: string) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Cancelaria a reserva ${reservationId}.`);
+      return { success: true };
+    }
     const botId = await getBotUserId();
     const { data, error } = await supabaseAdmin.rpc("rpc_cancel_reservation", { p_reservation_id: reservationId, p_actor: botId });
     if (error) throw new WhatsappServiceError(`Falha ao cancelar: ${error.message}`);
@@ -265,6 +305,10 @@ export const whatsappService = {
   // =====================================================================
   async moveReservation(conversationId: string, reservationId: string, target: { tripDate: string; direction: string; routePointCode: string }) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Moveria a reserva ${reservationId} para ${JSON.stringify(target)}.`);
+      return { success: true };
+    }
     const botId = await getBotUserId();
     const { data, error } = await supabaseAdmin.rpc("rpc_move_reservation", {
       p_reservation_id: reservationId, p_new_trip_date: target.tripDate, p_new_direction: target.direction,
@@ -283,6 +327,10 @@ export const whatsappService = {
    */
   async setDropoffLocation(conversationId: string, reservationId: string, location: string) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Mudaria o desembarque da reserva ${reservationId} para "${location}".`);
+      return;
+    }
     const botId = await getBotUserId();
     const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
       p_reservation_id: reservationId,
@@ -308,7 +356,9 @@ export const whatsappService = {
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (error) throw new WhatsappServiceError(`Falha ao listar reservas: ${error.message}`);
-    return data;
+    // trip/route_point são joins de 1 linha, mas o tipo inferido os dá como lista
+    // biome-ignore lint/suspicious/noExplicitAny: ver acima
+    return data as any[] | null;
   },
 
   // =====================================================================
@@ -323,6 +373,7 @@ export const whatsappService = {
   /** Cliente avisa que mandou o comprovante — marca só isso, nunca o status como 'pago' (isso é do financeiro). */
   async markProofReceived(conversationId: string, paymentId: string) {
     await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) return;
     const botId = await getBotUserId();
     const { error } = await supabaseAdmin.from("payments").update({ proof_received: true, updated_by: botId }).eq("id", paymentId);
     if (error) throw new WhatsappServiceError(`Falha ao registrar comprovante: ${error.message}`);
@@ -346,6 +397,10 @@ export const whatsappService = {
   ): Promise<{ matched: boolean; reservationId?: string; paymentId?: string }> {
     const customer = await this.identifyCustomer(phone);
     if (!customer) return { matched: false };
+    if (emSombra()) {
+      await notaSombra("Arquivaria o comprovante Pix e ligaria ao pagamento pendente do cliente.");
+      return { matched: true };
+    }
 
     const { data: pgto, error: findErr } = await supabaseAdmin
       .from("payments")
@@ -435,6 +490,10 @@ export const whatsappService = {
   // 11) transferência para atendente humano
   // =====================================================================
   async transferToHuman(conversationId: string, reason: string) {
+    if (emSombra()) {
+      await notaSombra(`Transferiria para um atendente humano. Motivo: ${reason}`);
+      return;
+    }
     const botId = await getBotUserId();
     const { error } = await supabaseAdmin.rpc("rpc_transfer_to_human", {
       p_conversation_id: conversationId, p_reason: reason, p_actor: botId,
@@ -462,6 +521,24 @@ export const whatsappService = {
     if (ticketError) {
       console.error("Falha ao abrir pendência de atendimento:", ticketError.message);
     }
+
+    // Entrega a conversa à equipe no Chatwoot: status "aberta" tira do bot e
+    // aparece pros atendentes, com o motivo numa nota privada.
+    const ctx = getBotContext();
+    if (ctx) {
+      try {
+        await chatwootClient.postMessage(ctx.chatwootConversationId, `Transferido pelo bot. Motivo: ${reason}`, { private: true });
+        await chatwootClient.setStatus(ctx.chatwootConversationId, "open");
+      } catch (err) {
+        console.error("Falha ao entregar a conversa à equipe no Chatwoot:", err);
+      }
+    }
+  },
+
+  /** Chave Pix cadastrada em Sistema (nunca um valor fixo no código). */
+  async getPix(): Promise<{ key: string; name?: string } | null> {
+    const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "pix").maybeSingle();
+    return data?.value?.key ? data.value : null;
   },
 
   // =====================================================================

@@ -35,11 +35,11 @@ com WhatsApp Business API.
 ├── supabase/functions/       # Edge Functions (backend real do WhatsApp — nunca no frontend)
 │   ├── _shared/
 │   │   ├── supabaseAdmin.ts      # cliente com service_role (só existe no servidor)
-│   │   ├── whatsappClient.ts     # fala com a Graph API da Meta (texto/lista/botão/template)
+│   │   ├── whatsappClient.ts     # envia pelo Chatwoot (texto; opções numeradas)
 │   │   ├── whatsappService.ts    # regras de negócio: nunca inventa vaga/preço/pagamento
 │   │   ├── conversationEngine.ts # máquina de estados do atendimento (menus/botões)
 │   │   └── nluService.ts        # interpreta texto livre (extração estruturada via Claude)
-│   ├── whatsapp-webhook/         # recebe mensagens da Meta
+│   ├── chatwoot-bot/             # recebe os webhooks do Agent Bot do Chatwoot
 │   └── whatsapp-notifications-dispatcher/  # envia lembretes e "motorista a caminho"
 ├── WHATSAPP.md               # guia de deploy da integração WhatsApp, passo a passo
 ├── SETUP.md                  # checklist mestre para ir ao ar

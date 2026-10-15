@@ -73,34 +73,19 @@ Passo a passo completo em [`frontend/DEPLOY.md`](frontend/DEPLOY.md). Resumo:
 6. **Supabase → Authentication → URL Configuration**: colar a URL em
    *Site URL* e *Redirect URLs*.
 
-### 4. WhatsApp — Meta + Edge Functions
+### 4. WhatsApp — Chatwoot + Edge Function
 
 Passo a passo completo em [`WHATSAPP.md`](WHATSAPP.md). Resumo:
 
-1. App na Meta (developers.facebook.com) com produto WhatsApp → pegar
-   `access token` e `Phone number ID`.
-2. Criar e submeter os templates `lembrete_viagem` e `motorista_a_caminho`
-   (**aprovação da Meta demora horas**).
-3. Instalar a [Supabase CLI](https://supabase.com/docs/guides/cli),
-   `supabase login`, `supabase link --project-ref szwnsacgpsvioswrelqo`.
-4. Deploy:
-   ```bash
-   supabase functions deploy whatsapp-webhook --no-verify-jwt
-   supabase functions deploy whatsapp-notifications-dispatcher --no-verify-jwt
-   ```
-5. Secrets:
-   ```bash
-   supabase secrets set WHATSAPP_TOKEN=...
-   supabase secrets set WHATSAPP_PHONE_NUMBER_ID=...
-   supabase secrets set WHATSAPP_VERIFY_TOKEN=...   # string à sua escolha
-   supabase secrets set WHATSAPP_APP_SECRET=...     # Meta → App → Configurações → Básico → Chave secreta (assina o webhook)
-   supabase secrets set DISPATCH_SECRET=...          # string à sua escolha (a mesma do 07-scheduling.sql)
-   supabase secrets set ANTHROPIC_API_KEY=...        # console.anthropic.com → API Keys
-   ```
-6. Meta → WhatsApp → Configuration → Webhook: Callback URL
-   `https://szwnsacgpsvioswrelqo.functions.supabase.co/whatsapp-webhook`,
-   Verify token = o mesmo `WHATSAPP_VERIFY_TOKEN`, inscrever em `messages`.
-7. Rodar o checklist de teste ponta-a-ponta do `WHATSAPP.md §6`.
+1. Número conectado ao Chatwoot Cloud por Coexistência (feito em 2026-10-15).
+2. Banco: `06-whatsapp.sql`, `50-base-conhecimento-bot.sql`, `51-bot-chatwoot.sql`
+   (sem o `07` por enquanto) e o usuário `Bot WhatsApp` em Sistema → Equipe.
+3. Deploy: `supabase functions deploy chatwoot-bot --no-verify-jwt`.
+4. Secrets: `ANTHROPIC_API_KEY`, `CHATWOOT_ACCOUNT_ID`, `CHATWOOT_INBOX_ID`,
+   `CHATWOOT_API_TOKEN`, `CHATWOOT_WEBHOOK_SECRET` (nunca em chat/issue/PR).
+5. Criar o Agent Bot no Chatwoot apontando pra
+   `https://szwnsacgpsvioswrelqo.functions.supabase.co/chatwoot-bot` e ligá-lo à caixa.
+6. Começar em modo **Sombra** e rodar o checklist do `WHATSAPP.md §7`.
 
 ---
 

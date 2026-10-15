@@ -13,6 +13,8 @@
 
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
+import { responderComBase } from "./botAnswer.ts";
+import { resolverOpcao } from "./opcoes.ts";
 import { interpretMessage, type ExtractedIntent } from "./nluService.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { hojeSaoLuis } from "./dataOperacao.ts";
@@ -22,7 +24,7 @@ type IncomingMessage = {
   waMessageId: string;
   text?: string;
   interactiveId?: string;
-  media?: { mediaId: string; mimeType?: string; caption?: string; kind: "image" | "document" };
+  media?: { mediaId: string; mimeType?: string; caption?: string; kind: "image" | "document" | "audio" };
   raw: unknown;
 };
 
@@ -49,6 +51,13 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     content: msg.raw,
   });
 
+  // Áudio: o modelo não entende voz. Pede pra escrever e, se insistir,
+  // passa pra equipe — só quando a conversa está com o bot.
+  if (msg.media?.kind === "audio") {
+    await handleAudio(conversation);
+    return;
+  }
+
   // Comprovante Pix (imagem/documento) — issue #8. Arquiva a mídia e liga
   // ao pagamento pendente, em QUALQUER modo (não é a IA decidindo nada).
   if (msg.media) {
@@ -63,8 +72,10 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
   const to = msg.from;
 
   try {
-    if (msg.interactiveId) {
-      await route(conversation, state, msg.interactiveId, msg);
+    // Opções oferecidas como texto numerado: "1", "volta"… viram o id da opção.
+    const interactiveId = msg.interactiveId ?? resolverOpcao((msg.text ?? "").trim(), conversation.last_options);
+    if (interactiveId) {
+      await route(conversation, state, interactiveId, msg);
       return;
     }
 
@@ -93,6 +104,13 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
       return;
     }
 
+    // Dúvida sobre a empresa/serviço: responde com a base de conhecimento e,
+    // se estava no meio de uma reserva, repete a pergunta pendente.
+    if (extraction.intent === "pergunta" && extraction.confidence !== "baixa") {
+      await responderPergunta(conversation, state, text, to);
+      return;
+    }
+
     if ((state.step ?? "idle") === "idle" || state.step === "awaiting_menu") {
       if (extraction.intent === "reservar" && extraction.direction) {
         state = { ...state, step: "awaiting_date", direction: extraction.direction, type: "passagem" };
@@ -100,6 +118,7 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
         return;
       }
       if (extraction.intent === "alterar") { await route(conversation, state, "menu_alterar", msg); return; }
+      if (extraction.intent === "outro") { await responderPergunta(conversation, state, text, to); return; }
       await route(conversation, { ...state, step: "idle" }, "menu", msg);
       return;
     }
@@ -119,6 +138,50 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     console.error("Erro no conversationEngine:", err);
     await whatsappService.transferToHuman(conversation.id, `Erro inesperado: ${String(err)}`);
     await sendText(conversation.id, to, "Tive um problema para continuar — já chamei alguém da equipe para te ajudar. 🙏");
+  }
+}
+
+/** Resposta livre (base de conhecimento). Sem base pra responder → equipe assume. */
+async function responderPergunta(conversation: any, state: any, text: string, to: string) {
+  let resposta: Awaited<ReturnType<typeof responderComBase>>;
+  try {
+    resposta = await responderComBase(text);
+  } catch (err) {
+    console.error("Falha ao responder pergunta:", err);
+    resposta = { acao: "transferir", motivo: `Falha técnica ao responder: ${String(err)}` };
+  }
+
+  if (resposta.acao === "responder") {
+    await sendText(conversation.id, to, resposta.texto);
+    if (RESERVATION_STEPS.includes(state.step)) await advanceReservationFlow(conversation, state, to);
+    return;
+  }
+
+  await whatsappService.logMessage(conversation.id, "inbound", {
+    type: "system", content: { pergunta: text, motivo: resposta.motivo }, intent: "pergunta_sem_resposta",
+  });
+  await whatsappService.transferToHuman(conversation.id, `Pergunta sem resposta na base: "${text}" (${resposta.motivo})`);
+  await sendText(conversation.id, to, "Vou chamar alguém da equipe para te ajudar com isso. 🙋");
+}
+
+/** Áudio: primeira vez pede pra escrever; se insistir, passa pra equipe. */
+async function handleAudio(conversation: any) {
+  const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
+  if (mode !== "ia") return;
+  const to = conversation.phone;
+  const state = conversation.state ?? { step: "idle" };
+  try {
+    if (state.audioAvisado) {
+      await whatsappService.transferToHuman(conversation.id, "Cliente continua mandando áudio.");
+      await sendText(conversation.id, to, "Vou chamar alguém da equipe para te ouvir. 🙋");
+      return;
+    }
+    await whatsappService.updateConversationState(conversation.id, { ...state, audioAvisado: true });
+    await sendText(conversation.id, to,
+      "Recebi seu áudio, mas ainda não consigo ouvir. 🙏 Pode me escrever o que precisa? Se preferir, digite *atendente* que chamo alguém da equipe.");
+  } catch (err) {
+    if (err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE") return;
+    throw err;
   }
 }
 
@@ -247,7 +310,12 @@ async function finalizeReservation(conversation: any, state: any, to: string) {
       await sendText(conversation.id, to, "Recebemos sua solicitação! Esse trajeto está fora da nossa área padrão — vamos confirmar a disponibilidade e te avisamos por aqui. 🙏");
     } else {
       let text = `Reserva confirmada! ✅ ${state.quantity}x passagem, R$ ${state.routePointPrice} cada.`;
-      if (state.paymentMethod === "pix") text += "\n\nChave Pix: 98981012388 — A O Castelo Transporte e Turismo.\nSe pagar por Pix, envie o comprovante aqui mesmo.";
+      if (state.paymentMethod === "pix") {
+        const pix = await whatsappService.getPix();
+        text += pix
+          ? `\n\nChave Pix: ${pix.key}${pix.name ? ` — ${pix.name}` : ""}.\nSe pagar por Pix, envie o comprovante aqui mesmo.`
+          : "\n\nA equipe vai te passar a chave Pix por aqui.";
+      }
       await sendText(conversation.id, to, text);
     }
   } catch (err) {
