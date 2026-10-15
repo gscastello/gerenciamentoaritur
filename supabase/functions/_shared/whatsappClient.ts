@@ -56,11 +56,6 @@ export const whatsappClient = {
     return enviar(formatarOpcoes(bodyText, buttons), buttons);
   },
 
-  /** Modelos aprovados (lembretes fora da janela de 24h) ainda não saem pelo Chatwoot. */
-  sendTemplate(_to: string, _templateName: string, _languageCode: string, _components: unknown[] = []): Promise<never> {
-    return Promise.reject(new Error("Envio de modelos (templates) pelo Chatwoot ainda não foi implementado."));
-  },
-
   /** O Chatwoot entrega o anexo como URL pública (attachments[].data_url). */
   async downloadMedia(url: string): Promise<{ bytes: Uint8Array; mimeType: string }> {
     const res = await fetch(url, { signal: AbortSignal.timeout(20000) });

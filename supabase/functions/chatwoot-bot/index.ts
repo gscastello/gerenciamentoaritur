@@ -2,7 +2,7 @@
 //
 // Receptor do Agent Bot do Chatwoot — substitui o webhook direto da Meta.
 // O número de WhatsApp está no Chatwoot Cloud (Coexistência); ele avisa
-// esta função a cada mensagem e o bot responde pela API REST do Chatwoot.
+// esta função a cada evento e o bot responde pela API REST do Chatwoot.
 //
 // Deploy: supabase functions deploy chatwoot-bot --no-verify-jwt
 // (--no-verify-jwt porque quem chama é o Chatwoot, não um usuário logado.
@@ -16,12 +16,19 @@
 //   CHATWOOT_INBOX_ID        id da caixa "Aritur WhatsApp" (ex.: 146985) — opcional, filtra
 //   ANTHROPIC_API_KEY        leitura do texto + respostas da base de conhecimento
 //
+// Dois trabalhos por evento:
+//   1) ESPELHO — grava em whatsapp_conversations o status da conversa no
+//      Chatwoot, quem falou por último e a prévia: é o que alimenta a fila
+//      do painel "Atendimento" do app (sem guardar token do Chatwoot no
+//      navegador).
+//   2) BOT — se for mensagem de cliente, roda o motor de reservas.
+//
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
 import { runWithBotContext } from "../_shared/botContext.ts";
-import { extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
+import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
@@ -30,13 +37,51 @@ import { whatsappService } from "../_shared/whatsappService.ts";
 const WEBHOOK_SECRET = Deno.env.get("CHATWOOT_WEBHOOK_SECRET") ?? "";
 const INBOX_ID = Number(Deno.env.get("CHATWOOT_INBOX_ID") ?? "0");
 
-// Evento nomeado (AGENTS.md §4): uma linha JSON por mensagem tratada.
+// Evento nomeado (AGENTS.md §4): uma linha JSON por evento tratado.
 function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
 }
 
+/** Espelha no banco o que aconteceu na conversa (fila do painel de atendimento). */
+async function espelhar(a: NonNullable<ReturnType<typeof extrairAtividade>>) {
+  const conversation = await whatsappService.resolveConversation(a.telefone);
+  const patch: Record<string, unknown> = { chatwoot_conversation_id: a.chatwootConversationId };
+  if (a.status) patch.chatwoot_status = a.status;
+  if (a.nomeContato) patch.chatwoot_contact_name = a.nomeContato;
+  if (a.contatoId) patch.chatwoot_contact_id = a.contatoId;
+  if (a.autor) {
+    patch.last_message_by = a.autor;
+    patch.last_message_preview = a.previa ?? null;
+    patch.last_message_at = new Date().toISOString();
+  }
+  const { error } = await supabaseAdmin.from("whatsapp_conversations").update(patch).eq("id", conversation.id);
+  if (error) console.error("Falha ao espelhar a conversa do Chatwoot:", error.message);
+}
+
+/**
+ * O nome do perfil do WhatsApp costuma ser apelido ou fictício ("😎 Maria Top").
+ * O bot NUNCA o usa pra cadastrar ninguém (pergunta o nome ao cliente). Aqui,
+ * se o cliente já está no cadastro, o contato no Chatwoot passa a mostrar o
+ * nome do CADASTRO. Melhor esforço; no modo sombra nada é escrito no Chatwoot.
+ */
+async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAtual?: string) {
+  if (!contatoId) return;
+  const cliente = await whatsappService.identifyCustomer(telefone);
+  const nome = cliente?.name?.trim();
+  if (!nome || nome === nomeAtual) return;
+  try {
+    await chatwootClient.atualizarContato(contatoId, { name: nome });
+    evento("bot_contato_renomeado", { contato: contatoId });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "nao_renomeou_contato", erro: String(err).slice(0, 200) });
+  }
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any) {
+  const atividade = extrairAtividade(body, INBOX_ID);
+  if (atividade) await espelhar(atividade);
+
   const m = extrairMensagemDeCliente(body, INBOX_ID);
   if (!m) return;
 
@@ -44,12 +89,6 @@ async function processar(body: any) {
   const modo: string = cfg?.value?.mode ?? "ia";
 
   const conversation = await whatsappService.resolveConversation(m.telefone);
-  if (conversation.chatwoot_conversation_id !== m.chatwootConversationId) {
-    await supabaseAdmin
-      .from("whatsapp_conversations")
-      .update({ chatwoot_conversation_id: m.chatwootConversationId })
-      .eq("id", conversation.id);
-  }
 
   // Atendimento manual: o bot não responde — mas a conversa precisa aparecer
   // pra equipe (conversas "pendentes" ficam fora da caixa de abertas).
@@ -67,6 +106,8 @@ async function processar(body: any) {
     conversa: m.chatwootConversationId,
     anexo: m.anexo?.tipo ?? null,
   });
+
+  if (modo !== "sombra") await alinharNomeDoContato(m.telefone, atividade?.contatoId, atividade?.nomeContato);
 
   await runWithBotContext(
     { chatwootConversationId: m.chatwootConversationId, conversationId: conversation.id, shadow: modo === "sombra" },

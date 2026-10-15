@@ -454,45 +454,6 @@ export const whatsappService = {
   },
 
   // =====================================================================
-  // 9/10) lembrete de viagem e aviso de motorista a caminho — disparados
-  // pelo whatsapp-notifications-dispatcher, não em resposta direta a
-  // uma mensagem do cliente (por isso usam template pré-aprovado)
-  // =====================================================================
-  async dispatchPendingNotifications(limit = 50) {
-    const { data: pending, error } = await supabaseAdmin
-      .from("notifications")
-      .select("*, customer:customers(phone, name)")
-      .eq("status", "pendente")
-      .eq("channel", "whatsapp")
-      .limit(limit);
-    if (error) throw new WhatsappServiceError(`Falha ao buscar notificações pendentes: ${error.message}`);
-
-    const results = [];
-    for (const n of pending ?? []) {
-      try {
-        if (!n.customer?.phone) throw new Error("Cliente sem telefone.");
-        if (n.template_key === "lembrete_viagem") {
-          await whatsappClient.sendTemplate(n.customer.phone, "lembrete_viagem", "pt_BR", [
-            { type: "body", parameters: [{ type: "text", text: n.payload?.horario ?? "" }, { type: "text", text: n.payload?.local ?? "" }] },
-          ]);
-        } else if (n.template_key === "motorista_a_caminho") {
-          await whatsappClient.sendTemplate(n.customer.phone, "motorista_a_caminho", "pt_BR", [
-            { type: "body", parameters: [{ type: "text", text: n.payload?.local ?? "" }] },
-          ]);
-        } else {
-          await whatsappClient.sendText(n.customer.phone, String(n.payload?.mensagem ?? ""));
-        }
-        await supabaseAdmin.from("notifications").update({ status: "enviada", sent_at: new Date().toISOString() }).eq("id", n.id);
-        results.push({ id: n.id, ok: true });
-      } catch (err) {
-        await supabaseAdmin.from("notifications").update({ status: "falha", error: String(err) }).eq("id", n.id);
-        results.push({ id: n.id, ok: false, error: String(err) });
-      }
-    }
-    return results;
-  },
-
-  // =====================================================================
   // 11) transferência para atendente humano
   // =====================================================================
   async transferToHuman(conversationId: string, reason: string) {

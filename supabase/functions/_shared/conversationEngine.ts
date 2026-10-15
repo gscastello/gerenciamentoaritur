@@ -157,8 +157,10 @@ async function responderPergunta(conversation: any, state: any, text: string, to
     return;
   }
 
-  await whatsappService.logMessage(conversation.id, "inbound", {
-    type: "system", content: { pergunta: text, motivo: resposta.motivo }, intent: "pergunta_sem_resposta",
+  // vira item da lista "perguntas sem resposta" do painel de atendimento (a
+  // equipe cadastra a resposta na base). Vale também no modo sombra.
+  await supabaseAdmin.from("bot_unanswered").insert({
+    conversation_id: conversation.id, question: text, reason: resposta.motivo,
   });
   await whatsappService.transferToHuman(conversation.id, `Pergunta sem resposta na base: "${text}" (${resposta.motivo})`);
   await sendText(conversation.id, to, "Vou chamar alguém da equipe para te ajudar com isso. 🙋");

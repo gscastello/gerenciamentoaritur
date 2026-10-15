@@ -18,10 +18,10 @@ function config() {
   return { token, base: `${base}/api/v1/accounts/${account}` };
 }
 
-async function chamar(path: string, body: Record<string, unknown>) {
+async function chamar(path: string, body: Record<string, unknown>, method = "POST") {
   const { token, base } = config();
   const res = await fetch(`${base}${path}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", api_access_token: token },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
@@ -42,6 +42,15 @@ export const chatwootClient = {
       message_type: "outgoing",
       private: opts.private === true,
     });
+  },
+
+  /**
+   * Corrige o nome do contato no Chatwoot pro nome do CADASTRO (o do perfil do
+   * WhatsApp costuma ser apelido). Melhor esforço: o token do Agent Bot pode
+   * não ter permissão pra isso.
+   */
+  atualizarContato(contatoId: number, dados: { name: string }) {
+    return chamar(`/contacts/${contatoId}`, dados, "PUT");
   },
 
   /** "open" entrega a conversa à equipe; "pending" devolve ao bot. */

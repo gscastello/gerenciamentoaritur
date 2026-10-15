@@ -42,9 +42,24 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 
 1. `database/06-whatsapp.sql` — conversas, mensagens, modo de atendimento.
    **Não rodar o `07-scheduling.sql` ainda** (lembretes por modelo ainda não saem pelo Chatwoot).
-2. `database/50-base-conhecimento-bot.sql` e `database/51-bot-chatwoot.sql`.
+2. `database/50-base-conhecimento-bot.sql`, `database/51-bot-chatwoot.sql` e
+   `database/52-painel-atendimento-whatsapp.sql` (espelho da fila do Chatwoot, perguntas sem resposta).
 3. Criar o usuário do bot em **Sistema → Equipe**: nome exato `Bot WhatsApp`, e-mail
    `bot@rota-pirapemas.local`, papel **atendente**. É ele que aparece na auditoria.
+
+## 3b. Painel "Atendimento" (no app)
+
+A aba **Atendimento** (admin/atendente) mostra, em tempo real: conversas com a equipe e
+com o bot (status do Chatwoot), pendências abertas, perguntas que o bot não soube
+responder (com atalho pra cadastrar a resposta na base) e o botão **Abrir no Chatwoot**.
+O estado vem do próprio `chatwoot-bot`, que espelha cada evento do Chatwoot em
+`whatsapp_conversations` — não há token do Chatwoot no navegador. Só aparecem conversas
+com atividade **depois** que o Agent Bot foi ligado à caixa.
+
+**Nomes:** o nome do perfil do WhatsApp (muitas vezes apelido) aparece ao lado do nome do
+**cadastro**. O bot nunca cadastra ninguém com o nome do perfil — pergunta ao cliente — e,
+quando o cliente já existe, tenta renomear o contato no Chatwoot para o nome do cadastro
+(melhor esforço; depende da permissão do token).
 
 ## 4. Deploy e secrets
 
@@ -92,7 +107,8 @@ IA automática (a troca vale na hora, para todos os sócios).
 ## 8. Limites conhecidos
 
 - **Opções** vão como texto numerado ("1 - Ida"); o cliente responde com o número ou o nome. Botões/listas do WhatsApp via Chatwoot não foram validados.
-- **Lembretes e "motorista a caminho"** (modelos aprovados fora das 24 h) ainda não saem pelo Chatwoot (`sendTemplate` recusa de propósito).
+- **Lembretes e "motorista a caminho"** (modelos aprovados fora das 24 h) **não existem mais**: o `whatsapp-notifications-dispatcher` (Meta direto) foi removido. Reimplementar pela API de modelos do Chatwoot é trabalho futuro (issue própria).
 - **Áudio** não é entendido (peça para escrever; insistindo, vai pra equipe).
 - Histórico antigo das conversas pode não sincronizar com o Chatwoot.
-- Funções do bot **não rodam no CI**; testes puros: `cd supabase/functions/_shared && deno test`.
+- O CI roda o job **Funções (Deno)** (`deno check` da função + `deno test supabase/functions/_shared`). Localmente: `deno test supabase/functions/_shared`.
+- Se for ativar proteção de branch, inclua o check **Funções (Deno)** nos obrigatórios.

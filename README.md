@@ -39,8 +39,7 @@ com WhatsApp Business API.
 │   │   ├── whatsappService.ts    # regras de negócio: nunca inventa vaga/preço/pagamento
 │   │   ├── conversationEngine.ts # máquina de estados do atendimento (menus/botões)
 │   │   └── nluService.ts        # interpreta texto livre (extração estruturada via Claude)
-│   ├── chatwoot-bot/             # recebe os webhooks do Agent Bot do Chatwoot
-│   └── whatsapp-notifications-dispatcher/  # envia lembretes e "motorista a caminho"
+│   └── chatwoot-bot/             # recebe os webhooks do Agent Bot do Chatwoot (bot + espelho da fila)
 ├── WHATSAPP.md               # guia de deploy da integração WhatsApp, passo a passo
 ├── SETUP.md                  # checklist mestre para ir ao ar
 ├── frontend/                # App (Vite + React). Ver AGENTS.md §2.
