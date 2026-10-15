@@ -230,6 +230,9 @@ export async function mockSupabase(page, opts = {}) {
   let maintenanceTypeSeq = 0;
   // log de erros (database/36+47) — stateful pra testar "Resolver"
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
+  // base de conhecimento do bot (database/50) — stateful pra testar o CRUD
+  let botKnowledgeRows = (opts.botKnowledge ?? []).map((k) => ({ ...k }));
+  let botKnowledgeSeq = 0;
   // passageiros/CRM (database/49) — stateful pra testar remover cadastro
   let customersStatsRows = (opts.customersStats ?? []).map((c) => ({ ...c }));
   // quem busca em casa (issue #96) — override por reserva, stateful
@@ -506,6 +509,25 @@ export async function mockSupabase(page, opts = {}) {
       const updated = maintenanceTypesRows.find((t) => t.id === id) ?? null;
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
+    else if (table === "bot_knowledge" && req.method() === "POST") {
+      const body = req.postDataJSON?.() ?? {};
+      botKnowledgeSeq += 1;
+      const row = {
+        id: `bk-novo-${botKnowledgeSeq}`,
+        active: true,
+        sort_order: 100,
+        deleted_at: null,
+        ...body,
+      };
+      botKnowledgeRows = [...botKnowledgeRows, row];
+      return route.fulfill(json(wantsObject ? row : [row]));
+    } else if (table === "bot_knowledge" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      botKnowledgeRows = botKnowledgeRows.map((k) => (k.id === id ? { ...k, ...body } : k));
+      const updated = botKnowledgeRows.find((k) => k.id === id) ?? null;
+      return route.fulfill(json(wantsObject ? updated : [updated]));
+    } else if (table === "bot_knowledge") rows = botKnowledgeRows.filter((k) => !k.deleted_at);
     else if (table === "expense_categories" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
