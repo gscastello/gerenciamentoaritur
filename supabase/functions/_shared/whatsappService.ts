@@ -19,7 +19,7 @@
 
 import { getBotContext } from "./botContext.ts";
 import { chatwootClient } from "./chatwootClient.ts";
-import { normalizarTelefone } from "./telefone.ts";
+import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin, getBotUserId } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 
@@ -147,8 +147,10 @@ export const whatsappService = {
     const { data } = await supabaseAdmin
       .from("customers")
       .select("*")
-      .eq("phone", normalizarTelefone(phone))
+      .in("phone", variantesTelefone(phone))
       .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
     return data ?? null; // null = cliente novo, ainda não cadastrado
   },
@@ -206,11 +208,15 @@ export const whatsappService = {
     }
     const botId = await getBotUserId();
 
+    // Cliente já cadastrado (com ou sem o nono dígito): reusa o telefone dele
+    // em vez de criar um segundo cadastro com a forma que o WhatsApp entregou.
+    const existente = await this.identifyCustomer(String(payload.customerPhone ?? ""));
+
     const { data, error } = await supabaseAdmin.rpc("rpc_create_reservation", {
       p_trip_date: payload.tripDate,
       p_direction: payload.direction,
       p_customer_name: payload.customerName,
-      p_customer_phone: payload.customerPhone,
+      p_customer_phone: existente?.phone ?? payload.customerPhone,
       p_type: payload.type ?? "passagem",
       p_route_point_code: payload.routePointCode ?? null,
       p_quantity: payload.quantity ?? 1,
@@ -433,7 +439,7 @@ export const whatsappService = {
       .update({
         proof_url: path,
         proof_received: true,
-        proof_wa_media_id: media.mediaId,
+        proof_wa_media_id: media.waMessageId,
         proof_received_at: new Date().toISOString(),
         updated_by: botId,
       })
@@ -441,7 +447,7 @@ export const whatsappService = {
     if (updErr) throw new WhatsappServiceError(`Falha ao registrar o comprovante: ${updErr.message}`);
 
     await logAiAction("payments", pgto.id, "update", {
-      proof_received: true, proof_url: path, wa_media_id: media.mediaId,
+      proof_received: true, proof_url: path, wa_message_id: media.waMessageId,
       caption: media.caption ?? null, origem: "whatsapp",
     });
     return { matched: true, reservationId: pgto.reservation_id, paymentId: pgto.id };
@@ -516,7 +522,10 @@ export const whatsappService = {
       p_phone: conversation?.phone ?? null,
       p_customer_id: conversation?.customer_id ?? null,
       p_source: "whatsapp",
-      p_meta: { conversation_id: conversationId },
+      p_meta: {
+        conversation_id: conversationId,
+        chatwoot_conversation_id: getBotContext()?.chatwootConversationId ?? null,
+      },
     });
     if (ticketError) {
       console.error("Falha ao abrir pendência de atendimento:", ticketError.message);
