@@ -2,7 +2,7 @@
 
 > ATENÇÃO: minuta inicial, redigida com base no que o sistema efetivamente faz hoje. Recomenda-se revisão por advogado antes da publicação oficial, especialmente as cláusulas de cancelamento/reembolso e responsabilidade.
 
-Última atualização: 02/09/2026
+Última atualização: 15/10/2026
 
 ## 1. Aceitação
 
@@ -43,9 +43,9 @@ Pedidos de frete e encomenda não têm valor informado automaticamente pelo sist
 
 Nos comprometemos a operar a linha nos horários divulgados, salvo casos de força maior (condições climáticas, problemas mecânicos, bloqueios de via), quando avisaremos os passageiros com a maior antecedência possível.
 
-## 9. Atendimento automatizado (quando ativo)
+## 9. Atendimento pelo WhatsApp e assistente automático
 
-Quando o atendimento automático via WhatsApp estiver em operação, ele segue um roteiro guiado (menus/botões) e só confirma reservas depois de consultar disponibilidade e preço reais no nosso sistema — nunca inventa vaga, horário ou valor. Você pode pedir para falar com um atendente humano a qualquer momento durante o atendimento automático.
+O atendimento pelo WhatsApp é feito por nossa equipe e, quando ativo, por um assistente automático. O assistente responde dúvidas usando informações cadastradas pela empresa e conduz reservas por um roteiro guiado, oferecendo opções numeradas; ele só confirma uma reserva depois de consultar disponibilidade e preço reais no nosso sistema — nunca inventa vaga, horário ou valor. O assistente pode errar ou não entender uma mensagem; nesses casos, ou sempre que você preferir, digite "atendente" para falar com uma pessoa. Mensagens de áudio podem não ser compreendidas pelo assistente. Informações dadas por ele sobre regras da empresa não substituem a confirmação da equipe em casos especiais (frete, encomendas e trajetos fora da área padrão).
 
 ## 10. Alterações destes termos
 
