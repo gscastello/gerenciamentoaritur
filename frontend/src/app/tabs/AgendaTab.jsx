@@ -13,6 +13,7 @@ import {
   NotebookPen,
   Package,
   Pencil,
+  PhoneCall,
   PlayCircle,
   Plus,
   RefreshCw,
@@ -24,6 +25,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { detalheDoPonto, pontoSoNome } from "../../domain/agendaLinha.js";
 import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
 import {
   primeiroErro,
@@ -732,6 +734,20 @@ export default function AgendaTab({
     </div>
   );
 }
+// Cor de destaque de cada tópico (ponto/horário) da Agenda — o app é em
+// tons de cinza de propósito, então a cor fica só aqui, pra o motorista
+// achar o ponto de relance (pedido do dono, issue #185).
+const COR_DO_PONTO = {
+  busca: "#F59E0B",
+  rodoviaria: "#38BDF8",
+  retorno: "#A78BFA",
+  postocarone: "#34D399",
+  br: "#F472B6",
+  outro: "#9CA0A8",
+  cantanhede: "#38BDF8",
+  pirapemas: "#34D399",
+};
+const corDoPonto = (id) => COR_DO_PONTO[id] ?? C.inkSoft;
 // Ações da linha do passageiro na Agenda. Enxuto e com rótulo (o motorista
 // no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
 // comprovante e localização saíram — pagamento/comprovante agora ficam
@@ -759,7 +775,29 @@ function QuickActions({ r, onStatus, onEditar }) {
 }
 function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
-  const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
+  const soNome = pontoSoNome(r.pontoId);
+  // Ponto fixo: o título da seção já diz onde embarca — só nome (+ detalhe
+  // que o passageiro informou). Demais pontos: endereço/bairro em 1º lugar.
+  const endereco = soNome ? detalheDoPonto(r) : enderecoEmbarque(r, trips) || "endereço não informado";
+  const tel = digitos(r.telefone);
+  const corTexto = marcado ? C.inkFaint : C.ink;
+  const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
+  const nome = (
+    <span
+      className="text-[16px] font-bold leading-snug"
+      style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
+    >
+      {r.nome || "—"}
+    </span>
+  );
+  const quantidade = (
+    <span
+      className="text-[14px] font-bold shrink-0"
+      style={{ fontFamily: "'JetBrains Mono', monospace", color: marcado ? C.inkFaint : C.brand }}
+    >
+      {r.quantidade}P
+    </span>
+  );
   return (
     <div className="row-hover rounded-md px-2 py-2" style={{ background: C.panel }}>
       <div className="flex items-start gap-2">
@@ -776,37 +814,50 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
           {r.status === "embarcado" && <Check size={11} color={C.panel} strokeWidth={3} />}
         </button>
         <div className="min-w-0 flex-1">
-          {/* o que importa: nº de passagens + endereço */}
-          <div className="flex items-baseline gap-1.5">
-            <span
-              className="text-[13px] font-bold shrink-0"
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                color: marcado ? C.inkFaint : C.ink,
-              }}
+          {soNome ? (
+            <>
+              {/* ponto fixo: só o nome do passageiro, em destaque */}
+              <div className="flex items-baseline gap-2">
+                {quantidade}
+                {nome}
+              </div>
+              {endereco && (
+                <div className="text-[12px] mt-0.5" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+                  {endereco}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* endereço/bairro é o que o motorista precisa; o nome vem logo abaixo, em destaque */}
+              <div className="flex items-baseline gap-2">
+                {quantidade}
+                <span
+                  className="text-[14px] font-semibold leading-snug"
+                  style={{ color: C.inkSoft, textDecoration: riscado, overflowWrap: "anywhere" }}
+                >
+                  {endereco}
+                </span>
+              </div>
+              <div className="mt-0.5">{nome}</div>
+            </>
+          )}
+          {(r.desembarque || r.pagamento === "pix") && (
+            <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
+              {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
+              {r.desembarque && r.pagamento === "pix" ? " · " : ""}
+              {r.pagamento === "pix" ? "Pix" : ""}
+            </div>
+          )}
+          {tel && (
+            <a
+              href={`tel:${tel}`}
+              className="btn-press inline-flex items-center gap-1.5 mt-1.5 text-[13px] font-medium px-2.5 py-1 rounded-md"
+              style={{ background: C.panel2, color: C.ink }}
             >
-              {r.quantidade}P
-            </span>
-            <span
-              className="text-[13px] font-semibold leading-snug"
-              style={{
-                color: marcado ? C.inkFaint : C.ink,
-                textDecoration: r.status === "nao_compareceu" ? "line-through" : "none",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {endereco}
-            </span>
-          </div>
-          {/* nome em segundo plano */}
-          <div
-            className="text-[11px] mt-0.5"
-            style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
-          >
-            {r.nome || "—"}
-            {r.desembarque ? ` · desembarque: ${r.desembarque}` : ""}
-            {r.pagamento === "pix" ? " · Pix" : ""}
-          </div>
+              <PhoneCall size={13} /> {r.telefone}
+            </a>
+          )}
           <div
             className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap"
             style={{ color: C.inkFaint }}
@@ -1046,11 +1097,28 @@ function ViagemOperacional({
           return (
             <div key={p.id}>
               <div
-                className="text-xs font-semibold mb-1.5 flex items-center gap-2"
-                style={{ color: C.inkSoft }}
+                className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
+                style={{
+                  background: `${corDoPonto(p.id)}1F`,
+                  borderLeft: `4px solid ${corDoPonto(p.id)}`,
+                }}
               >
-                <span>
-                  {hora} — {p.nome.toUpperCase()}
+                <span
+                  className="text-[18px] font-bold leading-none"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", color: corDoPonto(p.id) }}
+                >
+                  {hora}
+                </span>
+                <span
+                  className="text-[15px] font-bold tracking-wide"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+                >
+                  {p.nome.toUpperCase()}
+                </span>
+                <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
+                  {itens.length === 0
+                    ? "sem reservas"
+                    : `${itens.reduce((s, r) => s + r.quantidade, 0)} passagem(ns)`}
                 </span>
                 {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
                 {p.janela && (
