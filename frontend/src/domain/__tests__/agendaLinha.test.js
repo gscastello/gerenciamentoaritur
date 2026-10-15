@@ -2,16 +2,23 @@ import { describe, expect, it } from "vitest";
 import { detalheDoPonto, pontoSoNome } from "../agendaLinha.js";
 
 describe("pontoSoNome", () => {
-  it("Rodoviária, Retorno e Posto Carone mostram só o nome do passageiro", () => {
-    expect(pontoSoNome("rodoviaria")).toBe(true);
-    expect(pontoSoNome("retorno")).toBe(true);
-    expect(pontoSoNome("postocarone")).toBe(true);
+  it("Rodoviária, Retorno e Posto Carone não repetem o nome do ponto", () => {
+    for (const pontoId of ["rodoviaria", "retorno", "postocarone"]) {
+      expect(pontoSoNome({ direcao: "ida", pontoId })).toBe(true);
+    }
   });
 
-  it("demais pontos continuam mostrando o endereço", () => {
-    for (const id of ["busca", "br", "outro", "cantanhede", "pirapemas", undefined, null, ""]) {
-      expect(pontoSoNome(id)).toBe(false);
+  it("qualquer ponto da Volta não repete a cidade (o título já diz)", () => {
+    expect(pontoSoNome({ direcao: "volta", pontoId: "cantanhede" })).toBe(true);
+    expect(pontoSoNome({ direcao: "volta", pontoId: "pirapemas" })).toBe(true);
+    expect(pontoSoNome({ direcao: "volta", pontoId: "qualquer-outro" })).toBe(true);
+  });
+
+  it("Buscar em casa, BR e Outro (ida) continuam mostrando o endereço", () => {
+    for (const pontoId of ["busca", "br", "outro", undefined, null, ""]) {
+      expect(pontoSoNome({ direcao: "ida", pontoId })).toBe(false);
     }
+    expect(pontoSoNome(null)).toBe(false);
   });
 });
 

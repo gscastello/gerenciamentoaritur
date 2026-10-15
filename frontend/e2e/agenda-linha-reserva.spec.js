@@ -68,3 +68,35 @@ test("Agenda: ponto fixo mostra só o nome do passageiro e o telefone", async ({
   await expect(linhaBusca).toContainText("Cohatrac");
   await expect(page.getByRole("link", { name: /98987654321/ })).toBeVisible();
 });
+
+test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço informado", async ({
+  page,
+}) => {
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      {
+        ...base,
+        id: "res-volta",
+        direcao: "volta",
+        pontoId: "pirapemas",
+        rua: "Rua das Flores, 7",
+        nome: "Ana da Volta Teste",
+        telefone: "98981112222",
+      },
+    ],
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
+  await page.locator('input[type="date"]').first().fill(hoje);
+
+  const linha = page.locator("div.row-hover", { hasText: "Ana da Volta Teste" });
+  await expect(linha).toBeVisible();
+  await expect(linha).toContainText("Rua das Flores, 7");
+  await expect(linha).not.toContainText(/Pirapemas/i);
+  await expect(linha.getByRole("link", { name: /98981112222/ })).toBeVisible();
+});
