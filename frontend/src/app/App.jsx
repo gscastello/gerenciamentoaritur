@@ -1085,7 +1085,8 @@ function AppInner() {
                       style={{ color: R.error ? C.red : C.green }}
                     />
                     {R.error ? "Sem conexão…" : "Sincronizado"} ·{" "}
-                    {modoAtendimento === "ia" ? "IA atendendo" : "Atend. manual"}
+                    {{ ia: "IA atendendo", sombra: "Bot em teste" }[modoAtendimento] ||
+                      "Atend. manual"}
                   </div>
                 </div>
                 <nav className="flex-1 py-3 px-3 overflow-y-auto relative z-10">

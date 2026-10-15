@@ -5,7 +5,8 @@
 //
 // Chaves usadas hoje (ver database/05-seed.sql):
 //   monday_adjustment   {"active": true, "hours": 1}
-//   attendance_mode     {"mode": "ia"}          -- 'ia' | 'manual'
+//   attendance_mode     {"mode": "ia"}          -- 'ia' | 'manual' | 'sombra'
+//   bot_style_guide     {"text": "..."}         -- tom de voz do bot de WhatsApp
 //   pix                 {"key": "...", "name": "..."}
 //   intermediate_cities [...]
 //   served_cities       [...]

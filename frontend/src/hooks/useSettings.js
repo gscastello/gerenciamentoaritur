@@ -32,7 +32,10 @@ export function useSettings() {
     servedCities: Array.isArray(settings.served_cities) ? settings.served_cities : [],
     intermediateCities: Array.isArray(settings.intermediate_cities) ? settings.intermediate_cities : [],
 
+    botStyleGuide: settings.bot_style_guide?.text ?? "",
+
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
+    setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),
     setMondayAdjustment: ({ active, hours }) => after(setKey.run("monday_adjustment", { active, hours })),
     setServedCities: (list) => after(setKey.run("served_cities", list)),
     setIntermediateCities: (list) => after(setKey.run("intermediate_cities", list)),

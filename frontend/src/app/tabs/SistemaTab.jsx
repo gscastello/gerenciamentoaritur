@@ -3,6 +3,7 @@ import {
   Bot,
   Check,
   Download,
+  Eye,
   KeyRound,
   MapPin,
   Pencil,
@@ -40,6 +41,7 @@ import {
   watchSystemMotion,
 } from "../../lib/motion.js";
 import { EVENTS, emit } from "../../observability/index.js";
+import SistemaBot from "./SistemaBot.jsx";
 import {
   C,
   Card,
@@ -1310,13 +1312,19 @@ export default function SistemaTab({
 
         <Card>
           <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
             {[
               {
                 v: "ia",
                 icon: Bot,
                 label: "IA automática",
                 desc: "O bot conduz o roteiro completo e confirma sozinho.",
+              },
+              {
+                v: "sombra",
+                icon: Eye,
+                label: "Sombra (teste)",
+                desc: "O bot escreve a resposta como nota privada no Chatwoot; nada é enviado ao cliente.",
               },
               {
                 v: "manual",
@@ -1351,6 +1359,8 @@ export default function SistemaTab({
             Vale para todos os sócios em tempo real.
           </div>
         </Card>
+
+        <SistemaBot />
 
         <Card>
           <div className="flex items-center justify-between mb-3">
