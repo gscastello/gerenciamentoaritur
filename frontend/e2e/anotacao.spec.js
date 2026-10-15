@@ -70,6 +70,10 @@ test("Agenda: editar reserva reescrevendo o endereço à mão", async ({ page })
 
   await page.goto("/");
   await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
+  // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
+  // reserva em vez de depender do default.
+  await page.locator('input[type="date"]').first().fill(hoje);
   await page.getByRole("button", { name: "Editar" }).first().click();
   await expect(page.getByText("Editar reserva")).toBeVisible();
 

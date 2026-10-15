@@ -1150,7 +1150,8 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     const quantidade = novaQtd !== reserva.quantidade ? { qty: novaQtd } : null;
     const contatoFields = {};
     if ((f.nome || "") !== (reserva.nome || "")) contatoFields.name = f.nome || null;
-    if ((f.telefone || "") !== (reserva.telefone || "")) contatoFields.phone = f.telefone || null;
+    if ((f.telefone || "") !== (reserva.telefone || ""))
+      contatoFields.phone = f.telefone ? validarTelefone(f.telefone).valor : null;
     const contato =
       reserva.customer_id && Object.keys(contatoFields).length > 0
         ? { customerId: reserva.customer_id, fields: contatoFields }
@@ -1406,7 +1407,7 @@ export function NovaReservaModal({
     tripDate: f.data,
     direction: f.direcao,
     customerName: f.nome.trim(),
-    customerPhone: f.telefone.trim(),
+    customerPhone: validarTelefone(f.telefone).valor,
     routePointCode: f.pontoId || null,
     quantity: qtd,
     unitPrice: valorUnit,
@@ -1710,6 +1711,7 @@ function NovaEncomendaModal({
     }
     setSalvando(true);
     try {
+      const telefoneNormalizado = validarTelefone(f.destinatarioTelefone).valor;
       const extraData = {
         encItem: f.item.trim() || null,
         encRemetenteNome: f.remetenteNome.trim() || null,
@@ -1726,7 +1728,7 @@ function NovaEncomendaModal({
           contact: {
             customer_id: pendente.customer_id,
             name: f.destinatarioNome.trim(),
-            phone: f.destinatarioTelefone.trim(),
+            phone: telefoneNormalizado,
           },
           extraData,
           status: "confirmada",
@@ -1737,7 +1739,7 @@ function NovaEncomendaModal({
           direction: f.direcao,
           type: "encomenda",
           customerName: f.destinatarioNome.trim(),
-          customerPhone: f.destinatarioTelefone.trim(),
+          customerPhone: telefoneNormalizado,
           routePointCode: f.pontoId,
           unitPrice: f.valor !== "" ? Number.parseFloat(f.valor) || 0 : 0,
           dropoffLocation: f.desembarque.trim() || null,

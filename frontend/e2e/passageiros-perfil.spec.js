@@ -74,3 +74,24 @@ test("Passageiros: telefone inválido barra o salvamento do cadastro", async ({ 
   await expect(page.getByText(/DDD/i)).toBeVisible();
   await expect(page.getByText("Editar cadastro")).toBeVisible();
 });
+
+test("Passageiros: remove o cadastro de um passageiro", async ({ page }) => {
+  await mockSupabase(page, { role: "admin", customersStats: STATS });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
+
+  let aba = page.getByRole("button", { name: "Passageiros" });
+  if ((await aba.count()) === 0) {
+    await page.getByRole("button", { name: "Mais" }).click();
+    aba = page.getByRole("button", { name: "Passageiros" });
+  }
+  await aba.first().click();
+
+  await expect(page.getByText("Maria Receptora")).toBeVisible();
+  await page.getByRole("button", { name: "Editar cadastro de Maria Receptora" }).click();
+
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Remover cadastro de Maria Receptora" }).click();
+
+  await expect(page.getByText("Maria Receptora")).toHaveCount(0);
+});
