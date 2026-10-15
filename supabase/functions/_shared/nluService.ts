@@ -29,7 +29,7 @@ if (!ANTHROPIC_API_KEY) {
 export type ExtractedIntent = {
   intent:
     | "reservar" | "cancelar" | "alterar" | "pagamento" | "frete"
-    | "encomenda" | "atendente" | "saudacao" | "confirmar" | "negar" | "outro";
+    | "encomenda" | "atendente" | "saudacao" | "confirmar" | "negar" | "pergunta" | "outro";
   direction: "ida" | "volta" | null;
   trip_date: string | null;         // YYYY-MM-DD, já resolvido a partir de expressões relativas
   quantity: number | null;
@@ -48,7 +48,7 @@ const EXTRACT_TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      intent: { type: "string", enum: ["reservar", "cancelar", "alterar", "pagamento", "frete", "encomenda", "atendente", "saudacao", "confirmar", "negar", "outro"] },
+      intent: { type: "string", enum: ["reservar", "cancelar", "alterar", "pagamento", "frete", "encomenda", "atendente", "saudacao", "confirmar", "negar", "pergunta", "outro"] },
       direction: { type: ["string", "null"], enum: ["ida", "volta", null] },
       trip_date: { type: ["string", "null"], description: "formato YYYY-MM-DD, resolvido a partir de hoje; null se não mencionado" },
       quantity: { type: ["integer", "null"] },
@@ -78,6 +78,7 @@ NUNCA invente data, quantidade, local ou preço que não estejam no texto — us
 Hoje é ${params.today}. Resolva expressões relativas ("amanhã", "sexta que vem") para data absoluta.
 route_point_code só pode ser um destes códigos válidos, exatamente como aparecem: ${pointsList}. Se o texto mencionar um local que não bate com nenhum desses, deixe route_point_code null e coloque a menção literal em pickup_detail.
 ${params.conversationSummary ? `Contexto da conversa até agora: ${params.conversationSummary}` : ""}
+Use intent "pergunta" quando o cliente faz uma dúvida geral sobre a empresa ou o serviço (horários, regras, bagagem, crianças, animais, pagamento, cancelamento, atraso…) sem pedir para reservar, cancelar ou alterar nada.
 Você NUNCA responde preço, vaga, horário ou confirmação — isso não é seu trabalho, só extraia dados.`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {

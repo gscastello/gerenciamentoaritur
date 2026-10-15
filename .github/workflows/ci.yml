@@ -50,6 +50,24 @@ jobs:
       # Informativo: árvore completa (dev incluso) no log, sem quebrar.
       - run: npm audit --audit-level=moderate || true
 
+  # Bot de WhatsApp (Edge Functions em Deno, fora do frontend/): sem este job
+  # nada nelas era checado no PR. `deno check` pega erro de tipo/import da
+  # função publicada; `deno test` roda os módulos puros de _shared (assinatura
+  # do webhook, filtro do payload, opções, trava de números, telefone, fuso).
+  functions:
+    name: Funções (Deno)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/chatwoot-bot/index.ts
+      - run: deno test supabase/functions/_shared
+
   test:
     name: Unit · Integração (Vitest + Codecov)
     runs-on: ubuntu-latest

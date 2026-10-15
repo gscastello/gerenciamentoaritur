@@ -6,10 +6,11 @@ verdade do processo. Leia inteiro antes de abrir uma Issue, um branch ou
 um PR. Se uma instrução daqui conflitar com um hábito seu, a instrução
 daqui vence.
 
-> **Escopo do código:** o app vive em `frontend/`. O protótipo funcional
-> original está em `frontend/src/app/App.jsx` e está sendo migrado para os
-> services/hooks conectados ao Supabase (issue #10). O banco está em
-> `database/` (rodar os `.sql` na ordem numérica).
+> **Escopo do código:** o app vive em `frontend/` (a migração do protótipo
+> para services/hooks conectados ao Supabase terminou — issue #10). O banco
+> está em `database/` (rodar os `.sql` na ordem numérica). O bot de WhatsApp
+> vive em `supabase/functions/` (Edge Functions em Deno, via Chatwoot — ver
+> `WHATSAPP.md`).
 
 ---
 
@@ -26,6 +27,13 @@ npm run test          # Vitest + cobertura (gate no vite.config.js)
 npm run test:mutation # Stryker (só exigido se tocou src/domain)
 npm run test:e2e      # Playwright (fluxos afetados)
 npm run build         # Vite
+```
+
+Se o PR tocou em `supabase/functions/` (bot de WhatsApp), na raiz do repo:
+
+```bash
+deno check supabase/functions/chatwoot-bot/index.ts
+deno test supabase/functions/_shared   # módulos puros: assinatura, payload, opções, trava de números…
 ```
 
 Tudo isso roda no CI (`.github/workflows/ci.yml`) em todo PR. **Merge
@@ -102,6 +110,13 @@ lib/            supabaseClient (único), storageShim (dev).
 O contrato acima é validado por `npm run arch`
 (`.dependency-cruiser.cjs`). Quebrou o limite → o CI falha.
 
+**Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
+tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`),
+que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
+módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
+Regra de negócio testável vai pro módulo puro.
+
 ---
 
 ## 3. Qualidade de código
@@ -155,7 +170,9 @@ Camadas (todas no-op se a env correspondente não existir — ver
 vagas, webhook do WhatsApp, auto-correção do diagnóstico) emite um
 **evento nomeado** via `emit()` / `instrument()` de
 `src/observability/events.js` — não só `console.log`. Nomes canônicos em
-`EVENTS`.
+`EVENTS`. No bot (Deno, `supabase/functions/`), que não importa o frontend, o
+equivalente é uma **linha JSON nomeada** no log (`bot_mensagem_recebida`,
+`bot_erro`…) até a issue #3 ligar Sentry/OTel lá.
 
 ---
 
@@ -200,7 +217,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   `database/DATABASE.md`, **não** o `storageShim`/localStorage (que é só
   para rodar o protótipo em dev).
 - Toda criação de reserva é **transacional e idempotente** por
-  `wa_message_id` — reenvio de webhook do WhatsApp nunca duplica.
+  `wa_message_id` (no bot, `cw-<id da mensagem no Chatwoot>`) — reenvio de
+  webhook nunca duplica. O telefone do cliente é **sempre normalizado**
+  (`fn_normalizar_telefone`: só dígitos, sem `+55`) e buscado também com/sem o
+  nono dígito — senão o mesmo número vira dois clientes.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
@@ -224,14 +244,30 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
 
 ## 8. Flexibilidade IA ⇄ humano
 
-- Flag `modo_atendimento` (`ia` | `manual`) em `configuracao`, editável na
-  aba Sistema. O bot consulta antes de responder automaticamente.
-- Em `manual`, o bot para de confirmar reservas sozinho. O botão "falar
-  com atendente" funciona em qualquer modo e **sempre** cria um item de
-  acompanhamento humano.
+O número de WhatsApp está no **Chatwoot Cloud** (Coexistência com o app do
+celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
+
+- Modo global em `settings.attendance_mode` (`ia` | `manual` | `sombra`),
+  editável na aba Sistema e válido na hora para todos os sócios:
+  - `ia` — o bot responde e confirma reservas sozinho;
+  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot;
+  - `sombra` — o bot roda tudo, mas a resposta vira **nota privada** e **nada é
+    gravado** no negócio. Todo bot novo ou mudança grande começa em `sombra`.
+- Por conversa: `whatsapp_conversations.attendance_mode` (`ia` | `humano`). O bot
+  **continua ativo** quando a equipe responde pelo celular; só **cala** na
+  transferência completa (`rpc_transfer_to_human` + status Aberta no Chatwoot).
+  Devolver ao bot = status Pendente no Chatwoot.
+- O botão/pedido "falar com atendente" funciona em qualquer modo e **sempre**
+  transfere e abre uma pendência (aba Pendências) com o link da conversa.
 - Reservas fora da área padrão (São Luís, Cantanhede, Pirapemas) entram
   como `pendente` e exigem confirmação manual — nunca vão sozinhas para a
   Agenda.
+- O Claude **nunca** decide preço, vaga, horário ou confirmação. Respostas livres
+  só com a base de conhecimento (aba Sistema) + dados ao vivo, e número/horário/
+  valor fora dessas fontes **barra** a resposta (`botGuard`). O bot **nunca**
+  cadastra cliente com o nome do perfil do WhatsApp (costuma ser apelido):
+  pergunta o nome.
+- A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 
 ---
 
@@ -262,6 +298,11 @@ mapeamento e o texto pronto estão em `docs/ISSUES-INICIAIS.md`. Labels
 customizados (`feature`, `critico`, `integracao`, `financeiro`,
 `seguranca`, `motion`, `observability`, `testing`, `chore`) já existem no
 repositório.
+
+**WhatsApp:** número no Chatwoot por Coexistência desde 2026-10-15; bot e painel
+seguem o `WHATSAPP.md` (issue #163). Ações em produção (migrações, deploy de
+função, secrets, criar o Agent Bot) são **manuais e autorizadas pelo dono**, uma a
+uma; secrets nunca vão em chat, issue ou PR.
 
 Ao pegar uma tarefa nova que não tem Issue: **crie a Issue primeiro**
 (template `Tarefa`), depois o branch `tipo/numero-slug`, depois o PR com

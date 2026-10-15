@@ -1,108 +1,66 @@
 // supabase/functions/_shared/whatsappClient.ts
 //
-// Camada mais baixa: só sabe conversar com a Graph API da Meta (enviar
-// texto, lista, botões). Não tem NENHUMA lógica de negócio — isso fica
-// no whatsappService.ts. Separar assim deixa fácil trocar de provedor
-// (ex.: Twilio) no futuro sem tocar no resto do sistema.
+// Camada mais baixa de envio. O número de WhatsApp está conectado ao
+// Chatwoot Cloud por Coexistência (a conexão com a Meta é dele), então
+// toda saída passa pela API do Chatwoot — não há mais chamada direta à
+// Graph API. Mantém as mesmas assinaturas de antes (sendText/sendList/
+// sendButtons) pra o motor de reservas não mudar.
+//
+// O Chatwoot não documenta botões/listas interativos do WhatsApp pra bot,
+// então opções vão como texto numerado (ver opcoes.ts); as opções
+// oferecidas ficam em whatsapp_conversations.last_options pra resolver a
+// resposta do cliente ("1", "volta") no id que o motor espera.
+//
+// Modo sombra: em vez de mandar ao cliente, a resposta vira nota privada
+// no Chatwoot — o dono confere o que o bot diria.
 
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN")!;
-const WHATSAPP_PHONE_NUMBER_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")!;
-const GRAPH_API_VERSION = "v20.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-const BASE_URL = `${GRAPH_BASE}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+import { getBotContext } from "./botContext.ts";
+import { chatwootClient } from "./chatwootClient.ts";
+import { formatarOpcoes, type Opcao } from "./opcoes.ts";
+import { supabaseAdmin } from "./supabaseAdmin.ts";
 
-if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
-  throw new Error("Faltam WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID nos secrets da função.");
-}
+async function enviar(texto: string, opcoes: Opcao[] | null) {
+  const ctx = getBotContext();
+  if (!ctx) throw new Error("Envio fora do contexto de uma conversa do Chatwoot.");
 
-async function callGraphApi(payload: Record<string, unknown>) {
-  const res = await fetch(BASE_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`WhatsApp API error: ${JSON.stringify(data)}`);
+  const { error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .update({ last_options: opcoes })
+    .eq("id", ctx.conversationId);
+  if (error) console.error("Falha ao guardar as opções oferecidas:", error.message);
+
+  if (ctx.shadow) {
+    return chatwootClient.postMessage(
+      ctx.chatwootConversationId,
+      `🤖 [SOMBRA] Resposta que o bot enviaria:\n\n${texto}`,
+      { private: true },
+    );
   }
-  return data; // { messaging_product, contacts, messages: [{ id }] }
+  return chatwootClient.postMessage(ctx.chatwootConversationId, texto);
 }
 
 export const whatsappClient = {
-  async sendText(to: string, body: string) {
-    return callGraphApi({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body },
-    });
+  // `to` (telefone) ficou na assinatura por compatibilidade; o destino vem
+  // do contexto da conversa do Chatwoot.
+  sendText(_to: string, body: string) {
+    return enviar(body, null);
   },
 
-  /** Lista de opções (até 10 itens) — usado no menu principal e na escolha de pontos. */
-  async sendList(to: string, header: string, bodyText: string, buttonLabel: string, rows: { id: string; title: string; description?: string }[]) {
-    return callGraphApi({
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        header: { type: "text", text: header },
-        body: { text: bodyText },
-        action: {
-          button: buttonLabel,
-          sections: [{ title: header, rows }],
-        },
-      },
-    });
+  /** Lista de opções (até 10 itens) — menu, pontos de embarque, reservas. */
+  sendList(_to: string, _header: string, bodyText: string, _buttonLabel: string, rows: Opcao[]) {
+    return enviar(formatarOpcoes(bodyText, rows), rows);
   },
 
-  /** Botões rápidos (até 3) — usado para sim/não, confirmar/cancelar. */
-  async sendButtons(to: string, bodyText: string, buttons: { id: string; title: string }[]) {
-    return callGraphApi({
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: { text: bodyText },
-        action: { buttons: buttons.map((b) => ({ type: "reply", reply: { id: b.id, title: b.title } })) },
-      },
-    });
+  /** Poucas opções (sim/não, formas de pagamento). */
+  sendButtons(_to: string, bodyText: string, buttons: { id: string; title: string }[]) {
+    return enviar(formatarOpcoes(bodyText, buttons), buttons);
   },
 
-  /** Templates pré-aprovados pela Meta — obrigatório para mensagens fora da janela de 24h (lembrete, motorista a caminho). */
-  async sendTemplate(to: string, templateName: string, languageCode: string, components: unknown[] = []) {
-    return callGraphApi({
-      messaging_product: "whatsapp",
-      to,
-      type: "template",
-      template: { name: templateName, language: { code: languageCode }, components },
-    });
-  },
-
-  /**
-   * Baixa uma mídia recebida (imagem/documento). Na Cloud API é em 2 passos:
-   *   1) GET /{media-id}      -> { url, mime_type, ... } (url expira em ~5min)
-   *   2) GET {url} com Bearer -> os bytes
-   */
-  async downloadMedia(mediaId: string): Promise<{ bytes: Uint8Array; mimeType: string }> {
-    const metaRes = await fetch(`${GRAPH_BASE}/${mediaId}`, {
-      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
-    });
-    const meta = await metaRes.json();
-    if (!metaRes.ok || !meta?.url) {
-      throw new Error(`WhatsApp media lookup error: ${JSON.stringify(meta)}`);
-    }
-    const fileRes = await fetch(meta.url, {
-      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
-    });
-    if (!fileRes.ok) {
-      throw new Error(`WhatsApp media download error: ${fileRes.status}`);
-    }
-    const bytes = new Uint8Array(await fileRes.arrayBuffer());
-    return { bytes, mimeType: (meta.mime_type as string) ?? "application/octet-stream" };
+  /** O Chatwoot entrega o anexo como URL pública (attachments[].data_url). */
+  async downloadMedia(url: string): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`Falha ao baixar o anexo do Chatwoot: ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return { bytes, mimeType: res.headers.get("content-type") ?? "application/octet-stream" };
   },
 };
