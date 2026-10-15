@@ -332,7 +332,8 @@ export default function ReservarTab({
                 className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
                 style={{ background: "rgba(255,255,255,.14)", color: "#fff" }}
               >
-                {modoAtendimento === "ia" ? "IA atendendo" : "Atendimento manual"}
+                {{ ia: "IA atendendo", sombra: "Bot em teste" }[modoAtendimento] ||
+                  "Atendimento manual"}
               </span>
             </div>
             <h1
