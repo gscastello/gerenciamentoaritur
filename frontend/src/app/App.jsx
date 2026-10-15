@@ -48,7 +48,7 @@ const DashboardTab = React.lazy(() => import("./tabs/DashboardTab.jsx"));
 const FinanceiroTab = React.lazy(() => import("./tabs/FinanceiroTab.jsx"));
 const GestaoTab = React.lazy(() => import("./tabs/GestaoTab.jsx"));
 const SistemaTab = React.lazy(() => import("./tabs/SistemaTab.jsx"));
-const ReservarTab = React.lazy(() => import("./tabs/ReservarTab.jsx"));
+const AtendimentoTab = React.lazy(() => import("./tabs/AtendimentoTab.jsx"));
 const AgendaTab = React.lazy(() => import("./tabs/AgendaTab.jsx"));
 const NovaReservaModal = React.lazy(() =>
   import("./tabs/AgendaTab.jsx").then((m) => ({ default: m.NovaReservaModal })),
@@ -223,7 +223,7 @@ function GlobalStyles() {
       html[data-motion="off"] :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
       html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after { animation: none !important; }
       html[data-motion="off"] .hero-fx-spark { opacity: 0 !important; }
-      /* .anim-fadeIn envolve o conteúdo de TODA aba (Reservar, Agenda, Lista,
+      /* .anim-fadeIn envolve o conteúdo de TODA aba (Atendimento, Agenda, Lista,
          Financeiro, Gestão...) e .anim-fadeUp/.anim-pop/.anim-slideDown/
          .stagger entram cards e listas — reduzir a duração pra ~0 (regra
          acima) não é suficiente em alguns motores móveis: a camada composta
@@ -386,7 +386,11 @@ const DESTINOS_BUSCA = [
     termos: "backup usuários pontos valores horários pix",
   },
   { tab: "sistema", label: "Backup completo", termos: "exportar json csv excel pdf cópia dados" },
-  { tab: "reservar", label: "Reservar passagem", termos: "nova reserva atendimento whatsapp bot" },
+  {
+    tab: "atendimento",
+    label: "Atendimento WhatsApp",
+    termos: "conversas fila chatwoot bot whatsapp perguntas sombra atendente",
+  },
 ];
 
 function normalizaBusca(s) {
@@ -723,7 +727,7 @@ const JANELA_FUTURO = 90;
 // motorista que abrisse Financeiro só via erro de permissão); isto é só
 // navegação — esconde o que a pessoa não usa. `admin` vê tudo.
 const TAB_ROLES = {
-  reservar: ["admin", "atendente"],
+  atendimento: ["admin", "atendente"],
   agenda: ["admin", "atendente", "motorista", "financeiro"],
   lista: ["admin", "atendente", "motorista", "financeiro"],
   bloco: ["admin", "atendente", "motorista"],
@@ -738,7 +742,7 @@ const TAB_ROLES = {
 
 // Ordem da barra lateral (pedido do dono): primeiro o dia a dia
 // (Dashboard, Agenda, Lista, Financeiro, Gestão), depois os cadastros, e o
-// fluxo de agendamento ("Reservar" / atendimento automático) por último.
+// fila de atendimento do WhatsApp ("Atendimento") por último.
 const NAV_ITENS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
@@ -749,8 +753,8 @@ const NAV_ITENS = [
   { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
   { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
+  { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   { id: "pendencias", label: "Pendências", icon: Inbox, grupo: "Atendimento" },
-  { id: "reservar", label: "Reservar", icon: MessageCircle, grupo: "Atendimento" },
 ];
 const NAV_GRUPOS = [
   "Principal",
@@ -926,7 +930,7 @@ function AppInner() {
   );
   const tabPermitida = NAV.some((n) => n.id === tab);
 
-  // Papel não enxerga a aba atual (ex.: motorista cai no app com "reservar"
+  // Papel não enxerga a aba atual (ex.: motorista cai no app com "atendimento"
   // selecionado) → manda para a primeira aba que ele pode ver.
   useEffect(() => {
     if (role && NAV.length > 0 && !tabPermitida) setTab(NAV[0].id);
@@ -979,8 +983,8 @@ function AppInner() {
   // refetch de R (ex.: o que roda depois de criar uma reserva) sempre que
   // a janela de reservas ainda estivesse vazia — trocando a árvore
   // Suspense/aba pela <TabSkeleton>, o que desmonta a aba ativa e perde
-  // seu estado local (ex.: o wizard de Reservar voltava pro passo 0 após
-  // "Encomenda registrada!" nunca aparecer).
+  // seu estado local (ex.: um formulário aberto de um modal da Agenda ou o wizard antigo
+  // de Reservar voltava pro passo 0 ao criar uma reserva).
   const primeiraCargaRef = useRef(true);
   useEffect(() => {
     if (!R.loading && !cfg.loading) primeiraCargaRef.current = false;
@@ -1251,17 +1255,11 @@ function AppInner() {
                 ) : (
                   <Suspense fallback={<TabSkeleton tab={tab} />}>
                     <div className="anim-fadeIn">
-                      {tab === "reservar" && (
-                        <ReservarTab
-                          reservas={reservas}
-                          R={R}
-                          capacidade={capacidadeAtiva}
+                      {tab === "atendimento" && (
+                        <AtendimentoTab
+                          pend={pend}
                           modoAtendimento={modoAtendimento}
-                          trips={trips}
-                          segundaAtiva={cfg.segundaAtiva}
-                          segundaHoras={cfg.segundaHoras}
-                          pix={cfgSettings.pix}
-                          cidadesIntermediarias={cfgSettings.intermediateCities}
+                          onNavigate={irParaBusca}
                         />
                       )}
                       {tab === "agenda" && (

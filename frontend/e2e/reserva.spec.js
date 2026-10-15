@@ -1,37 +1,22 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Fluxos autenticados de Reserva (issue #4). Sem projeto Supabase de teste
+// Fluxos autenticados do app (issue #4). Sem projeto Supabase de teste
 // no CI — o helper mockSupabase injeta a sessão e intercepta PostgREST/RPC.
-
-// Data usada nos fluxos que chegam a criar reserva de verdade: sempre a
-// PRÓXIMA terça-feira a partir de hoje. Nunca fica no passado (o form de
-// Reservar recusa data < hoje) e evita segunda (ajuste de horário
-// especial) e o próprio dia (alguns fluxos tratam "hoje" como caso
-// especial). Antes disto a data vinha fixa ("2026-09-15") e o teste que
-// confere o status final da reserva parava de passar assim que o
-// calendário virava a data — corrigido na auditoria de 2026-09-16.
-function proximaTerca() {
-  const d = new Date();
-  do {
-    d.setDate(d.getDate() + 1);
-  } while (d.getDay() !== 2); // 0=domingo ... 2=terça
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(d);
-}
 
 test("app passa da tela de login e mostra a navegação por papel", async ({ page }) => {
   await mockSupabase(page, { role: "atendente" });
   await page.goto("/");
 
-  // atendente vê Reservar; NÃO vê Sistema (TAB_ROLES em App.jsx)
-  await expect(page.getByRole("button", { name: /Reservar/ }).first()).toBeVisible();
+  // atendente vê Atendimento; NÃO vê Sistema (TAB_ROLES em App.jsx)
+  await expect(page.getByRole("button", { name: /Atendimento/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Sistema$/ })).toHaveCount(0);
 });
 
 test("botão Sair desloga e volta pra tela de login", async ({ page }) => {
   await mockSupabase(page, { role: "atendente" });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Reservar/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Atendimento/ }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Sair da conta" }).first().click();
 
@@ -205,146 +190,32 @@ test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page
   await expect(chip).toHaveText(/Gustavo/);
 });
 
-test("Reservar: data → direção com vaga → escolha do ponto de embarque", async ({ page }) => {
-  await mockSupabase(page, { role: "atendente", occupancy: {} });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
-
-  await expect(page.getByText("Para quando é a viagem?")).toBeVisible();
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-
-  await expect(page.getByText("O que você precisa?")).toBeVisible();
-  await page.getByRole("button", { name: /Ida ·/ }).click();
-
-  await expect(page.getByText("Local de embarque")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Rodoviária/ })).toBeVisible();
-});
-
-test("Reservar: roteiro do cliente até os dados da reserva", async ({ page }) => {
-  await mockSupabase(page, { role: "atendente", occupancy: {} });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
-
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: /Ida ·/ }).click();
-  await page.getByRole("button", { name: /Rodoviária/ }).click();
-
-  // step "Dados da reserva": quantidade default 1, desembarque + contato
-  await expect(page.getByText("Dados da reserva")).toBeVisible();
-  await page.getByLabel("Onde você vai ficar (desembarque)").selectOption("pirapemas");
-  await page.getByLabel("Nome completo").fill("Cliente E2E");
-  await page.getByLabel("WhatsApp", { exact: true }).fill("98999990000");
-  // com os campos obrigatórios preenchidos, o botão de avançar habilita
-  await expect(page.getByRole("button", { name: "Continuar" })).toBeEnabled();
-});
-
-test("Reservar: desembarque em cidade intermediária → reserva pendente (issue #6)", async ({
-  page,
-}) => {
-  let createBody = null;
+// Regressão (issue #168): criar a PRIMEIRA reserva de uma janela vazia disparava
+// um refetch (App.jsx) que reacendia o `loading` de página inteira e trocava a
+// árvore da aba pela <TabSkeleton> — o React desmontava a aba e ela perdia o
+// estado local. O caso original era o wizard de Reservar (aposentado); o
+// mecanismo é de TODA aba, então o teste usa as caixas de anotação rápida da
+// Agenda: o rascunho de um ponto tem que sobreviver à criação em outro.
+test("Agenda: criar a primeira reserva de uma janela vazia não desmonta a aba", async ({ page }) => {
+  let criou = false;
   await mockSupabase(page, {
-    role: "atendente",
+    role: "admin",
     occupancy: {},
-    createResult: { success: true, reservation_id: "e2e-pend-1", status: "pendente", message: "created" },
-    onCreate: (route) => {
-      createBody = JSON.parse(route.request().postData() || "{}");
+    onCreate: () => {
+      criou = true;
     },
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
+  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
 
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: /Ida ·/ }).click();
-  await page.getByRole("button", { name: /Rodoviária/ }).click();
+  const rascunho = page.getByLabel("Anotar reserva — Rodoviária");
+  await rascunho.fill("rascunho que não pode sumir");
 
-  await expect(page.getByText("Dados da reserva")).toBeVisible();
-  await page.getByLabel("Onde você vai ficar (desembarque)").selectOption("outro");
-  await page.getByRole("textbox", { name: "Onde você vai ficar *" }).fill("perto do posto em Bacabeira");
-  await page.getByLabel("Nome completo").fill("Cliente E2E");
-  await page.getByLabel("WhatsApp", { exact: true }).fill("98999990000");
+  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  await campo.fill("1P Cohatrac 98999998888");
+  await campo.press("Enter");
 
-  // a UI já avisa que vai ficar pendente
-  await expect(page.getByText(/fora da nossa área padrão|ficará\s+pendente/i)).toBeVisible();
-
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Dinheiro" }).click();
-  await page.getByRole("button", { name: "Confirmar reserva" }).click();
-
-  await expect
-    .poll(() => createBody?.p_status, { timeout: 10000 })
-    .toBe("pendente");
-  // regressão: o refetch da janela de reservas (disparado depois de criar)
-  // não pode derrubar o wizard de volta pro passo 0 antes de mostrar a
-  // tela de sucesso — ver o teste de encomenda logo abaixo.
-  await expect(page.getByText("Recebemos sua solicitação!")).toBeVisible();
+  await expect.poll(() => criou).toBe(true);
+  await expect(campo).toHaveValue("");
+  await expect(rascunho).toHaveValue("rascunho que não pode sumir");
 });
-
-// Regressão: criar a PRIMEIRA reserva de uma janela vazia disparava um
-// refetch (App.jsx) que reacendia o `loading` de página inteira e
-// trocava a árvore <ReservarTab> pela <TabSkeleton> no mesmo lugar do
-// JSX — como são elementos estruturalmente diferentes, React desmontava
-// o wizard e perdia o `step`/`done` locais, voltando pra "Para quando é
-// a viagem?" em vez de mostrar "Encomenda registrada!".
-test("Reservar: encomenda chega na tela de sucesso (não perde o wizard no refetch)", async ({
-  page,
-}) => {
-  await mockSupabase(page, {
-    role: "atendente",
-    createResult: { success: true, reservation_id: "e2e-enc-1", status: "pendente", message: "created" },
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
-
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-
-  await page.getByRole("button", { name: /Enviar uma encomenda/ }).click();
-  await page.getByLabel("O que é a encomenda?").fill("Documentos");
-  await page.getByLabel("Local de embarque").fill("Rodoviária");
-  await page.getByLabel("Local de desembarque").fill("Pirapemas centro");
-  await page.getByLabel("Nome de quem vai receber").fill("Maria Receptora");
-  await page.getByLabel("Telefone de contato de quem recebe").fill("98988887777");
-
-  await page.getByRole("button", { name: "Encaminhar para a equipe" }).click();
-
-  await expect(page.getByText("Encomenda registrada!")).toBeVisible();
-  // a tela de "Para quando é a viagem?" (passo 0) não pode ter voltado
-  await expect(page.getByText("Para quando é a viagem?")).toHaveCount(0);
-});
-
-test("Reservar: viagem lotada → lista de espera → confirmação (RPC com status espera)", async ({
-  page,
-}) => {
-  let createBody = null;
-  await mockSupabase(page, {
-    role: "atendente",
-    // ReservarTab calcula vagas a partir de v_reservations_flat + capacidade
-    // do veículo padrão (31). Uma reserva confirmada de 40 lugares lota a Ida.
-    reservations: [
-      { id: "r-cheia", data: proximaTerca(), direcao: "ida", status: "confirmada", tipo: "passagem", quantidade: 40 },
-    ],
-    createResult: { success: true, reservation_id: "e2e-espera-1", status: "espera", message: "created" },
-    onCreate: (route) => {
-      createBody = JSON.parse(route.request().postData() || "{}");
-    },
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: /Reservar/ }).first().click();
-
-  await page.locator('input[type="date"]').fill(proximaTerca());
-  await page.getByRole("button", { name: "Continuar" }).click();
-
-  await page.getByRole("button", { name: /Ida.*Lotado/s }).click();
-  await expect(page.getByText("Lista de espera", { exact: true })).toBeVisible();
-
-  await page.getByLabel("Nome", { exact: true }).fill("Cliente E2E");
-  await page.getByLabel("WhatsApp", { exact: true }).fill("98999990000");
-  await page.getByRole("button", { name: "Entrar na lista de espera" }).click();
-
-  await expect(page.getByText("Você entrou na lista de espera!", { exact: true })).toBeVisible();
-  expect(createBody?.p_status).toBe("espera");
-});
-
