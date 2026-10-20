@@ -174,10 +174,12 @@ export const whatsappService = {
   // 2) identificação do cliente pelo telefone
   // =====================================================================
   async identifyCustomer(phone: string) {
+    const formas = variantesTelefone(phone).join(",");
     const { data } = await supabaseAdmin
       .from("customers")
       .select("*")
-      .in("phone", variantesTelefone(phone))
+      // o passageiro pode escrever do número secundário (customers.phone_secondary)
+      .or(`phone.in.(${formas}),phone_secondary.in.(${formas})`)
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
       .limit(1)
@@ -215,6 +217,19 @@ export const whatsappService = {
       .order("display_order");
     if (error) throw new WhatsappServiceError(`Falha ao consultar pontos: ${error.message}`);
     return data;
+  },
+
+  /** Locais de DESEMBARQUE (dropoff_areas) — a outra metade do que listRoutePoints devolve (embarque). */
+  async listDropoffAreas(direction: "ida" | "volta") {
+    const { data, error } = await supabaseAdmin
+      .from("dropoff_areas")
+      .select("code, label")
+      .eq("direction", direction)
+      .eq("active", true)
+      .is("deleted_at", null)
+      .order("sort_order");
+    if (error) throw new WhatsappServiceError(`Falha ao consultar locais de desembarque: ${error.message}`);
+    return data ?? [];
   },
 
   /** Preço de "Buscar em Casa" por bairro — se não achar, retorna null e quem chama deve transferir para humano. */
