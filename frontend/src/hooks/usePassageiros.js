@@ -70,10 +70,11 @@ export function usePassageiros(busca) {
   // "Salvar" na tela, aplica só os campos que mudaram.
   const perfilAction = useAsyncAction(customersService.updateProfile);
   const salvarPerfil = useCallback(
-    async (customerId, { name, phone, defaultRoutePointCode, defaultPaymentMethod }) => {
+    async (customerId, { name, phone, phoneSecondary, defaultRoutePointCode, defaultPaymentMethod }) => {
       await perfilAction.run(customerId, {
         name,
         phone,
+        phoneSecondary,
         defaultRoutePointCode,
         defaultPaymentMethod,
       });
@@ -84,6 +85,7 @@ export function usePassageiros(busca) {
                 ...p,
                 ...(name !== undefined ? { nome: name } : {}),
                 ...(phone !== undefined ? { telefone: phone } : {}),
+                ...(phoneSecondary !== undefined ? { telefone2: phoneSecondary } : {}),
                 ...(defaultRoutePointCode !== undefined
                   ? { ponto_padrao: defaultRoutePointCode }
                   : {}),

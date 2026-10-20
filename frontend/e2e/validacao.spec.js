@@ -18,7 +18,7 @@ test("Agendar passagem: telefone inválido barra o envio", async ({ page }) => {
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Nome").fill("Maria Teste");
-  await page.getByLabel("Telefone").fill("123"); // inválido
+  await page.getByLabel("Telefone *").fill("123"); // inválido
   // preenche o bairro (ponto "Buscar em Casa" costuma ser o 1º da ida)
   const bairro = page.getByLabel("Bairro");
   if (await bairro.count()) await bairro.fill("Cohama");

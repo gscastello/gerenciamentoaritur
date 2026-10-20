@@ -68,4 +68,21 @@ export const pendenciasService = {
     }
     return data;
   },
+
+  /** Marca TODAS as pendências abertas como resolvidas (continuam no histórico). */
+  async resolverTodas() {
+    const { data, error } = await supabase.rpc("rpc_resolve_all_support_tickets");
+    if (error) {
+      throw new ServiceError(`resolverTodas: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    }
+    if (data && data.success === false) {
+      throw new ServiceError(data.message || "Não foi possível limpar as pendências.", {
+        retryable: false,
+      });
+    }
+    return data;
+  },
 };

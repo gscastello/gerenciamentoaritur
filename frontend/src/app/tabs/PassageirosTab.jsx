@@ -259,6 +259,7 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
     setForm({
       nome: p.nome || "",
       telefone: p.telefone || "",
+      telefone2: p.telefone2 || "",
       pontoPadrao: p.ponto_padrao || "",
       pagamentoPadrao: p.pagamento_padrao || "",
     });
@@ -267,7 +268,11 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
   };
 
   const salvarEdicao = async () => {
-    const problema = primeiroErro([validarNome(form.nome), validarTelefone(form.telefone)]);
+    const problema = primeiroErro([
+      validarNome(form.nome),
+      validarTelefone(form.telefone),
+      form.telefone2.trim() ? validarTelefone(form.telefone2) : null,
+    ]);
     if (problema) {
       setErroForm(problema);
       return;
@@ -277,6 +282,7 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
       await onSalvarPerfil(p.customer_id, {
         name: form.nome.trim(),
         phone: validarTelefone(form.telefone).valor,
+        phoneSecondary: form.telefone2.trim() ? validarTelefone(form.telefone2).valor : null,
         defaultRoutePointCode: form.pontoPadrao || null,
         defaultPaymentMethod: form.pagamentoPadrao || null,
       });
@@ -330,6 +336,7 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
               {p.nome}{" "}
               <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
                 · {p.telefone}
+                {p.telefone2 ? ` · ${p.telefone2}` : ""}
               </span>
             </span>
             <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
@@ -436,6 +443,13 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
                       inputMode="tel"
                       value={form.telefone}
                       onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Telefone secundário (opcional)">
+                    <TextInput
+                      inputMode="tel"
+                      value={form.telefone2}
+                      onChange={(e) => setForm({ ...form, telefone2: e.target.value })}
                     />
                   </Field>
                   <Field label="Ponto de embarque padrão (opcional)">
