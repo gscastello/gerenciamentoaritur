@@ -17,6 +17,7 @@ export function useNotifications({ enabled = true } = {}) {
   const query = useSupabaseQuery(() => notificationsService.list(), [enabled], { enabled });
   const marcar = useAsyncAction(notificationsService.markRead);
   const marcarTodas = useAsyncAction(notificationsService.markAllRead);
+  const limpar = useAsyncAction(notificationsService.clearAll);
 
   useRealtimeTable(
     ["app_notifications", "app_notification_reads"],
@@ -40,6 +41,11 @@ export function useNotifications({ enabled = true } = {}) {
     query.refetch();
   }, [marcarTodas, query]);
 
+  const limparTodas = useCallback(async () => {
+    await limpar.run();
+    query.refetch();
+  }, [limpar, query]);
+
   return {
     notificacoes: lista,
     naoLidas,
@@ -47,6 +53,7 @@ export function useNotifications({ enabled = true } = {}) {
     error: query.error,
     marcarLida,
     marcarTodasLidas,
+    limparTodas,
     recarregar: query.refetch,
   };
 }

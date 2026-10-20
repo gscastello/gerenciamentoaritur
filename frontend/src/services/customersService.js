@@ -45,7 +45,7 @@ export const customersService = {
     let query = supabase
       .from("v_customers_stats")
       .select(
-        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao",
+        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2",
         { count: "exact" },
       )
       .order("total_gasto", { ascending: false })
@@ -145,12 +145,13 @@ export const customersService = {
    * `null` limpa a preferência; campos omitidos não mudam. */
   async updateProfile(
     customerId,
-    { name, phone, defaultRoutePointCode, defaultPaymentMethod } = {},
+    { name, phone, phoneSecondary, defaultRoutePointCode, defaultPaymentMethod } = {},
   ) {
     const actor = await getCurrentUserId();
     const patch = { updated_by: actor };
     if (name !== undefined) patch.name = name;
     if (phone !== undefined) patch.phone = phone;
+    if (phoneSecondary !== undefined) patch.phone_secondary = phoneSecondary;
     if (defaultRoutePointCode !== undefined) patch.default_route_point_code = defaultRoutePointCode;
     if (defaultPaymentMethod !== undefined) patch.default_payment_method = defaultPaymentMethod;
     return handle(

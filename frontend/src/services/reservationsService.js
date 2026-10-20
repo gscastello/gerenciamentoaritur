@@ -117,6 +117,7 @@ export const reservationsService = {
       p_created_by: actor,
       p_dropoff_area: payload.dropoffArea ?? null,
       p_dropoff_detail: payload.dropoffDetail ?? null,
+      p_customer_phone_secondary: payload.customerPhoneSecondary ?? null,
     });
     if (error) {
       throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });

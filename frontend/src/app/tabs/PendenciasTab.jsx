@@ -11,6 +11,20 @@ import { C, Card, ErrorBanner, Header, TextInput, digitos, tempoRelativo } from 
 export default function PendenciasTab({ pend }) {
   const [novo, setNovo] = useState({ subject: "", detail: "", phone: "" });
   const [erro, setErro] = useState("");
+  const limparTodas = async () => {
+    if (
+      !window.confirm(
+        `Marcar as ${pend.pendencias.length} pendências abertas como resolvidas? Elas continuam no histórico.`,
+      )
+    )
+      return;
+    setErro("");
+    try {
+      await pend.resolverTodas();
+    } catch (e) {
+      setErro(mensagemAmigavel(e, "Não foi possível limpar as pendências."));
+    }
+  };
   const abrir = async () => {
     if (!novo.subject.trim()) return;
     setErro("");
@@ -96,6 +110,18 @@ export default function PendenciasTab({ pend }) {
               Nenhuma pendência aberta.
             </div>
           </Card>
+        )}
+        {pend.pendencias.length > 1 && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={limparTodas}
+              className="btn-press text-xs px-3 py-1.5 rounded-lg font-semibold"
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            >
+              Limpar todas ({pend.pendencias.length})
+            </button>
+          </div>
         )}
         {pend.pendencias.map((p) => {
           const tel = digitos(p.phone);

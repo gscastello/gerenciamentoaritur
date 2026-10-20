@@ -76,6 +76,7 @@ import {
   todayStr,
   useBairros,
   useDeepLinkData,
+  useDropoff,
 } from "../tabShared.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
@@ -768,19 +769,26 @@ function QuickActions({ r, onStatus, onEditar }) {
 }
 function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
-  const soNome = pontoSoNome(r);
-  // Ponto fixo: o título da seção já diz onde embarca — só nome (+ detalhe
-  // que o passageiro informou). Demais pontos: endereço/bairro em 1º lugar.
-  const endereco = soNome
+  // O endereço é o que o motorista precisa: vem em destaque e o nome em
+  // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
+  // repetem o nome do ponto — o título da seção já diz; só aparece o detalhe
+  // que o passageiro informou. Sem detalhe, o nome passa a ser a linha
+  // principal (é só o que há para mostrar).
+  const endereco = pontoSoNome(r)
     ? detalheDoPonto(r)
     : enderecoEmbarque(r, trips) || "endereço não informado";
   const tel = digitos(r.telefone);
+  const tel2 = digitos(r.telefone2);
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
-  const nome = (
+  const nome = (principal) => (
     <span
-      className="text-[16px] font-bold leading-snug"
-      style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
+      className={principal ? "text-[15px] font-bold leading-snug" : "text-[13px] font-semibold"}
+      style={{
+        color: principal ? corTexto : marcado ? C.inkFaint : C.inkSoft,
+        textDecoration: riscado,
+        overflowWrap: "anywhere",
+      }}
     >
       {r.nome || "—"}
     </span>
@@ -792,6 +800,16 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
     >
       {r.quantidade}P
     </span>
+  );
+  const chipTel = (numero, digitosTel, rotulo) => (
+    <a
+      href={`tel:${digitosTel}`}
+      className="btn-press inline-flex items-center gap-1.5 text-[13px] font-medium px-2.5 py-1 rounded-md"
+      style={{ background: C.panel2, color: C.ink }}
+    >
+      <PhoneCall size={13} /> {rotulo ? <span style={{ color: C.inkFaint }}>{rotulo}</span> : null}
+      {numero}
+    </a>
   );
   return (
     <div className="row-hover rounded-md px-2 py-2" style={{ background: C.panel }}>
@@ -809,36 +827,24 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
           {r.status === "embarcado" && <Check size={11} color={C.panel} strokeWidth={3} />}
         </button>
         <div className="min-w-0 flex-1">
-          {soNome ? (
+          {endereco ? (
             <>
-              {/* ponto fixo: só o nome do passageiro, em destaque */}
-              <div className="flex items-baseline gap-2">
-                {quantidade}
-                {nome}
-              </div>
-              {endereco && (
-                <div
-                  className="text-[12px] mt-0.5"
-                  style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
-                >
-                  {endereco}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              {/* endereço/bairro é o que o motorista precisa; o nome vem logo abaixo, em destaque */}
               <div className="flex items-baseline gap-2">
                 {quantidade}
                 <span
-                  className="text-[14px] font-semibold leading-snug"
-                  style={{ color: C.inkSoft, textDecoration: riscado, overflowWrap: "anywhere" }}
+                  className="text-[15px] font-bold leading-snug"
+                  style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
                 >
                   {endereco}
                 </span>
               </div>
-              <div className="mt-0.5">{nome}</div>
+              <div className="mt-0.5">{nome(false)}</div>
             </>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              {quantidade}
+              {nome(true)}
+            </div>
           )}
           {(r.desembarque || r.pagamento === "pix") && (
             <div
@@ -850,14 +856,11 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
               {r.pagamento === "pix" ? "Pix" : ""}
             </div>
           )}
-          {tel && (
-            <a
-              href={`tel:${tel}`}
-              className="btn-press inline-flex items-center gap-1.5 mt-1.5 text-[13px] font-medium px-2.5 py-1 rounded-md"
-              style={{ background: C.panel2, color: C.ink }}
-            >
-              <PhoneCall size={13} /> {r.telefone}
-            </a>
+          {(tel || tel2) && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {tel && chipTel(r.telefone, tel)}
+              {tel2 && chipTel(r.telefone2, tel2, "2º")}
+            </div>
           )}
           <div
             className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap"
@@ -1173,6 +1176,12 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
   const [f, setF] = useState({ ...reserva, anotacao: anotacaoBase(reserva) });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const dropoff = useDropoff();
+  const areaExigeRevisao =
+    !!f.desembarqueArea &&
+    f.desembarqueArea !== reserva.desembarqueArea &&
+    reserva.status === "confirmada" &&
+    dropoff.exigeRevisao(f.direcao || "ida", f.desembarqueArea);
   const viagem = trips[f.direcao] || trips.ida;
   const ponto = viagem.pontos.find((p) => p.id === f.pontoId);
   const campoDetalhe = ponto?.campo; // 'bairro' | 'localExato' | 'localOutro' | undefined
@@ -1181,6 +1190,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     const problema = primeiroErro([
       validarNome(f.nome),
       validarTelefone(f.telefone),
+      f.telefone2?.trim() ? validarTelefone(f.telefone2) : null,
       validarData(f.data, {
         min: reserva.data && reserva.data < todayStr() ? reserva.data : todayStr(),
       }),
@@ -1204,6 +1214,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
       if ((atual ?? "") !== (orig ?? "")) details[col] = atual || null;
     };
     set("dropoff_location", f.desembarque, reserva.desembarque);
+    set("dropoff_area", f.desembarqueArea, reserva.desembarqueArea);
     set("payment_method", f.pagamento, reserva.pagamento);
     if (campoDetalhe === "bairro") set("pickup_neighborhood", f.bairro, reserva.bairro);
     // Anotação reescrita à mão (issue: editar endereço escrevendo manualmente)
@@ -1221,6 +1232,10 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
     if ((f.nome || "") !== (reserva.nome || "")) contatoFields.name = f.nome || null;
     if ((f.telefone || "") !== (reserva.telefone || ""))
       contatoFields.phone = f.telefone ? validarTelefone(f.telefone).valor : null;
+    if ((f.telefone2 || "") !== (reserva.telefone2 || ""))
+      contatoFields.phone_secondary = f.telefone2?.trim()
+        ? validarTelefone(f.telefone2).valor
+        : null;
     const contato =
       reserva.customer_id && Object.keys(contatoFields).length > 0
         ? { customerId: reserva.customer_id, fields: contatoFields }
@@ -1294,12 +1309,26 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             />
           </Field>
         </div>
+        <div className="mb-2">
+          <Field label="Telefone secundário (opcional)">
+            <TextInput
+              inputMode="tel"
+              value={f.telefone2 || ""}
+              onChange={(e) => setF({ ...f, telefone2: e.target.value })}
+            />
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Field label="Direção">
             <Select
               value={f.direcao || "ida"}
               onChange={(e) =>
-                setF({ ...f, direcao: e.target.value, pontoId: trips[e.target.value].pontos[0].id })
+                setF({
+                  ...f,
+                  direcao: e.target.value,
+                  pontoId: trips[e.target.value].pontos[0].id,
+                  desembarqueArea: "",
+                })
               }
             >
               <option value="ida">Ida</option>
@@ -1355,6 +1384,27 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
               placeholder="Escreva como preferir — ex.: rua tal, perto da padaria, portão azul"
             />
           </Field>
+        </div>
+        <div className="mt-2">
+          <Field label="Cidade do desembarque">
+            <Select
+              value={f.desembarqueArea || ""}
+              onChange={(e) => setF({ ...f, desembarqueArea: e.target.value })}
+            >
+              <option value="">—</option>
+              {dropoff.porDirecao(f.direcao || "ida").map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {areaExigeRevisao && (
+            <div className="text-[11px] mt-1" style={{ color: C.warn }}>
+              Esta cidade exige revisão do dono — a reserva continua confirmada; confira antes da
+              viagem.
+            </div>
+          )}
         </div>
         <div className="mt-2">
           <Field label="Local de desembarque">
@@ -1447,12 +1497,19 @@ export function NovaReservaModal({
     pagamento: "dinheiro",
     valorManual: "",
     desembarque: "",
+    desembarqueArea: "",
+    telefone2: "",
     comoPendente: false,
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [ofereceEspera, setOfereceEspera] = useState(false);
   const bairros = useBairros();
+  const dropoff = useDropoff();
+  // Cidade fora de São Luís/Cantanhede/Pirapemas: a reserva nasce pendente
+  // para o dono revisar antes de ocupar vaga (issue #192).
+  const areaExigeRevisao =
+    !!f.desembarqueArea && dropoff.exigeRevisao(f.direcao, f.desembarqueArea);
 
   const viagem = trips[f.direcao] || trips.ida;
   const ponto = viagem.pontos.find((p) => p.id === f.pontoId);
@@ -1470,32 +1527,50 @@ export function NovaReservaModal({
     (campoDetalhe !== "bairro" || f.bairro.trim());
 
   const trocarDirecao = (dir) =>
-    setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir), bairro: "", anotacao: "" }));
+    setF((s) => ({
+      ...s,
+      direcao: dir,
+      pontoId: primeiroPonto(dir),
+      bairro: "",
+      anotacao: "",
+      desembarqueArea: "",
+    }));
 
-  const montarPayload = (status) => ({
-    tripDate: f.data,
-    direction: f.direcao,
-    customerName: f.nome.trim(),
-    customerPhone: validarTelefone(f.telefone).valor,
-    routePointCode: f.pontoId || null,
-    quantity: qtd,
-    unitPrice: valorUnit,
-    paymentMethod: f.pagamento,
-    pickupNeighborhood: campoDetalhe === "bairro" ? f.bairro.trim() || null : null,
-    pickupDetail: f.anotacao.trim() || null,
-    street: null,
-    referencePoint: null,
-    dropoffLocation: f.desembarque.trim() || null,
-    status,
-    pendingReason: status === "pendente" ? "Agendamento manual — aguardando confirmação." : null,
-    extraData: { origem: "agendamento_manual" },
-  });
+  const montarPayload = (statusPedido) => {
+    const revisar = areaExigeRevisao && statusPedido === "confirmada";
+    const status = revisar ? "pendente" : statusPedido;
+    return {
+      tripDate: f.data,
+      direction: f.direcao,
+      customerName: f.nome.trim(),
+      customerPhone: validarTelefone(f.telefone).valor,
+      customerPhoneSecondary: f.telefone2.trim() ? validarTelefone(f.telefone2).valor : null,
+      routePointCode: f.pontoId || null,
+      quantity: qtd,
+      unitPrice: valorUnit,
+      paymentMethod: f.pagamento,
+      pickupNeighborhood: campoDetalhe === "bairro" ? f.bairro.trim() || null : null,
+      pickupDetail: f.anotacao.trim() || null,
+      street: null,
+      referencePoint: null,
+      dropoffLocation: f.desembarque.trim() || null,
+      dropoffArea: f.desembarqueArea || null,
+      status,
+      pendingReason: revisar
+        ? `Desembarque em ${dropoff.rotulo(f.direcao, f.desembarqueArea)} — aguardando revisão do dono.`
+        : status === "pendente"
+          ? "Agendamento manual — aguardando confirmação."
+          : null,
+      extraData: { origem: "agendamento_manual" },
+    };
+  };
 
   const criar = async (status) => {
     setErro("");
     const problema = primeiroErro([
       validarNome(f.nome),
       validarTelefone(f.telefone),
+      f.telefone2.trim() ? validarTelefone(f.telefone2) : null,
       validarData(f.data, { min: todayStr() }),
       validarQuantidade(qtd, { min: 1, max: capacidade }),
       validarValor(valorUnit, { min: 0 }),
@@ -1568,6 +1643,16 @@ export function NovaReservaModal({
               value={f.telefone}
               inputMode="tel"
               onChange={(e) => setF({ ...f, telefone: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="mb-2">
+          <Field label="Telefone secundário (opcional)">
+            <TextInput
+              value={f.telefone2}
+              inputMode="tel"
+              onChange={(e) => setF({ ...f, telefone2: e.target.value })}
             />
           </Field>
         </div>
@@ -1646,6 +1731,27 @@ export function NovaReservaModal({
               placeholder="Escreva como preferir — ex.: rua tal, perto da padaria, portão azul"
             />
           </Field>
+        </div>
+
+        <div className="mb-2">
+          <Field label="Cidade do desembarque (opcional)">
+            <Select
+              value={f.desembarqueArea}
+              onChange={(e) => setF({ ...f, desembarqueArea: e.target.value })}
+            >
+              <option value="">—</option>
+              {dropoff.porDirecao(f.direcao).map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {areaExigeRevisao && (
+            <div className="text-[11px] mt-1" style={{ color: C.warn }}>
+              Cidade fora da área padrão: a reserva fica pendente até você revisar e confirmar.
+            </div>
+          )}
         </div>
 
         <div className="mb-2">

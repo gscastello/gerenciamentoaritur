@@ -1,7 +1,7 @@
 // src/hooks/usePendencias.js
 //
 // Fila de pendências de atendimento — carrega, atualiza sozinha via
-// Realtime e expõe a contagem + ações (abrir, resolver).
+// Realtime e expõe a contagem + ações (abrir, resolver, resolver todas).
 
 import { useCallback } from "react";
 import { pendenciasService } from "../services/pendenciasService";
@@ -13,6 +13,7 @@ export function usePendencias({ enabled = true } = {}) {
   const query = useSupabaseQuery(() => pendenciasService.list(), [enabled], { enabled });
   const abrirA = useAsyncAction(pendenciasService.abrir);
   const resolverA = useAsyncAction(pendenciasService.resolver);
+  const resolverTodasA = useAsyncAction(pendenciasService.resolverTodas);
 
   useRealtimeTable("support_tickets", () => query.refetch(), { enabled });
 
@@ -33,6 +34,11 @@ export function usePendencias({ enabled = true } = {}) {
     [resolverA, query],
   );
 
+  const resolverTodas = useCallback(async () => {
+    await resolverTodasA.run();
+    query.refetch();
+  }, [resolverTodasA, query]);
+
   return {
     pendencias: lista,
     total: lista.length,
@@ -40,6 +46,7 @@ export function usePendencias({ enabled = true } = {}) {
     error: query.error,
     abrir,
     resolver,
+    resolverTodas,
     recarregar: query.refetch,
   };
 }

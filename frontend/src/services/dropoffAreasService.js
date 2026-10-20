@@ -21,7 +21,7 @@ export const dropoffAreasService = {
     return handle(
       supabase
         .from("dropoff_areas")
-        .select("id, direction, code, label, detail_label, detail_placeholder, detail_required, sort_order, active")
+        .select("id, direction, code, label, detail_label, detail_placeholder, detail_required, sort_order, active, needs_review")
         .is("deleted_at", null)
         .order("direction")
         .order("sort_order"),
@@ -29,7 +29,16 @@ export const dropoffAreasService = {
     );
   },
 
-  async upsert({ direction, code, label, detailLabel, detailPlaceholder, detailRequired, sortOrder }) {
+  async upsert({
+    direction,
+    code,
+    label,
+    detailLabel,
+    detailPlaceholder,
+    detailRequired,
+    sortOrder,
+    needsReview,
+  }) {
     const { data, error } = await supabase.rpc("rpc_upsert_dropoff_area", {
       p_direction: direction,
       p_code: code ?? null,
@@ -38,6 +47,7 @@ export const dropoffAreasService = {
       p_detail_placeholder: detailPlaceholder ?? null,
       p_detail_required: detailRequired ?? null,
       p_sort_order: sortOrder ?? null,
+      p_needs_review: needsReview ?? null,
     });
     if (error) throw new ServiceError(`upsert: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
     if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar o local.", { retryable: false });
