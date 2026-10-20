@@ -734,27 +734,14 @@ export default function AgendaTab({
     </div>
   );
 }
-// Cor de destaque de cada tópico (ponto/horário) da Agenda — o app é em
-// tons de cinza de propósito, então a cor fica só aqui, pra o motorista
-// achar o ponto de relance (pedido do dono, issue #185).
-const COR_DO_PONTO = {
-  busca: "#F59E0B",
-  rodoviaria: "#38BDF8",
-  retorno: "#A78BFA",
-  postocarone: "#34D399",
-  br: "#F472B6",
-  outro: "#9CA0A8",
-  cantanhede: "#38BDF8",
-  pirapemas: "#34D399",
-};
-const corDoPonto = (id) => COR_DO_PONTO[id] ?? C.inkSoft;
 // Ações da linha do passageiro na Agenda. Enxuto e com rótulo (o motorista
 // no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
 // comprovante e localização saíram — pagamento/comprovante agora ficam
 // dentro de "Editar reserva".
 function QuickActions({ r, onStatus, onEditar }) {
   const tel = digitos(r.telefone);
-  const classeAcao = "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
+  const classeAcao =
+    "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
   const estiloAcao = { background: C.panel2, color: C.inkSoft };
   const btn = (Icon, label, onClick) => (
     <button type="button" onClick={onClick} className={classeAcao} style={estiloAcao}>
@@ -764,7 +751,13 @@ function QuickActions({ r, onStatus, onEditar }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {tel && (
-        <a href={`https://wa.me/55${tel}`} target="_blank" rel="noreferrer" className={classeAcao} style={estiloAcao}>
+        <a
+          href={`https://wa.me/55${tel}`}
+          target="_blank"
+          rel="noreferrer"
+          className={classeAcao}
+          style={estiloAcao}
+        >
           <MessageCircle size={13} /> <span>WhatsApp</span>
         </a>
       )}
@@ -775,10 +768,12 @@ function QuickActions({ r, onStatus, onEditar }) {
 }
 function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
-  const soNome = pontoSoNome(r.pontoId);
+  const soNome = pontoSoNome(r);
   // Ponto fixo: o título da seção já diz onde embarca — só nome (+ detalhe
   // que o passageiro informou). Demais pontos: endereço/bairro em 1º lugar.
-  const endereco = soNome ? detalheDoPonto(r) : enderecoEmbarque(r, trips) || "endereço não informado";
+  const endereco = soNome
+    ? detalheDoPonto(r)
+    : enderecoEmbarque(r, trips) || "endereço não informado";
   const tel = digitos(r.telefone);
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
@@ -792,8 +787,8 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   );
   const quantidade = (
     <span
-      className="text-[14px] font-bold shrink-0"
-      style={{ fontFamily: "'JetBrains Mono', monospace", color: marcado ? C.inkFaint : C.brand }}
+      className="text-[13px] font-bold shrink-0"
+      style={{ fontFamily: "'JetBrains Mono', monospace", color: corTexto }}
     >
       {r.quantidade}P
     </span>
@@ -822,7 +817,10 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
                 {nome}
               </div>
               {endereco && (
-                <div className="text-[12px] mt-0.5" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+                <div
+                  className="text-[12px] mt-0.5"
+                  style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+                >
                   {endereco}
                 </div>
               )}
@@ -843,7 +841,10 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
             </>
           )}
           {(r.desembarque || r.pagamento === "pix") && (
-            <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
+            <div
+              className="text-[11px] mt-0.5"
+              style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
+            >
               {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
               {r.desembarque && r.pagamento === "pix" ? " · " : ""}
               {r.pagamento === "pix" ? "Pix" : ""}
@@ -1099,13 +1100,13 @@ function ViagemOperacional({
               <div
                 className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
                 style={{
-                  background: `${corDoPonto(p.id)}1F`,
-                  borderLeft: `4px solid ${corDoPonto(p.id)}`,
+                  background: `${C.brand}1F`,
+                  borderLeft: `4px solid ${C.brand}`,
                 }}
               >
                 <span
-                  className="text-[18px] font-bold leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", color: corDoPonto(p.id) }}
+                  className="text-[12px] font-medium"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", color: C.inkSoft }}
                 >
                   {hora}
                 </span>
