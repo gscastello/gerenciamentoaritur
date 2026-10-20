@@ -18,6 +18,7 @@ import { resolverOpcao } from "./opcoes.ts";
 import { interpretMessage, type ExtractedIntent } from "./nluService.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { hojeSaoLuis } from "./dataOperacao.ts";
+import { detectarConfusao, mensagemLadoErrado, type Direcao, type Lado, type Lugar } from "./confusaoLocal.ts";
 
 type IncomingMessage = {
   from: string;
@@ -39,7 +40,7 @@ const MENU_ROWS = [
   { id: "menu_atendente", title: "Falar com atendente", description: "Sair do atendimento automático" },
 ];
 
-const RESERVATION_STEPS = ["awaiting_date", "awaiting_route_point", "awaiting_detail", "awaiting_quantity", "awaiting_dropoff", "awaiting_name", "awaiting_payment"];
+const RESERVATION_STEPS = ["awaiting_date", "awaiting_route_point", "awaiting_detail", "awaiting_quantity", "awaiting_dropoff", "awaiting_dropoff_confirm", "awaiting_name", "awaiting_payment"];
 
 export async function handleIncomingMessage(msg: IncomingMessage) {
   const conversation = await whatsappService.resolveConversation(msg.from);
@@ -87,6 +88,10 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
     const text = (msg.text ?? "").trim();
     if (!text) return;
     if (text.toLowerCase() === "menu") { await route(conversation, state, "menu", msg); return; }
+
+    // Passageiro confundiu embarque com desembarque (ex.: responde "retorno" quando
+    // perguntamos de onde sai)? Explica e repete a pergunta em vez de gravar errado.
+    if (await tratarConfusaoDeLado(conversation, state, text, to)) return;
 
     const validRoutePoints = await whatsappService.listRoutePoints(state.direction ?? "ida");
     const validRoutePointsBoth = state.direction
@@ -262,6 +267,17 @@ async function advanceReservationFlow(conversation: any, state: any, to: string)
     return;
   }
 
+  if (!state.dropoffLocation && state.dropoffSugerido) {
+    // O passageiro citou um local de desembarque quando perguntamos o embarque:
+    // confirma antes de assumir que é lá que ele vai ficar.
+    await whatsappService.updateConversationState(conversation.id, { ...state, step: "awaiting_dropoff_confirm" });
+    await whatsappService.reply(conversation.id, to,
+      () => whatsappClient.sendButtons(to, `Você mencionou *${state.dropoffSugerido}*. É lá que você vai ficar (desembarque)?`,
+        [{ id: "drop_sim", title: "Sim" }, { id: "drop_nao", title: "Não" }]),
+      { type: "interactive", content: { dropoffSugerido: state.dropoffSugerido } });
+    return;
+  }
+
   if (!state.dropoffLocation) {
     await whatsappService.updateConversationState(conversation.id, { ...state, step: "awaiting_dropoff" });
     await sendText(conversation.id, to, "Onde você vai ficar (local de desembarque)?");
@@ -404,6 +420,7 @@ async function route(conversation: any, state: any, input: string, msg: Incoming
   if (step === "awaiting_detail") return handleDetailInput(conversation, state, input, to);
   if (step === "awaiting_quantity") return handleQuantityInput(conversation, state, input, to);
   if (step === "awaiting_dropoff") return handleDropoffInput(conversation, state, input, to);
+  if (step === "awaiting_dropoff_confirm") return handleDropoffConfirm(conversation, state, input, to);
   if (step === "awaiting_name") return handleNameInput(conversation, state, input, to);
   if (step === "awaiting_payment") return handlePaymentChoice(conversation, state, input, to);
   if (step === "awaiting_cancel_choice") return handleCancelChoice(conversation, state, input, to);
@@ -516,6 +533,77 @@ async function handleQuantityInput(conversation: any, state: any, input: string,
   const next = { ...state, quantity: qty };
   await whatsappService.updateConversationState(conversation.id, next);
   await advanceReservationFlow(conversation, next, to);
+}
+
+/** O passageiro confirma (ou não) o desembarque que ele citou quando era pra dizer o embarque. */
+async function handleDropoffConfirm(conversation: any, state: any, input: string, to: string) {
+  let next: any;
+  if (input === "drop_sim") next = { ...state, dropoffLocation: state.dropoffSugerido, dropoffSugerido: undefined };
+  else if (input === "drop_nao") next = { ...state, dropoffSugerido: undefined };
+  else {
+    await sendText(conversation.id, to, "Responda *sim* ou *não*: é lá que você vai ficar (desembarque)?");
+    return;
+  }
+  await whatsappService.updateConversationState(conversation.id, next);
+  await advanceReservationFlow(conversation, next, to);
+}
+
+const LADO_DO_PASSO: Record<string, Lado> = {
+  awaiting_route_point: "embarque",
+  awaiting_detail: "embarque",
+  awaiting_dropoff: "desembarque",
+};
+
+/**
+ * Detecta quando a resposta é um local do LADO ERRADO da viagem (ver
+ * confusaoLocal.ts): "retorno" como local de embarque na Volta, "Pirapemas"
+ * como desembarque na Volta, "Cantanhede" como embarque na Ida… Explica a
+ * troca e repete a pergunta. Devolve true se tratou a mensagem.
+ */
+async function tratarConfusaoDeLado(conversation: any, state: any, text: string, to: string): Promise<boolean> {
+  const lado = LADO_DO_PASSO[state.step ?? ""];
+  const direcao = state.direction as Direcao | undefined;
+  if (!lado || !direcao) return false;
+
+  const [pontos, areas] = await Promise.all([
+    whatsappService.listRoutePoints(direcao),
+    whatsappService.listDropoffAreas(direcao),
+  ]);
+  const embarque: Lugar[] = (pontos ?? []).map((p: any) => ({ codigo: p.code, nome: p.name }));
+  const desembarque: Lugar[] = areas.map((a: any) => ({ codigo: a.code, nome: a.label }));
+  const confusao = detectarConfusao({
+    texto: text,
+    proprios: lado === "embarque" ? embarque : desembarque,
+    outros: lado === "embarque" ? desembarque : embarque,
+  });
+  if (!confusao) return false;
+
+  await whatsappService.logMessage(conversation.id, "inbound", {
+    type: "text",
+    content: { confusao: { lado, lugar: confusao.lugar.codigo, direcao } },
+    intent: "confusao_embarque_desembarque",
+  });
+
+  const pergunta =
+    state.step === "awaiting_route_point"
+      ? "Veja a lista abaixo e escolha o ponto de embarque. 👇"
+      : state.step === "awaiting_detail"
+        ? state.routePointCode === "busca"
+          ? "Qual o seu bairro?"
+          : "Qual o endereço (rua e ponto de referência) onde vamos te buscar?"
+        : `Onde você vai ficar? Ex.: ${desembarque.map((l) => l.nome).join(", ")}.`;
+
+  // Se citou um local de desembarque ao responder o embarque, guarda como
+  // sugestão pro desembarque — será confirmado quando chegar nessa pergunta.
+  const next = lado === "embarque" && !state.dropoffLocation
+    ? { ...state, dropoffSugerido: confusao.lugar.nome }
+    : state;
+  if (next !== state) await whatsappService.updateConversationState(conversation.id, next);
+
+  await sendText(conversation.id, to, mensagemLadoErrado({ lado, lugar: confusao.lugar, direcao, pergunta }));
+  // no passo da lista de pontos, reenvia a lista logo depois da explicação
+  if (state.step === "awaiting_route_point") await advanceReservationFlow(conversation, next, to);
+  return true;
 }
 
 async function handleDropoffInput(conversation: any, state: any, input: string, to: string) {
