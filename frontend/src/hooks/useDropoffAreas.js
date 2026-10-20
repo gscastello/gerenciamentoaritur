@@ -38,6 +38,8 @@ export function useDropoffAreas() {
         };
       },
       obrigatorio: (dir, code) => !!idx[`${dir}:${code}`]?.detail_required,
+      // cidade fora de São Luís/Cantanhede/Pirapemas: reserva nasce pendente
+      exigeRevisao: (dir, code) => !!idx[`${dir}:${code}`]?.needs_review,
     };
   }, [todas]);
 

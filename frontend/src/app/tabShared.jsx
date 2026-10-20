@@ -407,6 +407,7 @@ const DROPOFF_FALLBACK = (() => {
       req: !!DETALHE_DESEMBARQUE[code]?.req,
     }),
     obrigatorio: (_dir, code) => detalheDesembarqueObrigatorio(code),
+    exigeRevisao: () => false,
     loading: false,
     error: null,
     salvando: false,
@@ -432,9 +433,18 @@ const useNotificacoesCtx = () => useContext(NotificacoesContext);
 
 // Balde da reserva: usa a classificação manual (dropoff_area) se existir;
 // senão chuta pelo texto livre que o cliente deu no agendamento.
+const CIDADES_DE_REVISAO = [
+  ["campestre", "campestre"],
+  ["matoes", "matoes"],
+  ["miranda", "miranda"],
+  ["bacabeira", "bacabeira"],
+  ["santa rita", "santa_rita"],
+];
 export function inferirBaldeDesembarque(r) {
   if (r.desembarqueArea) return r.desembarqueArea;
   const t = normalizar(`${r.desembarque || ""} ${r.referencia || ""} ${r.rua || ""}`);
+  const cidade = CIDADES_DE_REVISAO.find(([chave]) => t.includes(chave));
+  if (cidade) return cidade[1];
   if (r.direcao === "ida") {
     if (t.includes("cantanhede")) return "cantanhede";
     if (t.includes("pirapemas")) return "pirapemas";
@@ -556,7 +566,7 @@ export function SinoNotificacoes() {
   const ctx = useNotificacoesCtx();
   const [aberto, setAberto] = useState(false);
   if (!ctx) return null;
-  const { notificacoes, naoLidas, marcarLida, marcarTodasLidas, loading } = ctx;
+  const { notificacoes, naoLidas, marcarLida, marcarTodasLidas, limparTodas, loading } = ctx;
   return (
     <div className="relative">
       <button
@@ -595,16 +605,28 @@ export function SinoNotificacoes() {
               <span className="text-sm font-semibold" style={{ color: C.ink }}>
                 Notificações
               </span>
-              {naoLidas > 0 && (
-                <button
-                  type="button"
-                  onClick={() => marcarTodasLidas()}
-                  className="btn-press text-[11px] px-2 py-1 rounded-md"
-                  style={{ background: C.panel2, color: C.inkSoft }}
-                >
-                  Marcar todas como lidas
-                </button>
-              )}
+              <span className="flex items-center gap-1.5">
+                {naoLidas > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => marcarTodasLidas()}
+                    className="btn-press text-[11px] px-2 py-1 rounded-md"
+                    style={{ background: C.panel2, color: C.inkSoft }}
+                  >
+                    Marcar todas como lidas
+                  </button>
+                )}
+                {notificacoes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => limparTodas()}
+                    className="btn-press text-[11px] px-2 py-1 rounded-md font-semibold"
+                    style={{ background: C.panel2, color: C.ink }}
+                  >
+                    Limpar
+                  </button>
+                )}
+              </span>
             </div>
             {loading && notificacoes.length === 0 && (
               <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>

@@ -42,7 +42,7 @@ test("Passageiros: edita nome, telefone e preferências fixas do cliente", async
 
   await expect(page.getByText("Editar cadastro")).toBeVisible();
   await page.getByLabel("Nome").fill("Maria Silva");
-  await page.getByLabel("Telefone").fill("98999997777");
+  await page.getByLabel("Telefone", { exact: true }).fill("98999997777");
   await page
     .getByLabel("Ponto de embarque padrão (opcional)")
     .selectOption({ label: "Rodoviária" });
@@ -68,7 +68,7 @@ test("Passageiros: telefone inválido barra o salvamento do cadastro", async ({ 
   await aba.first().click();
 
   await page.getByRole("button", { name: "Editar cadastro de Maria Receptora" }).click();
-  await page.getByLabel("Telefone").fill("123");
+  await page.getByLabel("Telefone", { exact: true }).fill("123");
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await expect(page.getByText(/DDD/i)).toBeVisible();

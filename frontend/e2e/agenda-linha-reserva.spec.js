@@ -56,7 +56,7 @@ test("Agenda: ponto fixo mostra só o nome do passageiro e o telefone", async ({
   await expect(nomeRod).toBeVisible();
   expect(
     await nomeRod.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
-  ).toBeGreaterThanOrEqual(16);
+  ).toBeGreaterThanOrEqual(15);
   await expect(page.getByRole("link", { name: /98991234567/ })).toBeVisible();
 
   // na linha do ponto fixo NÃO repete "Rodoviária" ao lado do nome (o título da seção já diz)

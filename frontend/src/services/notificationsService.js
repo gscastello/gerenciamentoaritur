@@ -20,6 +20,7 @@ export const notificationsService = {
     const { data, error } = await supabase
       .from("v_app_notifications")
       .select("id, kind, title, body, reservation_id, trip_date, direction, meta, created_at, lida")
+      .eq("limpada", false)
       .order("created_at", { ascending: false })
       .limit(LIMITE);
     if (error) {
@@ -59,6 +60,22 @@ export const notificationsService = {
     }
     if (data && data.success === false) {
       throw new ServiceError(data.message || "Não foi possível marcar todas como lidas.", {
+        retryable: false,
+      });
+    }
+  },
+
+  /** "Limpar": some do sino só para o usuário atual (o histórico fica no banco). */
+  async clearAll() {
+    const { data, error } = await supabase.rpc("rpc_clear_notifications");
+    if (error) {
+      throw new ServiceError(`clearAll: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    }
+    if (data && data.success === false) {
+      throw new ServiceError(data.message || "Não foi possível limpar as notificações.", {
         retryable: false,
       });
     }

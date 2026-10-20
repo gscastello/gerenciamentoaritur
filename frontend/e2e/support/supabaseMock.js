@@ -216,7 +216,15 @@ export async function mockSupabase(page, opts = {}) {
   // stateful pra testar criar/remover veículo, editar manutenção etc.
   let vehiclesRows = (
     opts.vehicles ?? [
-      { id: "veh-1", name: "Ônibus", plate: "ABC-1234", type: "onibus", capacity: 31, is_default: true, active: true },
+      {
+        id: "veh-1",
+        name: "Ônibus",
+        plate: "ABC-1234",
+        type: "onibus",
+        capacity: 31,
+        is_default: true,
+        active: true,
+      },
     ]
   ).map((v) => ({ ...v }));
   let vehicleSeq = 0;
@@ -243,6 +251,7 @@ export async function mockSupabase(page, opts = {}) {
   const buscaOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
+  const limpadas = new Set();
   // pendências de atendimento (issue #118) — stateful
   let tickets = pendencias.map((p) => ({ ...p }));
   let ticketSeq = 0;
@@ -386,10 +395,14 @@ export async function mockSupabase(page, opts = {}) {
       if (fn === "rpc_soft_delete_vehicle") {
         const b = req.postDataJSON?.() ?? {};
         const alvo = vehiclesRows.find((v) => v.id === b.p_id);
-        if (!alvo) return route.fulfill(json({ success: false, message: "Veículo não encontrado." }));
+        if (!alvo)
+          return route.fulfill(json({ success: false, message: "Veículo não encontrado." }));
         if (alvo.is_default) {
           return route.fulfill(
-            json({ success: false, message: "Defina outro veículo como padrão antes de remover este." }),
+            json({
+              success: false,
+              message: "Defina outro veículo como padrão antes de remover este.",
+            }),
           );
         }
         vehiclesRows = vehiclesRows.filter((v) => v.id !== b.p_id);
@@ -410,6 +423,14 @@ export async function mockSupabase(page, opts = {}) {
       }
       if (fn === "rpc_mark_all_notifications_read") {
         for (const n of notifications) lidas.add(n.id);
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_clear_notifications") {
+        for (const n of notifications) limpadas.add(n.id);
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_resolve_all_support_tickets") {
+        tickets = [];
         return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_open_support_ticket") {
@@ -596,13 +617,36 @@ export async function mockSupabase(page, opts = {}) {
           detail_required: true,
           sort_order: 40,
           active: true,
+          needs_review: false,
+        },
+        {
+          id: "da-2",
+          direction: "ida",
+          code: "campestre",
+          label: "Campestre",
+          detail_required: false,
+          sort_order: 50,
+          active: true,
+          needs_review: true,
+        },
+        {
+          id: "da-3",
+          direction: "volta",
+          code: "retorno",
+          label: "Retorno",
+          detail_required: false,
+          sort_order: 20,
+          active: true,
+          needs_review: false,
         },
       ];
     else if (table === "customers") rows = [];
     else if (table === "financial_entries") rows = opts.financialEntries ?? [];
     else if (table === "v_contas_a_receber") rows = [];
     else if (table === "v_app_notifications")
-      rows = notifications.map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
+      rows = notifications
+        .filter((n) => !limpadas.has(n.id))
+        .map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
     else if (table === "app_error_log" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");

@@ -41,7 +41,6 @@ import {
   watchSystemMotion,
 } from "../../lib/motion.js";
 import { EVENTS, emit } from "../../observability/index.js";
-import SistemaBot from "./SistemaBot.jsx";
 import {
   C,
   Card,
@@ -54,6 +53,7 @@ import {
   useBairros,
   useDropoff,
 } from "../tabShared.jsx";
+import SistemaBot from "./SistemaBot.jsx";
 
 /* ============================= 8. SISTEMA ============================= */
 const DIAG_KIND_LABEL = {
@@ -185,6 +185,7 @@ function SistemaBaldes() {
     label: "",
     detailLabel: "",
     detailRequired: false,
+    needsReview: false,
   });
   const [editId, setEditId] = useState(null);
   const [ev, setEv] = useState({});
@@ -207,6 +208,7 @@ function SistemaBaldes() {
         label: novo.label.trim(),
         detailLabel: novo.detailLabel.trim() || "Ponto de referência",
         detailRequired: novo.detailRequired,
+        needsReview: novo.needsReview,
         sortOrder: 100 + dropoff.porDirecao(novo.direction).length * 10,
       });
       setNovo({ ...novo, label: "", detailLabel: "" });
@@ -218,6 +220,7 @@ function SistemaBaldes() {
         detail_label: (ev.detail_label ?? "").trim() || "Ponto de referência",
         detail_placeholder: ev.detail_placeholder ?? "",
         detail_required: !!ev.detail_required,
+        needs_review: !!ev.needs_review,
         sort_order: Number.parseInt(ev.sort_order, 10) || 100,
       });
       setEditId(null);
@@ -254,6 +257,14 @@ function SistemaBaldes() {
             onChange={(e) => setEv({ ...ev, detail_required: e.target.checked })}
           />
         </td>
+        <td className="px-2 py-1.5 text-center">
+          <input
+            type="checkbox"
+            aria-label="Exige revisão"
+            checked={!!ev.needs_review}
+            onChange={(e) => setEv({ ...ev, needs_review: e.target.checked })}
+          />
+        </td>
         <td className="px-2 py-1.5 w-14">
           <TextInput
             type="number"
@@ -280,6 +291,7 @@ function SistemaBaldes() {
           {b.detail_label}
         </td>
         <td className="px-2 py-1.5 text-center text-xs">{b.detail_required ? "sim" : "—"}</td>
+        <td className="px-2 py-1.5 text-center text-xs">{b.needs_review ? "sim" : "—"}</td>
         <td className="px-2 py-1.5 text-xs" style={{ color: C.inkFaint }}>
           {b.sort_order}
         </td>
@@ -294,6 +306,7 @@ function SistemaBaldes() {
                   detail_label: b.detail_label,
                   detail_placeholder: b.detail_placeholder,
                   detail_required: b.detail_required,
+                  needs_review: b.needs_review,
                   sort_order: String(b.sort_order),
                 });
               }}
@@ -317,8 +330,9 @@ function SistemaBaldes() {
         <MapPin size={16} style={{ color: C.amber }} /> Locais de desembarque
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        O passo "Onde você vai ficar" da reserva e os grupos da rota do motorista. Renomeie, defina
-        se o detalhe é obrigatório e a ordem em que o ônibus alcança cada local.
+        A cidade/local de desembarque da reserva e os grupos da rota do motorista. Renomeie, defina
+        se o detalhe é obrigatório, se a reserva para ali precisa da sua revisão (fica pendente) e a
+        ordem em que o ônibus alcança cada local.
       </p>
       {erro && (
         <div
@@ -357,6 +371,14 @@ function SistemaBaldes() {
           />
           detalhe obrigatório
         </label>
+        <label className="text-xs flex items-center gap-1" style={{ color: C.inkSoft }}>
+          <input
+            type="checkbox"
+            checked={novo.needsReview}
+            onChange={(e) => setNovo({ ...novo, needsReview: e.target.checked })}
+          />
+          exige revisão
+        </label>
         <button
           type="button"
           onClick={criar}
@@ -379,6 +401,7 @@ function SistemaBaldes() {
                   <th className="px-2 py-1 font-medium">Local</th>
                   <th className="px-2 py-1 font-medium">Campo de detalhe</th>
                   <th className="px-2 py-1 font-medium">Obrig.</th>
+                  <th className="px-2 py-1 font-medium">Revisão</th>
                   <th className="px-2 py-1 font-medium">Ordem</th>
                   <th className="px-2 py-1 font-medium" aria-label="ações" />
                 </tr>
