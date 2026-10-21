@@ -81,7 +81,9 @@ test("Bloco de notas: cria, edita, fixa e apaga uma nota", async ({ page }) => {
 
 // Quem busca em casa (issue #96): chip cicla Táxi → Nós → Motorista.
 test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   await mockSupabase(page, {
     role: "admin",
     reservations: [
@@ -107,7 +109,10 @@ test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ pag
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
+  await page
+    .getByRole("button", { name: /Lista do Dia/ })
+    .first()
+    .click();
 
   const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
   await expect(chip).toHaveText(/Táxi/);
@@ -118,7 +123,9 @@ test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ pag
 });
 
 test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   await mockSupabase(page, {
     role: "admin",
     occupancy: {},
@@ -144,14 +151,19 @@ test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ pa
   });
   await page.goto("/");
   await page.getByRole?.("button");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   await expect(page.getByText(/Lista de espera\s*\(1\)/)).toBeVisible();
   await expect(page.getByText("Cliente Espera E2E")).toBeVisible();
   await expect(page.getByRole("button", { name: "Chamar (dar vaga)" })).toBeVisible();
 });
 
-test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+test("Agenda: seletor de quem busca em casa aparece e troca", async ({ page }) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   await mockSupabase(page, {
     role: "admin",
     occupancy: {},
@@ -178,16 +190,23 @@ test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
   // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
   // reserva em vez de depender do default.
   await page.locator('input[type="date"]').first().fill(hoje);
 
-  const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
-  await expect(chip).toHaveText(/Táxi/);
-  await chip.click();
-  await expect(chip).toHaveText(/Gustavo/);
+  // na Agenda o seletor mostra as 4 opções (táxi, Gustavo, Maurício, Ari)
+  const grupo = page.getByRole("group", { name: "Quem busca este passageiro" });
+  await expect(grupo.getByRole("button", { name: "Táxi" })).toHaveAttribute("aria-pressed", "true");
+  await grupo.getByRole("button", { name: "Gustavo" }).click();
+  await expect(grupo.getByRole("button", { name: "Gustavo" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
 
 // Regressão (issue #168): criar a PRIMEIRA reserva de uma janela vazia disparava
@@ -196,7 +215,9 @@ test("Agenda: chip de quem busca em casa também aparece e cicla", async ({ page
 // estado local. O caso original era o wizard de Reservar (aposentado); o
 // mecanismo é de TODA aba, então o teste usa as caixas de anotação rápida da
 // Agenda: o rascunho de um ponto tem que sobreviver à criação em outro.
-test("Agenda: criar a primeira reserva de uma janela vazia não desmonta a aba", async ({ page }) => {
+test("Agenda: criar a primeira reserva de uma janela vazia não desmonta a aba", async ({
+  page,
+}) => {
   let criou = false;
   await mockSupabase(page, {
     role: "admin",
@@ -206,7 +227,10 @@ test("Agenda: criar a primeira reserva de uma janela vazia não desmonta a aba",
     },
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
 
   const rascunho = page.getByLabel("Anotar reserva — Rodoviária");
   await rascunho.fill("rascunho que não pode sumir");

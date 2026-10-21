@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  User,
   Users,
   UtensilsCrossed,
   Wrench,
@@ -330,16 +331,23 @@ export const STATUS_META = {
 };
 export const OCUPA_VAGA = ["confirmada", "embarcado"];
 
-// Quem busca o passageiro "em casa" em São Luís (issue #96). Todos nascem
-// 'taxi' (o padrão — não precisa marcar). Só sinalizamos os que o Gustavo
-// (proprio) ou o Maurício (motorista) vão buscar. Um toque cicla
-// táxi → Gustavo → Maurício → táxi.
+// Quem busca o passageiro "em casa" em São Luís (issues #96 e #196). Todos
+// nascem 'taxi' (o padrão). O dono separa o dia entre o táxi, o Gustavo
+// (proprio), o Maurício (motorista) e o Ari — cada um com a sua cor, para
+// achar de relance quem busca quem (e repassar a lista aos taxistas).
 export const BUSCA_MODOS = {
-  taxi: { label: "Táxi", Icon: CarTaxiFront, cor: C.inkFaint, bg: C.panel2 },
-  proprio: { label: "Gustavo", Icon: Car, cor: C.ink, bg: C.panel2 },
-  motorista: { label: "Maurício", Icon: Bus, cor: C.ink, bg: C.panel2 },
+  taxi: { label: "Táxi", Icon: CarTaxiFront, cor: "#F59E0B" },
+  proprio: { label: "Gustavo", Icon: Car, cor: "#38BDF8" },
+  motorista: { label: "Maurício", Icon: Bus, cor: "#34D399" },
+  ari: { label: "Ari", Icon: User, cor: "#A78BFA" },
 };
-export const BUSCA_PROXIMO = { taxi: "proprio", proprio: "motorista", motorista: "taxi" };
+export const BUSCA_ORDEM = ["taxi", "proprio", "motorista", "ari"];
+export const BUSCA_PROXIMO = {
+  taxi: "proprio",
+  proprio: "motorista",
+  motorista: "ari",
+  ari: "taxi",
+};
 
 /* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
  * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
@@ -468,15 +476,12 @@ export function detalheDesembarque(r) {
 
 /* ============================= animation shell ============================= */
 
-// Chip de "quem busca em casa" (issue #96) — um toque cicla
-// Táxi → Nós → Motorista → Táxi. `dense` = variante compacta da Agenda.
-// Só sinaliza quem o Gustavo/Maurício buscam; táxi (o padrão) fica
-// apagado. Um toque cicla táxi → Gustavo → Maurício → táxi. Sem espera:
-// a mudança é otimista no hook.
+// Chip de "quem busca em casa" (issues #96/#196) — um toque cicla
+// Táxi → Gustavo → Maurício → Ari → Táxi, sempre na cor de quem busca.
+// `dense` = variante compacta. A mudança é otimista no hook.
 export function BuscaChip({ r, onCycle, dense = false }) {
   const modo = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
   const m = BUSCA_MODOS[modo];
-  const taxi = modo === "taxi";
   return (
     <button
       type="button"
@@ -484,16 +489,47 @@ export function BuscaChip({ r, onCycle, dense = false }) {
       className={`btn-press inline-flex items-center gap-1 rounded-full font-semibold ${
         dense ? "text-[10px] px-1.5 py-0.5" : "text-[11px] px-2 py-1"
       }`}
-      style={{
-        background: taxi ? "transparent" : C.panel2,
-        color: taxi ? C.inkFaint : C.ink,
-        border: `1px solid ${taxi ? C.borderSoft : C.border}`,
-      }}
+      style={{ background: `${m.cor}22`, color: m.cor, border: `1px solid ${m.cor}66` }}
       aria-label="Mudar quem busca este passageiro"
     >
       <m.Icon size={dense ? 11 : 13} />
-      {taxi ? "Táxi" : m.label}
+      {m.label}
     </button>
+  );
+}
+
+// Seletor direto (sem ciclar) de quem busca: as 4 opções à vista, a escolhida
+// preenchida na sua cor. Usado em cada reserva de "Buscar em casa" na Agenda.
+export function QuemBusca({ r, onSet }) {
+  const atual = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
+  return (
+    <div
+      className="flex items-center gap-1 flex-wrap"
+      role="group"
+      aria-label="Quem busca este passageiro"
+    >
+      {BUSCA_ORDEM.map((k) => {
+        const m = BUSCA_MODOS[k];
+        const ativo = k === atual;
+        return (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={ativo}
+            onClick={() => !ativo && onSet(r.id, k)}
+            className="btn-press inline-flex items-center gap-1 rounded-full text-[11px] font-semibold px-2 py-1"
+            style={{
+              background: ativo ? m.cor : "transparent",
+              color: ativo ? "#0B0B0D" : m.cor,
+              border: `1px solid ${ativo ? m.cor : `${m.cor}66`}`,
+            }}
+          >
+            <m.Icon size={11} />
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
