@@ -71,15 +71,21 @@ export const financeService = {
   },
 
   /**
-   * Soft-delete via RPC SECURITY DEFINER: um UPDATE direto de `deleted_at`
-   * é recusado pela RLS desta instância (a policy de SELECT vira WITH
-   * CHECK no UPDATE). Ver database/retrofit-soft-delete-rpc.sql.
+   * Remove (soft-delete, nunca DELETE) vários lançamentos de uma vez — inclusive
+   * os que vêm de reservas e da operação (combustível/manutenção). Via RPC
+   * SECURITY DEFINER (database/57): recalcula o fechamento dos dias passados
+   * afetados; a remoção fica na auditoria.
    */
-  async softDelete(entryId) {
-    const { data, error } = await supabase.rpc("rpc_soft_delete_financial_entry", { p_id: entryId });
-    if (error) throw new ServiceError(`softDelete: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover o lançamento.", { retryable: false });
+  async removeMany(ids) {
+    const { data, error } = await supabase.rpc("rpc_remove_financial_entries", { p_ids: ids });
+    if (error) throw new ServiceError(`removeMany: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível remover os lançamentos.", { retryable: false });
     return data;
+  },
+
+  /** Remove um lançamento (mesma RPC, lista de um). */
+  async softDelete(entryId) {
+    return this.removeMany([entryId]);
   },
 
   /** Lucro real do dia = receitas − despesas manuais − combustível − manutenção (tudo já em financial_entries). */
