@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Copy,
   Hourglass,
   Megaphone,
   MessageCircle,
@@ -25,7 +26,12 @@ import {
   X as XIcon,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { detalheDoPonto, pontoSoNome } from "../../domain/agendaLinha.js";
+import {
+  detalheDoPonto,
+  pontoSoNome,
+  textoDaListaDeBusca,
+  textoParaTaxista,
+} from "../../domain/agendaLinha.js";
 import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
 import {
   primeiroErro,
@@ -42,9 +48,9 @@ import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
 import { Presence } from "../../ui/motion/index.js";
 import {
-  BUSCA_PROXIMO,
+  BUSCA_MODOS,
+  BUSCA_ORDEM,
   BotaoAgendar,
-  BuscaChip,
   C,
   CapacidadeBar,
   Card,
@@ -55,6 +61,7 @@ import {
   MiniStat,
   OCUPA_VAGA,
   Pill,
+  QuemBusca,
   Select,
   StatusPill,
   TextArea,
@@ -222,12 +229,9 @@ export default function AgendaTab({
       setAcaoErro(mensagemAmigavel(e, "Não foi possível salvar a edição."));
     }
   };
-  // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
-  const ciclarBusca = (id, atual) =>
-    acao(
-      R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio"),
-      "Não foi possível mudar quem busca.",
-    );
+  // Quem busca em casa: táxi, Gustavo, Maurício ou Ari (issues #96/#196).
+  const definirBusca = (id, modo) =>
+    acao(R.setPickupTransport(id, modo), "Não foi possível mudar quem busca.");
   const dataFrete = (r) => r.data || r.extra?.data || null;
 
   // Nova encomenda OU agendar uma pendente (database/42): o modal decide
@@ -699,7 +703,7 @@ export default function AgendaTab({
             T={T}
             onStatus={atualizarStatus}
             onEditar={setEditando}
-            onBusca={ciclarBusca}
+            onBusca={definirBusca}
             onAnotar={criarViaAnotacao}
           />
         ))}
@@ -735,11 +739,90 @@ export default function AgendaTab({
     </div>
   );
 }
+// Copia para a área de transferência (com plano B para navegadores sem a API)
+// e mostra "Copiado" por um instante.
+async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = texto;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+function BotaoCopiar({ texto, label = "Copiar", cor, title }) {
+  const [estado, setEstado] = useState("");
+  const copiar = async () => {
+    setEstado((await copiarTexto(texto)) ? "ok" : "erro");
+    setTimeout(() => setEstado(""), 1800);
+  };
+  return (
+    <button
+      type="button"
+      onClick={copiar}
+      title={title}
+      className="btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
+      style={{
+        background: cor ? `${cor}22` : C.panel2,
+        color: estado === "erro" ? C.red : cor || C.inkSoft,
+        border: cor ? `1px solid ${cor}66` : "none",
+      }}
+    >
+      {estado === "ok" ? <Check size={13} /> : <Copy size={13} />}
+      <span>{estado === "ok" ? "Copiado" : estado === "erro" ? "Não copiou" : label}</span>
+    </button>
+  );
+}
+// Cabeçalho de "Buscar em casa": quantos cada um busca e um botão por grupo que
+// copia a lista inteira (endereço + contato, uma reserva por linha) para
+// repassar de uma vez ao taxista / ao Gustavo / ao Maurício / ao Ari.
+function GruposDeBusca({ itens, trips }) {
+  const grupos = BUSCA_ORDEM.map((k) => ({
+    k,
+    m: BUSCA_MODOS[k],
+    lista: itens.filter((r) => (BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi") === k),
+  })).filter((g) => g.lista.length > 0);
+  if (grupos.length === 0) return null;
+  return (
+    <span className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-[11px] font-medium" style={{ color: C.inkSoft }}>
+        Copiar lista:
+      </span>
+      {grupos.map(({ k, m, lista }) => (
+        <BotaoCopiar
+          key={k}
+          cor={m.cor}
+          label={`${m.label} ${lista.length}`}
+          title={`Copiar a lista de ${m.label} (endereço + contato)`}
+          texto={textoDaListaDeBusca(
+            lista.map((r) => ({
+              endereco: enderecoEmbarque(r, trips),
+              telefone: r.telefone,
+              telefone2: r.telefone2,
+              quantidade: r.quantidade,
+            })),
+          )}
+        />
+      ))}
+    </span>
+  );
+}
 // Ações da linha do passageiro na Agenda. Enxuto e com rótulo (o motorista
 // no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
 // comprovante e localização saíram — pagamento/comprovante agora ficam
 // dentro de "Editar reserva".
-function QuickActions({ r, onStatus, onEditar }) {
+function QuickActions({ r, onStatus, onEditar, textoCopia }) {
   const tel = digitos(r.telefone);
   const classeAcao =
     "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
@@ -762,6 +845,13 @@ function QuickActions({ r, onStatus, onEditar }) {
           <MessageCircle size={13} /> <span>WhatsApp</span>
         </a>
       )}
+      {textoCopia && (
+        <BotaoCopiar
+          texto={textoCopia}
+          label="Copiar endereço + contato"
+          title="Copia o endereço e o telefone"
+        />
+      )}
       {btn(Pencil, "Editar", () => onEditar(r))}
       {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
     </div>
@@ -779,6 +869,17 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
     : enderecoEmbarque(r, trips) || "endereço não informado";
   const tel = digitos(r.telefone);
   const tel2 = digitos(r.telefone2);
+  const ehBusca = r.pontoId === "busca";
+  const corBusca = ehBusca ? BUSCA_MODOS[BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi"].cor : null;
+  // texto para repassar ao taxista: endereço + contato (só em "Buscar em casa")
+  const textoCopia = ehBusca
+    ? textoParaTaxista({
+        endereco: enderecoEmbarque(r, trips),
+        telefone: r.telefone,
+        telefone2: r.telefone2,
+        quantidade: r.quantidade,
+      })
+    : null;
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
   const nome = (principal) => (
@@ -812,7 +913,13 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
     </a>
   );
   return (
-    <div className="row-hover rounded-md px-2 py-2" style={{ background: C.panel }}>
+    <div
+      className="row-hover rounded-md px-2 py-2"
+      style={{
+        background: corBusca ? `${corBusca}14` : C.panel,
+        borderLeft: corBusca ? `3px solid ${corBusca}` : undefined,
+      }}
+    >
       <div className="flex items-start gap-2">
         <button
           type="button"
@@ -867,12 +974,16 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
             style={{ color: C.inkFaint }}
           >
             <StatusPill status={r.status} />
-            {onBusca && r.pontoId === "busca" && <BuscaChip r={r} onCycle={onBusca} dense />}
           </div>
+          {onBusca && ehBusca && (
+            <div className="mt-1.5">
+              <QuemBusca r={r} onSet={onBusca} />
+            </div>
+          )}
         </div>
       </div>
       <div className="mt-2 pl-6">
-        <QuickActions r={r} onStatus={onStatus} onEditar={onEditar} />
+        <QuickActions r={r} onStatus={onStatus} onEditar={onEditar} textoCopia={textoCopia} />
       </div>
     </div>
   );
@@ -1119,6 +1230,7 @@ function ViagemOperacional({
                 >
                   {p.nome.toUpperCase()}
                 </span>
+                {p.id === "busca" && <GruposDeBusca itens={itens} trips={trips} />}
                 <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                   {itens.length === 0
                     ? "sem reservas"
