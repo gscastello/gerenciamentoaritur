@@ -250,6 +250,7 @@ export async function mockSupabase(page, opts = {}) {
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   const seqOverride = {};
+  let financeiroRows = (opts.financialEntries ?? []).map((e) => ({ ...e }));
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
   const limpadas = new Set();
@@ -439,6 +440,13 @@ export async function mockSupabase(page, opts = {}) {
       if (fn === "rpc_mark_all_notifications_read") {
         for (const n of notifications) lidas.add(n.id);
         return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_remove_financial_entries") {
+        const b = req.postDataJSON?.() ?? {};
+        const ids = new Set(b.p_ids ?? []);
+        const antes = financeiroRows.length;
+        financeiroRows = financeiroRows.filter((e) => !ids.has(e.id));
+        return route.fulfill(json({ success: true, removed: antes - financeiroRows.length }));
       }
       if (fn === "rpc_clear_notifications") {
         for (const n of notifications) limpadas.add(n.id);
@@ -662,7 +670,7 @@ export async function mockSupabase(page, opts = {}) {
         },
       ];
     else if (table === "customers") rows = [];
-    else if (table === "financial_entries") rows = opts.financialEntries ?? [];
+    else if (table === "financial_entries") rows = financeiroRows;
     else if (table === "v_contas_a_receber") rows = [];
     else if (table === "v_app_notifications")
       rows = notifications
