@@ -33,6 +33,7 @@ import {
   textoParaTaxista,
 } from "../../domain/agendaLinha.js";
 import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
+import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
 import {
   primeiroErro,
   validarData,
@@ -49,7 +50,6 @@ import { EVENTS, emit } from "../../observability/index.js";
 import { Presence } from "../../ui/motion/index.js";
 import {
   BUSCA_MODOS,
-  BUSCA_ORDEM,
   BotaoAgendar,
   C,
   CapacidadeBar,
@@ -61,7 +61,6 @@ import {
   MiniStat,
   OCUPA_VAGA,
   Pill,
-  QuemBusca,
   Select,
   StatusPill,
   TextArea,
@@ -85,6 +84,7 @@ import {
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
+import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
 export default function AgendaTab({
@@ -229,9 +229,13 @@ export default function AgendaTab({
       setAcaoErro(mensagemAmigavel(e, "Não foi possível salvar a edição."));
     }
   };
-  // Quem busca em casa: táxi, Gustavo, Maurício ou Ari (issues #96/#196).
-  const definirBusca = (id, modo) =>
-    acao(R.setPickupTransport(id, modo), "Não foi possível mudar quem busca.");
+  // Lista "Buscar em casa" em modo EDITAR (issue #198): grava quem busca (em
+  // lote, por responsável) e a nova ordem. Erro volta para o editor mostrar.
+  const salvarBusca = async ({ ordem, atribuicoes }) => {
+    setAcaoErro("");
+    for (const { modo, ids } of atribuicoes) await R.setPickupTransportMany(ids, modo);
+    if (ordem) await R.reorderPickup(ordem);
+  };
   const dataFrete = (r) => r.data || r.extra?.data || null;
 
   // Nova encomenda OU agendar uma pendente (database/42): o modal decide
@@ -703,7 +707,7 @@ export default function AgendaTab({
             T={T}
             onStatus={atualizarStatus}
             onEditar={setEditando}
-            onBusca={definirBusca}
+            onSalvarBusca={salvarBusca}
             onAnotar={criarViaAnotacao}
           />
         ))}
@@ -788,10 +792,10 @@ function BotaoCopiar({ texto, label = "Copiar", cor, title }) {
 // copia a lista inteira (endereço + contato, uma reserva por linha) para
 // repassar de uma vez ao taxista / ao Gustavo / ao Maurício / ao Ari.
 function GruposDeBusca({ itens, trips }) {
-  const grupos = BUSCA_ORDEM.map((k) => ({
+  const grupos = RESPONSAVEIS_BUSCA.map((k) => ({
     k,
     m: BUSCA_MODOS[k],
-    lista: itens.filter((r) => (BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi") === k),
+    lista: itens.filter((r) => responsavelDaBusca(r) === k),
   })).filter((g) => g.lista.length > 0);
   if (grupos.length === 0) return null;
   return (
@@ -857,7 +861,7 @@ function QuickActions({ r, onStatus, onEditar, textoCopia }) {
     </div>
   );
 }
-function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
+function LinhaOperacional({ r, trips, onStatus, onEditar }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
   // O endereço é o que o motorista precisa: vem em destaque e o nome em
   // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
@@ -870,7 +874,8 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
   const tel = digitos(r.telefone);
   const tel2 = digitos(r.telefone2);
   const ehBusca = r.pontoId === "busca";
-  const corBusca = ehBusca ? BUSCA_MODOS[BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi"].cor : null;
+  const modoBusca = ehBusca ? BUSCA_MODOS[responsavelDaBusca(r)] : null;
+  const corBusca = modoBusca?.cor ?? null;
   // texto para repassar ao taxista: endereço + contato (só em "Buscar em casa")
   const textoCopia = ehBusca
     ? textoParaTaxista({
@@ -975,10 +980,17 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onBusca }) {
           >
             <StatusPill status={r.status} />
           </div>
-          {onBusca && ehBusca && (
-            <div className="mt-1.5">
-              <QuemBusca r={r} onSet={onBusca} />
-            </div>
+          {modoBusca && (
+            <span
+              className="inline-flex items-center gap-1 mt-1.5 rounded-full text-[11px] font-semibold px-2 py-0.5"
+              style={{
+                background: `${modoBusca.cor}22`,
+                color: modoBusca.cor,
+                border: `1px solid ${modoBusca.cor}66`,
+              }}
+            >
+              <modoBusca.Icon size={11} /> {modoBusca.label}
+            </span>
           )}
         </div>
       </div>
@@ -1056,10 +1068,11 @@ function ViagemOperacional({
   T,
   onStatus,
   onEditar,
-  onBusca,
+  onSalvarBusca,
   onAnotar,
 }) {
   const viagem = trips[direcao];
+  const [editandoBusca, setEditandoBusca] = useState(false);
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
   const confirmados = doGrupo
     .filter((r) => OCUPA_VAGA.includes(r.status))
@@ -1206,9 +1219,13 @@ function ViagemOperacional({
       <div className="space-y-3">
         {pontosOrdenados.map((p) => {
           const hora = shiftHour(p.horaBase, direcao === "ida" && segunda, segundaHoras);
-          const itens = doGrupo.filter(
+          const doPonto = doGrupo.filter(
             (r) => r.pontoId === p.id && r.status !== "cancelada" && r.status !== "espera",
           );
+          // "Buscar em casa" segue a ordem que o dono montou (issue #198)
+          const ehBusca = p.id === "busca";
+          const itens = ehBusca ? ordenarBusca(doPonto) : doPonto;
+          const editando = ehBusca && editandoBusca;
           return (
             <div key={p.id}>
               <div
@@ -1230,7 +1247,17 @@ function ViagemOperacional({
                 >
                   {p.nome.toUpperCase()}
                 </span>
-                {p.id === "busca" && <GruposDeBusca itens={itens} trips={trips} />}
+                {ehBusca && !editando && <GruposDeBusca itens={itens} trips={trips} />}
+                {ehBusca && !editando && itens.length > 0 && onSalvarBusca && (
+                  <button
+                    type="button"
+                    onClick={() => setEditandoBusca(true)}
+                    className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+                    style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+                  >
+                    <Pencil size={12} /> EDITAR LISTA
+                  </button>
+                )}
                 <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                   {itens.length === 0
                     ? "sem reservas"
@@ -1247,7 +1274,14 @@ function ViagemOperacional({
                   </button>
                 )}
               </div>
-              {itens.length === 0 ? (
+              {editando ? (
+                <BuscaEmCasaEditor
+                  itens={itens}
+                  trips={trips}
+                  onSalvar={onSalvarBusca}
+                  onFechar={() => setEditandoBusca(false)}
+                />
+              ) : itens.length === 0 ? (
                 <div className="text-xs pl-1 mb-1.5" style={{ color: C.inkFaint }}>
                   Sem reservas.
                 </div>
@@ -1260,7 +1294,6 @@ function ViagemOperacional({
                       trips={trips}
                       onStatus={onStatus}
                       onEditar={onEditar}
-                      onBusca={onBusca}
                     />
                   ))}
                 </div>

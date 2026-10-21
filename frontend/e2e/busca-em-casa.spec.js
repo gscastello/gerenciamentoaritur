@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Issue #196: reservas de "Buscar em casa" — copiar endereço + contato,
-// separar por cores quem busca (táxi, Gustavo, Maurício, Ari) e copiar a
-// lista de cada grupo para repassar aos taxistas.
+// Issues #196 e #198: reservas de "Buscar em casa" — copiar endereço +
+// contato, modo EDITAR (reordenar e definir quem busca em lote: táxi,
+// Gustavo, Maurício, Ari — cada um na sua cor) e copiar a lista de cada grupo.
 
 const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
 
@@ -32,6 +32,7 @@ const RESERVAS = [
     telefone: "98987654321",
     telefone2: "98981110000",
     buscaPor: "taxi",
+    criadoEm: "2026-10-01T10:00:00Z",
   },
   {
     ...base,
@@ -42,6 +43,7 @@ const RESERVAS = [
     telefone: "98999990000",
     quantidade: 2,
     buscaPor: "taxi",
+    criadoEm: "2026-10-01T11:00:00Z",
   },
   {
     ...base,
@@ -51,6 +53,7 @@ const RESERVAS = [
     nome: "Caio Gustavo",
     telefone: "98988880000",
     buscaPor: "proprio",
+    criadoEm: "2026-10-01T12:00:00Z",
   },
   {
     ...base,
@@ -84,6 +87,7 @@ async function abrir(page) {
 }
 
 const linha = (page, nome) => page.locator("div.row-hover", { hasText: nome });
+const itemEditor = (page, nome) => page.locator("li", { hasText: nome });
 
 test("Buscar em casa: copia endereço + contato da reserva", async ({ page }) => {
   await abrir(page);
@@ -98,48 +102,108 @@ test("Buscar em casa: copia endereço + contato da reserva", async ({ page }) =>
   expect(copiado).toContain("(98) 98765-4321 / (98) 98111-0000");
 });
 
-test("só Buscar em casa tem o botão de copiar", async ({ page }) => {
+test("só Buscar em casa tem copiar e o botão EDITAR", async ({ page }) => {
   await abrir(page);
   await expect(linha(page, "Rita Rodoviaria")).toBeVisible();
   await expect(
     linha(page, "Rita Rodoviaria").getByRole("button", { name: /Copiar endereço/ }),
   ).toHaveCount(0);
-  await expect(linha(page, "Rita Rodoviaria").getByRole("group")).toHaveCount(0);
+  // um único EDITAR: o da seção Buscar em casa
+  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toHaveCount(1);
 });
 
-test("seletor das 4 opções: marca quem busca e grava pelo RPC", async ({ page }) => {
+test("EDITAR: seleciona reservas e define quem busca em lote (Ari) — só grava ao salvar", async ({
+  page,
+}) => {
   let corpo = null;
+  let chamadas = 0;
   page.on("request", (r) => {
-    if (r.url().includes("/rpc/rpc_set_pickup_transport")) corpo = r.postDataJSON?.();
+    if (r.url().includes("/rpc/rpc_set_pickup_transport_many")) {
+      corpo = r.postDataJSON?.();
+      chamadas += 1;
+    }
   });
   await abrir(page);
-  const grupo = linha(page, "Caio Gustavo").getByRole("group", {
-    name: "Quem busca este passageiro",
-  });
-  for (const nome of ["Táxi", "Gustavo", "Maurício", "Ari"]) {
-    await expect(grupo.getByRole("button", { name: nome })).toBeVisible();
-  }
-  await expect(grupo.getByRole("button", { name: "Gustavo" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
 
-  await grupo.getByRole("button", { name: "Ari" }).click();
-  await expect.poll(() => corpo?.p_mode).toBe("ari");
-  await expect(grupo.getByRole("button", { name: "Ari" })).toHaveAttribute("aria-pressed", "true");
-  await expect(grupo.getByRole("button", { name: "Gustavo" })).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
+  // sem seleção, os botões de responsável ficam desligados
+  await expect(page.getByRole("button", { name: "Atribuir a Ari" })).toBeDisabled();
+
+  await page.getByRole("checkbox", { name: "Selecionar Ana Taxi" }).check();
+  await page.getByRole("checkbox", { name: "Selecionar Beto Taxi" }).check();
+  await expect(page.getByText("2 selecionada(s)")).toBeVisible();
+  await page.getByRole("button", { name: "Atribuir a Ari" }).click();
+
+  // o rascunho já mostra Ari nas duas, mas nada foi gravado ainda
+  await expect(itemEditor(page, "Ana Taxi").getByText("Ari", { exact: true })).toBeVisible();
+  await expect(page.getByText("Alterações ainda não salvas")).toBeVisible();
+  expect(chamadas).toBe(0);
+
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect.poll(() => chamadas).toBe(1);
+  expect(corpo.p_mode).toBe("ari");
+  expect([...corpo.p_ids].sort()).toEqual(["b1", "b2"]);
+
+  // saiu do modo edição e a linha ficou como Ari
+  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toBeVisible();
+  await expect(linha(page, "Ana Taxi").getByText("Ari", { exact: true })).toBeVisible();
+});
+
+test("EDITAR: Cancelar descarta o rascunho", async ({ page }) => {
+  let gravou = false;
+  page.on("request", (r) => {
+    if (r.url().includes("/rpc/rpc_set_pickup_transport_many")) gravou = true;
+  });
+  await abrir(page);
+  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("checkbox", { name: "Selecionar Ana Taxi" }).check();
+  await page.getByRole("button", { name: "Atribuir a Maurício" }).click();
+  await page.getByRole("button", { name: "Cancelar edição" }).click();
+
+  expect(gravou).toBe(false);
+  await expect(linha(page, "Ana Taxi").getByText("Táxi", { exact: true })).toBeVisible();
+});
+
+test("EDITAR: reordena com as setas e grava a nova ordem", async ({ page }) => {
+  let ordem = null;
+  page.on("request", (r) => {
+    if (r.url().includes("/rpc/rpc_reorder_pickup")) ordem = r.postDataJSON?.().p_ids;
+  });
+  await abrir(page);
+  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+
+  await page.getByRole("button", { name: "Subir Caio Gustavo" }).click();
+  await page.getByRole("button", { name: "Subir Caio Gustavo" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  await expect.poll(() => ordem).toEqual(["b3", "b1", "b2"]);
+  // volta ao modo normal e a lista já aparece na nova ordem
+  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toBeVisible();
+  const nomes = await page.locator("div.row-hover").allInnerTexts();
+  const posicao = (nome) => nomes.findIndex((t) => t.includes(nome));
+  expect(posicao("Caio Gustavo")).toBeLessThan(posicao("Ana Taxi"));
+  expect(posicao("Ana Taxi")).toBeLessThan(posicao("Beto Taxi"));
+});
+
+test("EDITAR: Agrupar por quem busca junta Táxi, Gustavo, Maurício e Ari", async ({ page }) => {
+  await abrir(page);
+  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("checkbox", { name: "Selecionar Ana Taxi" }).check();
+  await page.getByRole("button", { name: "Atribuir a Ari" }).click();
+  await page.getByRole("button", { name: "Agrupar por quem busca" }).click();
+
+  // Beto (táxi) → Caio (Gustavo) → Ana (Ari)
+  const nomes = await page.locator("li").allInnerTexts();
+  const posicao = (nome) => nomes.findIndex((t) => t.includes(nome));
+  expect(posicao("Beto Taxi")).toBeLessThan(posicao("Caio Gustavo"));
+  expect(posicao("Caio Gustavo")).toBeLessThan(posicao("Ana Taxi"));
 });
 
 test("cada grupo tem a sua cor e o cabeçalho copia a lista do grupo", async ({ page }) => {
   await abrir(page);
-  // linha do táxi (âmbar) e do Gustavo (azul) com bordas de cores diferentes
   const cor = (nome) => linha(page, nome).evaluate((el) => getComputedStyle(el).borderLeftColor);
   expect(await cor("Ana Taxi")).not.toBe(await cor("Caio Gustavo"));
 
-  // botões de grupo no cabeçalho: Táxi 2 e Gustavo 1
   const copiarTaxi = page.getByRole("button", { name: "Táxi 2" });
   await expect(copiarTaxi).toBeVisible();
   await expect(page.getByRole("button", { name: "Gustavo 1" })).toBeVisible();

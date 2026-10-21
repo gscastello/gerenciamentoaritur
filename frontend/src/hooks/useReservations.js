@@ -151,6 +151,8 @@ export function useReservationsWindow(fromDate, toDate) {
   const setDrop = useAsyncAction(reservationsService.setDropoff);
   const reorderDrop = useAsyncAction(reservationsService.reorderDropoff);
   const pickupTransp = useAsyncAction(reservationsService.setPickupTransport);
+  const pickupMany = useAsyncAction(reservationsService.setPickupTransportMany);
+  const reorderPick = useAsyncAction(reservationsService.reorderPickup);
   const setPaid = useAsyncAction(paymentsService.setPaidForReservation);
   const setProof = useAsyncAction(paymentsService.setProofForReservation);
 
@@ -212,6 +214,15 @@ export function useReservationsWindow(fromDate, toDate) {
         ),
       [otimista, pickupTransp],
     ),
+    setPickupTransportMany: useCallback(
+      (ids, mode) =>
+        otimista(
+          (rows) => (rows ?? []).map((r) => (ids.includes(r.id) ? { ...r, buscaPor: mode } : r)),
+          () => pickupMany.run(ids, mode),
+        ),
+      [otimista, pickupMany],
+    ),
+    reorderPickup: useCallback((ids) => after(reorderPick.run(ids)), [after, reorderPick]),
     setPaid: useCallback((args) => after(setPaid.run(args)), [after, setPaid]),
     setProof: useCallback((args) => after(setProof.run(args)), [after, setProof]),
 
