@@ -32,7 +32,11 @@ import {
   textoDaListaDeBusca,
   textoParaTaxista,
 } from "../../domain/agendaLinha.js";
-import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../../domain/anotacaoRapida.js";
+import {
+  parseAnotacaoEncomenda,
+  parseAnotacaoRapida,
+  separarBairro,
+} from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
 import {
   primeiroErro,
@@ -297,11 +301,17 @@ export default function AgendaTab({
     if (!achado.ok) return { ok: false, erro: achado.erro };
 
     const ehBairro = ponto.campo === "bairro";
-    const precoAuto = ehBairro ? (bairrosAnotacao.preco(achado.local) ?? 80) : (ponto.valor ?? 60);
+    // "Cohatrac Rua 7": o bairro (tabela de preços) cobra o valor; o resto é detalhe
+    const { bairro, detalhe } = ehBairro
+      ? separarBairro(achado.local, bairrosAnotacao.nomes)
+      : { bairro: "", detalhe: achado.local };
+    const precoAuto = ehBairro ? (bairrosAnotacao.preco(bairro) ?? 80) : (ponto.valor ?? 60);
 
     try {
-      const nomeExistente = await buscarClientePorTelefone(achado.telefone);
-      const nome = nomeExistente || `Passageiro${achado.local ? ` (${achado.local})` : ""}`;
+      // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
+      const nomeExistente = achado.nome ? null : await buscarClientePorTelefone(achado.telefone);
+      const nome =
+        achado.nome || nomeExistente || `Passageiro${achado.local ? ` (${achado.local})` : ""}`;
       const res = await R.createReservation({
         tripDate: data,
         direction: direcao,
@@ -311,8 +321,8 @@ export default function AgendaTab({
         quantity: achado.quantidade,
         unitPrice: precoAuto,
         paymentMethod: "dinheiro",
-        pickupNeighborhood: ehBairro ? achado.local || null : null,
-        pickupDetail: !ehBairro ? achado.local || null : null,
+        pickupNeighborhood: ehBairro ? bairro || null : null,
+        pickupDetail: detalhe || null,
         status: "confirmada",
         extraData: { origem: "anotacao_agenda" },
       });
@@ -1030,10 +1040,10 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
             if (erro) setErro("");
           }}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
-          placeholder="Anotar — 1P Cohatrac 98999998888 · encomenda: E 98999998888"
+          placeholder="Anotar — 1P Endereço 98999998888 Nome · encomenda: E 98999998888"
           aria-label={`Anotar reserva — ${nomePonto}`}
           className="text-xs py-1.5"
-          disabled={salvando}
+          readOnly={salvando}
         />
         <button
           type="button"
@@ -1649,6 +1659,7 @@ export function NovaReservaModal({
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [ofereceEspera, setOfereceEspera] = useState(false);
+  const [linha, setLinha] = useState("");
   const bairros = useBairros();
   const dropoff = useDropoff();
   // Cidade fora de São Luís/Cantanhede/Pirapemas: a reserva nasce pendente
@@ -1670,6 +1681,29 @@ export function NovaReservaModal({
     f.telefone.trim() &&
     f.pontoId &&
     (campoDetalhe !== "bairro" || f.bairro.trim());
+
+  // Linha rápida (issue #202): "NP endereço telefone nome" preenche os campos de
+  // uma vez — mesma ordem da anotação direto no ponto da Agenda.
+  const aplicarLinha = (texto) => {
+    setLinha(texto);
+    const a = parseAnotacaoRapida(texto);
+    if (!a.ok) return;
+    setF((atual) => {
+      const campo = viagem.pontos.find((p) => p.id === atual.pontoId)?.campo;
+      const { bairro, detalhe } =
+        campo === "bairro"
+          ? separarBairro(a.local, bairros.nomes)
+          : { bairro: "", detalhe: a.local };
+      return {
+        ...atual,
+        quantidade: String(a.quantidade),
+        telefone: a.telefone,
+        nome: a.nome || atual.nome,
+        bairro: campo === "bairro" ? bairro : atual.bairro,
+        anotacao: detalhe,
+      };
+    });
+  };
 
   const trocarDirecao = (dir) =>
     setF((s) => ({
@@ -1778,6 +1812,17 @@ export function NovaReservaModal({
             <span>{erro}</span>
           </div>
         )}
+
+        <div className="mb-2">
+          <Field label="Linha rápida (opcional)">
+            <TextInput
+              value={linha}
+              autoFocus
+              onChange={(e) => aplicarLinha(e.target.value)}
+              placeholder="1P Cohatrac Rua 7 98999998888 Maria Silva"
+            />
+          </Field>
+        </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Field label="Nome *">

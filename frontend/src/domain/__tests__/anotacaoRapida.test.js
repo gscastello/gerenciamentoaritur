@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { parseAnotacaoEncomenda, parseAnotacaoRapida } from "../anotacaoRapida.js";
+import { parseAnotacaoEncomenda, parseAnotacaoRapida, separarBairro } from "../anotacaoRapida.js";
 
 describe("parseAnotacaoRapida", () => {
   it("formato completo: quantidade + bairro + telefone sem máscara", () => {
     const r = parseAnotacaoRapida("1P Cohatrac 98999998888");
-    expect(r).toEqual({ ok: true, quantidade: 1, local: "Cohatrac", telefone: "98999998888" });
+    expect(r).toEqual({
+      ok: true,
+      quantidade: 1,
+      local: "Cohatrac",
+      telefone: "98999998888",
+      nome: "",
+    });
   });
 
   it("quantidade > 1, 'p' minúsculo, telefone com +55 e máscara", () => {
@@ -79,6 +85,80 @@ describe("parseAnotacaoRapida", () => {
   });
 });
 
+describe("parseAnotacaoRapida — ordem NP, endereço, telefone, nome (issue #202)", () => {
+  it("nome depois do telefone", () => {
+    expect(parseAnotacaoRapida("1P Cohatrac Rua 7 98999998888 Maria Silva")).toEqual({
+      ok: true,
+      quantidade: 1,
+      local: "Cohatrac Rua 7",
+      telefone: "98999998888",
+      nome: "Maria Silva",
+    });
+  });
+
+  it("aceita ' - ' entre as partes", () => {
+    const r = parseAnotacaoRapida("2P - Miranda - 98 8516-6052 - João");
+    expect(r).toEqual({
+      ok: true,
+      quantidade: 2,
+      local: "Miranda",
+      telefone: "9885166052",
+      nome: "João",
+    });
+  });
+
+  it("vírgulas e ponto e vírgula entre as partes são ignorados", () => {
+    const r = parseAnotacaoRapida("1P Cohatrac, Rua 7, 98999998888, Maria");
+    expect(r.ok).toBe(true);
+    expect(r.local).toBe("Cohatrac Rua 7");
+    expect(r.telefone).toBe("98999998888");
+    expect(r.nome).toBe("Maria");
+  });
+
+  it("número no endereço não é confundido com o telefone", () => {
+    const r = parseAnotacaoRapida("1P Rua 7 98999998888 Ana");
+    expect(r.local).toBe("Rua 7");
+    expect(r.telefone).toBe("98999998888");
+    expect(r.nome).toBe("Ana");
+
+    const r2 = parseAnotacaoRapida("1P Cohama 12 98 99999-8888 Ana");
+    expect(r2.local).toBe("Cohama 12");
+    expect(r2.telefone).toBe("98999998888");
+    expect(r2.nome).toBe("Ana");
+
+    // número "55" no endereço (igual ao prefixo do país) continua no endereço
+    const r3 = parseAnotacaoRapida("1P Rua 55 98999998888 Ana");
+    expect(r3.local).toBe("Rua 55");
+    expect(r3.telefone).toBe("98999998888");
+  });
+
+  it("+55 colado ao telefone não vaza para o endereço", () => {
+    const r = parseAnotacaoRapida("1P Miranda +55 98 8516-6052 João");
+    expect(r.local).toBe("Miranda");
+    expect(r.telefone).toBe("9885166052");
+    expect(r.nome).toBe("João");
+  });
+
+  it("sem endereço: só quantidade, telefone e nome", () => {
+    const r = parseAnotacaoRapida("1P 98999998888 Maria");
+    expect(r.ok).toBe(true);
+    expect(r.local).toBe("");
+    expect(r.nome).toBe("Maria");
+  });
+
+  it("telefone com 55 e DDD num bloco só (13 dígitos) ainda é reconhecido", () => {
+    const r = parseAnotacaoRapida("1P Cohatrac 5598999998888 Maria");
+    expect(r.ok).toBe(true);
+    expect(r.telefone).toBe("98999998888");
+    expect(r.nome).toBe("Maria");
+  });
+
+  it("nome com vários nomes e acentos", () => {
+    const r = parseAnotacaoRapida("1P Anil 98999998888 José da Conceição Ribeiro");
+    expect(r.nome).toBe("José da Conceição Ribeiro");
+  });
+});
+
 describe("parseAnotacaoEncomenda", () => {
   it("só telefone: 'E <telefone>'", () => {
     const r = parseAnotacaoEncomenda("E 98999998888");
@@ -134,5 +214,39 @@ describe("parseAnotacaoEncomenda", () => {
     const r = parseAnotacaoEncomenda("E 123");
     expect(r.ok).toBe(false);
     expect(r.erro).toMatch(/DDD/i);
+  });
+});
+
+describe("separarBairro", () => {
+  const BAIRROS = ["Cohatrac", "Anjo da Guarda", "Cohama"];
+
+  it("bairro conhecido no começo: o resto vira detalhe", () => {
+    expect(separarBairro("Cohatrac Rua 7", BAIRROS)).toEqual({
+      bairro: "Cohatrac",
+      detalhe: "Rua 7",
+    });
+  });
+
+  it("bairro com várias palavras, sem acento/caixa", () => {
+    expect(separarBairro("anjo da guarda quadra 12 casa 3", BAIRROS)).toEqual({
+      bairro: "anjo da guarda",
+      detalhe: "quadra 12 casa 3",
+    });
+  });
+
+  it("só o bairro, sem detalhe", () => {
+    expect(separarBairro("Cohama", BAIRROS)).toEqual({ bairro: "Cohama", detalhe: "" });
+  });
+
+  it("bairro desconhecido: o texto todo fica como bairro (como sempre foi)", () => {
+    expect(separarBairro("Turu perto do posto", BAIRROS)).toEqual({
+      bairro: "Turu perto do posto",
+      detalhe: "",
+    });
+  });
+
+  it("texto vazio ou lista vazia não quebra", () => {
+    expect(separarBairro("", BAIRROS)).toEqual({ bairro: "", detalhe: "" });
+    expect(separarBairro("Cohatrac Rua 7", [])).toEqual({ bairro: "Cohatrac Rua 7", detalhe: "" });
   });
 });
