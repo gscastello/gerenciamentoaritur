@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
+import { mensagemDeRemocao, resumoDaRemocao } from "../../domain/financeiroRemocao.js";
 import { montarRelatorioFinanceiro } from "../../domain/relatorioFinanceiro.js";
 import { validarData, validarValor } from "../../domain/validacao.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
@@ -65,6 +66,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
   const [editVal, setEditVal] = useState({});
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
   const ano = mesRef.getFullYear();
   const mes = mesRef.getMonth();
 
@@ -108,7 +110,20 @@ export default function FinanceiroTab({ pix, deepLink }) {
       setNovo({ tipo: "receita", categoria: "passagem", valor: "", descricao: "" });
     });
   };
-  const remove = (id) => run(() => fin.removeEntry(id));
+  // Remover / limpar (issue #200): vale para qualquer lançamento — inclusive os
+  // de reservas e da operação. Sempre pergunta, dizendo o que sai e o que fica.
+  const confirmarERemover = (lista, titulo) => {
+    if (lista.length === 0) return;
+    if (!window.confirm(mensagemDeRemocao(titulo, resumoDaRemocao(lista)))) return;
+    run(async () => {
+      await fin.removeMany(lista.map((f) => f.id));
+      setSel(new Set());
+    });
+  };
+  const remove = (id) => {
+    const f = financeiro.find((x) => x.id === id);
+    if (f) confirmarERemover([f], "Remover este lançamento");
+  };
   const iniciarEdicao = (f) => {
     setEditId(f.id);
     setEditVal({ ...f });
@@ -146,6 +161,16 @@ export default function FinanceiroTab({ pix, deepLink }) {
     [financeiro, ano, mes],
   );
   const doDia = financeiro.filter((f) => f.data === diaSel);
+  const selecionados = doDia.filter((f) => sel.has(f.id));
+  const todosSel = doDia.length > 0 && selecionados.length === doDia.length;
+  const alternarSel = (id) =>
+    setSel((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  const alternarTodos = () => setSel(todosSel ? new Set() : new Set(doDia.map((f) => f.id)));
   const receitaDia = doDia.filter((f) => f.tipo === "receita").reduce((s, f) => s + f.valor, 0);
   const despesaDia = doDia.filter((f) => f.tipo === "despesa").reduce((s, f) => s + f.valor, 0);
   // combustível e manutenção já entram como 'despesa' via trigger do banco —
@@ -483,6 +508,52 @@ export default function FinanceiroTab({ pix, deepLink }) {
                   É por isso que o problema só aparecia em dias que já
                   tinham valor lançado — dia vazio nunca renderizava essa
                   tabela. */}
+              {doDia.length > 0 && (
+                <div
+                  className="flex flex-wrap items-center gap-2 text-xs rounded-lg px-3 py-2"
+                  style={{ background: C.panel2, color: C.inkSoft }}
+                >
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={todosSel}
+                      onChange={alternarTodos}
+                      aria-label="Selecionar todos os lançamentos do dia"
+                    />
+                    Selecionar todos
+                  </label>
+                  {selecionados.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        confirmarERemover(
+                          selecionados,
+                          `Remover ${selecionados.length === 1 ? "o lançamento selecionado" : `os ${selecionados.length} lançamentos selecionados`}`,
+                        )
+                      }
+                      disabled={salvando}
+                      className="btn-press px-2.5 py-1.5 rounded-md font-semibold"
+                      style={{ background: C.redSoft, color: C.red }}
+                    >
+                      Remover selecionados ({selecionados.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmarERemover(
+                        doDia,
+                        `Limpar TODOS os ${doDia.length} lançamentos de ${fmtDate(diaSel)}`,
+                      )
+                    }
+                    disabled={salvando}
+                    className="btn-press px-2.5 py-1.5 rounded-md font-semibold ml-auto"
+                    style={{ background: C.panel, color: C.red, border: `1px solid ${C.border}` }}
+                  >
+                    Limpar o dia ({doDia.length})
+                  </button>
+                </div>
+              )}
               <div className="sm:hidden space-y-2">
                 {[...doDia].reverse().map((f) =>
                   editId === f.id ? (
@@ -505,7 +576,9 @@ export default function FinanceiroTab({ pix, deepLink }) {
                             </option>
                           ))}
                           {editVal.categoria && !cats.existe(editVal.categoria) ? (
-                            <option value={editVal.categoria}>{cats.rotulo(editVal.categoria)}</option>
+                            <option value={editVal.categoria}>
+                              {cats.rotulo(editVal.categoria)}
+                            </option>
                           ) : null}
                         </Select>
                       )}
@@ -531,7 +604,14 @@ export default function FinanceiroTab({ pix, deepLink }) {
                     </Card>
                   ) : (
                     <Card key={f.id} className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <input
+                        type="checkbox"
+                        className="mt-1 shrink-0"
+                        checked={sel.has(f.id)}
+                        onChange={() => alternarSel(f.id)}
+                        aria-label={`Selecionar ${f.descricao || fmtBRL(f.valor)}`}
+                      />
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Pill
                             color={f.tipo === "receita" ? C.green : C.red}
@@ -549,20 +629,23 @@ export default function FinanceiroTab({ pix, deepLink }) {
                         <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
                           {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
                           {f.descricao ? ` · ${f.descricao}` : ""}
-                          {f.auto ? (
-                            <span style={{ color: C.inkFaint }}> · automático</span>
-                          ) : (
-                            ""
-                          )}
+                          {f.auto ? <span style={{ color: C.inkFaint }}> · automático</span> : ""}
                         </div>
                       </div>
                       {f.auto ? (
-                        <span
-                          className="text-[10px] shrink-0"
-                          style={{ color: C.inkFaint }}
-                        >
-                          da operação
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[10px]" style={{ color: C.inkFaint }}>
+                            da operação
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => remove(f.id)}
+                            className="btn-press p-2 rounded-lg"
+                            aria-label="Remover lançamento"
+                          >
+                            <X size={14} style={{ color: C.inkFaint }} />
+                          </button>
+                        </div>
                       ) : (
                         <div className="flex gap-1 shrink-0">
                           <button
@@ -598,6 +681,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ background: C.panel2, color: C.inkSoft }}>
+                      <th className="px-3 py-2.5 w-8" aria-label="Seleção" />
                       <th className="text-left px-4 py-2.5 font-medium">Tipo</th>
                       <th className="text-left px-4 py-2.5 font-medium">Categoria</th>
                       <th className="text-left px-4 py-2.5 font-medium">Valor</th>
@@ -613,6 +697,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           className="border-t anim-slideDown"
                           style={{ borderColor: C.borderSoft, background: C.panel2 }}
                         >
+                          <td className="px-2 py-2" />
                           <td className="px-2 py-2">
                             <Select
                               value={editVal.tipo}
@@ -678,6 +763,14 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           className="row-hover border-t"
                           style={{ borderColor: C.borderSoft }}
                         >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={sel.has(f.id)}
+                              onChange={() => alternarSel(f.id)}
+                              aria-label={`Selecionar ${f.descricao || fmtBRL(f.valor)}`}
+                            />
+                          </td>
                           <td className="px-4 py-2">
                             <Pill
                               color={f.tipo === "receita" ? C.green : C.red}
@@ -707,15 +800,32 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           </td>
                           <td className="px-4 py-2">
                             {f.auto ? (
-                              <span className="text-[10px]" style={{ color: C.inkFaint }}>
-                                da operação
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px]" style={{ color: C.inkFaint }}>
+                                  da operação
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => remove(f.id)}
+                                  aria-label="Remover lançamento"
+                                >
+                                  <X size={13} style={{ color: C.inkFaint }} />
+                                </button>
+                              </div>
                             ) : (
                               <div className="flex gap-2">
-                                <button onClick={() => iniciarEdicao(f)}>
+                                <button
+                                  type="button"
+                                  onClick={() => iniciarEdicao(f)}
+                                  aria-label="Editar lançamento"
+                                >
                                   <Pencil size={12} style={{ color: C.inkFaint }} />
                                 </button>
-                                <button onClick={() => remove(f.id)}>
+                                <button
+                                  type="button"
+                                  onClick={() => remove(f.id)}
+                                  aria-label="Remover lançamento"
+                                >
                                   <X size={13} style={{ color: C.inkFaint }} />
                                 </button>
                               </div>
@@ -727,7 +837,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
                     {doDia.length === 0 && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="text-center py-8 text-xs"
                           style={{ color: C.inkFaint }}
                         >

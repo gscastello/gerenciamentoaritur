@@ -13,6 +13,7 @@ export function useFinanceDay(entryDate) {
   const add = useAsyncAction(financeService.addManualEntry);
   const update = useAsyncAction(financeService.update);
   const remove = useAsyncAction(financeService.softDelete);
+  const removeBulk = useAsyncAction(financeService.removeMany);
 
   return {
     summary: query.data ?? { revenue: 0, expenses: 0, profit: 0, entries: [] },
@@ -21,6 +22,7 @@ export function useFinanceDay(entryDate) {
     addEntry: async (fields) => { const r = await add.run(fields); await query.refetch(); return r; },
     updateEntry: async (id, fields) => { const r = await update.run(id, fields); await query.refetch(); return r; },
     removeEntry: async (id) => { const r = await remove.run(id); await query.refetch(); return r; },
+    removeMany: async (ids) => { const r = await removeBulk.run(ids); await query.refetch(); return r; },
   };
 }
 
@@ -72,6 +74,7 @@ export function useFinanceMonth(year, month) {
   const add = useAsyncAction(financeService.addManualEntry);
   const update = useAsyncAction(financeService.update);
   const remove = useAsyncAction(financeService.softDelete);
+  const removeBulk = useAsyncAction(financeService.removeMany);
 
   return {
     entries: query.data ?? [],
@@ -81,5 +84,6 @@ export function useFinanceMonth(year, month) {
     addEntry: async (fields) => { const r = await add.run(fields); await query.refetch(); return r; },
     updateEntry: async (id, fields) => { const r = await update.run(id, fields); await query.refetch(); return r; },
     removeEntry: async (id) => { const r = await remove.run(id); await query.refetch(); return r; },
+    removeMany: async (ids) => { const r = await removeBulk.run(ids); await query.refetch(); return r; },
   };
 }
