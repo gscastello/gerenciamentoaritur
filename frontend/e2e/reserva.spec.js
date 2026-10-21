@@ -160,55 +160,6 @@ test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ pa
   await expect(page.getByRole("button", { name: "Chamar (dar vaga)" })).toBeVisible();
 });
 
-test("Agenda: seletor de quem busca em casa aparece e troca", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
-    new Date(),
-  );
-  await mockSupabase(page, {
-    role: "admin",
-    occupancy: {},
-    reservations: [
-      {
-        id: "res-busca-ag",
-        data: hoje,
-        direcao: "ida",
-        pontoId: "busca",
-        bairro: "Turu",
-        nome: "Cliente Agenda E2E",
-        telefone: "98999997777",
-        quantidade: 1,
-        valorUnit: 80,
-        valorTotal: 80,
-        pagamento: "dinheiro",
-        status: "confirmada",
-        tipo: "passagem",
-        pago: false,
-        temEmbarcado: false,
-        buscaPor: "taxi",
-        criadoEm: new Date().toISOString(),
-      },
-    ],
-  });
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: /^Agenda$/ })
-    .first()
-    .click();
-  // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
-  // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
-  // reserva em vez de depender do default.
-  await page.locator('input[type="date"]').first().fill(hoje);
-
-  // na Agenda o seletor mostra as 4 opções (táxi, Gustavo, Maurício, Ari)
-  const grupo = page.getByRole("group", { name: "Quem busca este passageiro" });
-  await expect(grupo.getByRole("button", { name: "Táxi" })).toHaveAttribute("aria-pressed", "true");
-  await grupo.getByRole("button", { name: "Gustavo" }).click();
-  await expect(grupo.getByRole("button", { name: "Gustavo" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-});
-
 // Regressão (issue #168): criar a PRIMEIRA reserva de uma janela vazia disparava
 // um refetch (App.jsx) que reacendia o `loading` de página inteira e trocava a
 // árvore da aba pela <TabSkeleton> — o React desmontava a aba e ela perdia o

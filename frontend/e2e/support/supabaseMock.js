@@ -249,6 +249,7 @@ export async function mockSupabase(page, opts = {}) {
   let customersStatsRows = (opts.customersStats ?? []).map((c) => ({ ...c }));
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
+  const seqOverride = {};
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
   const limpadas = new Set();
@@ -313,6 +314,20 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json(createResult));
       }
       if (fn === "rpc_ensure_trips") return route.fulfill(json({ success: true, created: 0 }));
+      if (fn === "rpc_set_pickup_transport_many") {
+        const b = req.postDataJSON?.() ?? {};
+        for (const id of b.p_ids ?? []) buscaOverride[id] = b.p_mode;
+        return route.fulfill(
+          json({ success: true, mode: b.p_mode, updated: (b.p_ids ?? []).length }),
+        );
+      }
+      if (fn === "rpc_reorder_pickup") {
+        const b = req.postDataJSON?.() ?? {};
+        (b.p_ids ?? []).forEach((id, i) => {
+          seqOverride[id] = i + 1;
+        });
+        return route.fulfill(json({ success: true, updated: (b.p_ids ?? []).length }));
+      }
       if (fn === "rpc_set_pickup_transport") {
         const b = req.postDataJSON?.() ?? {};
         if (b.p_reservation_id) buscaOverride[b.p_reservation_id] = b.p_mode;
@@ -487,7 +502,13 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "settings") rows = SETTINGS;
     else if (table === "v_reservations_flat")
       rows = reservations.map((r) =>
-        buscaOverride[r.id] ? { ...r, buscaPor: buscaOverride[r.id] } : r,
+        buscaOverride[r.id] || seqOverride[r.id]
+          ? {
+              ...r,
+              buscaPor: buscaOverride[r.id] ?? r.buscaPor,
+              buscaSeq: seqOverride[r.id] ?? r.buscaSeq,
+            }
+          : r,
       );
     else if (table === "v_trip_occupancy") {
       rows = Object.entries(occupancy).map(([k, v]) => {

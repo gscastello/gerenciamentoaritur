@@ -341,7 +341,6 @@ export const BUSCA_MODOS = {
   motorista: { label: "Maurício", Icon: Bus, cor: "#34D399" },
   ari: { label: "Ari", Icon: User, cor: "#A78BFA" },
 };
-export const BUSCA_ORDEM = ["taxi", "proprio", "motorista", "ari"];
 export const BUSCA_PROXIMO = {
   taxi: "proprio",
   proprio: "motorista",
@@ -495,41 +494,6 @@ export function BuscaChip({ r, onCycle, dense = false }) {
       <m.Icon size={dense ? 11 : 13} />
       {m.label}
     </button>
-  );
-}
-
-// Seletor direto (sem ciclar) de quem busca: as 4 opções à vista, a escolhida
-// preenchida na sua cor. Usado em cada reserva de "Buscar em casa" na Agenda.
-export function QuemBusca({ r, onSet }) {
-  const atual = BUSCA_MODOS[r.buscaPor] ? r.buscaPor : "taxi";
-  return (
-    <div
-      className="flex items-center gap-1 flex-wrap"
-      role="group"
-      aria-label="Quem busca este passageiro"
-    >
-      {BUSCA_ORDEM.map((k) => {
-        const m = BUSCA_MODOS[k];
-        const ativo = k === atual;
-        return (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={ativo}
-            onClick={() => !ativo && onSet(r.id, k)}
-            className="btn-press inline-flex items-center gap-1 rounded-full text-[11px] font-semibold px-2 py-1"
-            style={{
-              background: ativo ? m.cor : "transparent",
-              color: ativo ? "#0B0B0D" : m.cor,
-              border: `1px solid ${ativo ? m.cor : `${m.cor}66`}`,
-            }}
-          >
-            <m.Icon size={11} />
-            {m.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 

@@ -295,6 +295,25 @@ export const reservationsService = {
     return data;
   },
 
+  /** Grava a ordem da lista "Buscar em casa" — `orderedIds` na ordem desejada (database/56). */
+  async reorderPickup(orderedIds) {
+    const { data, error } = await supabase.rpc("rpc_reorder_pickup", { p_ids: orderedIds });
+    if (error) throw new ServiceError(`reorderPickup: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar a ordem.", { retryable: false });
+    return data;
+  },
+
+  /** Define quem busca VÁRIAS reservas de uma vez: 'taxi' | 'proprio' | 'motorista' | 'ari'. */
+  async setPickupTransportMany(ids, mode) {
+    const { data, error } = await supabase.rpc("rpc_set_pickup_transport_many", {
+      p_ids: ids,
+      p_mode: mode,
+    });
+    if (error) throw new ServiceError(`setPickupTransportMany: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", { retryable: false });
+    return data;
+  },
+
   /** Atualiza nome/telefone do cliente da reserva (tabela customers). */
   async updateCustomerContact(customerId, { name, phone }) {
     const actor = await getCurrentUserId();
