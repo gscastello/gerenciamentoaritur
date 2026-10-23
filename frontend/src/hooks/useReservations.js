@@ -142,6 +142,7 @@ export function useReservationsWindow(fromDate, toDate) {
   const create = useAsyncAction(reservationsService.create);
   const confirm = useAsyncAction(reservationsService.confirm);
   const cancel = useAsyncAction(reservationsService.cancel);
+  const restore = useAsyncAction(reservationsService.restore);
   const setPassengersStatus = useAsyncAction(reservationsService.setPassengersStatus);
   const move = useAsyncAction(reservationsService.move);
   const updateDetails = useAsyncAction(reservationsService.updateDetails);
@@ -185,6 +186,7 @@ export function useReservationsWindow(fromDate, toDate) {
     createReservation: useCallback((payload) => after(create.run(payload)), [after, create]),
     confirmReservation: useCallback((id, opts) => after(confirm.run(id, opts)), [after, confirm]),
     cancelReservation: useCallback((id) => after(cancel.run(id)), [after, cancel]),
+    restoreReservation: useCallback((id) => after(restore.run(id)), [after, restore]),
     markPassengers: useCallback(
       (id, status) =>
         otimista(
