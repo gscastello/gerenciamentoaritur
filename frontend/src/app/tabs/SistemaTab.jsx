@@ -54,6 +54,7 @@ import {
   useBairros,
   useDropoff,
 } from "../tabShared.jsx";
+import BackupReservasDoDia from "./BackupReservasDoDia.jsx";
 import SistemaBot from "./SistemaBot.jsx";
 
 /* ============================= 8. SISTEMA ============================= */
@@ -1650,6 +1651,8 @@ export default function SistemaTab({
             </div>
           )}
         </Card>
+
+        <BackupReservasDoDia />
 
         <Card style={{ borderColor: C.blueSoft }}>
           <div className="text-sm font-semibold mb-2">Acesso compartilhado entre sócios</div>
