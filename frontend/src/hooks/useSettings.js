@@ -28,6 +28,8 @@ export function useSettings() {
     attendanceMode: settings.attendance_mode?.mode ?? "ia",
     mondayAdjustment: settings.monday_adjustment ?? { active: true, hours: 1 },
     pix: settings.pix ?? null,
+    // receita automática das passagens no Financeiro (database/58): sem a chave = ligada
+    autoRevenue: settings.auto_revenue?.enabled ?? true,
     // cidades da rota (issue #6) — listas normalizadas (minúsculas/sem acento no banco)
     servedCities: Array.isArray(settings.served_cities) ? settings.served_cities : [],
     intermediateCities: Array.isArray(settings.intermediate_cities) ? settings.intermediate_cities : [],
@@ -38,6 +40,7 @@ export function useSettings() {
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),
+    setAutoRevenue: (enabled) => after(setKey.run("auto_revenue", { enabled })),
     setMondayAdjustment: ({ active, hours }) => after(setKey.run("monday_adjustment", { active, hours })),
     setServedCities: (list) => after(setKey.run("served_cities", list)),
     setIntermediateCities: (list) => after(setKey.run("intermediate_cities", list)),

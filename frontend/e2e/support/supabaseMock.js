@@ -106,6 +106,7 @@ const SETTINGS = [
   { key: "served_cities", value: ["sao luis", "cantanhede", "pirapemas"] },
   { key: "intermediate_cities", value: ["bacabeira", "santa rita"] },
   { key: "chatwoot", value: { url: "https://chatwoot.e2e.local/app/accounts/1" } },
+  { key: "auto_revenue", value: { enabled: false } },
 ];
 
 function json(body, status = 200, headers = null) {
