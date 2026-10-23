@@ -18,6 +18,7 @@ import {
   UserCog,
   UserX,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -128,6 +129,78 @@ function ListaChips({ titulo, ajuda, itens, onSalvar, salvando }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// Receita automática das passagens no Financeiro (database/58). Pausada, confirmar
+// ou pagar uma reserva não lança receita — o dono lança à mão em Financeiro.
+function SistemaReceitaAutomatica() {
+  const s = useSettings();
+  const [erro, setErro] = useState("");
+  const ligada = s.autoRevenue;
+  const alternar = async () => {
+    if (
+      !ligada &&
+      !window.confirm(
+        "Religar a receita automática?\n\nSó as próximas confirmações e pagamentos lançam receita. As reservas confirmadas durante a pausa NÃO são lançadas retroativamente.",
+      )
+    )
+      return;
+    setErro("");
+    try {
+      await s.setAutoRevenue(!ligada);
+    } catch (e) {
+      setErro(mensagemAmigavel(e, "Não foi possível salvar."));
+    }
+  };
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <Wallet size={16} style={{ color: C.amber }} /> Receita automática das passagens
+      </div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        {ligada ? (
+          <>
+            Ligada: ao <b>confirmar ou pagar</b> uma reserva, a receita é lançada sozinha no
+            Financeiro (no dia da viagem).
+          </>
+        ) : (
+          <>
+            <b>Pausada:</b> confirmar ou pagar uma reserva <b>não</b> lança receita no Financeiro —
+            lance à mão em Financeiro → Lançamentos. O que já foi lançado continua, e cancelar uma
+            reserva que já tinha receita continua estornando.
+          </>
+        )}
+      </p>
+      {(erro || s.error) && (
+        <div
+          className="mb-3 text-xs rounded-lg px-3 py-2"
+          style={{ background: C.redSoft, color: C.red }}
+        >
+          {erro || mensagemAmigavel(s.error, "Erro ao carregar as configurações.")}
+        </div>
+      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span
+          className="text-[11px] font-semibold rounded-full px-2 py-1"
+          style={{
+            background: ligada ? C.greenSoft : C.warnSoft,
+            color: ligada ? C.green : C.warn,
+          }}
+        >
+          {ligada ? "Ligada" : "Pausada"}
+        </span>
+        <button
+          type="button"
+          onClick={alternar}
+          disabled={s.saving || s.loading}
+          className="btn-press text-xs px-3 py-2 rounded-md font-semibold disabled:opacity-40"
+          style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+        >
+          {ligada ? "Pausar receita automática" : "Religar receita automática"}
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -1219,6 +1292,8 @@ export default function SistemaTab({
         <SistemaErros />
 
         <SistemaEquipe />
+
+        <SistemaReceitaAutomatica />
 
         <SistemaCidades />
 
