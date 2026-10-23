@@ -251,6 +251,7 @@ export async function mockSupabase(page, opts = {}) {
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   const seqOverride = {};
+  const statusOverride = {};
   let financeiroRows = (opts.financialEntries ?? []).map((e) => ({ ...e }));
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
@@ -442,6 +443,21 @@ export async function mockSupabase(page, opts = {}) {
         for (const n of notifications) lidas.add(n.id);
         return route.fulfill(json({ success: true }));
       }
+      if (fn === "rpc_restore_reservation") {
+        const b = req.postDataJSON?.() ?? {};
+        if (opts.restoreRecusado) {
+          return route.fulfill(
+            json({ success: false, message: "Não foi possível restaurar: viagem lotada." }),
+          );
+        }
+        statusOverride[b.p_reservation_id] = "confirmada";
+        return route.fulfill(json({ success: true, status: "confirmada" }));
+      }
+      if (fn === "rpc_cancel_reservation") {
+        const b = req.postDataJSON?.() ?? {};
+        statusOverride[b.p_reservation_id] = "cancelada";
+        return route.fulfill(json({ success: true, message: "cancelled" }));
+      }
       if (fn === "rpc_remove_financial_entries") {
         const b = req.postDataJSON?.() ?? {};
         const ids = new Set(b.p_ids ?? []);
@@ -511,11 +527,12 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "settings") rows = SETTINGS;
     else if (table === "v_reservations_flat")
       rows = reservations.map((r) =>
-        buscaOverride[r.id] || seqOverride[r.id]
+        buscaOverride[r.id] || seqOverride[r.id] || statusOverride[r.id]
           ? {
               ...r,
               buscaPor: buscaOverride[r.id] ?? r.buscaPor,
               buscaSeq: seqOverride[r.id] ?? r.buscaSeq,
+              status: statusOverride[r.id] ?? r.status,
             }
           : r,
       );

@@ -146,6 +146,18 @@ export const reservationsService = {
     return data;
   },
 
+  /** Restaura uma reserva cancelada (Lixeira): volta ao status de antes, respeitando a lotação. */
+  async restore(reservationId) {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase.rpc("rpc_restore_reservation", {
+      p_reservation_id: reservationId,
+      p_actor: actor,
+    });
+    if (error) throw new ServiceError(`restore: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível restaurar a reserva.", { retryable: false });
+    return data;
+  },
+
   async cancel(reservationId) {
     const actor = await getCurrentUserId();
     const { data, error } = await supabase.rpc("rpc_cancel_reservation", {

@@ -38,6 +38,7 @@ import {
   separarBairro,
 } from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
+import { mensagemDeCancelamento } from "../../domain/lixeira.js";
 import {
   primeiroErro,
   validarData,
@@ -89,6 +90,7 @@ import {
   useDropoff,
 } from "../tabShared.jsx";
 import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
+import LixeiraReservas from "./LixeiraReservas.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
 export default function AgendaTab({
@@ -148,8 +150,13 @@ export default function AgendaTab({
     }
   };
   const atualizarStatus = (id, novoStatus) => {
-    if (novoStatus === "cancelada")
+    if (novoStatus === "cancelada") {
+      // um toque não cancela direto: pede confirmação (e a reserva vai para a Lixeira)
+      if (!window.confirm(mensagemDeCancelamento(reservas.find((x) => x.id === id)))) {
+        return Promise.resolve();
+      }
       return acao(R.cancelReservation(id), "Não foi possível cancelar.");
+    }
     if (novoStatus === "embarcado")
       return acao(R.markPassengers(id, "embarcado"), "Não foi possível marcar embarque.");
     if (novoStatus === "nao_compareceu")
@@ -191,6 +198,7 @@ export default function AgendaTab({
     setAcaoErro("");
     try {
       if (cancel) {
+        if (!window.confirm(mensagemDeCancelamento(reservas.find((x) => x.id === id)))) return;
         await R.cancelReservation(id);
         emit(EVENTS.RESERVA_CANCELADA, { via: "editar" });
         setEditando(null);
@@ -721,6 +729,14 @@ export default function AgendaTab({
             onAnotar={criarViaAnotacao}
           />
         ))}
+
+        <LixeiraReservas
+          reservas={reservas}
+          trips={trips}
+          onRestaurar={(id) =>
+            acao(R.restoreReservation(id), "Não foi possível restaurar a reserva.")
+          }
+        />
       </div>
       <Presence when={!!editando} duration={200}>
         {(state) =>
