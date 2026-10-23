@@ -158,6 +158,19 @@ export const reservationsService = {
     return data;
   },
 
+  /** Liga/desliga "extra (fora das vagas)" numa reserva (database/61). */
+  async setExtra(reservationId, extra) {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase.rpc("rpc_set_reservation_extra", {
+      p_reservation_id: reservationId,
+      p_extra: extra,
+      p_actor: actor,
+    });
+    if (error) throw new ServiceError(`setExtra: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar a passagem.", { retryable: false });
+    return data;
+  },
+
   async cancel(reservationId) {
     const actor = await getCurrentUserId();
     const { data, error } = await supabase.rpc("rpc_cancel_reservation", {

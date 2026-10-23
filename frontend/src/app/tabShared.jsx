@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { ehExtra } from "../domain/vagas.js";
 
 /* ============================================================================
  * Helpers, tokens, contexts and UI primitives shared by every tab.
@@ -1146,7 +1147,10 @@ export function runDiagnostics(reservas, capacidade, trips) {
   });
   const porDiaDirecao = {};
   corrigidas
-    .filter((r) => OCUPA_VAGA.includes(r.status) && !["frete", "encomenda"].includes(r.tipo))
+    .filter(
+      (r) =>
+        OCUPA_VAGA.includes(r.status) && !["frete", "encomenda"].includes(r.tipo) && !ehExtra(r),
+    )
     .forEach((r) => {
       const k = `${r.data}__${r.direcao}`;
       porDiaDirecao[k] = (porDiaDirecao[k] || 0) + r.quantidade;
@@ -1209,7 +1213,7 @@ export function gerarInsightsIA(reservas, operacao, capacidade, trips) {
   ["ida", "volta"].forEach((dir) => {
     const itens = doDiaHoje.filter((r) => r.direcao === dir);
     const confirmados = itens
-      .filter((r) => OCUPA_VAGA.includes(r.status))
+      .filter((r) => OCUPA_VAGA.includes(r.status) && !ehExtra(r))
       .reduce((s, r) => s + r.quantidade, 0);
     if (confirmados === 0) return;
     const horaRef =

@@ -12,11 +12,12 @@ import {
 } from "lucide-react";
 import React, { Suspense, useMemo } from "react";
 import { useAuth } from "../../auth/AuthProvider.jsx";
+import { ehExtra } from "../../domain/vagas.js";
 import { useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
 import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useVehicles } from "../../hooks/useVehicles.js";
-import { ChartsSkeleton } from "../../ui/skeletons/TabSkeleton.jsx";
 import { VideoBackdrop } from "../../ui/VideoBackdrop.jsx";
+import { ChartsSkeleton } from "../../ui/skeletons/TabSkeleton.jsx";
 import {
   C,
   Card,
@@ -202,9 +203,12 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
   const doDia = confirmadas.filter((r) => r.data === hoje);
   const passageirosHoje = doDia.reduce((s, r) => s + r.quantidade, 0);
   // Lotação SEMPRE por direção — cada viagem tem `capacidade` lugares.
-  const paxIdaHoje = doDia.filter((r) => r.direcao === "ida").reduce((s, r) => s + r.quantidade, 0);
+  // Extras (fora das vagas, issue #210) ficam de fora da lotação.
+  const paxIdaHoje = doDia
+    .filter((r) => r.direcao === "ida" && !ehExtra(r))
+    .reduce((s, r) => s + r.quantidade, 0);
   const paxVoltaHoje = doDia
-    .filter((r) => r.direcao === "volta")
+    .filter((r) => r.direcao === "volta" && !ehExtra(r))
     .reduce((s, r) => s + r.quantidade, 0);
   const vagasIdaHoje = Math.max(0, capacidade - paxIdaHoje);
   const vagasVoltaHoje = Math.max(0, capacidade - paxVoltaHoje);

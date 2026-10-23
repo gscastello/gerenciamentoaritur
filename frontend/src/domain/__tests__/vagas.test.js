@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cabeNaViagem, excedeCapacidade, ocupacao, vagasDisponiveis } from "../vagas.js";
+import {
+  cabeNaViagem,
+  contaNaLotacao,
+  ehExtra,
+  excedeCapacidade,
+  ocupacao,
+  totalExtras,
+  vagasDisponiveis,
+} from "../vagas.js";
 
 const r = (over) => ({
   id: Math.random().toString(36).slice(2),
@@ -89,19 +97,72 @@ describe("cabeNaViagem — criação e edição", () => {
     const reservas = [r({ quantidade: undefined }), r({ quantidade: undefined })];
     expect(ocupacao(reservas, "2026-09-01", "ida")).toBe(2);
     expect(
-      cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 3, quantidade: undefined }),
+      cabeNaViagem({
+        reservas,
+        data: "2026-09-01",
+        direcao: "ida",
+        capacidade: 3,
+        quantidade: undefined,
+      }),
     ).toBe(true); // 2 ocupados + 1 = 3, cabe
   });
 
   it("cabe exatamente na última vaga", () => {
     const reservas = [r({ quantidade: 30 })];
-    expect(cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 1 })).toBe(true);
-    expect(cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 2 })).toBe(false);
+    expect(
+      cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 1 }),
+    ).toBe(true);
+    expect(
+      cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 2 }),
+    ).toBe(false);
   });
 
   it("excedeCapacidade é o complemento de cabeNaViagem", () => {
-    const p = { reservas: [r({ quantidade: 30 })], data: "2026-09-01", direcao: "ida", capacidade: 31 };
+    const p = {
+      reservas: [r({ quantidade: 30 })],
+      data: "2026-09-01",
+      direcao: "ida",
+      capacidade: 31,
+    };
     expect(excedeCapacidade({ ...p, quantidade: 1 })).toBe(false);
     expect(excedeCapacidade({ ...p, quantidade: 5 })).toBe(true);
+  });
+});
+
+describe("passagens extras — fora das vagas (issue #210)", () => {
+  const extra = (over) => r({ extra: { fora_lotacao: true }, ...over });
+
+  it("extra não conta na lotação nem consome vaga", () => {
+    const reservas = [r({ quantidade: 31 }), extra({ quantidade: 3 })];
+    expect(ocupacao(reservas, "2026-09-01", "ida")).toBe(31);
+    expect(vagasDisponiveis(reservas, "2026-09-01", "ida", 31)).toBe(0);
+  });
+
+  it("com a viagem lotada, uma passagem normal NÃO cabe mas não é o extra que impede", () => {
+    const reservas = [r({ quantidade: 31 }), extra({ quantidade: 2 })];
+    expect(
+      cabeNaViagem({ reservas, data: "2026-09-01", direcao: "ida", capacidade: 31, quantidade: 1 }),
+    ).toBe(false);
+  });
+
+  it("ehExtra só vale para a marca verdadeira", () => {
+    expect(ehExtra(extra())).toBe(true);
+    expect(ehExtra(r({ extra: { fora_lotacao: false } }))).toBe(false);
+    expect(ehExtra(r({ extra: { fora_lotacao: "true" } }))).toBe(false);
+    expect(ehExtra(r())).toBe(false);
+    expect(ehExtra(undefined)).toBe(false);
+  });
+
+  it("contaNaLotacao exclui extra, mas totalExtras soma só os confirmados", () => {
+    expect(contaNaLotacao(extra())).toBe(false);
+    expect(contaNaLotacao(r())).toBe(true);
+    const reservas = [
+      extra({ quantidade: 2 }),
+      extra({ quantidade: 5, status: "cancelada" }),
+      extra({ quantidade: 1, status: "embarcado" }),
+      r({ quantidade: 4 }),
+      extra({ quantidade: 7, tipo: "encomenda" }),
+    ];
+    expect(totalExtras(reservas)).toBe(3);
   });
 });
