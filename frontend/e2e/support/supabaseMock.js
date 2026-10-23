@@ -15,6 +15,27 @@
 const PROJECT_REF = "e2e-placeholder"; // casa com playwright.config.js
 const AUTH_STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 
+// retrato de um dia no formato de fn_assemble_reservas_do_dia (database/60)
+export const SNAPSHOT_BACKUP_DIA = {
+  versao: 1,
+  dia: "2026-10-23",
+  reservas: [
+    {
+      reserva: {
+        quantity: 2,
+        status: "confirmada",
+        type: "passagem",
+        pickup_neighborhood: "Cohatrac",
+        street: "Rua 7",
+        deleted_at: null,
+      },
+      cliente: { nome: "Maria Backup", telefone: "98987654321" },
+      viagem: { direcao: "ida" },
+      ponto: { nome: "Buscar em Casa" },
+    },
+  ],
+};
+
 const FAKE_USER = {
   id: "00000000-0000-4000-8000-000000000001",
   aud: "authenticated",
@@ -143,6 +164,7 @@ export async function mockSupabase(page, opts = {}) {
     },
     onCreate,
     onEdit,
+    backupsDia: backupsIniciais = [],
     notifications = [],
     pendencias = [],
   } = opts;
@@ -255,6 +277,8 @@ export async function mockSupabase(page, opts = {}) {
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
   const limpadas = new Set();
+  // backups diários das reservas (issue #208) — stateful
+  let backupsDia = backupsIniciais.map((b) => ({ ...b }));
   // pendências de atendimento (issue #118) — stateful
   let tickets = pendencias.map((p) => ({ ...p }));
   let ticketSeq = 0;
@@ -308,12 +332,42 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json([]));
     }
 
+    // backup diário das reservas do dia (issue #208) — stateful
+    if (path === "reservation_day_backups") {
+      if (req.method() === "GET") {
+        const id = url.searchParams.get("id")?.replace("eq.", "");
+        if (id) {
+          const b = backupsDia.find((x) => x.id === id);
+          return route.fulfill(json(wantsObject ? { data: b?.data } : [{ data: b?.data }]));
+        }
+        return route.fulfill(json(backupsDia.map(({ data: _data, ...meta }) => meta)));
+      }
+      return route.fulfill(json([]));
+    }
+
     // RPCs
     if (path.startsWith("rpc/")) {
       const fn = path.slice(4);
       if (fn === "rpc_create_reservation") {
         onCreate?.(route);
         return route.fulfill(json(createResult));
+      }
+      if (fn === "rpc_backup_reservas_do_dia") {
+        backupsDia = [
+          {
+            id: `bk-${backupsDia.length + 1}`,
+            backup_date: "2026-10-23",
+            taken_at: "2026-10-23T15:00:00Z",
+            origem: "manual",
+            reservas_total: 1,
+            reservas_canceladas: 0,
+            passagens: 2,
+            size_bytes: 900,
+            data: SNAPSHOT_BACKUP_DIA,
+          },
+          ...backupsDia,
+        ];
+        return route.fulfill(json({ success: true, reservas: 1 }));
       }
       if (fn === "rpc_ensure_trips") return route.fulfill(json({ success: true, created: 0 }));
       if (fn === "rpc_set_pickup_transport_many") {
