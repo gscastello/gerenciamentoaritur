@@ -4,8 +4,25 @@
 
 import { OCUPA_VAGA, TIPOS_SEM_VAGA } from "./constants.js";
 
-function contaNaLotacao(r) {
-  return OCUPA_VAGA.includes(r.status) && !TIPOS_SEM_VAGA.includes(r.tipo);
+/**
+ * Passagem extra (issue #210): embarca fora do esquema normal — ex.: na beira
+ * da estrada — e NÃO ocupa uma das vagas da viagem. O banco guarda a marca em
+ * reservations.extra_data.fora_lotacao (database/61).
+ */
+export function ehExtra(r) {
+  return r?.extra?.fora_lotacao === true;
+}
+
+/** A reserva ocupa uma das vagas da viagem? */
+export function contaNaLotacao(r) {
+  return OCUPA_VAGA.includes(r.status) && !TIPOS_SEM_VAGA.includes(r.tipo) && !ehExtra(r);
+}
+
+/** Passagens extras (fora das vagas) já confirmadas numa lista de reservas. */
+export function totalExtras(reservas) {
+  return reservas
+    .filter((r) => OCUPA_VAGA.includes(r.status) && !TIPOS_SEM_VAGA.includes(r.tipo) && ehExtra(r))
+    .reduce((soma, r) => soma + (Number(r.quantidade) || 1), 0);
 }
 
 /** Lugares já ocupados numa viagem (data + direção). */

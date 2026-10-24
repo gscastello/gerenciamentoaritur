@@ -22,6 +22,7 @@ import {
   StopCircle,
   Sunrise,
   Truck,
+  Users,
   X,
   X as XIcon,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import {
 } from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
 import { mensagemDeCancelamento } from "../../domain/lixeira.js";
+import { ehExtra } from "../../domain/vagas.js";
 import {
   primeiroErro,
   validarData,
@@ -108,6 +110,7 @@ export default function AgendaTab({
   const [editando, setEditando] = useState(null);
   const [encomendaModal, setEncomendaModal] = useState(null); // null = fechado; {} = nova; {pendente:r} = agendando uma pendente
   const [acaoErro, setAcaoErro] = useState("");
+  const [extraModal, setExtraModal] = useState(null); // null = fechado; { direcao }
   const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
   const modalHeld = useRef(null);
@@ -131,7 +134,8 @@ export default function AgendaTab({
         .sort((a, b) => (a.data || "").localeCompare(b.data || "")),
     [reservas],
   );
-  const ocupa = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
+  // Passagens extras (fora das vagas, issue #210) não entram na lotação.
+  const ocupa = doDia.filter((r) => OCUPA_VAGA.includes(r.status) && !ehExtra(r));
   const paxIda = ocupa.filter((r) => r.direcao === "ida").reduce((s, r) => s + r.quantidade, 0);
   const paxVolta = ocupa.filter((r) => r.direcao === "volta").reduce((s, r) => s + r.quantidade, 0);
   const fretesPendentes = reservas.filter((r) => r.tipo === "frete" && r.status === "pendente");
@@ -241,6 +245,12 @@ export default function AgendaTab({
       setAcaoErro(mensagemAmigavel(e, "Não foi possível salvar a edição."));
     }
   };
+  // Passagem extra (fora das vagas, issue #210): liga/desliga a marca numa reserva.
+  const alternarExtra = (r, extra) =>
+    acao(
+      R.setReservationExtra(r.id, extra),
+      extra ? "Não foi possível marcar como extra." : "Não foi possível voltar às vagas.",
+    );
   // Lista "Buscar em casa" em modo EDITAR (issue #198): grava quem busca (em
   // lote, por responsável) e a nova ordem. Erro volta para o editor mostrar.
   const salvarBusca = async ({ ordem, atribuicoes }) => {
@@ -725,6 +735,8 @@ export default function AgendaTab({
             T={T}
             onStatus={atualizarStatus}
             onEditar={setEditando}
+            onExtra={alternarExtra}
+            onNovoExtra={() => setExtraModal({ direcao: dir })}
             onSalvarBusca={salvarBusca}
             onAnotar={criarViaAnotacao}
           />
@@ -757,6 +769,17 @@ export default function AgendaTab({
           )
         }
       </Presence>
+      {extraModal && (
+        <NovaReservaModal
+          dataInicial={data}
+          direcaoInicial={extraModal.direcao}
+          extraInicial
+          trips={trips}
+          capacidade={capacidade}
+          onCriar={R.createReservation}
+          onClose={() => setExtraModal(null)}
+        />
+      )}
       {encomendaModal && (
         <NovaEncomendaModal
           pendente={encomendaModal.pendente}
@@ -852,7 +875,7 @@ function GruposDeBusca({ itens, trips }) {
 // no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
 // comprovante e localização saíram — pagamento/comprovante agora ficam
 // dentro de "Editar reserva".
-function QuickActions({ r, onStatus, onEditar, textoCopia }) {
+function QuickActions({ r, onStatus, onEditar, onExtra, textoCopia }) {
   const tel = digitos(r.telefone);
   const classeAcao =
     "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
@@ -883,11 +906,15 @@ function QuickActions({ r, onStatus, onEditar, textoCopia }) {
         />
       )}
       {btn(Pencil, "Editar", () => onEditar(r))}
+      {onExtra &&
+        r.tipo === "passagem" &&
+        r.status !== "cancelada" &&
+        btn(Users, ehExtra(r) ? "Voltar às vagas" : "Tornar extra", () => onExtra(r, !ehExtra(r)))}
       {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
     </div>
   );
 }
-function LinhaOperacional({ r, trips, onStatus, onEditar }) {
+function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
   // O endereço é o que o motorista precisa: vem em destaque e o nome em
   // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
@@ -1021,7 +1048,13 @@ function LinhaOperacional({ r, trips, onStatus, onEditar }) {
         </div>
       </div>
       <div className="mt-2 pl-6">
-        <QuickActions r={r} onStatus={onStatus} onEditar={onEditar} textoCopia={textoCopia} />
+        <QuickActions
+          r={r}
+          onStatus={onStatus}
+          onEditar={onEditar}
+          onExtra={onExtra}
+          textoCopia={textoCopia}
+        />
       </div>
     </div>
   );
@@ -1094,6 +1127,8 @@ function ViagemOperacional({
   T,
   onStatus,
   onEditar,
+  onExtra,
+  onNovoExtra,
   onSalvarBusca,
   onAnotar,
 }) {
@@ -1101,7 +1136,7 @@ function ViagemOperacional({
   const [editandoBusca, setEditandoBusca] = useState(false);
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
   const confirmados = doGrupo
-    .filter((r) => OCUPA_VAGA.includes(r.status))
+    .filter((r) => OCUPA_VAGA.includes(r.status) && !ehExtra(r))
     .reduce((s, r) => s + r.quantidade, 0);
   const pendentesQtd = doGrupo
     .filter((r) => r.status === "pendente")
@@ -1110,6 +1145,13 @@ function ViagemOperacional({
     .filter((r) => r.status === "embarcado")
     .reduce((s, r) => s + r.quantidade, 0);
   const vagas = Math.max(0, capacidade - confirmados);
+  // Passagens extras (fora das vagas): seção própria, não entram nos pontos.
+  const extras = doGrupo.filter(
+    (r) => ehExtra(r) && r.status !== "cancelada" && r.status !== "espera",
+  );
+  const extrasQtd = extras
+    .filter((r) => OCUPA_VAGA.includes(r.status))
+    .reduce((s, r) => s + r.quantidade, 0);
   const horaPrincipal =
     direcao === "ida"
       ? shiftHour(
@@ -1240,13 +1282,18 @@ function ViagemOperacional({
           <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
           <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
           <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
+          {extrasQtd > 0 && <MiniStat label="Extras" value={extrasQtd} cor={C.purple} />}
         </div>
       </div>
       <div className="space-y-3">
         {pontosOrdenados.map((p) => {
           const hora = shiftHour(p.horaBase, direcao === "ida" && segunda, segundaHoras);
           const doPonto = doGrupo.filter(
-            (r) => r.pontoId === p.id && r.status !== "cancelada" && r.status !== "espera",
+            (r) =>
+              r.pontoId === p.id &&
+              r.status !== "cancelada" &&
+              r.status !== "espera" &&
+              !ehExtra(r),
           );
           // "Buscar em casa" segue a ordem que o dono montou (issue #198)
           const ehBusca = p.id === "busca";
@@ -1320,6 +1367,7 @@ function ViagemOperacional({
                       trips={trips}
                       onStatus={onStatus}
                       onEditar={onEditar}
+                      onExtra={onExtra}
                     />
                   ))}
                 </div>
@@ -1333,6 +1381,53 @@ function ViagemOperacional({
             </div>
           );
         })}
+        {onNovoExtra && (
+          <div>
+            <div
+              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
+              style={{ background: `${C.purple}1F`, borderLeft: `4px solid ${C.purple}` }}
+            >
+              <span
+                className="text-[15px] font-bold tracking-wide"
+                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+              >
+                EXTRAS
+              </span>
+              <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
+                {extras.length === 0
+                  ? "fora das vagas"
+                  : `${extras.reduce((s, r) => s + r.quantidade, 0)} passagem(ns) · fora das vagas`}
+              </span>
+              <button
+                type="button"
+                onClick={onNovoExtra}
+                className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+                style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <Plus size={12} /> Adicionar extra
+              </button>
+            </div>
+            {extras.length === 0 ? (
+              <div className="text-xs pl-1 mb-1.5" style={{ color: C.inkFaint }}>
+                Nenhum extra. Use para quem embarca fora do esquema (ex.: beira da estrada) sem
+                ocupar uma das {capacidade} vagas.
+              </div>
+            ) : (
+              <div className="space-y-1.5 mb-1.5">
+                {extras.map((r) => (
+                  <LinhaOperacional
+                    key={r.id}
+                    r={r}
+                    trips={trips}
+                    onStatus={onStatus}
+                    onEditar={onEditar}
+                    onExtra={onExtra}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -1654,8 +1749,13 @@ export function NovaReservaModal({
   onClose,
   onCriar,
   capacidade = 31,
+  extraInicial = false,
 }) {
-  const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
+  // Extra na ida: começa em "Outro local de embarque" (beira da estrada etc.).
+  const primeiroPonto = (dir) =>
+    (extraInicial && trips[dir]?.pontos?.find((p) => p.id === "outro")?.id) ||
+    trips[dir]?.pontos?.[0]?.id ||
+    "";
   const [f, setF] = useState({
     nome: "",
     telefone: "",
@@ -1671,6 +1771,7 @@ export function NovaReservaModal({
     desembarqueArea: "",
     telefone2: "",
     comoPendente: false,
+    foraLotacao: extraInicial,
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -1756,7 +1857,9 @@ export function NovaReservaModal({
         : status === "pendente"
           ? "Agendamento manual — aguardando confirmação."
           : null,
-      extraData: { origem: "agendamento_manual" },
+      extraData: f.foraLotacao
+        ? { origem: "agendamento_manual", fora_lotacao: true }
+        : { origem: "agendamento_manual" },
     };
   };
 
@@ -1812,7 +1915,7 @@ export function NovaReservaModal({
             className="font-semibold text-sm"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
-            Agendar passagem
+            {extraInicial ? "Adicionar passagem extra" : "Agendar passagem"}
           </div>
           <button type="button" onClick={() => onClose()}>
             <X size={16} style={{ color: C.inkSoft }} />
@@ -1985,6 +2088,18 @@ export function NovaReservaModal({
             />
           </Field>
         </div>
+
+        <label
+          className="flex items-center gap-2 text-xs mb-2 cursor-pointer"
+          style={{ color: C.inkSoft }}
+        >
+          <input
+            type="checkbox"
+            checked={f.foraLotacao}
+            onChange={(e) => setF({ ...f, foraLotacao: e.target.checked })}
+          />
+          Passagem extra — fora das vagas (ex.: embarca na beira da estrada)
+        </label>
 
         <label
           className="flex items-center gap-2 text-xs mb-4 cursor-pointer"

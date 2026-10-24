@@ -274,6 +274,7 @@ export async function mockSupabase(page, opts = {}) {
   const buscaOverride = {};
   const seqOverride = {};
   const statusOverride = {};
+  const extraOverride = {}; // fora_lotacao por reserva (database/61)
   let financeiroRows = (opts.financialEntries ?? []).map((e) => ({ ...e }));
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
@@ -507,6 +508,19 @@ export async function mockSupabase(page, opts = {}) {
         statusOverride[b.p_reservation_id] = "confirmada";
         return route.fulfill(json({ success: true, status: "confirmada" }));
       }
+      if (fn === "rpc_set_reservation_extra") {
+        const b = req.postDataJSON?.() ?? {};
+        if (opts.extraRecusado && !b.p_extra) {
+          return route.fulfill(
+            json({
+              success: false,
+              message: "A viagem já está lotada — não dá para voltar esta passagem às vagas.",
+            }),
+          );
+        }
+        extraOverride[b.p_reservation_id] = !!b.p_extra;
+        return route.fulfill(json({ success: true, extra: !!b.p_extra }));
+      }
       if (fn === "rpc_cancel_reservation") {
         const b = req.postDataJSON?.() ?? {};
         statusOverride[b.p_reservation_id] = "cancelada";
@@ -581,12 +595,19 @@ export async function mockSupabase(page, opts = {}) {
     else if (table === "settings") rows = SETTINGS;
     else if (table === "v_reservations_flat")
       rows = reservations.map((r) =>
-        buscaOverride[r.id] || seqOverride[r.id] || statusOverride[r.id]
+        buscaOverride[r.id] ||
+        seqOverride[r.id] ||
+        statusOverride[r.id] ||
+        extraOverride[r.id] !== undefined
           ? {
               ...r,
               buscaPor: buscaOverride[r.id] ?? r.buscaPor,
               buscaSeq: seqOverride[r.id] ?? r.buscaSeq,
               status: statusOverride[r.id] ?? r.status,
+              extra:
+                extraOverride[r.id] === undefined
+                  ? r.extra
+                  : { ...r.extra, fora_lotacao: extraOverride[r.id] },
             }
           : r,
       );
