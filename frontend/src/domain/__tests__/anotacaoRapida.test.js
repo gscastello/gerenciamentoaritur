@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseAnotacaoEncomenda, parseAnotacaoRapida, separarBairro } from "../anotacaoRapida.js";
+import {
+  parseAnotacaoEncomenda,
+  parseAnotacaoRapida,
+  parseLinhaEncomenda,
+  separarBairro,
+} from "../anotacaoRapida.js";
 
 describe("parseAnotacaoRapida", () => {
   it("formato completo: quantidade + bairro + telefone sem máscara", () => {
@@ -248,5 +253,42 @@ describe("separarBairro", () => {
   it("texto vazio ou lista vazia não quebra", () => {
     expect(separarBairro("", BAIRROS)).toEqual({ bairro: "", detalhe: "" });
     expect(separarBairro("Cohatrac Rua 7", [])).toEqual({ bairro: "Cohatrac Rua 7", detalhe: "" });
+  });
+});
+
+describe("parseLinhaEncomenda — endereço, telefone, nome (issue #214)", () => {
+  it("endereço + telefone", () => {
+    expect(parseLinhaEncomenda("Rua das Flores 12 centro 98999998888")).toEqual({
+      ok: true,
+      endereco: "Rua das Flores 12 centro",
+      telefone: "98999998888",
+      nome: "",
+    });
+  });
+  it("com nome depois do telefone e separadores ' - '", () => {
+    expect(parseLinhaEncomenda("Pirapemas centro - 98 8516-6052 - João da Loja")).toEqual({
+      ok: true,
+      endereco: "Pirapemas centro",
+      telefone: "9885166052",
+      nome: "João da Loja",
+    });
+  });
+  it("só o telefone: endereço vazio, o resto se completa depois", () => {
+    const r = parseLinhaEncomenda("98999998888");
+    expect(r).toMatchObject({ ok: true, endereco: "", telefone: "98999998888" });
+  });
+  it("sem telefone: o texto todo é o endereço", () => {
+    expect(parseLinhaEncomenda("Mercadinho do Zé, quadra 7")).toEqual({
+      ok: true,
+      endereco: "Mercadinho do Zé quadra 7",
+      telefone: "",
+      nome: "",
+    });
+  });
+  it("vazio pede ao menos o endereço", () => {
+    expect(parseLinhaEncomenda("   ")).toEqual({
+      ok: false,
+      erro: "Escreva ao menos o endereço de entrega.",
+    });
   });
 });

@@ -86,8 +86,8 @@ test("Adicionar extra abre o agendamento já marcado como extra", async ({ page 
   await expect(page.getByText("Adicionar passagem extra")).toBeVisible();
   await expect(page.getByLabel(/Passagem extra — fora das vagas/)).toBeChecked();
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
-  await page.getByLabel("Nome *").fill("Beira da Estrada");
-  await page.getByLabel("Telefone *").fill("98988887777");
+  await page.getByLabel("Nome (ou telefone)").fill("Beira da Estrada");
+  await page.getByLabel("Telefone (ou nome)").fill("98988887777");
   await page
     .locator("div.anim-pop")
     .getByRole("button", { name: /^Agendar$/ })

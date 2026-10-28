@@ -34,16 +34,23 @@ test("Agenda: agenda uma encomenda pendente numa viagem/ponto real", async ({ pa
     onEdit: (route) => chamadas.push(route.request().postDataJSON()),
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Agenda/ }).first().click();
+  await page
+    .getByRole("button", { name: /Agenda/ })
+    .first()
+    .click();
 
   const linhaPendente = page.getByText(/Encomenda: Documentos/).locator("..");
   await expect(linhaPendente).toBeVisible();
   await linhaPendente.getByRole("button", { name: "Agendar" }).click();
 
   // modal pré-preenchido com os dados de quem recebe e o desembarque
-  await expect(page.getByRole("heading", { name: "Agendar encomenda" }).or(page.getByText("Agendar encomenda"))).toBeVisible();
-  await expect(page.getByLabel("Quem recebe (nome) *")).toHaveValue("Maria Receptora");
-  await expect(page.getByLabel("Quem recebe (telefone) *")).toHaveValue("98988887777");
+  await expect(
+    page
+      .getByRole("heading", { name: "Agendar encomenda" })
+      .or(page.getByText("Agendar encomenda")),
+  ).toBeVisible();
+  await expect(page.getByLabel("Quem recebe (nome ou telefone)")).toHaveValue("Maria Receptora");
+  await expect(page.getByLabel("Quem recebe (telefone ou nome)")).toHaveValue("98988887777");
 
   await page.getByRole("button", { name: "Agendar", exact: true }).last().click();
 
@@ -60,18 +67,29 @@ test("Agenda: cria uma encomenda nova do zero", async ({ page }) => {
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
-    createResult: { success: true, reservation_id: "e2e-enc-novo", status: "confirmada", message: "created" },
+    createResult: {
+      success: true,
+      reservation_id: "e2e-enc-novo",
+      status: "confirmada",
+      message: "created",
+    },
     onCreate: (route) => chamadas.push(route.request().postDataJSON()),
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Agenda/ }).first().click();
+  await page
+    .getByRole("button", { name: /Agenda/ })
+    .first()
+    .click();
 
   await page.getByRole("button", { name: "Nova" }).click();
-  await page.getByLabel("Quem recebe (nome) *").fill("João Destino");
-  await page.getByLabel("Quem recebe (telefone) *").fill("98977776666");
+  await page.getByLabel("Endereço de entrega *").fill("Pirapemas centro");
+  await page.getByLabel("Quem recebe (nome ou telefone)").fill("João Destino");
+  await page.getByLabel("Quem recebe (telefone ou nome)").fill("98977776666");
   await page.getByRole("button", { name: "Criar" }).click();
 
-  await expect(page.getByText("Nenhuma encomenda agendada")).toHaveCount(0).catch(() => {});
+  await expect(page.getByText("Nenhuma encomenda agendada"))
+    .toHaveCount(0)
+    .catch(() => {});
   expect(chamadas).toHaveLength(1);
   expect(chamadas[0].p_type).toBe("encomenda");
   expect(chamadas[0].p_customer_name).toBe("João Destino");
@@ -94,7 +112,10 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
     onEdit: (route) => chamadas.push(route.request().postDataJSON()),
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
+  await page
+    .getByRole("button", { name: /Lista do Dia/ })
+    .first()
+    .click();
 
   await expect(page.getByText("Encomendas do dia")).toBeVisible();
   await expect(page.getByText(/Documentos.*Rodoviária.*Pirapemas centro/)).toBeVisible();
@@ -105,4 +126,49 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   await expect(page.getByRole("button", { name: "Entregue" })).toHaveCount(0);
   expect(chamadas).toHaveLength(1);
   expect(chamadas[0].p_status).toBe("embarcado");
+});
+
+test("Agenda: nova encomenda pela linha rápida (só endereço e contato)", async ({ page }) => {
+  const chamadas = [];
+  await mockSupabase(page, {
+    role: "admin",
+    createResult: {
+      success: true,
+      reservation_id: "e2e-enc-rapida",
+      status: "confirmada",
+      message: "created",
+    },
+    onCreate: (route) => chamadas.push(route.request().postDataJSON()),
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /Agenda/ })
+    .first()
+    .click();
+
+  await page.getByRole("button", { name: "Nova" }).click();
+  await page
+    .getByLabel("Linha rápida: endereço, telefone e nome")
+    .fill("Pirapemas centro 98977776666");
+  await expect(page.getByLabel("Endereço de entrega *")).toHaveValue("Pirapemas centro");
+  await expect(page.getByLabel("Quem recebe (telefone ou nome)")).toHaveValue("98977776666");
+  await page.getByRole("button", { name: "Criar" }).click();
+
+  await expect.poll(() => chamadas.length).toBe(1);
+  expect(chamadas[0].p_type).toBe("encomenda");
+  expect(chamadas[0].p_dropoff_location).toBe("Pirapemas centro");
+  expect(chamadas[0].p_customer_phone).toBe("98977776666");
+  expect(chamadas[0].p_customer_name).toBe("");
+});
+
+test("Agenda: encomenda sem endereço de entrega não envia", async ({ page }) => {
+  await mockSupabase(page, { role: "admin" });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /Agenda/ })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Nova" }).click();
+  await page.getByLabel("Quem recebe (telefone ou nome)").fill("98977776666");
+  await expect(page.getByRole("button", { name: "Criar" })).toBeDisabled();
 });

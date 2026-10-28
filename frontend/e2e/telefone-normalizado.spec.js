@@ -32,8 +32,8 @@ test("Agenda: Agendar passagem manual também normaliza o telefone antes de envi
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
-  await page.getByLabel("Nome *").fill("Cliente Manual E2E");
-  await page.getByLabel("Telefone *").fill("+55 98 99999-8888");
+  await page.getByLabel("Nome (ou telefone)").fill("Cliente Manual E2E");
+  await page.getByLabel("Telefone (ou nome)").fill("+55 98 99999-8888");
 
   await page.getByRole("button", { name: /^Agendar$/ }).first().click();
 
