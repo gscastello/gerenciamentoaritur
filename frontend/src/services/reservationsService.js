@@ -125,6 +125,13 @@ export const reservationsService = {
     // a função RPC nunca lança exceção de negócio pro cliente — ela devolve
     // { success:false, message } quando a capacidade foi excedida.
     if (!data?.success) {
+      // mesmo contato já tem passagem nesta viagem: a tela pergunta se é de propósito
+      if (data?.code === "RESERVA_DUPLICADA") {
+        throw new ServiceError(data.message || "Este contato já tem reserva nesta viagem.", {
+          retryable: false,
+          code: "RESERVA_DUPLICADA",
+        });
+      }
       throw new ServiceError(data?.message || "Não foi possível criar a reserva.", {
         retryable: false, // nunca reexecutar automaticamente um "capacidade excedida"
         code: "CAPACITY_OR_BUSINESS_RULE",
