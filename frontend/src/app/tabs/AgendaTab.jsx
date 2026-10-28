@@ -96,6 +96,26 @@ import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
 import LixeiraReservas from "./LixeiraReservas.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
+// Reserva duplicada (issue #216): o banco recusa quando o mesmo contato já tem
+// passagem ativa na viagem. Pergunta se é de propósito e, só se confirmar,
+// reenvia com a marca que libera a segunda reserva.
+async function criarConfirmandoDuplicada(criar, payload) {
+  try {
+    return await criar(payload);
+  } catch (e) {
+    if (
+      e?.code === "RESERVA_DUPLICADA" &&
+      window.confirm(`${e.message}\n\nCriar outra reserva mesmo assim?`)
+    ) {
+      return criar({
+        ...payload,
+        extraData: { ...payload.extraData, permitir_duplicada: true },
+      });
+    }
+    throw e;
+  }
+}
+
 export default function AgendaTab({
   reservas,
   R,
@@ -331,7 +351,7 @@ export default function AgendaTab({
       const nomeExistente = achado.nome ? null : await buscarClientePorTelefone(achado.telefone);
       const nome =
         achado.nome || nomeExistente || `Passageiro${achado.local ? ` (${achado.local})` : ""}`;
-      const res = await R.createReservation({
+      const res = await criarConfirmandoDuplicada(R.createReservation, {
         tripDate: data,
         direction: direcao,
         customerName: nome,
@@ -1881,7 +1901,7 @@ export function NovaReservaModal({
     }
     setSalvando(true);
     try {
-      const res = await onCriar(montarPayload(status));
+      const res = await criarConfirmandoDuplicada(onCriar, montarPayload(status));
       emit(EVENTS.RESERVA_CRIADA, {
         via: "agendamento_manual",
         status: res?.status || status,

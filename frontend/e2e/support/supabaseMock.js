@@ -352,6 +352,18 @@ export async function mockSupabase(page, opts = {}) {
       const fn = path.slice(4);
       if (fn === "rpc_create_reservation") {
         onCreate?.(route);
+        // opts.duplicada: o banco recusa até a tela reenviar com permitir_duplicada
+        if (opts.duplicada && req.postDataJSON?.()?.p_extra_data?.permitir_duplicada !== true) {
+          return route.fulfill(
+            json({
+              success: false,
+              status: "duplicate",
+              code: "RESERVA_DUPLICADA",
+              message:
+                "Maria já tem reserva nesta viagem: 1 passagem(ns) em Rodoviária (confirmada).",
+            }),
+          );
+        }
         return route.fulfill(json(createResult));
       }
       if (fn === "rpc_backup_reservas_do_dia") {
