@@ -26,11 +26,13 @@
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
+import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
+import { registrarObservacao } from "../_shared/observacoes.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -82,13 +84,37 @@ async function processar(body: any) {
   const atividade = extrairAtividade(body, INBOX_ID);
   if (atividade) await espelhar(atividade);
 
-  const m = extrairMensagemDeCliente(body, INBOX_ID);
-  if (!m) return;
-
   const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "attendance_mode").maybeSingle();
   const modo: string = cfg?.value?.mode ?? "ia";
 
+  // Modo sombra OBSERVA: guarda o que o atendente respondeu (pelo celular ou pelo
+  // Chatwoot) para o bot aprender como a equipe atende e agenda (issue #218).
+  if (modo === "sombra" && atividade?.autor === "equipe" && atividade.texto) {
+    const conversa = await whatsappService.resolveConversation(atividade.telefone);
+    await registrarObservacao({
+      conversationId: conversa.id,
+      chatwootConversationId: atividade.chatwootConversationId,
+      chatwootMessageId: atividade.mensagemId,
+      author: "equipe",
+      content: atividade.texto,
+    });
+    await aprenderSePreciso();
+  }
+
+  const m = extrairMensagemDeCliente(body, INBOX_ID);
+  if (!m) return;
+
   const conversation = await whatsappService.resolveConversation(m.telefone);
+
+  if (modo === "sombra" && m.texto) {
+    await registrarObservacao({
+      conversationId: conversation.id,
+      chatwootConversationId: m.chatwootConversationId,
+      chatwootMessageId: m.chatwootMessageId,
+      author: "cliente",
+      content: m.texto,
+    });
+  }
 
   // Atendimento manual: o bot não responde — mas a conversa precisa aparecer
   // pra equipe (conversas "pendentes" ficam fora da caixa de abertas).

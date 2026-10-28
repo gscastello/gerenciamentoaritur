@@ -1,10 +1,21 @@
-import { BookOpen, MessageSquareText, Pause, Pencil, Play, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  BookOpen,
+  MessageSquareText,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBotKnowledge } from "../../hooks/useBotKnowledge.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import { C, Card, ErrorBanner, Field, TextArea, TextInput } from "../tabShared.jsx";
+import SistemaBotAprendizado from "./SistemaBotAprendizado.jsx";
 
 // Duração da saída antes de tirar o item da lista de verdade — precisa
 // bater com o `duration` do Presence (AGENTS.md §5).
@@ -133,8 +144,8 @@ function GuiaDeEstilo({ valor, onSalvar, salvando }) {
         <MessageSquareText size={16} style={{ color: C.amber }} /> Como o bot fala com o cliente
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        Descreva o tom que combina com o seu público: se trata por "você" ou "senhor/senhora", se usa
-        emoji, se é mais formal ou descontraído, expressões que deve usar ou evitar.
+        Descreva o tom que combina com o seu público: se trata por "você" ou "senhor/senhora", se
+        usa emoji, se é mais formal ou descontraído, expressões que deve usar ou evitar.
       </p>
       <Field label="Guia de estilo">
         <TextArea
@@ -285,12 +296,7 @@ export default function SistemaBot() {
         )}
         <div className="space-y-2">
           {base.itens.map((item) => (
-            <Presence
-              key={item.id}
-              when={!saindo.has(item.id)}
-              duration={SAIDA_MS}
-              {...fadeScale}
-            >
+            <Presence key={item.id} when={!saindo.has(item.id)} duration={SAIDA_MS} {...fadeScale}>
               <ItemConhecimento
                 item={item}
                 onSalvar={salvarItem}
@@ -301,6 +307,8 @@ export default function SistemaBot() {
           ))}
         </div>
       </Card>
+
+      <SistemaBotAprendizado />
     </div>
   );
 }

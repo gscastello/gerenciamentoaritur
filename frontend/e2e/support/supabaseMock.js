@@ -165,6 +165,16 @@ export async function mockSupabase(page, opts = {}) {
     onCreate,
     onEdit,
     backupsDia: backupsIniciais = [],
+    botLearnings: botLearningsIniciais = [],
+    botStats = {
+      success: true,
+      observacoes: 0,
+      pendentes: 0,
+      ultima_observacao: null,
+      ultimo_aprendizado: null,
+      dias_guardados: 90,
+    },
+    botAprendizadoResumo = { observacoes: 0, novas: 0, reforcos: 0, atualizadas: 0, ignoradas: 0 },
     notifications = [],
     pendencias = [],
   } = opts;
@@ -184,6 +194,11 @@ export async function mockSupabase(page, opts = {}) {
   // Edge Functions (ex.: create-user da aba Sistema → Equipe)
   await page.route("**/functions/v1/**", (route) =>
     route.fulfill(json({ success: true, id: "e2e-new-user" })),
+  );
+
+  // "Aprender agora" (Edge Function bot-aprender, só admin)
+  await page.route("**/functions/v1/bot-aprender", (route) =>
+    route.fulfill(json({ success: true, resumo: botAprendizadoResumo })),
   );
 
   // auth: getUser / refresh
@@ -275,6 +290,7 @@ export async function mockSupabase(page, opts = {}) {
   const seqOverride = {};
   const statusOverride = {};
   const extraOverride = {}; // fora_lotacao por reserva (database/61)
+  let botLearnings = botLearningsIniciais.map((l) => ({ ...l }));
   let financeiroRows = (opts.financialEntries ?? []).map((e) => ({ ...e }));
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
@@ -520,6 +536,7 @@ export async function mockSupabase(page, opts = {}) {
         statusOverride[b.p_reservation_id] = "confirmada";
         return route.fulfill(json({ success: true, status: "confirmada" }));
       }
+      if (fn === "rpc_bot_learning_stats") return route.fulfill(json(botStats));
       if (fn === "rpc_set_reservation_extra") {
         const b = req.postDataJSON?.() ?? {};
         if (opts.extraRecusado && !b.p_extra) {
@@ -694,6 +711,12 @@ export async function mockSupabase(page, opts = {}) {
       const updated = botKnowledgeRows.find((k) => k.id === id) ?? null;
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "bot_knowledge") rows = botKnowledgeRows.filter((k) => !k.deleted_at);
+    else if (table === "bot_learnings" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      botLearnings = botLearnings.map((l) => (l.id === id ? { ...l, ...body } : l));
+      return route.fulfill(json([]));
+    } else if (table === "bot_learnings") rows = botLearnings;
     else if (table === "expense_categories" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};

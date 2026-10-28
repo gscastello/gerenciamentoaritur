@@ -16,6 +16,7 @@
 
 import { getBotContext } from "./botContext.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { registrarObservacao } from "./observacoes.ts";
 import { formatarOpcoes, type Opcao } from "./opcoes.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 
@@ -30,6 +31,13 @@ async function enviar(texto: string, opcoes: Opcao[] | null) {
   if (error) console.error("Falha ao guardar as opções oferecidas:", error.message);
 
   if (ctx.shadow) {
+    // o rascunho também é observado: o aprendizado compara com o que o atendente respondeu
+    await registrarObservacao({
+      conversationId: ctx.conversationId,
+      chatwootConversationId: ctx.chatwootConversationId,
+      author: "bot_rascunho",
+      content: texto,
+    });
     return chatwootClient.postMessage(
       ctx.chatwootConversationId,
       `🤖 [SOMBRA] Resposta que o bot enviaria:\n\n${texto}`,

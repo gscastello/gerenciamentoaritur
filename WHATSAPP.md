@@ -46,6 +46,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
    `database/52-painel-atendimento-whatsapp.sql` (espelho da fila do Chatwoot, perguntas sem resposta).
 3. Criar o usuário do bot em **Sistema → Equipe**: nome exato `Bot WhatsApp`, e-mail
    `bot@rota-pirapemas.local`, papel **atendente**. É ele que aparece na auditoria.
+4. `database/64-sombra-aprende.sql` — observações e lições do modo Sombra (ver §6b).
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -65,6 +66,7 @@ quando o cliente já existe, tenta renomear o contato no Chatwoot para o nome do
 
 ```bash
 supabase functions deploy chatwoot-bot --no-verify-jwt
+supabase functions deploy bot-aprender            # botão "Aprender agora" (só admin; com verificação de JWT)
 supabase secrets set ANTHROPIC_API_KEY=...        # console.anthropic.com
 supabase secrets set CHATWOOT_ACCOUNT_ID=188239
 supabase secrets set CHATWOOT_INBOX_ID=146985
@@ -94,6 +96,28 @@ Nunca cole esses valores em chat, issue ou PR. URL da função:
 
 Comece em **Sombra** por alguns dias, leia as notas privadas e só então troque para
 IA automática (a troca vale na hora, para todos os sócios).
+
+## 6b. O que o bot aprende em modo Sombra (issue #218)
+
+No modo **Sombra** o bot, além de rascunhar as respostas, **observa**: guarda o texto do que o
+cliente escreve, do que o atendente responde (pelo celular ou pelo Chatwoot) e do rascunho que
+ele mesmo teria enviado (`bot_observations`, só texto, **apagado após 90 dias**, legível só pelo
+admin). Notas privadas e anexos não entram.
+
+De tempos em tempos (quando há material e passaram 6 h) ou ao clicar em **Sistema → Bot →
+Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolve **lições**
+(`bot_learnings`), acumulando: lição já conhecida só ganha evidência; texto melhor só substitui
+o antigo se o dono ainda não revisou.
+
+| Tipo | Como entra | Para que serve |
+|---|---|---|
+| Jeito dos clientes falarem | **Já vale**, com aviso "Está certo?" | O bot entende melhor gírias e pedidos (só leitura da mensagem) |
+| Estilo do atendente / como o atendente agenda | **Já vale**, com aviso | Afina o tom e a ordem das perguntas nas respostas livres |
+| Informação do atendente (preço, regra, horário) | **Só depois de aprovada** | Entra nas respostas livres, sempre sob o `botGuard` |
+
+O bot continua **sem decidir preço, vaga, horário ou confirmação**: isso segue vindo do banco.
+As lições só mudam como ele entende e como ele fala. O dono pode editar, recusar ou desativar
+qualquer lição a qualquer momento.
 
 ## 7. Checklist de teste (em modo Sombra)
 

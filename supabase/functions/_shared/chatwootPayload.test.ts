@@ -91,7 +91,7 @@ Deno.test("atividade: mensagem do cliente", () => {
   const a = extrairAtividade({ event: "message_created", id: 1, content: "Oi!", message_type: "incoming", private: false,
     sender: { id: 7, name: "😎 Maria Top", phone_number: "+5598981012388" }, conversation: conversa() }, 146985);
   assertEquals(a, { chatwootConversationId: 55, telefone: "5598981012388", nomeContato: "😎 Maria Top", contatoId: 7,
-    status: "open", autor: "cliente", previa: "Oi!" });
+    status: "open", autor: "cliente", previa: "Oi!", texto: "Oi!", mensagemId: 1 });
 });
 
 Deno.test("atividade: resposta da equipe vs. do bot (contato vem da conversa)", () => {
@@ -124,4 +124,27 @@ Deno.test("atividade: prévia de anexo e limite de tamanho", () => {
 Deno.test("atividade: outra caixa de entrada e eventos desconhecidos são ignorados", () => {
   assertEquals(extrairAtividade({ event: "conversation_opened", ...conversa({ inbox_id: 999 }) }, 146985), null);
   assertEquals(extrairAtividade({ event: "webwidget_triggered", ...conversa() }), null);
+});
+
+Deno.test("atividade: carrega o texto inteiro e o id da mensagem (modo sombra observa)", () => {
+  const longo = `${"Resposta longa do atendente. ".repeat(20)}`.trim();
+  const a = extrairAtividade({ event: "message_created", id: 77, content: longo, message_type: "outgoing", private: false,
+    sender: { id: 3, type: "user" }, conversation: conversa() });
+  assertEquals(a?.autor, "equipe");
+  assertEquals(a?.mensagemId, 77);
+  assertEquals(a?.texto, longo);
+  assertEquals((a?.previa ?? "").length <= 140, true);
+});
+
+Deno.test("atividade: mensagem só com anexo não tem texto para observar", () => {
+  const a = extrairAtividade({ event: "message_created", id: 78, content: "", message_type: "outgoing", private: false,
+    sender: { id: 3, type: "user" }, attachments: [{ file_type: "image", data_url: "https://x/y.jpg" }], conversation: conversa() });
+  assertEquals(a?.texto, undefined);
+  assertEquals(a?.previa, "[imagem]");
+});
+
+Deno.test("atividade: nota privada (inclusive o rascunho do bot) nunca é observada", () => {
+  const a = extrairAtividade({ event: "message_created", id: 79, content: "🤖 [SOMBRA] ...", message_type: "outgoing", private: true,
+    sender: { id: 3, type: "agent_bot" }, conversation: conversa() });
+  assertEquals(a, null);
 });

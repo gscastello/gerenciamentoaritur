@@ -10,6 +10,7 @@
 // que não esteja nas fontes. Reservas, vagas e confirmações NUNCA passam
 // por aqui — continuam no motor determinístico (conversationEngine).
 
+import { blocoDasLicoes } from "./botLicoes.ts";
 import { numerosNaoFundamentados } from "./botGuard.ts";
 import { hojeSaoLuis } from "./dataOperacao.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -92,7 +93,17 @@ async function montarFatos(): Promise<{ fatos: string; estilo: string }> {
     for (const k of base.data) linhas.push(`- ${k.title}: ${k.content}`);
   }
 
-  return { fatos: linhas.join("\n"), estilo: (cfg.bot_style_guide?.text ?? "").trim() || ESTILO_PADRAO };
+  // Aprendido no modo sombra: fatos só entram APROVADOS (status 'ativa') e passam
+  // pelo mesmo botGuard; estilo e fluxo do atendente afinam o tom das respostas.
+  const fatosAprendidos = await blocoDasLicoes(["fato"]);
+  if (fatosAprendidos) linhas.push("", fatosAprendidos);
+  const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento"]);
+  const estiloBase = (cfg.bot_style_guide?.text ?? "").trim() || ESTILO_PADRAO;
+
+  return {
+    fatos: linhas.join("\n"),
+    estilo: estiloAprendido ? `${estiloBase}\n\n${estiloAprendido}` : estiloBase,
+  };
 }
 
 export async function responderComBase(perguntaDoCliente: string): Promise<RespostaLivre> {

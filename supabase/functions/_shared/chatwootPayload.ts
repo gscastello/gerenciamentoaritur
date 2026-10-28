@@ -77,6 +77,10 @@ export type Atividade = {
   status?: string;
   autor?: "cliente" | "equipe" | "bot";
   previa?: string;
+  /** Texto inteiro da mensagem (sem anexo) — o modo sombra observa por aqui. */
+  texto?: string;
+  /** id da mensagem no Chatwoot (idempotência de quem grava). */
+  mensagemId?: number;
 };
 
 const EVENTOS_DE_CONVERSA = new Set([
@@ -103,6 +107,8 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
 
   let autor: Atividade["autor"];
   let previa: string | undefined;
+  let texto: string | undefined;
+  let mensagemId: number | undefined;
   if (ehMensagem) {
     if (body.private) return null;
     const tipo = body.message_type;
@@ -111,9 +117,11 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     else return null;
     const a = body.attachments?.[0];
     const anexo = a ? tipoDoAnexo(a) : null;
-    const texto = typeof body.content === "string" ? body.content.trim() : "";
+    const conteudo = typeof body.content === "string" ? body.content.trim() : "";
     const rotulo = { audio: "[áudio]", image: "[imagem]", sticker: "[figurinha]", document: "[arquivo]" };
-    previa = (texto || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
+    previa = (conteudo || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
+    texto = conteudo || undefined;
+    mensagemId = Number(body.id) || undefined;
   }
 
   const conv = ehMensagem ? (body.conversation ?? {}) : (body.conversation ?? body);
@@ -133,5 +141,7 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     status: typeof conv.status === "string" ? conv.status : undefined,
     autor,
     previa,
+    texto,
+    mensagemId,
   };
 }

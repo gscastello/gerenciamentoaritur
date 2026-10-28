@@ -1,0 +1,110 @@
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import {
+  blocoDeLicoes,
+  conteudoAtualizadoValido,
+  mascararDados,
+  montarTranscricoes,
+  normalizarTitulo,
+  statusInicial,
+  validarLicoesNovas,
+  type LicaoGuardada,
+  type Observacao,
+} from "./aprendizado.ts";
+
+Deno.test("mascara telefone, e-mail e link", () => {
+  assertEquals(mascararDados("me liga 98 99999-8888 ok"), "me liga [telefone] ok");
+  assertEquals(mascararDados("+55 (98) 98101-2388"), "[telefone]");
+  assertEquals(mascararDados("maria@exemplo.com.br"), "[email]");
+  assertEquals(mascararDados("veja https://site.com/x?y=1 agora"), "veja [link] agora");
+});
+
+Deno.test("não mascara números curtos (quantidade, hora, valor)", () => {
+  assertEquals(mascararDados("2 passagens às 6h por R$ 80,00"), "2 passagens às 6h por R$ 80,00");
+});
+
+const obs = (conv: number, author: Observacao["author"], content: string, t: string): Observacao => ({
+  chatwoot_conversation_id: conv,
+  author,
+  content,
+  created_at: t,
+});
+
+Deno.test("transcrição agrupa por conversa, ordena no tempo e rotula quem falou", () => {
+  const t = montarTranscricoes([
+    obs(1, "equipe", "Qual o endereço?", "2026-10-28T10:01:00Z"),
+    obs(1, "cliente", "quero ir amanhã, 98999998888", "2026-10-28T10:00:00Z"),
+    obs(2, "cliente", "bom dia", "2026-10-28T09:00:00Z"),
+    obs(1, "bot_rascunho", "Qual o endereço de embarque?", "2026-10-28T10:01:30Z"),
+  ]);
+  assertEquals(t.length, 2);
+  const c1 = t.find((x) => x.conversa === 1)!;
+  assertEquals(c1.texto.split("\n"), [
+    "CLIENTE: quero ir amanhã, [telefone]",
+    "ATENDENTE: Qual o endereço?",
+    "BOT (rascunho, não enviado): Qual o endereço de embarque?",
+  ]);
+});
+
+Deno.test("transcrição respeita o limite de tamanho e de conversas", () => {
+  const muitas = Array.from({ length: 5 }, (_, i) => obs(i + 1, "cliente", "oi", `2026-10-28T10:0${i}:00Z`));
+  assertEquals(montarTranscricoes(muitas, { maxConversas: 3 }).length, 3);
+  const longa = [obs(1, "cliente", "a".repeat(300), "2026-10-28T10:00:00Z"), obs(1, "cliente", "b".repeat(300), "2026-10-28T10:01:00Z")];
+  const [c] = montarTranscricoes(longa, { maxCharsPorConversa: 400 });
+  assertEquals(c.texto.includes("bbb"), false);
+});
+
+Deno.test("fato nasce proposta; o resto nasce ativa", () => {
+  assertEquals(statusInicial("fato"), "proposta");
+  assertEquals(statusInicial("linguagem_cliente"), "ativa");
+  assertEquals(statusInicial("estilo_atendente"), "ativa");
+  assertEquals(statusInicial("fluxo_agendamento"), "ativa");
+});
+
+Deno.test("normaliza título (acentos, caixa, pontuação)", () => {
+  assertEquals(normalizarTitulo("  Pedido de 'Retorno'!  "), "pedido de retorno");
+  assertEquals(normalizarTitulo("Endereço"), "endereco");
+});
+
+Deno.test("valida lições: tipo, tamanhos, dado pessoal e repetidas", () => {
+  const ok = { kind: "linguagem_cliente", title: "Pedem 'pra amanhã cedo'", content: "Dizem 'pra amanhã cedo' querendo a viagem do dia seguinte de manhã." };
+  const r = validarLicoesNovas(
+    [
+      ok,
+      { ...ok }, // repetida no lote
+      { kind: "inventado", title: "Tipo ruim", content: "conteúdo suficientemente longo" },
+      { kind: "fato", title: "Curto", content: "x" },
+      { kind: "fato", title: "Tem telefone", content: "Ligue para 98 99999-8888 para combinar." },
+      { kind: "fato", title: "Tem marca", content: "Falar com [telefone] da central de vendas." },
+      { kind: "estilo_atendente", title: "Já existia", content: "Cumprimenta com bom dia e pergunta o destino." },
+    ],
+    [{ kind: "estilo_atendente", title: "já existia" }],
+  );
+  assertEquals(r.length, 1);
+  assertEquals(r[0].title, "Pedem 'pra amanhã cedo'");
+});
+
+Deno.test("entrada que não é lista vira lista vazia", () => {
+  assertEquals(validarLicoesNovas(undefined), []);
+  assertEquals(validarLicoesNovas("x"), []);
+});
+
+Deno.test("atualização válida precisa de texto no tamanho e sem dado pessoal", () => {
+  assertEquals(conteudoAtualizadoValido("  Texto novo com tamanho bom.  "), "Texto novo com tamanho bom.");
+  assertEquals(conteudoAtualizadoValido("curto"), null);
+  assertEquals(conteudoAtualizadoValido("Ligue 98 99999-8888 agora mesmo ok"), null);
+  assertEquals(conteudoAtualizadoValido(undefined), null);
+});
+
+Deno.test("bloco do prompt: tipos pedidos, mais vistas primeiro, com limite", () => {
+  const licoes: LicaoGuardada[] = [
+    { id: "1", kind: "linguagem_cliente", title: "Rara", content: "Aparece pouco nas conversas.", evidence_count: 1 },
+    { id: "2", kind: "linguagem_cliente", title: "Comum", content: "Aparece muito nas conversas.", evidence_count: 9 },
+    { id: "3", kind: "estilo_atendente", title: "Tom", content: "Cumprimenta e pergunta o destino.", evidence_count: 4 },
+  ];
+  const bloco = blocoDeLicoes(licoes, ["linguagem_cliente"]);
+  assertStringIncludes(bloco, "COMO OS CLIENTES COSTUMAM ESCREVER:");
+  assertEquals(bloco.indexOf("Comum") < bloco.indexOf("Rara"), true);
+  assertEquals(bloco.includes("Tom"), false);
+  assertEquals(blocoDeLicoes(licoes, ["fato"]), "");
+  assertEquals(blocoDeLicoes(licoes, ["linguagem_cliente"], { maxChars: 40 }).includes("Rara"), false);
+});
