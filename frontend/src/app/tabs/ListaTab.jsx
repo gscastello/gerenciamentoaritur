@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  ListOrdered,
   MapPin,
   MessageCircle,
   Package,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { ordenarBusca } from "../../domain/buscaEmCasa.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   BUSCA_MODOS,
@@ -43,6 +45,7 @@ import {
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
+import OrdemDaListaEditor from "./OrdemDaListaEditor.jsx";
 
 export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   const [data, setData] = useState(todayStr());
@@ -124,6 +127,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
     }
   };
   // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
+  const salvarOrdem = (ids) => R.reorderPickup(ids);
   const ciclarBusca = async (id, atual) => {
     setErro("");
     try {
@@ -137,11 +141,21 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   const naRota = doDia.filter(
     (r) => OCUPA_VAGA.includes(r.status) || r.status === "nao_compareceu",
   );
-  const buscaItens = naRota.filter((r) => r.direcao === "ida" && r.pontoId === "busca");
-  const agrupadosIda = naRota
-    .filter((r) => r.direcao === "ida" && r.pontoId !== "busca")
-    .sort((a, b) => (IDA_PRIORIDADE[a.pontoId] ?? 3) - (IDA_PRIORIDADE[b.pontoId] ?? 3));
-  const cantanhedeItens = naRota.filter((r) => r.direcao === "volta" && r.pontoId === "cantanhede");
+  // A ordem salva em "Organizar" (buscaSeq) vale para todas as seções; sem ela,
+  // cada seção segue a ordem de sempre.
+  const comOrdemSalva = (itens) =>
+    itens.some((r) => r.buscaSeq != null) ? ordenarBusca(itens) : itens;
+  const buscaItens = ordenarBusca(
+    naRota.filter((r) => r.direcao === "ida" && r.pontoId === "busca"),
+  );
+  const agrupadosIda = comOrdemSalva(
+    naRota
+      .filter((r) => r.direcao === "ida" && r.pontoId !== "busca")
+      .sort((a, b) => (IDA_PRIORIDADE[a.pontoId] ?? 3) - (IDA_PRIORIDADE[b.pontoId] ?? 3)),
+  );
+  const cantanhedeItens = comOrdemSalva(
+    naRota.filter((r) => r.direcao === "volta" && r.pontoId === "cantanhede"),
+  );
   const pirapemasItens = naRota.filter((r) => r.direcao === "volta" && r.pontoId === "pirapemas");
   const outrasVolta = naRota.filter(
     (r) => r.direcao === "volta" && r.pontoId !== "cantanhede" && r.pontoId !== "pirapemas",
@@ -325,6 +339,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             )}
             <DirecaoDivisor label="IDA" cor={C.inkSoft} />
             <ListaSecao
+              onOrdenar={salvarOrdem}
               titulo="BUSCAR EM CASA"
               itens={buscaItens}
               trips={trips}
@@ -333,6 +348,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
               onAbrir={setResumo}
             />
             <ListaSecao
+              onOrdenar={salvarOrdem}
               titulo="RODOVIÁRIA / RETORNO / POSTO CARONE / BR / OUTROS"
               itens={agrupadosIda}
               trips={trips}
@@ -341,6 +357,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             />
             <DirecaoDivisor label="VOLTA" cor={C.inkSoft} />
             <ListaSecao
+              onOrdenar={salvarOrdem}
               titulo="CANTANHEDE"
               itens={cantanhedeItens}
               trips={trips}
@@ -348,8 +365,9 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
               onAbrir={setResumo}
             />
             <ListaSecao
+              onOrdenar={salvarOrdem}
               titulo="PIRAPEMAS"
-              itens={[...pirapemasItens, ...outrasVolta]}
+              itens={comOrdemSalva([...pirapemasItens, ...outrasVolta])}
               trips={trips}
               marcar={marcar}
               onAbrir={setResumo}
@@ -555,7 +573,8 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
   );
 }
 
-function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir }) {
+function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }) {
+  const [organizando, setOrganizando] = useState(false);
   const paxAtivos = itens
     .filter((r) => OCUPA_VAGA.includes(r.status))
     .reduce((s, r) => s + r.quantidade, 0);
@@ -588,10 +607,27 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir }) {
                 </span>
               );
             })}
+          {onOrdenar && itens.length > 1 && !organizando && (
+            <button
+              type="button"
+              onClick={() => setOrganizando(true)}
+              className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+            >
+              <ListOrdered size={12} /> ORGANIZAR
+            </button>
+          )}
           <Pill>{paxAtivos} pax</Pill>
         </div>
       </div>
-      {itens.length === 0 ? (
+      {organizando ? (
+        <OrdemDaListaEditor
+          itens={itens}
+          trips={trips}
+          onSalvar={onOrdenar}
+          onFechar={() => setOrganizando(false)}
+        />
+      ) : itens.length === 0 ? (
         <div className="text-xs" style={{ color: C.inkFaint }}>
           — sem anotações —
         </div>
