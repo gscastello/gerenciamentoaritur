@@ -3,6 +3,7 @@ import {
   agruparPorResponsavel,
   diferencasDaBusca,
   moverNaLista,
+  moverParaIndice,
   moverParaPosicao,
   ordenarBusca,
   responsavelDaBusca,
@@ -97,5 +98,28 @@ describe("diferencasDaBusca", () => {
     });
     expect(d.ordem).toEqual(["c", "a", "b"]);
     expect(d.atribuicoes).toEqual([{ modo: "ari", ids: ["c", "a"] }]);
+  });
+});
+
+describe("moverParaIndice — ir direto para a posição N", () => {
+  const ids = ["a", "b", "c", "d"];
+  it("leva o item para a posição pedida (1 = primeiro)", () => {
+    expect(moverParaIndice(ids, "d", 1)).toEqual(["d", "a", "b", "c"]);
+    expect(moverParaIndice(ids, "a", 3)).toEqual(["b", "c", "a", "d"]);
+    expect(moverParaIndice(ids, "b", "4")).toEqual(["a", "c", "d", "b"]);
+  });
+  it("ajusta posições fora da lista ao primeiro/último", () => {
+    expect(moverParaIndice(ids, "c", 0)).toEqual(["c", "a", "b", "d"]);
+    expect(moverParaIndice(ids, "c", 99)).toEqual(["a", "b", "d", "c"]);
+  });
+  it("não muda nada com posição inválida, mesma posição ou id desconhecido", () => {
+    expect(moverParaIndice(ids, "b", "x")).toBe(ids);
+    expect(moverParaIndice(ids, "b", 2)).toBe(ids);
+    expect(moverParaIndice(ids, "z", 1)).toBe(ids);
+  });
+  it("não muta a lista original", () => {
+    const copia = [...ids];
+    moverParaIndice(ids, "d", 1);
+    expect(ids).toEqual(copia);
   });
 });

@@ -37,6 +37,22 @@ export function moverNaLista(ids, id, delta) {
   return novo;
 }
 
+/**
+ * Ir direto para a posição `posicao` (1 = primeiro). Valores fora da lista são
+ * ajustados ao primeiro/último; posição inválida não muda nada.
+ */
+export function moverParaIndice(ids, id, posicao) {
+  const de = ids.indexOf(id);
+  const n = Number.parseInt(posicao, 10);
+  if (de === -1 || !Number.isFinite(n)) return ids;
+  const para = Math.min(Math.max(n, 1), ids.length) - 1;
+  if (para === de) return ids;
+  const novo = [...ids];
+  novo.splice(de, 1);
+  novo.splice(para, 0, id);
+  return novo;
+}
+
 /** Arrastar e soltar: tira o id de onde está e o coloca na posição do `destinoId`. */
 export function moverParaPosicao(ids, id, destinoId) {
   const de = ids.indexOf(id);
