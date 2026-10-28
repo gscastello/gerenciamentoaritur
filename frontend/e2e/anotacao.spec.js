@@ -25,8 +25,8 @@ test("Agendar passagem: anotação escrita à mão vai pro pickup_detail", async
 
   // ponto que NÃO é "Buscar em Casa" (sem bairro) — BR, precisa só da anotação
   await page.getByLabel("Categoria de embarque").selectOption({ label: "BR (Posto)" });
-  await page.getByLabel("Nome *").fill("Cliente Anotação");
-  await page.getByLabel("Telefone *").fill("98999990000");
+  await page.getByLabel("Nome (ou telefone)").fill("Cliente Anotação");
+  await page.getByLabel("Telefone (ou nome)").fill("98999990000");
   await page.getByLabel(/Anotação/).fill("perto do posto, portão azul");
 
   await page.getByRole("button", { name: /^Agendar$/ }).click();

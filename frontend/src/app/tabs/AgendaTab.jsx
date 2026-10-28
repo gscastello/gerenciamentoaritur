@@ -36,6 +36,7 @@ import {
 import {
   parseAnotacaoEncomenda,
   parseAnotacaoRapida,
+  parseLinhaEncomenda,
   separarBairro,
 } from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
@@ -1793,11 +1794,9 @@ export function NovaReservaModal({
   const precoAuto = campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
   const valorUnit = f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
   const qtd = Number.parseInt(f.quantidade, 10) || 1;
-  const podeEnviar =
-    f.nome.trim() &&
-    f.telefone.trim() &&
-    f.pontoId &&
-    (campoDetalhe !== "bairro" || f.bairro.trim());
+  // Reserva "leve" (issue #214): basta o nome OU o telefone; o resto se completa
+  // depois, editando a reserva.
+  const podeEnviar = (f.nome.trim() || f.telefone.trim()) && f.pontoId;
 
   // Linha rápida (issue #202): "NP endereço telefone nome" preenche os campos de
   // uma vez — mesma ordem da anotação direto no ponto da Agenda.
@@ -1839,7 +1838,7 @@ export function NovaReservaModal({
       tripDate: f.data,
       direction: f.direcao,
       customerName: f.nome.trim(),
-      customerPhone: validarTelefone(f.telefone).valor,
+      customerPhone: f.telefone.trim() ? validarTelefone(f.telefone).valor : null,
       customerPhoneSecondary: f.telefone2.trim() ? validarTelefone(f.telefone2).valor : null,
       routePointCode: f.pontoId || null,
       quantity: qtd,
@@ -1866,13 +1865,15 @@ export function NovaReservaModal({
   const criar = async (status) => {
     setErro("");
     const problema = primeiroErro([
-      validarNome(f.nome),
-      validarTelefone(f.telefone),
+      !f.nome.trim() && !f.telefone.trim()
+        ? { ok: false, erro: "Informe ao menos o nome ou o telefone." }
+        : null,
+      f.nome.trim() ? validarNome(f.nome) : null,
+      f.telefone.trim() ? validarTelefone(f.telefone) : null,
       f.telefone2.trim() ? validarTelefone(f.telefone2) : null,
       validarData(f.data, { min: todayStr() }),
       validarQuantidade(qtd, { min: 1, max: capacidade }),
       validarValor(valorUnit, { min: 0 }),
-      campoDetalhe === "bairro" ? validarObrigatorio(f.bairro, "Bairro") : null,
     ]);
     if (problema) {
       setErro(problema);
@@ -1944,10 +1945,10 @@ export function NovaReservaModal({
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <Field label="Nome *">
+          <Field label="Nome (ou telefone)">
             <TextInput value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
           </Field>
-          <Field label="Telefone *">
+          <Field label="Telefone (ou nome)">
             <TextInput
               value={f.telefone}
               inputMode="tel"
@@ -2186,18 +2187,41 @@ function NovaEncomendaModal({
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [linha, setLinha] = useState("");
 
   const viagem = trips[f.direcao] || trips.ida;
   const trocarDirecao = (dir) => setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir) }));
 
+  // Linha rápida (issue #214): "endereço telefone nome" preenche os campos.
+  const aplicarLinha = (texto) => {
+    setLinha(texto);
+    const a = parseLinhaEncomenda(texto);
+    if (!a.ok) return;
+    setF((atual) => ({
+      ...atual,
+      desembarque: a.endereco || atual.desembarque,
+      destinatarioTelefone: a.telefone || atual.destinatarioTelefone,
+      destinatarioNome: a.nome || atual.destinatarioNome,
+    }));
+  };
+
+  // Só endereço de entrega + um contato (nome ou telefone) são necessários de
+  // início; o resto se completa depois editando a encomenda.
   const podeEnviar =
-    f.destinatarioNome.trim() && f.destinatarioTelefone.trim() && f.pontoId && f.data;
+    f.desembarque.trim() &&
+    (f.destinatarioNome.trim() || f.destinatarioTelefone.trim()) &&
+    f.pontoId &&
+    f.data;
 
   const salvar = async () => {
     setErro("");
     const problema = primeiroErro([
-      validarNome(f.destinatarioNome),
-      validarTelefone(f.destinatarioTelefone),
+      !f.desembarque.trim() ? { ok: false, erro: "Informe o endereço de entrega." } : null,
+      !f.destinatarioNome.trim() && !f.destinatarioTelefone.trim()
+        ? { ok: false, erro: "Informe ao menos o telefone ou o nome de quem recebe." }
+        : null,
+      f.destinatarioNome.trim() ? validarNome(f.destinatarioNome) : null,
+      f.destinatarioTelefone.trim() ? validarTelefone(f.destinatarioTelefone) : null,
       validarData(f.data, { min: pendente ? undefined : todayStr() }),
       f.valor !== "" ? validarValor(f.valor, { min: 0 }) : null,
     ]);
@@ -2207,7 +2231,9 @@ function NovaEncomendaModal({
     }
     setSalvando(true);
     try {
-      const telefoneNormalizado = validarTelefone(f.destinatarioTelefone).valor;
+      const telefoneNormalizado = f.destinatarioTelefone.trim()
+        ? validarTelefone(f.destinatarioTelefone).valor
+        : null;
       const extraData = {
         encItem: f.item.trim() || null,
         encRemetenteNome: f.remetenteNome.trim() || null,
@@ -2223,8 +2249,8 @@ function NovaEncomendaModal({
           },
           contact: {
             customer_id: pendente.customer_id,
-            name: f.destinatarioNome.trim(),
-            phone: telefoneNormalizado,
+            ...(f.destinatarioNome.trim() ? { name: f.destinatarioNome.trim() } : {}),
+            ...(telefoneNormalizado ? { phone: telefoneNormalizado } : {}),
           },
           extraData,
           status: "confirmada",
@@ -2284,6 +2310,18 @@ function NovaEncomendaModal({
           </div>
         )}
 
+        {!pendente && (
+          <div className="mb-3">
+            <Field label="Linha rápida: endereço, telefone e nome">
+              <TextInput
+                value={linha}
+                onChange={(e) => aplicarLinha(e.target.value)}
+                placeholder="Pirapemas centro 98999998888 João"
+              />
+            </Field>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Field label="Data">
             <TextInput
@@ -2310,7 +2348,7 @@ function NovaEncomendaModal({
               ))}
             </Select>
           </Field>
-          <Field label="Ponto de desembarque">
+          <Field label="Endereço de entrega *">
             <TextInput
               value={f.desembarque}
               onChange={(e) => setF({ ...f, desembarque: e.target.value })}
@@ -2346,13 +2384,13 @@ function NovaEncomendaModal({
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <Field label="Quem recebe (nome) *">
+          <Field label="Quem recebe (nome ou telefone)">
             <TextInput
               value={f.destinatarioNome}
               onChange={(e) => setF({ ...f, destinatarioNome: e.target.value })}
             />
           </Field>
-          <Field label="Quem recebe (telefone) *">
+          <Field label="Quem recebe (telefone ou nome)">
             <TextInput
               inputMode="tel"
               value={f.destinatarioTelefone}

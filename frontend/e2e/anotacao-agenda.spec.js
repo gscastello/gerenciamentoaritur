@@ -183,8 +183,8 @@ test("Agendar passagem: a linha rápida preenche quantidade, endereço, telefone
   await page.getByRole("button", { name: "Agendar passagem" }).click();
 
   await page.getByLabel(/Linha rápida/).fill("2P Cohama Rua 7 98999998888 Maria Silva");
-  await expect(page.getByLabel("Nome *")).toHaveValue("Maria Silva");
-  await expect(page.getByLabel("Telefone *")).toHaveValue("98999998888");
+  await expect(page.getByLabel("Nome (ou telefone)")).toHaveValue("Maria Silva");
+  await expect(page.getByLabel("Telefone (ou nome)")).toHaveValue("98999998888");
   await expect(page.getByLabel("Quantidade")).toHaveValue("2");
   await expect(page.getByLabel(/Bairro/)).toHaveValue("Cohama");
 

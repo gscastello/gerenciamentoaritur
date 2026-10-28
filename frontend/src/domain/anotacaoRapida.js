@@ -173,3 +173,30 @@ export function parseAnotacaoEncomenda(textoBruto) {
 
   return { ok: true, item, telefone: telefone.valor };
 }
+
+/**
+ * Linha rápida da NOVA ENCOMENDA (issue #214): "<endereço> <telefone> <nome>".
+ * Só o endereço de entrega e o contato são necessários de início; o nome vem
+ * depois do telefone (opcional) e o resto se completa editando a reserva.
+ * Sem telefone válido, o texto todo é o endereço.
+ * @param {string} textoBruto
+ * @returns {{ok:true, endereco:string, telefone:string, nome:string} | {ok:false, erro:string}}
+ */
+export function parseLinhaEncomenda(textoBruto) {
+  const texto = String(textoBruto ?? "")
+    .replace(RE_INVISIVEIS, "")
+    .trim();
+  if (!texto) return { ok: false, erro: "Escreva ao menos o endereço de entrega." };
+
+  const palavras = limparSeparadores(texto).split(" ").filter(Boolean);
+  const achado = acharTelefone(palavras);
+  if (!achado.valor) {
+    return { ok: true, endereco: palavras.join(" "), telefone: "", nome: "" };
+  }
+  return {
+    ok: true,
+    endereco: palavras.slice(0, achado.ini).join(" "),
+    telefone: achado.valor,
+    nome: palavras.slice(achado.fim + 1).join(" "),
+  };
+}

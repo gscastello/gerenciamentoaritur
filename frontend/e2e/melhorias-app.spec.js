@@ -88,8 +88,8 @@ test("Agendar passagem: cidade que exige revisão nasce pendente e leva o telefo
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
-  await page.getByLabel("Nome *").fill("Cliente Campestre E2E");
-  await page.getByLabel("Telefone *").fill("98999998888");
+  await page.getByLabel("Nome (ou telefone)").fill("Cliente Campestre E2E");
+  await page.getByLabel("Telefone (ou nome)").fill("98999998888");
   await page.getByLabel("Telefone secundário (opcional)").fill("+55 98 98111-2222");
   await page.getByLabel("Data").fill(proximaTerca());
   await page.getByLabel("Cidade do desembarque (opcional)").selectOption({ label: "Campestre" });
@@ -120,8 +120,8 @@ test("Agendar passagem: cidade padrão continua confirmada direto", async ({ pag
   await page.getByRole("button", { name: "Agendar passagem" }).click();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
-  await page.getByLabel("Nome *").fill("Cliente Cantanhede E2E");
-  await page.getByLabel("Telefone *").fill("98999997777");
+  await page.getByLabel("Nome (ou telefone)").fill("Cliente Cantanhede E2E");
+  await page.getByLabel("Telefone (ou nome)").fill("98999997777");
   await page.getByLabel("Data").fill(proximaTerca());
   await page.getByLabel("Cidade do desembarque (opcional)").selectOption({ label: "Cantanhede" });
 
