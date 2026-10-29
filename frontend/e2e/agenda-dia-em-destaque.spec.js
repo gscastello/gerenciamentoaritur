@@ -10,35 +10,53 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // aqui, já que o horário real de quando o e2e roda varia.
 
 const FUSO = "America/Fortaleza";
+// O dia é o do calendário de Fortaleza (não o do fuso de quem roda o teste: o CI
+// roda em UTC e, entre 21h e 24h daqui, o dia de lá já é o seguinte). Devolve
+// uma data ao meio-dia UTC com esse dia, para ler o dia da semana com
+// timeZone "UTC".
 function diaEsperadoNoOpen() {
   const agora = new Date();
-  const hora = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: FUSO, hour: "numeric", hourCycle: "h23" }).format(
-      agora,
-    ),
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: FUSO,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "numeric",
+      hourCycle: "h23",
+    })
+      .formatToParts(agora)
+      .map((x) => [x.type, x.value]),
   );
-  const alvo = new Date(agora);
-  if (hora >= 14) alvo.setDate(alvo.getDate() + 1);
+  const alvo = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), 12));
+  if (Number(p.hour) >= 14) alvo.setUTCDate(alvo.getUTCDate() + 1);
   return alvo;
 }
+
+const diaDaSemana = (d) => d.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
 
 async function abrirAgenda(page) {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Dashboard$/ }).first()).toBeVisible();
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
 }
 
 test("Agenda: dia da semana e data ficam em destaque, centralizados", async ({ page }) => {
   await abrirAgenda(page);
 
   const alvo = diaEsperadoNoOpen();
-  const diaSemanaAlvo = alvo.toLocaleDateString("pt-BR", { weekday: "long" });
+  const diaSemanaAlvo = diaDaSemana(alvo);
 
   const tituloDia = page.getByText(diaSemanaAlvo, { exact: true });
   await expect(tituloDia).toBeVisible();
 
-  const fontSize = await tituloDia.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+  const fontSize = await tituloDia.evaluate((el) =>
+    Number.parseFloat(getComputedStyle(el).fontSize),
+  );
   expect(fontSize).toBeGreaterThanOrEqual(24); // bem maior que o texto normal (14px)
 });
 
@@ -47,9 +65,9 @@ test("Agenda: setas avançam e voltam um dia por vez", async ({ page }) => {
 
   const alvo = diaEsperadoNoOpen();
   const proximo = new Date(alvo);
-  proximo.setDate(proximo.getDate() + 1);
-  const diaSemanaAlvo = alvo.toLocaleDateString("pt-BR", { weekday: "long" });
-  const diaSemanaProximo = proximo.toLocaleDateString("pt-BR", { weekday: "long" });
+  proximo.setUTCDate(proximo.getUTCDate() + 1);
+  const diaSemanaAlvo = diaDaSemana(alvo);
+  const diaSemanaProximo = diaDaSemana(proximo);
 
   await page.getByRole("button", { name: "Próximo dia" }).click();
   await expect(page.getByText(diaSemanaProximo, { exact: true })).toBeVisible();
