@@ -2,11 +2,11 @@ import { Check, Eye, Pencil, RotateCcw, Save, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import {
   TIPOS_DE_LICAO,
+  TIPOS_QUE_EXIGEM_APROVACAO,
   haQuantoTempo,
   mensagemDoAprendizado,
 } from "../../domain/botAprendizado.js";
 import { useBotLearnings } from "../../hooks/useBotLearnings.js";
-import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { C, Card, ErrorBanner, Field, Pill, TextArea, TextInput } from "../tabShared.jsx";
 
@@ -21,7 +21,7 @@ function Licao({ licao, onRevisar, onEditar, desativada }) {
   const [form, setForm] = useState({ title: licao.title, content: licao.content });
   const [salvando, setSalvando] = useState(false);
   const tipo = TIPOS_DE_LICAO[licao.kind];
-  const ehFato = licao.kind === "fato";
+  const exigeAprovacao = TIPOS_QUE_EXIGEM_APROVACAO.includes(licao.kind);
   const proposta = licao.status === "proposta";
 
   const salvar = async () => {
@@ -80,7 +80,7 @@ function Licao({ licao, onRevisar, onEditar, desativada }) {
       style={{ background: C.panel2, opacity: desativada ? 0.6 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-1.5 mb-1">
-        <Pill color={ehFato ? C.warn : C.blue}>{tipo?.rotulo ?? licao.kind}</Pill>
+        <Pill color={exigeAprovacao ? C.warn : C.blue}>{tipo?.rotulo ?? licao.kind}</Pill>
         {licao.evidence_count > 1 && (
           <span className="text-[11px]" style={{ color: C.inkFaint }}>
             visto {licao.evidence_count}×
@@ -157,18 +157,119 @@ function Licao({ licao, onRevisar, onEditar, desativada }) {
   );
 }
 
+function NotaDoCliente({ nota, onEditar }) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState(nota.notes);
+  const [salvando, setSalvando] = useState(false);
+  const desativada = nota.status !== "ativa";
+
+  const salvar = async () => {
+    if (texto.trim().length < 10) return;
+    setSalvando(true);
+    try {
+      await onEditar(nota, { notes: texto.trim() });
+      setEditando(false);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg px-3 py-2.5"
+      style={{ background: C.panel2, opacity: desativada ? 0.6 : 1 }}
+    >
+      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+        <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
+          {nota.customer_name}
+        </span>
+        {nota.evidence_count > 1 && (
+          <span className="text-[11px]" style={{ color: C.inkFaint }}>
+            atualizado {nota.evidence_count}×
+          </span>
+        )}
+        <span className="text-[11px]" style={{ color: C.inkFaint }}>
+          · {haQuantoTempo(nota.last_seen_at)}
+        </span>
+        {desativada && <Pill color={C.inkFaint}>desativada</Pill>}
+      </div>
+      {editando ? (
+        <>
+          <Field label={`Anotação sobre ${nota.customer_name}`}>
+            <TextArea rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} />
+          </Field>
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={salvar}
+              disabled={salvando}
+              className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
+              style={{ background: C.amber, color: C.onBrand }}
+            >
+              <Save size={13} /> {salvando ? "Salvando…" : "Salvar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(false)}
+              className="btn-press text-xs px-3 py-1.5 rounded-md"
+              style={botao()}
+            >
+              Cancelar
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="text-[12px]" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+            {nota.notes}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              aria-label={`Editar anotação de ${nota.customer_name}`}
+              className="btn-press flex items-center gap-1 text-[11px] px-2 py-1 rounded-md"
+              style={botao()}
+            >
+              <Pencil size={12} /> Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => onEditar(nota, { status: desativada ? "ativa" : "arquivada" })}
+              aria-label={`${desativada ? "Reativar" : "Desativar"} anotação de ${nota.customer_name}`}
+              className="btn-press flex items-center gap-1 text-[11px] px-2 py-1 rounded-md"
+              style={desativada ? botao() : botao(C.red)}
+            >
+              {desativada ? (
+                <>
+                  <RotateCcw size={12} /> Reativar
+                </>
+              ) : (
+                <>
+                  <X size={12} /> Desativar
+                </>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
- * Sistema → Bot → Aprendizado do modo sombra (issue #218). No modo sombra o bot
- * observa as conversas (clientes, atendente e o rascunho dele) e propõe lições.
- * Linguagem, estilo e fluxo já valem e pedem conferência; informações (fatos)
- * só valem depois de aprovadas.
+ * Sistema → Bot → Aprendizado do bot (issue #218). O bot observa as conversas em
+ * qualquer modo (clientes, atendente, o que ele mesmo enviou e o rascunho do modo
+ * sombra), propõe lições e anota o que vale lembrar de cada cliente recorrente.
+ * Linguagem, estilo, fluxo e respostas por situação já valem e pedem conferência;
+ * informações (fatos e funcionamento da empresa) só valem depois de aprovadas.
  */
 export default function SistemaBotAprendizado() {
   const ap = useBotLearnings();
-  const cfg = useSettings();
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
   const [verDescartadas, setVerDescartadas] = useState(false);
+  const [verClientes, setVerClientes] = useState(false);
 
   const tentar = async (fn, msg) => {
     setErro("");
@@ -183,6 +284,8 @@ export default function SistemaBotAprendizado() {
     tentar(() => ap.revisar(licao, acao), "Não foi possível salvar (só admin).").catch(() => {});
   const editar = (licao, campos) =>
     tentar(() => ap.editar(licao, campos), "Não foi possível salvar (só admin).");
+  const editarNota = (nota, campos) =>
+    tentar(() => ap.editarNota(nota, campos), "Não foi possível salvar (só admin).");
   const aprender = async () => {
     setAviso("");
     try {
@@ -194,30 +297,21 @@ export default function SistemaBotAprendizado() {
   };
 
   const n = ap.numeros;
-  const emSombra = cfg.attendanceMode === "sombra";
 
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Eye size={16} style={{ color: C.amber }} /> Aprendizado do modo Sombra
+        <Eye size={16} style={{ color: C.amber }} /> Aprendizado do bot
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        No modo Sombra o bot só observa: lê o que os clientes escrevem, como o atendente responde e
-        agenda, e compara com o que ele mesmo diria. Disso saem lições, sem nomes nem telefones. O
-        jeito dos clientes falarem e o estilo do atendente já passam a valer (confira abaixo);
-        informações como preço, regra e horário só valem depois que você aprovar. O texto das
-        conversas é apagado após 90 dias.
+        O bot está sempre aprendendo, em qualquer modo de atendimento (IA, manual ou sombra): lê o
+        que os clientes escrevem, como o atendente responde e agenda, o que ele mesmo respondeu e o
+        que cada situação pede. Disso saem lições, sem nomes nem telefones, e uma anotação por
+        cliente recorrente. O jeito dos clientes falarem, o estilo do atendente e as respostas por
+        situação já passam a valer (confira abaixo); informações como preço, regra, horário e o
+        funcionamento da empresa só valem depois que você aprovar. O texto das conversas é apagado
+        após 90 dias.
       </p>
-
-      {!emSombra && (
-        <div
-          className="text-xs rounded-lg px-3 py-2 mb-3"
-          style={{ background: C.panel2, color: C.inkSoft }}
-        >
-          O bot só observa conversas com o modo de atendimento em <b>Sombra</b> (aba Sistema → Modo
-          de atendimento). As lições abaixo continuam valendo nos outros modos.
-        </div>
-      )}
 
       {erro && (
         <ErrorBanner onDismiss={() => setErro("")} className="mb-3">
@@ -284,6 +378,31 @@ export default function SistemaBotAprendizado() {
           ))}
         </div>
       )}
+
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => setVerClientes((v) => !v)}
+          className="btn-press text-xs font-semibold underline"
+          style={{ color: C.ink }}
+        >
+          {verClientes ? "Ocultar" : "Ver"} clientes recorrentes ({ap.notasDeClientes.length})
+        </button>
+        {verClientes && (
+          <div className="space-y-2 mt-2">
+            {ap.notasDeClientes.length === 0 ? (
+              <div className="text-xs" style={{ color: C.inkFaint }}>
+                Nenhum cliente anotado ainda. As anotações aparecem quando um cliente com 2 ou mais
+                viagens conversa com a empresa.
+              </div>
+            ) : (
+              ap.notasDeClientes.map((n) => (
+                <NotaDoCliente key={n.id} nota={n} onEditar={editarNota} />
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       {ap.descartadas.length > 0 && (
         <div>

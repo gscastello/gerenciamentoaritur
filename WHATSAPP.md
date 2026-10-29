@@ -46,7 +46,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
    `database/52-painel-atendimento-whatsapp.sql` (espelho da fila do Chatwoot, perguntas sem resposta).
 3. Criar o usuário do bot em **Sistema → Equipe**: nome exato `Bot WhatsApp`, e-mail
    `bot@rota-pirapemas.local`, papel **atendente**. É ele que aparece na auditoria.
-4. `database/64-sombra-aprende.sql` — observações e lições do modo Sombra (ver §6b).
+4. `database/64-sombra-aprende.sql` — observações, lições e anotações de clientes: o bot aprende em qualquer modo (ver §6b).
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -97,12 +97,13 @@ Nunca cole esses valores em chat, issue ou PR. URL da função:
 Comece em **Sombra** por alguns dias, leia as notas privadas e só então troque para
 IA automática (a troca vale na hora, para todos os sócios).
 
-## 6b. O que o bot aprende em modo Sombra (issue #218)
+## 6b. O que o bot aprende, em qualquer modo (issue #218)
 
-No modo **Sombra** o bot, além de rascunhar as respostas, **observa**: guarda o texto do que o
-cliente escreve, do que o atendente responde (pelo celular ou pelo Chatwoot) e do rascunho que
-ele mesmo teria enviado (`bot_observations`, só texto, **apagado após 90 dias**, legível só pelo
-admin). Notas privadas e anexos não entram.
+O bot **está sempre aprendendo**, em qualquer modo de atendimento (**IA**, **manual** ou
+**sombra**): guarda o texto do que o cliente escreve, do que o atendente responde (pelo celular
+ou pelo Chatwoot), do que o próprio bot enviou e, no modo Sombra, do rascunho que ele teria
+enviado (`bot_observations`, só texto, **apagado após 90 dias**, legível só pelo admin). Notas
+privadas e anexos não entram.
 
 De tempos em tempos (quando há material e passaram 6 h) ou ao clicar em **Sistema → Bot →
 Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolve **lições**
@@ -113,7 +114,15 @@ o antigo se o dono ainda não revisou.
 |---|---|---|
 | Jeito dos clientes falarem | **Já vale**, com aviso "Está certo?" | O bot entende melhor gírias e pedidos (só leitura da mensagem) |
 | Estilo do atendente / como o atendente agenda | **Já vale**, com aviso | Afina o tom e a ordem das perguntas nas respostas livres |
+| O que responder em cada situação | **Já vale**, com aviso (com número: só depois de aprovada) | Mostra ao bot como o atendente reage a pedidos e problemas comuns |
 | Informação do atendente (preço, regra, horário) | **Só depois de aprovada** | Entra nas respostas livres, sempre sob o `botGuard` |
+| Como a empresa funciona | **Só depois de aprovada** | Entra nas respostas livres, sempre sob o `botGuard` |
+
+**Clientes recorrentes:** para quem já tem 2 ou mais viagens, o bot mantém uma anotação por
+cliente (`bot_customer_notes`: ponto de embarque de costume, dias em que viaja, jeito de pedir…).
+Ela só serve para personalizar e **confirmar** ("o mesmo ponto de sempre?") nas respostas livres;
+números dela nunca passam pelo `botGuard`. O dono vê, edita e desativa em **Sistema → Bot →
+Aprendizado → Ver clientes recorrentes**.
 
 O bot continua **sem decidir preço, vaga, horário ou confirmação**: isso segue vindo do banco.
 As lições só mudam como ele entende e como ele fala. O dono pode editar, recusar ou desativar

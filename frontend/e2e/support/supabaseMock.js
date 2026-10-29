@@ -166,6 +166,7 @@ export async function mockSupabase(page, opts = {}) {
     onEdit,
     backupsDia: backupsIniciais = [],
     botLearnings: botLearningsIniciais = [],
+    botCustomerNotes: botCustomerNotesIniciais = [],
     botStats = {
       success: true,
       observacoes: 0,
@@ -174,7 +175,14 @@ export async function mockSupabase(page, opts = {}) {
       ultimo_aprendizado: null,
       dias_guardados: 90,
     },
-    botAprendizadoResumo = { observacoes: 0, novas: 0, reforcos: 0, atualizadas: 0, ignoradas: 0 },
+    botAprendizadoResumo = {
+      observacoes: 0,
+      novas: 0,
+      reforcos: 0,
+      atualizadas: 0,
+      clientes: 0,
+      ignoradas: 0,
+    },
     notifications = [],
     pendencias = [],
   } = opts;
@@ -291,6 +299,7 @@ export async function mockSupabase(page, opts = {}) {
   const statusOverride = {};
   const extraOverride = {}; // fora_lotacao por reserva (database/61)
   let botLearnings = botLearningsIniciais.map((l) => ({ ...l }));
+  let botCustomerNotes = botCustomerNotesIniciais.map((n) => ({ ...n }));
   let financeiroRows = (opts.financialEntries ?? []).map((e) => ({ ...e }));
   // sino de notificações (issue #112) — stateful "lida" por id
   const lidas = new Set();
@@ -717,7 +726,14 @@ export async function mockSupabase(page, opts = {}) {
       botLearnings = botLearnings.map((l) => (l.id === id ? { ...l, ...body } : l));
       return route.fulfill(json([]));
     } else if (table === "bot_learnings") rows = botLearnings;
-    else if (table === "expense_categories" && req.method() === "PATCH") {
+    else if (table === "bot_customer_notes" && req.method() === "PATCH") {
+      const id = url.searchParams.get("id")?.replace("eq.", "");
+      const body = req.postDataJSON?.() ?? {};
+      botCustomerNotes = botCustomerNotes.map((n) => (n.id === id ? { ...n, ...body } : n));
+      return route.fulfill(json([]));
+    } else if (table === "bot_customer_notes") {
+      rows = botCustomerNotes.map((n) => ({ ...n, customer: { name: n.customer_name } }));
+    } else if (table === "expense_categories" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
       expenseCategories = expenseCategories.map((c) => (c.id === id ? { ...c, ...body } : c));

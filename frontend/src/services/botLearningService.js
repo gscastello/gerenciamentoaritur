@@ -1,7 +1,7 @@
 // src/services/botLearningService.js
 //
-// Aprendizado do modo sombra (database/64-sombra-aprende.sql): lições que o bot
-// extraiu das conversas observadas. A leitura é de admin/atendente; revisar
+// Aprendizado do bot (database/64-sombra-aprende.sql): lições que ele extraiu das
+// conversas observadas e anotações dos clientes recorrentes. A leitura é de admin/atendente; revisar
 // (aprovar, recusar, editar) é só do admin; "Aprender agora" chama a Edge
 // Function bot-aprender (também só admin).
 
@@ -47,6 +47,34 @@ export const botLearningService = {
     const { error } = await supabase.from("bot_learnings").update(fields).eq("id", id);
     if (error) {
       throw new ServiceError(`update: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    }
+  },
+
+  /** Anotações dos clientes recorrentes (só admin). */
+  async listNotes() {
+    const { data, error } = await supabase
+      .from("bot_customer_notes")
+      .select(
+        "id, customer_id, notes, status, evidence_count, last_seen_at, customer:customers(name)",
+      )
+      .order("last_seen_at", { ascending: false })
+      .limit(300);
+    if (error) {
+      throw new ServiceError(`listNotes: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    }
+    return (data ?? []).map((n) => ({ ...n, customer_name: n.customer?.name ?? "Cliente" }));
+  },
+
+  async updateNote(id, fields) {
+    const { error } = await supabase.from("bot_customer_notes").update(fields).eq("id", id);
+    if (error) {
+      throw new ServiceError(`updateNote: ${error.message}`, {
         cause: error,
         retryable: isNetworkish(error),
       });

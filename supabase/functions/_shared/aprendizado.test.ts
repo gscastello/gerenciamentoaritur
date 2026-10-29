@@ -1,12 +1,14 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   blocoDeLicoes,
+  blocoDoCliente,
   conteudoAtualizadoValido,
   mascararDados,
   montarTranscricoes,
   normalizarTitulo,
   statusInicial,
   validarLicoesNovas,
+  validarNotasDeClientes,
   type LicaoGuardada,
   type Observacao,
 } from "./aprendizado.ts";
@@ -53,8 +55,11 @@ Deno.test("transcrição respeita o limite de tamanho e de conversas", () => {
   assertEquals(c.texto.includes("bbb"), false);
 });
 
-Deno.test("fato nasce proposta; o resto nasce ativa", () => {
+Deno.test("fato e negócio nascem proposta; situação com número também; o resto nasce ativa", () => {
   assertEquals(statusInicial("fato"), "proposta");
+  assertEquals(statusInicial("negocio"), "proposta");
+  assertEquals(statusInicial("situacao", "Se pedem desconto, o atendente diz que não há."), "ativa");
+  assertEquals(statusInicial("situacao", "Se pedem desconto, o atendente faz por R$ 10."), "proposta");
   assertEquals(statusInicial("linguagem_cliente"), "ativa");
   assertEquals(statusInicial("estilo_atendente"), "ativa");
   assertEquals(statusInicial("fluxo_agendamento"), "ativa");
@@ -107,4 +112,38 @@ Deno.test("bloco do prompt: tipos pedidos, mais vistas primeiro, com limite", ()
   assertEquals(bloco.includes("Tom"), false);
   assertEquals(blocoDeLicoes(licoes, ["fato"]), "");
   assertEquals(blocoDeLicoes(licoes, ["linguagem_cliente"], { maxChars: 40 }).includes("Rara"), false);
+});
+
+Deno.test("bloco do prompt traz negócio e situação com os títulos certos", () => {
+  const licoes: LicaoGuardada[] = [
+    { id: "1", kind: "negocio", title: "Busca em casa", content: "A van passa nas casas antes de seguir viagem.", evidence_count: 2 },
+    { id: "2", kind: "situacao", title: "Pedem desconto", content: "O atendente explica que o valor é fixo.", evidence_count: 3 },
+  ];
+  assertStringIncludes(blocoDeLicoes(licoes, ["negocio"]), "COMO A EMPRESA FUNCIONA (aprovado pelo dono):");
+  assertStringIncludes(blocoDeLicoes(licoes, ["situacao"]), "O QUE RESPONDER EM CADA SITUAÇÃO");
+});
+
+Deno.test("anotações de clientes: só de conversas conhecidas, sem dado pessoal, uma por cliente", () => {
+  const mapa = new Map([
+    [1, "cli-a"],
+    [2, "cli-b"],
+  ]);
+  const r = validarNotasDeClientes(
+    [
+      { conversa: 1, resumo: "Costuma embarcar na Rodoviária, às sextas, com duas pessoas." },
+      { conversa: 1, resumo: "Outra anotação repetida para o mesmo cliente." },
+      { conversa: 2, resumo: "Liga no 98 99999-8888 sempre que atrasa." },
+      { conversa: 9, resumo: "Conversa que não existe no lote lido." },
+      { conversa: 2, resumo: "curta" },
+    ],
+    mapa,
+  );
+  assertEquals(r, [{ customerId: "cli-a", notes: "Costuma embarcar na Rodoviária, às sextas, com duas pessoas." }]);
+  assertEquals(validarNotasDeClientes("nada", mapa), []);
+});
+
+Deno.test("bloco do cliente: vazio sem anotação, com aviso de confirmar quando há", () => {
+  assertEquals(blocoDoCliente(null), "");
+  assertEquals(blocoDoCliente("   "), "");
+  assertStringIncludes(blocoDoCliente("Costuma ir na Rodoviária."), "nunca presuma");
 });

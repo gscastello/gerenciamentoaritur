@@ -1,19 +1,27 @@
 -- =====================================================================
--- ROTA PIRAPEMAS — 64: MODO SOMBRA OBSERVA E APRENDE (#218)
+-- ROTA PIRAPEMAS — 64: O BOT OBSERVA E APRENDE, EM QUALQUER MODO (#218)
 -- =====================================================================
 -- Rodar depois de 01–63. Idempotente.
--- No modo sombra o bot passa a OBSERVAR as conversas e a aprender com elas:
---   bot_observations  texto bruto observado (cliente, atendente e o rascunho
---                     que o bot teria enviado). Só texto; guardado 90 dias.
+-- O bot OBSERVA as conversas em QUALQUER modo de atendimento (ia, manual ou
+-- sombra) e aprende com elas:
+--   bot_observations  texto bruto observado (cliente, atendente, o que o bot
+--                     enviou e, no modo sombra, o rascunho que ele teria
+--                     enviado). Só texto; guardado 90 dias.
 --   bot_learnings     lições aprendidas, SEM nomes nem telefones:
 --                       linguagem_cliente   como os clientes escrevem/pedem
 --                       estilo_atendente    como o atendente responde
 --                       fluxo_agendamento   como o atendente agenda as passagens
+--                       situacao            o que responder em cada situação
 --                       fato                informação dita pelo atendente (preço,
 --                                           regra, horário…) — só vale APROVADA
---                     linguagem/estilo/fluxo já entram valendo (status 'ativa',
---                     needs_review = true até o dono conferir); fato nasce
---                     'proposta' e só passa a valer quando o dono aprova.
+--                       negocio             como a empresa funciona — só vale APROVADA
+--                     linguagem/estilo/fluxo/situacao entram valendo (status
+--                     'ativa', needs_review = true até o dono conferir; situação
+--                     com número vira proposta); fato e negocio nascem 'proposta'
+--                     e só passam a valer quando o dono aprova.
+--   bot_customer_notes  o que vale lembrar de cada cliente recorrente (ponto de
+--                     embarque de costume, dias que viaja, jeito de pedir). Uma
+--                     linha por cliente; só o admin lê e edita.
 -- O texto bruto só é lido pelo admin; as lições, por admin/atendente. Quem grava
 -- é a Edge Function (service_role). Remoção/arquivo é troca de status.
 -- =====================================================================
@@ -23,7 +31,7 @@ create table if not exists public.bot_observations (
   conversation_id          uuid,
   chatwoot_conversation_id bigint not null,
   chatwoot_message_id      bigint,
-  author                   text not null check (author in ('cliente', 'equipe', 'bot_rascunho')),
+  author                   text not null check (author in ('cliente', 'equipe', 'bot', 'bot_rascunho')),
   content                  text not null check (length(btrim(content)) > 0 and length(content) <= 2000),
   created_at               timestamptz not null default now(),
   processed_at             timestamptz
@@ -44,7 +52,7 @@ grant select on public.bot_observations to authenticated;
 
 create table if not exists public.bot_learnings (
   id             uuid primary key default gen_random_uuid(),
-  kind           text not null check (kind in ('linguagem_cliente', 'estilo_atendente', 'fluxo_agendamento', 'fato')),
+  kind           text not null check (kind in ('linguagem_cliente', 'estilo_atendente', 'fluxo_agendamento', 'situacao', 'fato', 'negocio')),
   title          text not null check (length(btrim(title)) between 3 and 120),
   content        text not null check (length(btrim(content)) between 10 and 800),
   status         text not null default 'proposta' check (status in ('ativa', 'proposta', 'recusada', 'arquivada')),
@@ -83,6 +91,41 @@ end $$;
 drop trigger if exists trg_bot_learnings_touch on public.bot_learnings;
 create trigger trg_bot_learnings_touch
   before update on public.bot_learnings
+  for each row execute function public.fn_bot_learnings_touch();
+
+-- ---------------------------------------------------------------------
+-- Clientes recorrentes: o que vale lembrar de cada um (uma linha por cliente).
+-- O bot só usa para personalizar e confirmar ("o mesmo ponto de sempre?"):
+-- nunca para decidir preço, vaga, horário ou confirmação.
+-- ---------------------------------------------------------------------
+create table if not exists public.bot_customer_notes (
+  id             uuid primary key default gen_random_uuid(),
+  customer_id    uuid not null references public.customers(id),
+  notes          text not null check (length(btrim(notes)) between 10 and 800),
+  status         text not null default 'ativa' check (status in ('ativa', 'arquivada')),
+  evidence_count integer not null default 1,
+  first_seen_at  timestamptz not null default now(),
+  last_seen_at   timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create unique index if not exists uq_bot_customer_notes_cliente
+  on public.bot_customer_notes (customer_id);
+
+alter table public.bot_customer_notes enable row level security;
+drop policy if exists bot_customer_notes_select on public.bot_customer_notes;
+create policy bot_customer_notes_select on public.bot_customer_notes
+  for select using (fn_has_role(array['admin']::user_role[]));
+drop policy if exists bot_customer_notes_update on public.bot_customer_notes;
+create policy bot_customer_notes_update on public.bot_customer_notes
+  for update using (fn_has_role(array['admin']::user_role[]))
+  with check (fn_has_role(array['admin']::user_role[]));
+revoke all on public.bot_customer_notes from anon, authenticated;
+grant select on public.bot_customer_notes to authenticated;
+grant update (notes, status, updated_at) on public.bot_customer_notes to authenticated;
+
+drop trigger if exists trg_bot_customer_notes_touch on public.bot_customer_notes;
+create trigger trg_bot_customer_notes_touch
+  before update on public.bot_customer_notes
   for each row execute function public.fn_bot_learnings_touch();
 
 -- ---------------------------------------------------------------------
@@ -132,6 +175,7 @@ begin
     'observacoes', (select count(*) from bot_observations),
     'pendentes', (select count(*) from bot_observations where processed_at is null),
     'ultima_observacao', (select max(created_at) from bot_observations),
+    'clientes', (select count(*) from bot_customer_notes where status = 'ativa'),
     'ultimo_aprendizado', (select value ->> 'last_run_at' from settings where key = 'bot_learning_state'),
     'dias_guardados', 90
   );
@@ -163,4 +207,5 @@ select cron.schedule(
 -- Conferir:
 --   select kind, status, needs_review, evidence_count, title from bot_learnings order by last_seen_at desc;
 --   select author, count(*) from bot_observations group by 1;
+--   select c.name, n.notes from bot_customer_notes n join customers c on c.id = n.customer_id;
 --   select jobname, schedule from cron.job where jobname = 'purge-bot-observations';

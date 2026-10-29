@@ -1,6 +1,7 @@
 // src/hooks/useBotLearnings.js
 //
-// Lições aprendidas no modo sombra + números da observação (issue #218).
+// Lições aprendidas observando as conversas + anotações dos clientes recorrentes
+// + números da observação (issue #218).
 
 import { useCallback, useMemo } from "react";
 import { mudancaDaRevisao, separarLicoes } from "../domain/botAprendizado";
@@ -12,9 +13,12 @@ import { useSupabaseQuery } from "./useSupabaseQuery";
 export function useBotLearnings() {
   const lista = useSupabaseQuery(() => botLearningService.list(), []);
   const numeros = useSupabaseQuery(() => botLearningService.stats(), []);
+  const notas = useSupabaseQuery(() => botLearningService.listNotes(), []);
   useRealtimeTable("bot_learnings", () => lista.refetch());
+  useRealtimeTable("bot_customer_notes", () => notas.refetch());
 
   const atualizar = useAsyncAction(botLearningService.update);
+  const atualizarNota = useAsyncAction(botLearningService.updateNote);
   const aprender = useAsyncAction(botLearningService.learnNow);
 
   const grupos = useMemo(() => separarLicoes(lista.data ?? []), [lista.data]);
@@ -41,22 +45,32 @@ export function useBotLearnings() {
     [atualizar, lista],
   );
 
+  const editarNota = useCallback(
+    async (nota, campos) => {
+      await atualizarNota.run(nota.id, campos);
+      await notas.refetch();
+    },
+    [atualizarNota, notas],
+  );
+
   const aprenderAgora = useCallback(async () => {
     const resumo = await aprender.run();
-    await Promise.all([lista.refetch(), numeros.refetch()]);
+    await Promise.all([lista.refetch(), numeros.refetch(), notas.refetch()]);
     return resumo;
-  }, [aprender, lista, numeros]);
+  }, [aprender, lista, numeros, notas]);
 
   return {
     ...grupos,
     numeros: numeros.data ?? null,
+    notasDeClientes: notas.data ?? [],
     loading: lista.loading,
-    error: lista.error ?? numeros.error,
-    recarregar: () => Promise.all([lista.refetch(), numeros.refetch()]),
+    error: lista.error ?? numeros.error ?? notas.error,
+    recarregar: () => Promise.all([lista.refetch(), numeros.refetch(), notas.refetch()]),
     salvando: atualizar.loading,
     aprendendo: aprender.loading,
     revisar,
     editar,
+    editarNota,
     aprenderAgora,
   };
 }

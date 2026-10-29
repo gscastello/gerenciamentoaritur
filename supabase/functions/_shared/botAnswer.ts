@@ -10,7 +10,7 @@
 // que não esteja nas fontes. Reservas, vagas e confirmações NUNCA passam
 // por aqui — continuam no motor determinístico (conversationEngine).
 
-import { blocoDasLicoes } from "./botLicoes.ts";
+import { blocoDasLicoes, blocoDoClienteAtual } from "./botLicoes.ts";
 import { numerosNaoFundamentados } from "./botGuard.ts";
 import { hojeSaoLuis } from "./dataOperacao.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -93,11 +93,11 @@ async function montarFatos(): Promise<{ fatos: string; estilo: string }> {
     for (const k of base.data) linhas.push(`- ${k.title}: ${k.content}`);
   }
 
-  // Aprendido no modo sombra: fatos só entram APROVADOS (status 'ativa') e passam
+  // Aprendido observando as conversas: fatos e negócio só entram APROVADOS (status 'ativa') e passam
   // pelo mesmo botGuard; estilo e fluxo do atendente afinam o tom das respostas.
-  const fatosAprendidos = await blocoDasLicoes(["fato"]);
+  const fatosAprendidos = await blocoDasLicoes(["fato", "negocio"]);
   if (fatosAprendidos) linhas.push("", fatosAprendidos);
-  const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento"]);
+  const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento", "situacao"]);
   const estiloBase = (cfg.bot_style_guide?.text ?? "").trim() || ESTILO_PADRAO;
 
   return {
@@ -111,6 +111,7 @@ export async function responderComBase(perguntaDoCliente: string): Promise<Respo
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
 
   const { fatos, estilo } = await montarFatos();
+  const sobreOCliente = await blocoDoClienteAtual();
 
   const system = `Você é o atendente virtual da AriTur (transporte de passageiros entre São Luís e Pirapemas/Cantanhede) no WhatsApp.
 
@@ -127,7 +128,10 @@ REGRAS INEGOCIÁVEIS:
 Hoje é ${hojeSaoLuis()}.
 
 INFORMAÇÕES:
-${fatos}`;
+${fatos}${sobreOCliente ? `
+
+${sobreOCliente}
+(Não repita números dessa anotação: valores, horários e vagas só vêm das INFORMAÇÕES.)` : ""}`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

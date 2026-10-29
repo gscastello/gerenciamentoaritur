@@ -1,5 +1,5 @@
-// Aprendizado do modo sombra (issue #218): regras puras da tela
-// Sistema → Bot → Aprendizado. O bot observa as conversas e propõe "lições";
+// Aprendizado do bot (issue #218): regras puras da tela Sistema → Bot →
+// Aprendizado. O bot observa as conversas (em qualquer modo) e propõe "lições";
 // aqui ficam o agrupamento por situação, os rótulos e os textos de resumo.
 
 export const TIPOS_DE_LICAO = {
@@ -15,11 +15,22 @@ export const TIPOS_DE_LICAO = {
     rotulo: "Como o atendente agenda",
     ajuda: "O que o atendente pergunta para fechar uma passagem e em que ordem.",
   },
+  situacao: {
+    rotulo: "O que responder em cada situação",
+    ajuda: "Como o atendente reage a pedidos e problemas comuns. Com número, só vale aprovada.",
+  },
   fato: {
     rotulo: "Informação do atendente",
     ajuda: "Regra, valor ou horário dito ao cliente. Só vale depois de aprovada.",
   },
+  negocio: {
+    rotulo: "Como a empresa funciona",
+    ajuda: "Funcionamento da empresa, em visão geral. Só vale depois de aprovada.",
+  },
 };
+
+/** Tipos que mudam o que o bot afirma: só valem depois de aprovados. */
+export const TIPOS_QUE_EXIGEM_APROVACAO = ["fato", "negocio"];
 
 /** Divide as lições pelo que o dono precisa fazer com elas. */
 export function separarLicoes(licoes = []) {
@@ -85,6 +96,7 @@ export function mensagemDoAprendizado(r) {
   if (r.novas) partes.push(`${r.novas} lição(ões) nova(s)`);
   if (r.reforcos) partes.push(`${r.reforcos} reforçada(s)`);
   if (r.atualizadas) partes.push(`${r.atualizadas} atualizada(s)`);
+  if (r.clientes) partes.push(`${r.clientes} cliente(s) anotado(s)`);
   const lido = `Li ${r.observacoes} mensagem(ns).`;
   return partes.length ? `${lido} ${partes.join(", ")}.` : `${lido} Nada de novo para registrar.`;
 }

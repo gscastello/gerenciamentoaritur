@@ -1,11 +1,13 @@
 // supabase/functions/_shared/botLicoes.ts
 //
-// Lições aprendidas no modo sombra que JÁ VALEM (status 'ativa'), prontas para
+// Lições aprendidas (observando as conversas) que JÁ VALEM (status 'ativa'), prontas para
 // entrar nos prompts do bot. Cache curto: o isolate atende várias conversas e
 // as lições mudam devagar. Falha de leitura nunca derruba uma resposta.
 
-import { blocoDeLicoes, type LicaoGuardada, type TipoLicao } from "./aprendizado.ts";
+import { blocoDeLicoes, blocoDoCliente, type LicaoGuardada, type TipoLicao } from "./aprendizado.ts";
+import { getBotContext } from "./botContext.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { variantesTelefone } from "./telefone.ts";
 
 const CACHE_MS = 5 * 60 * 1000;
 let cache: { em: number; licoes: LicaoGuardada[] } | null = null;
@@ -35,4 +37,45 @@ export async function blocoDasLicoes(tipos: TipoLicao[]): Promise<string> {
 /** Depois que o dono revisa, as lições novas passam a valer sem esperar o cache. */
 export function esquecerCacheDeLicoes() {
   cache = null;
+}
+
+/**
+ * O que o bot anotou do cliente desta conversa (cliente recorrente), já em
+ * forma de bloco de prompt. Vazio se não há anotação ou o cliente é novo.
+ */
+export async function blocoDoClienteAtual(): Promise<string> {
+  const ctx = getBotContext();
+  if (!ctx) return "";
+  try {
+    const { data: conversa } = await supabaseAdmin
+      .from("whatsapp_conversations")
+      .select("phone, customer_id")
+      .eq("id", ctx.conversationId)
+      .maybeSingle();
+    if (!conversa) return "";
+    let clienteId: string | null = conversa.customer_id;
+    if (!clienteId) {
+      const formas = variantesTelefone(conversa.phone).join(",");
+      const { data } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .or(`phone.in.(${formas}),phone_secondary.in.(${formas})`)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      clienteId = data?.id ?? null;
+    }
+    if (!clienteId) return "";
+    const { data: nota } = await supabaseAdmin
+      .from("bot_customer_notes")
+      .select("notes")
+      .eq("customer_id", clienteId)
+      .eq("status", "ativa")
+      .maybeSingle();
+    return blocoDoCliente(nota?.notes);
+  } catch (err) {
+    console.error("Falha ao ler a anotação do cliente:", String(err).slice(0, 200));
+    return "";
+  }
 }

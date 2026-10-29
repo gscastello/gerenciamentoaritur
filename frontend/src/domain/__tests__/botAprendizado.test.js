@@ -97,6 +97,11 @@ describe("mensagemDoAprendizado", () => {
       "Li 5 mensagem(ns). Nada de novo para registrar.",
     );
   });
+  it("conta os clientes recorrentes anotados", () => {
+    expect(mensagemDoAprendizado({ observacoes: 12, novas: 0, clientes: 2 })).toBe(
+      "Li 12 mensagem(ns). 2 cliente(s) anotado(s).",
+    );
+  });
   it("sem observações, avisa que não há o que aprender", () => {
     expect(mensagemDoAprendizado({ observacoes: 0 })).toContain("Nada novo");
     expect(mensagemDoAprendizado(null)).toContain("Nada novo");

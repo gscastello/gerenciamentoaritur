@@ -1,7 +1,8 @@
 // supabase/functions/_shared/observacoes.ts
 //
-// Modo sombra OBSERVA: guarda o texto (só texto) do que o cliente escreveu, do
-// que o atendente respondeu e do rascunho que o bot teria enviado. Melhor
+// O bot OBSERVA em qualquer modo: guarda o texto (só texto) do que o cliente
+// escreveu, do que o atendente respondeu, do que o bot enviou e, no modo sombra,
+// do rascunho que ele teria enviado. Melhor
 // esforço — nunca pode derrubar o atendimento. Ver database/64-sombra-aprende.sql.
 
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -12,7 +13,7 @@ export async function registrarObservacao(o: {
   conversationId?: string;
   chatwootConversationId: number;
   chatwootMessageId?: number;
-  author: "cliente" | "equipe" | "bot_rascunho";
+  author: "cliente" | "equipe" | "bot" | "bot_rascunho";
   content?: string;
 }) {
   const content = (o.content ?? "").trim().slice(0, MAX_CHARS);

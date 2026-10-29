@@ -5,17 +5,25 @@
 // lições devolvidas e o bloco de texto que entra nos prompts do bot.
 // A parte com I/O fica em aprendizadoRun.ts / botLicoes.ts.
 
-export type TipoLicao = "linguagem_cliente" | "estilo_atendente" | "fluxo_agendamento" | "fato";
+export type TipoLicao =
+  | "linguagem_cliente"
+  | "estilo_atendente"
+  | "fluxo_agendamento"
+  | "situacao"
+  | "fato"
+  | "negocio";
 export const TIPOS_DE_LICAO: TipoLicao[] = [
   "linguagem_cliente",
   "estilo_atendente",
   "fluxo_agendamento",
+  "situacao",
   "fato",
+  "negocio",
 ];
 
 export type Observacao = {
   chatwoot_conversation_id: number;
-  author: "cliente" | "equipe" | "bot_rascunho";
+  author: "cliente" | "equipe" | "bot" | "bot_rascunho";
   content: string;
   created_at: string;
 };
@@ -33,6 +41,7 @@ export type LicaoGuardada = {
 const ROTULO_AUTOR: Record<Observacao["author"], string> = {
   cliente: "CLIENTE",
   equipe: "ATENDENTE",
+  bot: "BOT (enviada)",
   bot_rascunho: "BOT (rascunho, não enviado)",
 };
 
@@ -70,9 +79,15 @@ export function montarTranscricoes(
   return saida;
 }
 
-/** Fato vale só aprovado; linguagem/estilo/fluxo entram valendo e pedem revisão. */
-export function statusInicial(kind: TipoLicao): "ativa" | "proposta" {
-  return kind === "fato" ? "proposta" : "ativa";
+/**
+ * Fato e negócio valem só aprovados; linguagem/estilo/fluxo entram valendo e
+ * pedem revisão. Resposta por situação também, a menos que cite número
+ * (valor, horário, prazo) — aí é informação e espera o dono aprovar.
+ */
+export function statusInicial(kind: TipoLicao, content = ""): "ativa" | "proposta" {
+  if (kind === "fato" || kind === "negocio") return "proposta";
+  if (kind === "situacao" && /\d/.test(content)) return "proposta";
+  return "ativa";
 }
 
 export function normalizarTitulo(t: string): string {
@@ -126,7 +141,9 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
   linguagem_cliente: "COMO OS CLIENTES COSTUMAM ESCREVER",
   estilo_atendente: "COMO O ATENDENTE COSTUMA RESPONDER",
   fluxo_agendamento: "COMO O ATENDENTE AGENDA AS PASSAGENS",
+  situacao: "O QUE RESPONDER EM CADA SITUAÇÃO (jeito do atendente)",
   fato: "INFORMAÇÕES DITAS PELO ATENDENTE (aprovadas pelo dono)",
+  negocio: "COMO A EMPRESA FUNCIONA (aprovado pelo dono)",
 };
 
 /**
@@ -157,4 +174,37 @@ export function blocoDeLicoes(
     if (corpo.length) linhas.push(cabecalho, ...corpo, "");
   }
   return linhas.join("\n").trim();
+}
+
+export type NotaDeCliente = { customerId: string; notes: string };
+
+/**
+ * O que o modelo devolveu sobre clientes recorrentes: só para clientes que
+ * estavam nas conversas lidas (o modelo fala "conversa N"), texto no tamanho
+ * do banco e sem telefone, e-mail ou link.
+ */
+export function validarNotasDeClientes(
+  brutas: unknown,
+  clientePorConversa: Map<number, string>,
+): NotaDeCliente[] {
+  if (!Array.isArray(brutas)) return [];
+  const feitos = new Set<string>();
+  const saida: NotaDeCliente[] = [];
+  for (const b of brutas) {
+    const n = Number((b as { conversa?: unknown })?.conversa);
+    const customerId = clientePorConversa.get(n);
+    const notes = conteudoAtualizadoValido((b as { resumo?: unknown })?.resumo);
+    if (!customerId || !notes || feitos.has(customerId)) continue;
+    feitos.add(customerId);
+    saida.push({ customerId, notes });
+  }
+  return saida;
+}
+
+/** Bloco do prompt com o que se sabe do cliente que está falando agora. */
+export function blocoDoCliente(notes: string | null | undefined): string {
+  const t = String(notes ?? "").trim();
+  if (!t) return "";
+  return `SOBRE ESTE CLIENTE (anotado de conversas anteriores; serve só para personalizar e lembrar — confirme com ele, nunca presuma):
+${t}`;
 }
