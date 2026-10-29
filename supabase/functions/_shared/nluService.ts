@@ -17,6 +17,8 @@
 //   lista fechada de opções reais (lida do banco antes desta chamada)
 //   — o modelo é instruído a nunca inventar um código fora dessa lista.
 
+import { blocoDasLicoes } from "./botLicoes.ts";
+
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 // Sonnet 5: mais capaz e mais barato que o 4-6 ($2/$10 vs $3/$15 por 1M tokens)
 // e suficiente de sobra para extração estruturada de campos.
@@ -70,6 +72,8 @@ export async function interpretMessage(params: {
   validRoutePoints: { code: string; name: string; direction: string }[];
   conversationSummary?: string;        // ex.: "cliente já escolheu Ida, aguardando data"
 }): Promise<ExtractedIntent> {
+  // Jeito de escrever dos clientes aprendido no modo sombra (só para ENTENDER).
+  const licoesDeLinguagem = await blocoDasLicoes(["linguagem_cliente"]);
   const pointsList = params.validRoutePoints.map((p) => `${p.code} (${p.direction}: ${p.name})`).join(", ") || "nenhum";
 
   const systemPrompt = `Você é um extrator de dados para um bot de reservas de transporte (São Luís ⇄ Pirapemas/Cantanhede).
@@ -79,7 +83,8 @@ Hoje é ${params.today}. Resolva expressões relativas ("amanhã", "sexta que ve
 route_point_code só pode ser um destes códigos válidos, exatamente como aparecem: ${pointsList}. Se o texto mencionar um local que não bate com nenhum desses, deixe route_point_code null e coloque a menção literal em pickup_detail.
 ${params.conversationSummary ? `Contexto da conversa até agora: ${params.conversationSummary}` : ""}
 Use intent "pergunta" quando o cliente faz uma dúvida geral sobre a empresa ou o serviço (horários, regras, bagagem, crianças, animais, pagamento, cancelamento, atraso…) sem pedir para reservar, cancelar ou alterar nada.
-Você NUNCA responde preço, vaga, horário ou confirmação — isso não é seu trabalho, só extraia dados.`;
+Você NUNCA responde preço, vaga, horário ou confirmação — isso não é seu trabalho, só extraia dados.
+${licoesDeLinguagem ? `\n${licoesDeLinguagem}\n(Isso só ajuda a ENTENDER como os clientes escrevem. Continue extraindo apenas o que a mensagem realmente diz.)` : ""}`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

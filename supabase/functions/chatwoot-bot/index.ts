@@ -26,11 +26,13 @@
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
+import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
+import { registrarObservacao } from "../_shared/observacoes.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -42,7 +44,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
 }
 
-/** Espelha no banco o que aconteceu na conversa (fila do painel de atendimento). */
+/** Espelha no banco o que aconteceu na conversa (fila do painel de atendimento). Devolve o id da conversa. */
 async function espelhar(a: NonNullable<ReturnType<typeof extrairAtividade>>) {
   const conversation = await whatsappService.resolveConversation(a.telefone);
   const patch: Record<string, unknown> = { chatwoot_conversation_id: a.chatwootConversationId };
@@ -56,6 +58,7 @@ async function espelhar(a: NonNullable<ReturnType<typeof extrairAtividade>>) {
   }
   const { error } = await supabaseAdmin.from("whatsapp_conversations").update(patch).eq("id", conversation.id);
   if (error) console.error("Falha ao espelhar a conversa do Chatwoot:", error.message);
+  return conversation.id as string;
 }
 
 /**
@@ -80,13 +83,33 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any) {
   const atividade = extrairAtividade(body, INBOX_ID);
-  if (atividade) await espelhar(atividade);
-
-  const m = extrairMensagemDeCliente(body, INBOX_ID);
-  if (!m) return;
+  const conversaEspelhada = atividade ? await espelhar(atividade) : undefined;
 
   const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "attendance_mode").maybeSingle();
   const modo: string = cfg?.value?.mode ?? "ia";
+
+  // O bot OBSERVA as conversas em QUALQUER modo (ia, manual ou sombra): o que o
+  // cliente escreveu, o que o atendente respondeu (pelo celular ou pelo Chatwoot)
+  // e o que o próprio bot enviou. É assim que ele aprende como os clientes falam,
+  // como a equipe atende e agenda e como a empresa funciona (issue #218).
+  let observou = false;
+  if (atividade?.autor && atividade.texto && conversaEspelhada) {
+    await registrarObservacao({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      chatwootMessageId: atividade.mensagemId,
+      author: atividade.autor,
+      content: atividade.texto,
+    });
+    observou = true;
+  }
+
+  const m = extrairMensagemDeCliente(body, INBOX_ID);
+  if (!m) {
+    // sem resposta pendente: pode aprender já
+    if (observou) await aprenderSePreciso();
+    return;
+  }
 
   const conversation = await whatsappService.resolveConversation(m.telefone);
 
@@ -120,6 +143,9 @@ async function processar(body: any) {
         raw: { chatwoot_message_id: m.chatwootMessageId, content: m.texto ?? null, anexo: m.anexo?.tipo ?? null },
       }),
   );
+
+  // depois de responder ao cliente, para o aprendizado não atrasar o atendimento
+  if (observou) await aprenderSePreciso();
 }
 
 Deno.serve(async (req: Request) => {

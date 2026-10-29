@@ -46,6 +46,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
    `database/52-painel-atendimento-whatsapp.sql` (espelho da fila do Chatwoot, perguntas sem resposta).
 3. Criar o usuário do bot em **Sistema → Equipe**: nome exato `Bot WhatsApp`, e-mail
    `bot@rota-pirapemas.local`, papel **atendente**. É ele que aparece na auditoria.
+4. `database/64-sombra-aprende.sql` — observações, lições e anotações de clientes: o bot aprende em qualquer modo (ver §6b).
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -65,6 +66,7 @@ quando o cliente já existe, tenta renomear o contato no Chatwoot para o nome do
 
 ```bash
 supabase functions deploy chatwoot-bot --no-verify-jwt
+supabase functions deploy bot-aprender            # botão "Aprender agora" (só admin; com verificação de JWT)
 supabase secrets set ANTHROPIC_API_KEY=...        # console.anthropic.com
 supabase secrets set CHATWOOT_ACCOUNT_ID=188239
 supabase secrets set CHATWOOT_INBOX_ID=146985
@@ -94,6 +96,56 @@ Nunca cole esses valores em chat, issue ou PR. URL da função:
 
 Comece em **Sombra** por alguns dias, leia as notas privadas e só então troque para
 IA automática (a troca vale na hora, para todos os sócios).
+
+## 6b. O que o bot aprende, em qualquer modo (issue #218)
+
+**Objetivo:** o aprendizado é o **treino do bot para o modo automático**. Tudo o que ele aprende
+aqui é o que ele vai usar quando atender sozinho, então o aprendizado é **contínuo e nunca para**
+(ver "Como não estagna", abaixo). A Sombra é só o modo mais seguro de treinar; as lições valem
+em qualquer modo.
+
+O bot **está sempre aprendendo**, em qualquer modo de atendimento (**IA**, **manual** ou
+**sombra**): guarda o texto do que o cliente escreve, do que o atendente responde (pelo celular
+ou pelo Chatwoot), do que o próprio bot enviou e, no modo Sombra, do rascunho que ele teria
+enviado (`bot_observations`, só texto, **apagado após 90 dias**, legível só pelo admin). Notas
+privadas e anexos não entram.
+
+De tempos em tempos (quando há material e passaram 6 h) ou ao clicar em **Sistema → Bot →
+Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolve **lições**
+(`bot_learnings`), acumulando: lição já conhecida só ganha evidência; texto melhor só substitui
+o antigo se o dono ainda não revisou.
+
+| Tipo | Como entra | Para que serve |
+|---|---|---|
+| Jeito dos clientes falarem | **Já vale**, com aviso "Está certo?" | O bot entende melhor gírias e pedidos (só leitura da mensagem) |
+| Estilo do atendente / como o atendente agenda | **Já vale**, com aviso | Afina o tom e a ordem das perguntas nas respostas livres |
+| O que responder em cada situação | **Já vale**, com aviso (com número: só depois de aprovada) | Mostra ao bot como o atendente reage a pedidos e problemas comuns |
+| Informação do atendente (preço, regra, horário) | **Só depois de aprovada** | Entra nas respostas livres, sempre sob o `botGuard` |
+| Como a empresa funciona | **Só depois de aprovada** | Entra nas respostas livres, sempre sob o `botGuard` |
+
+**Clientes recorrentes:** para quem já tem 2 ou mais viagens, o bot mantém uma anotação por
+cliente (`bot_customer_notes`: ponto de embarque de costume, dias em que viaja, jeito de pedir…).
+Ela só serve para personalizar e **confirmar** ("o mesmo ponto de sempre?") nas respostas livres;
+números dela nunca passam pelo `botGuard`. O dono vê, edita e desativa em **Sistema → Bot →
+Aprendizado → Ver clientes recorrentes**.
+
+**Como não estagna:**
+
+- **Roda sempre que há material:** 20+ mensagens novas, ou qualquer quantidade esperando há mais
+  de 24 h (semana fraca também aprende), respeitando 6 h entre rodadas.
+- **Lição aprovada continua sendo reavaliada:** o bot nunca reescreve o que o dono revisou, mas
+  quando as conversas novas mostram algo diferente (preço, horário, regra, jeito de atender) ele
+  deixa uma **sugestão de atualização** na lição; o dono aceita ou mantém. Lição não revisada é
+  atualizada direto, com aviso.
+- **Lição velha volta para conferência:** em uso e sem aparecer nas conversas há 4 meses (e sem
+  conferência do dono nesse tempo), vira "Está certo?" de novo (cron `flag-stale-bot-learnings`).
+- **Lição nova entra no prompt:** o ranking considera quanto a lição apareceu **e** se apareceu
+  recentemente; lição recente com pouca evidência não fica de fora para sempre.
+- **Sem duplicatas:** o modelo vê as 150 lições mais recentes ao decidir se algo já é conhecido.
+
+O bot continua **sem decidir preço, vaga, horário ou confirmação**: isso segue vindo do banco.
+As lições só mudam como ele entende e como ele fala. O dono pode editar, recusar ou desativar
+qualquer lição a qualquer momento.
 
 ## 7. Checklist de teste (em modo Sombra)
 
