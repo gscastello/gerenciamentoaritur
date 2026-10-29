@@ -88,6 +88,44 @@ describe("haQuantoTempo", () => {
   });
 });
 
+describe("sugestões de atualização do bot (conhecimento que não estagna)", () => {
+  it("lição aprovada com sugestão volta para a fila de revisão", () => {
+    const g = separarLicoes([
+      L({ id: "a", proposed_content: "Texto novo sugerido pelo bot." }),
+      L({ id: "b" }),
+    ]);
+    expect(g.paraRevisar.map((l) => l.id)).toEqual(["a"]);
+    expect(g.emUso.map((l) => l.id)).toEqual(["b"]);
+  });
+  it("aceitar troca o texto pela sugestão e limpa a sugestão", () => {
+    const m = mudancaDaRevisao(
+      L({ content: "antigo", proposed_content: "novo" }),
+      "aceitar_sugestao",
+      { agora: "2026-10-30T00:00:00Z", ator: "u1" },
+    );
+    expect(m).toMatchObject({
+      status: "ativa",
+      content: "novo",
+      proposed_content: null,
+      proposed_at: null,
+      needs_review: false,
+      reviewed_by: "u1",
+    });
+  });
+  it("manter descarta a sugestão e não mexe no texto", () => {
+    const m = mudancaDaRevisao(L({ proposed_content: "novo" }), "manter", {
+      agora: "2026-10-30T00:00:00Z",
+    });
+    expect(m).toMatchObject({ status: "ativa", proposed_content: null, proposed_at: null });
+    expect("content" in m).toBe(false);
+  });
+  it("o resumo do aprendizado conta as sugestões", () => {
+    expect(mensagemDoAprendizado({ observacoes: 8, sugestoes: 2 })).toBe(
+      "Li 8 mensagem(ns). 2 sugestão(ões) de atualização para você.",
+    );
+  });
+});
+
 describe("mensagemDoAprendizado", () => {
   it("resume o que foi aprendido", () => {
     expect(mensagemDoAprendizado({ observacoes: 40, novas: 3, reforcos: 2, atualizadas: 1 })).toBe(

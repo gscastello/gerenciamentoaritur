@@ -38,7 +38,8 @@ export function separarLicoes(licoes = []) {
   const emUso = [];
   const descartadas = [];
   for (const l of licoes) {
-    if (l.status === "proposta" || (l.status === "ativa" && l.needs_review)) paraRevisar.push(l);
+    if (l.status === "proposta" || (l.status === "ativa" && (l.needs_review || l.proposed_content)))
+      paraRevisar.push(l);
     else if (l.status === "ativa") emUso.push(l);
     else descartadas.push(l);
   }
@@ -63,6 +64,16 @@ export function mudancaDaRevisao(
     case "aprovar": // proposta -> passa a valer
     case "confirmar": // já valia; o dono conferiu
       return { ...revisada, status: "ativa" };
+    case "aceitar_sugestao": // o bot viu algo diferente nas conversas e o dono concordou
+      return {
+        ...revisada,
+        status: "ativa",
+        content: licao.proposed_content,
+        proposed_content: null,
+        proposed_at: null,
+      };
+    case "manter": // o dono confirma o texto atual e descarta a sugestão
+      return { ...revisada, status: "ativa", proposed_content: null, proposed_at: null };
     case "recusar":
       return { ...revisada, status: "recusada" };
     case "arquivar":
@@ -96,6 +107,7 @@ export function mensagemDoAprendizado(r) {
   if (r.novas) partes.push(`${r.novas} lição(ões) nova(s)`);
   if (r.reforcos) partes.push(`${r.reforcos} reforçada(s)`);
   if (r.atualizadas) partes.push(`${r.atualizadas} atualizada(s)`);
+  if (r.sugestoes) partes.push(`${r.sugestoes} sugestão(ões) de atualização para você`);
   if (r.clientes) partes.push(`${r.clientes} cliente(s) anotado(s)`);
   const lido = `Li ${r.observacoes} mensagem(ns).`;
   return partes.length ? `${lido} ${partes.join(", ")}.` : `${lido} Nada de novo para registrar.`;

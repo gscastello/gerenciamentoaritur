@@ -3,9 +3,11 @@ import {
   blocoDeLicoes,
   blocoDoCliente,
   conteudoAtualizadoValido,
+  deveAprender,
   mascararDados,
   montarTranscricoes,
   normalizarTitulo,
+  pontuacaoDaLicao,
   statusInicial,
   validarLicoesNovas,
   validarNotasDeClientes,
@@ -146,4 +148,24 @@ Deno.test("bloco do cliente: vazio sem anotação, com aviso de confirmar quando
   assertEquals(blocoDoCliente(null), "");
   assertEquals(blocoDoCliente("   "), "");
   assertStringIncludes(blocoDoCliente("Costuma ir na Rodoviária."), "nunca presuma");
+});
+
+Deno.test("aprende com bastante material, ou com pouco material esperando há mais de um dia", () => {
+  const agora = new Date("2026-10-30T12:00:00Z");
+  assertEquals(deveAprender({ pendentes: 25, maisAntigaEm: "2026-10-30T11:00:00Z", agora }), true);
+  assertEquals(deveAprender({ pendentes: 5, maisAntigaEm: "2026-10-30T08:00:00Z", agora }), false);
+  assertEquals(deveAprender({ pendentes: 5, maisAntigaEm: "2026-10-29T11:59:00Z", agora }), true);
+  assertEquals(deveAprender({ pendentes: 0, maisAntigaEm: null, agora }), false);
+  assertEquals(deveAprender({ pendentes: 3, maisAntigaEm: null, agora }), false);
+});
+
+Deno.test("lição nova e recente não fica de fora do prompt só por ter pouca evidência", () => {
+  const agora = new Date("2026-10-30T12:00:00Z");
+  const velha: LicaoGuardada = { id: "1", kind: "situacao", title: "Antiga", content: "Já era assim há muito tempo.", evidence_count: 4, last_seen_at: "2026-05-01T00:00:00Z" };
+  const nova: LicaoGuardada = { id: "2", kind: "situacao", title: "Nova", content: "Começou a aparecer esta semana.", evidence_count: 2, last_seen_at: "2026-10-29T00:00:00Z" };
+  assertEquals(pontuacaoDaLicao(nova, agora) > pontuacaoDaLicao(velha, agora), true);
+  assertEquals(pontuacaoDaLicao({ ...velha, last_seen_at: undefined }, agora), 4);
+  const bloco = blocoDeLicoes([velha, nova], ["situacao"], { max: 1 });
+  assertStringIncludes(bloco, "Nova");
+  assertEquals(bloco.includes("Antiga"), false);
 });

@@ -62,6 +62,10 @@ create table if not exists public.bot_learnings (
   last_seen_at   timestamptz not null default now(),
   reviewed_at    timestamptz,
   reviewed_by    uuid references public.users(id),
+  -- o bot nunca reescreve o que o dono já revisou: quando as conversas mostram
+  -- algo diferente, ele deixa uma SUGESTÃO aqui e o dono aceita ou mantém
+  proposed_content text check (proposed_content is null or length(btrim(proposed_content)) between 10 and 800),
+  proposed_at    timestamptz,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
@@ -79,7 +83,7 @@ create policy bot_learnings_update on public.bot_learnings
   with check (fn_has_role(array['admin']::user_role[]));
 revoke all on public.bot_learnings from anon, authenticated;
 grant select on public.bot_learnings to authenticated;
-grant update (title, content, status, needs_review, reviewed_at, reviewed_by, updated_at)
+grant update (title, content, status, needs_review, reviewed_at, reviewed_by, proposed_content, proposed_at, updated_at)
   on public.bot_learnings to authenticated;
 
 create or replace function public.fn_bot_learnings_touch()
@@ -204,8 +208,41 @@ select cron.schedule(
   $cron$ select public.fn_purge_bot_observations(); $cron$
 );
 
+-- ---------------------------------------------------------------------
+-- Conhecimento que não estagna: lição em uso que não aparece nas conversas há 4
+-- meses (e que o dono não conferiu nesse tempo) volta para a fila de conferência.
+-- Confirmar ("Está certo") renova o prazo.
+-- ---------------------------------------------------------------------
+create or replace function public.fn_flag_stale_bot_learnings()
+returns integer
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  v_n integer;
+begin
+  update bot_learnings
+     set needs_review = true
+   where status = 'ativa'
+     and needs_review = false
+     and last_seen_at < now() - interval '120 days'
+     and coalesce(reviewed_at, created_at) < now() - interval '120 days';
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke execute on function public.fn_flag_stale_bot_learnings() from public, anon, authenticated;
+grant  execute on function public.fn_flag_stale_bot_learnings() to service_role;
+
+select cron.schedule(
+  'flag-stale-bot-learnings',
+  '20 4 * * *',
+  $cron$ select public.fn_flag_stale_bot_learnings(); $cron$
+);
+
 -- Conferir:
 --   select kind, status, needs_review, evidence_count, title from bot_learnings order by last_seen_at desc;
 --   select author, count(*) from bot_observations group by 1;
 --   select c.name, n.notes from bot_customer_notes n join customers c on c.id = n.customer_id;
---   select jobname, schedule from cron.job where jobname = 'purge-bot-observations';
+--   select jobname, schedule from cron.job where jobname in ('purge-bot-observations', 'flag-stale-bot-learnings');

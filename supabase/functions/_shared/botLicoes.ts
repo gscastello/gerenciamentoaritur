@@ -17,10 +17,10 @@ export async function licoesAtivas(): Promise<LicaoGuardada[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from("bot_learnings")
-      .select("id, kind, title, content, evidence_count")
+      .select("id, kind, title, content, evidence_count, last_seen_at")
       .eq("status", "ativa")
-      .order("evidence_count", { ascending: false })
-      .limit(80);
+      .order("last_seen_at", { ascending: false })
+      .limit(300);
     if (error) throw error;
     cache = { em: Date.now(), licoes: (data ?? []) as LicaoGuardada[] };
     return cache.licoes;

@@ -36,6 +36,7 @@ export type LicaoGuardada = {
   title: string;
   content: string;
   evidence_count?: number;
+  last_seen_at?: string;
 };
 
 const ROTULO_AUTOR: Record<Observacao["author"], string> = {
@@ -129,6 +130,40 @@ export function validarLicoesNovas(
   return saida;
 }
 
+const MINIMO_PARA_APRENDER = 20;
+const ESPERA_MAXIMA_HORAS = 24;
+
+/**
+ * Quando vale rodar o aprendizado sozinho: material de sobra, ou pouco material
+ * mas esperando há mais de um dia — assim, em semana fraca, o bot não fica parado.
+ */
+export function deveAprender({
+  pendentes,
+  maisAntigaEm,
+  agora = new Date(),
+}: {
+  pendentes: number;
+  maisAntigaEm?: string | null;
+  agora?: Date;
+}): boolean {
+  if (pendentes >= MINIMO_PARA_APRENDER) return true;
+  if (pendentes <= 0 || !maisAntigaEm) return false;
+  const t = new Date(maisAntigaEm).getTime();
+  return Number.isFinite(t) && agora.getTime() - t >= ESPERA_MAXIMA_HORAS * 3600 * 1000;
+}
+
+/**
+ * Ordem das lições no prompt: o que aparece muito sobe, mas o que apareceu há
+ * pouco também — senão lição nova nunca entraria e o bot pararia de evoluir.
+ */
+export function pontuacaoDaLicao(l: LicaoGuardada, agora = new Date()): number {
+  const vistas = l.evidence_count ?? 1;
+  const t = l.last_seen_at ? new Date(l.last_seen_at).getTime() : Number.NaN;
+  const dias = Number.isFinite(t) ? (agora.getTime() - t) / 86400000 : 999;
+  const recencia = dias <= 14 ? 3 : dias <= 45 ? 1.5 : 0;
+  return vistas + recencia;
+}
+
 /** Atualização só vale com texto novo, no tamanho do banco e sem dado pessoal. */
 export function conteudoAtualizadoValido(content: unknown): string | null {
   const t = String(content ?? "").trim();
@@ -160,7 +195,7 @@ export function blocoDeLicoes(
   for (const tipo of tipos) {
     const doTipo = licoes
       .filter((l) => l.kind === tipo)
-      .sort((a, b) => (b.evidence_count ?? 1) - (a.evidence_count ?? 1))
+      .sort((a, b) => pontuacaoDaLicao(b) - pontuacaoDaLicao(a))
       .slice(0, max);
     if (doTipo.length === 0) continue;
     const cabecalho = `${TITULO_DO_BLOCO[tipo]}:`;

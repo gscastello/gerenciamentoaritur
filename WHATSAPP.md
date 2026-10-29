@@ -99,6 +99,11 @@ IA automática (a troca vale na hora, para todos os sócios).
 
 ## 6b. O que o bot aprende, em qualquer modo (issue #218)
 
+**Objetivo:** o aprendizado é o **treino do bot para o modo automático**. Tudo o que ele aprende
+aqui é o que ele vai usar quando atender sozinho, então o aprendizado é **contínuo e nunca para**
+(ver "Como não estagna", abaixo). A Sombra é só o modo mais seguro de treinar; as lições valem
+em qualquer modo.
+
 O bot **está sempre aprendendo**, em qualquer modo de atendimento (**IA**, **manual** ou
 **sombra**): guarda o texto do que o cliente escreve, do que o atendente responde (pelo celular
 ou pelo Chatwoot), do que o próprio bot enviou e, no modo Sombra, do rascunho que ele teria
@@ -123,6 +128,20 @@ cliente (`bot_customer_notes`: ponto de embarque de costume, dias em que viaja, 
 Ela só serve para personalizar e **confirmar** ("o mesmo ponto de sempre?") nas respostas livres;
 números dela nunca passam pelo `botGuard`. O dono vê, edita e desativa em **Sistema → Bot →
 Aprendizado → Ver clientes recorrentes**.
+
+**Como não estagna:**
+
+- **Roda sempre que há material:** 20+ mensagens novas, ou qualquer quantidade esperando há mais
+  de 24 h (semana fraca também aprende), respeitando 6 h entre rodadas.
+- **Lição aprovada continua sendo reavaliada:** o bot nunca reescreve o que o dono revisou, mas
+  quando as conversas novas mostram algo diferente (preço, horário, regra, jeito de atender) ele
+  deixa uma **sugestão de atualização** na lição; o dono aceita ou mantém. Lição não revisada é
+  atualizada direto, com aviso.
+- **Lição velha volta para conferência:** em uso e sem aparecer nas conversas há 4 meses (e sem
+  conferência do dono nesse tempo), vira "Está certo?" de novo (cron `flag-stale-bot-learnings`).
+- **Lição nova entra no prompt:** o ranking considera quanto a lição apareceu **e** se apareceu
+  recentemente; lição recente com pouca evidência não fica de fora para sempre.
+- **Sem duplicatas:** o modelo vê as 150 lições mais recentes ao decidir se algo já é conhecido.
 
 O bot continua **sem decidir preço, vaga, horário ou confirmação**: isso segue vindo do banco.
 As lições só mudam como ele entende e como ele fala. O dono pode editar, recusar ou desativar

@@ -96,6 +96,35 @@ function Licao({ licao, onRevisar, onEditar, desativada }) {
       <div className="text-[12px] mt-0.5" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
         {licao.content}
       </div>
+      {licao.proposed_content && !desativada && (
+        <div
+          className="rounded-md px-2.5 py-2 mt-2 text-[12px]"
+          style={{ background: C.amberSoft, color: C.ink, overflowWrap: "anywhere" }}
+        >
+          <div className="font-semibold mb-0.5">As conversas recentes sugerem atualizar:</div>
+          {licao.proposed_content}
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <button
+              type="button"
+              onClick={() => onRevisar(licao, "aceitar_sugestao")}
+              aria-label={`Aceitar a atualização de ${licao.title}`}
+              className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+              style={botao(C.green)}
+            >
+              <Check size={12} /> Aceitar a atualização
+            </button>
+            <button
+              type="button"
+              onClick={() => onRevisar(licao, "manter")}
+              aria-label={`Manter ${licao.title} como está`}
+              className="btn-press text-[11px] px-2 py-1 rounded-md"
+              style={botao()}
+            >
+              Manter como está
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
         {desativada ? (
           <button
@@ -304,13 +333,15 @@ export default function SistemaBotAprendizado() {
         <Eye size={16} style={{ color: C.amber }} /> Aprendizado do bot
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-        O bot está sempre aprendendo, em qualquer modo de atendimento (IA, manual ou sombra): lê o
-        que os clientes escrevem, como o atendente responde e agenda, o que ele mesmo respondeu e o
-        que cada situação pede. Disso saem lições, sem nomes nem telefones, e uma anotação por
-        cliente recorrente. O jeito dos clientes falarem, o estilo do atendente e as respostas por
-        situação já passam a valer (confira abaixo); informações como preço, regra, horário e o
-        funcionamento da empresa só valem depois que você aprovar. O texto das conversas é apagado
-        após 90 dias.
+        Isto é o treino do bot para o modo automático: tudo o que ele aprende aqui é o que ele vai
+        usar quando atender sozinho. Por isso ele aprende o tempo todo, em qualquer modo (IA, manual
+        ou sombra), e nunca para: lê o que os clientes escrevem, como o atendente responde e agenda,
+        o que cada situação pede e quem são os clientes recorrentes. Quando as conversas mostram
+        algo diferente do que você já aprovou, ele sugere a atualização (você decide), e lições que
+        não aparecem há 4 meses voltam para conferência. Disso saem lições, sem nomes nem telefones.
+        O jeito dos clientes falarem, o estilo do atendente e as respostas por situação já passam a
+        valer (confira abaixo); informações como preço, regra, horário e o funcionamento da empresa
+        só valem depois que você aprovar. O texto das conversas é apagado após 90 dias.
       </p>
 
       {erro && (

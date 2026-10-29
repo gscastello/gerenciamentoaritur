@@ -16,7 +16,7 @@ export const botLearningService = {
     const { data, error } = await supabase
       .from("bot_learnings")
       .select(
-        "id, kind, title, content, status, needs_review, evidence_count, first_seen_at, last_seen_at, reviewed_at",
+        "id, kind, title, content, status, needs_review, evidence_count, first_seen_at, last_seen_at, reviewed_at, proposed_content, proposed_at",
       )
       .order("last_seen_at", { ascending: false })
       .limit(300);

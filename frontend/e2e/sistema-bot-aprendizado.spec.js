@@ -227,3 +227,49 @@ test("'Aprender agora' roda o aprendizado e resume o que foi lido", async ({ pag
     ),
   ).toBeVisible();
 });
+
+test("lição já aprovada com sugestão do bot: aceitar troca o texto, manter descarta a sugestão", async ({
+  page,
+}) => {
+  const gravacoes = [];
+  page.on("request", (r) => {
+    if (r.method() === "PATCH" && r.url().includes("/rest/v1/bot_learnings")) {
+      gravacoes.push({ url: r.url(), corpo: r.postDataJSON?.() });
+    }
+  });
+  const agora = new Date().toISOString();
+  const base = { kind: "negocio", status: "ativa", needs_review: false, evidence_count: 3 };
+  await abrirAprendizado(page, {
+    botLearnings: [
+      {
+        ...base,
+        id: "l-a",
+        title: "Horário da van",
+        content: "A van sai às 6 da manhã.",
+        proposed_content: "A van agora sai às 5h30 da manhã.",
+        last_seen_at: agora,
+      },
+      {
+        ...base,
+        id: "l-b",
+        title: "Forma de pagamento",
+        content: "Aceita Pix e dinheiro.",
+        proposed_content: "Aceita Pix, dinheiro e cartão.",
+        last_seen_at: agora,
+      },
+    ],
+  });
+  await expect(page.getByText("Para você revisar (2)")).toBeVisible();
+  await expect(page.getByText("A van agora sai às 5h30 da manhã.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Aceitar a atualização de Horário da van" }).click();
+  await expect.poll(() => gravacoes[0]?.corpo?.content).toBe("A van agora sai às 5h30 da manhã.");
+  expect(gravacoes[0].corpo.proposed_content).toBeNull();
+  await expect(page.getByText("Para você revisar (1)")).toBeVisible();
+
+  await page.getByRole("button", { name: "Manter Forma de pagamento como está" }).click();
+  await expect.poll(() => gravacoes[1]?.corpo?.proposed_content).toBeNull();
+  expect(gravacoes[1].corpo.content).toBeUndefined();
+  await expect(page.getByText("Para você revisar (0)")).toBeVisible();
+  await expect(page.getByText("Aceita Pix e dinheiro.")).toBeVisible();
+});
