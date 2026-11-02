@@ -13,7 +13,9 @@
 // mesmas RPCs de sempre — a capacidade continua decidida pelo banco).
 
 import {
+  areaDoDesembarque,
   calcularTotal,
+  nomeDeveSerCompletado,
   type PedidoValidado,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
@@ -384,6 +386,10 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
     : null;
 
+  // o texto do desembarque que bate com um local cadastrado também vai como "área" (rota do motorista)
+  const areas = await whatsappService.listDropoffAreas(pedido.direcao).catch(() => []);
+  const dropoffArea = areaDoDesembarque(pedido.desembarque, areas);
+
   try {
     const r = await whatsappService.createReservation(ctx.conversationId, {
       tripDate: pedido.data,
@@ -397,12 +403,19 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       pickupNeighborhood: pedido.bairro,
       pickupDetail: pedido.enderecoEmbarque,
       dropoffLocation: pedido.desembarque,
+      dropoffArea,
       status: fora ? "pendente" : "confirmada",
       pendingReason: motivoPendente,
       waMessageId: `cw-${ctx.mensagemId}-agente`,
     });
     ctx.escrita.criou = true;
     ctx.reservasCache = undefined;
+    // nome completo dado pelo cliente completa o cadastro que tinha só um nome/apelido
+    if (cliente && nomeDeveSerCompletado(cliente.name, pedido.nomeCliente)) {
+      await whatsappService
+        .completarNomeDoCliente(r.reservation_id, cliente.id, pedido.nomeCliente as string)
+        .catch((e) => console.error("Falha ao completar o nome do cliente:", String(e).slice(0, 200)));
+    }
     if (r.status === "pendente") {
       await whatsappService.enqueueAreaReviewAlert(r.reservation_id, {
         motivo: motivoPendente,

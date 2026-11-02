@@ -5,7 +5,9 @@ import {
   calendarioParaOPrompt,
   contemDadoInterno,
   converterMensagensDoChatwoot,
+  areaDoDesembarque,
   converterObservacoes,
+  nomeDeveSerCompletado,
   numerosPorExtenso,
   problemasDaResposta,
   existeTextoNovoDoCliente,
@@ -266,4 +268,40 @@ Deno.test("trava: 'reserva confirmada' sem ferramenta que deu certo é barrado; 
 Deno.test("trava: identificador interno e resposta longa demais", () => {
   assertEquals(problemasDaResposta("Sua reserva 3f2b8c1e-1a2b-4c3d-9e8f-0a1b2c3d4e5f", FONTES, LIVRE).length >= 1, true);
   assertEquals(problemasDaResposta("a".repeat(1600), FONTES, LIVRE).length, 1);
+});
+
+const AREAS_VOLTA = [
+  { code: "bacabeira", label: "Bacabeira" },
+  { code: "br", label: "BR (ponto de referência)" },
+  { code: "casa", label: "Em casa (bairro)" },
+  { code: "matoes", label: "Matões do Norte" },
+  { code: "retorno", label: "Retorno" },
+  { code: "rodoviaria", label: "Rodoviária" },
+  { code: "santa_rita", label: "Santa Rita" },
+];
+
+Deno.test("desembarque: o que o cliente escreveu vira o local cadastrado", () => {
+  assertEquals(areaDoDesembarque("Retorno do Aeroporto", AREAS_VOLTA), "retorno");
+  assertEquals(areaDoDesembarque("na rodoviária de são luís", AREAS_VOLTA), "rodoviaria");
+  assertEquals(areaDoDesembarque("Matões", AREAS_VOLTA), "matoes");
+  assertEquals(areaDoDesembarque("Santa Rita", AREAS_VOLTA), "santa_rita");
+  assertEquals(areaDoDesembarque("vou ficar em casa mesmo", AREAS_VOLTA), "casa");
+});
+
+Deno.test("desembarque: só palavra inteira e sem correspondência não inventa local", () => {
+  assertEquals(areaDoDesembarque("Brasília", AREAS_VOLTA), null); // "br" dentro de outra palavra não conta
+  assertEquals(areaDoDesembarque("Rua dos Pinheiros, 12", AREAS_VOLTA), null);
+  assertEquals(areaDoDesembarque("", AREAS_VOLTA), null);
+  assertEquals(areaDoDesembarque("BR 135", AREAS_VOLTA), "br");
+});
+
+Deno.test("nome completo completa o cadastro sem trocar um nome por outro", () => {
+  assertEquals(nomeDeveSerCompletado("Cândido", "Amparo Rocha Cândido"), true);
+  assertEquals(nomeDeveSerCompletado("Passageiro (calhau)", "Tayara Abreu Lima"), true);
+  assertEquals(nomeDeveSerCompletado(null, "Ana Lima"), true);
+  assertEquals(nomeDeveSerCompletado("Maria Silva", "Maria Silva"), false);
+  assertEquals(nomeDeveSerCompletado("Maria Silva", "Joana Souza"), false);
+  assertEquals(nomeDeveSerCompletado("Maria", "Maria Silva Santos"), true);
+  assertEquals(nomeDeveSerCompletado("Ana", "Ana"), false);
+  assertEquals(nomeDeveSerCompletado("Maria Silva", "Maria"), false); // novo precisa ser nome completo
 });

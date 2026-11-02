@@ -165,6 +165,13 @@ O bot **não usa mais menu numerado**. Cada mensagem de texto vai para um agente
 | `avisar_equipe`, `chamar_atendente` | recado na aba Pendências / passar a conversa para uma pessoa (encomenda, reclamação, reembolso, negociação, >10 passagens, algo que o app não mostra) |
 | `nao_responder` | quando a mensagem não pede resposta ("ok", 👍) |
 
+**Como ele reserva:** junta os dados que o cliente manda picados em várias mensagens; infere o sentido
+(embarque em São Luís = Ida; Cantanhede/Pirapemas = Volta; "madrugada" = Ida da manhã com busca em casa),
+o ponto e o local de desembarque cadastrado; pede de uma vez tudo o que falta; confere vaga e valor no app;
+manda um **resumo completo** (nome, dia/data, sentido e horário, ponto e endereço, desembarque, quantidade,
+pagamento, total) e pergunta "Posso confirmar?"; **só cria a reserva depois do "sim"**. Se o cliente der o
+nome completo e o cadastro tiver só um nome/apelido, o cadastro é completado.
+
 **Travas:** número/horário/valor da resposta só se vier de uma ferramenta, das informações da empresa
 ou do cliente (`botGuard`; uma volta de correção antes de desistir e chamar a equipe); a resposta só
 diz que mexeu numa reserva se a ferramenta deu certo; nada de identificador interno nem dado de

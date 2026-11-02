@@ -307,3 +307,42 @@ export function problemasDaResposta(
   if (texto.length > 1500) problemas.push("Resposta longa demais para o WhatsApp: resuma em poucas frases.");
   return problemas;
 }
+
+const normalizar = (s: string) =>
+  s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/**
+ * O texto que o cliente escreveu bate com algum local de desembarque cadastrado?
+ * ("Retorno do Aeroporto" → retorno). Compara palavras inteiras, sem acento; o
+ * nome mais específico vence. Sem correspondência, devolve null (o texto livre fica).
+ */
+export function areaDoDesembarque(texto: string, areas: { code: string; label: string }[]): string | null {
+  const alvo = ` ${normalizar(texto)} `;
+  if (alvo.trim() === "") return null;
+  let melhor: { code: string; tamanho: number } | null = null;
+  for (const a of areas) {
+    for (const candidato of [normalizar(a.label), normalizar(a.code.replace(/_/g, " "))]) {
+      if (candidato && alvo.includes(` ${candidato} `) && (!melhor || candidato.length > melhor.tamanho)) {
+        melhor = { code: a.code, tamanho: candidato.length };
+      }
+    }
+  }
+  return melhor?.code ?? null;
+}
+
+/**
+ * O cliente deu o nome completo e o cadastro tem só um nome, um apelido ou um
+ * "Passageiro (…)" da equipe? Então o cadastro passa a ter o nome completo.
+ * Nunca troca um nome por outro diferente.
+ */
+export function nomeDeveSerCompletado(atual: string | null | undefined, novo: string | null | undefined): boolean {
+  const n = normalizar(novo ?? "");
+  if (n.split(" ").filter(Boolean).length < 2) return false;
+  const a = normalizar(atual ?? "");
+  if (!a) return true;
+  if (/^passageiro\b/.test(a)) return true;
+  if (a === n) return false;
+  const pa = a.split(" ");
+  const pn = n.split(" ");
+  return pn.length > pa.length && pa.every((p) => pn.includes(p));
+}

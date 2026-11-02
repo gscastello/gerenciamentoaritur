@@ -272,6 +272,7 @@ export const whatsappService = {
       p_street: payload.street ?? null,
       p_reference_point: payload.referencePoint ?? null,
       p_dropoff_location: payload.dropoffLocation ?? null,
+      p_dropoff_area: payload.dropoffArea ?? null,
       p_pending_reason: payload.pendingReason ?? null,
       p_status: payload.status ?? "confirmada",
       p_extra_data: payload.extraData ?? {},
@@ -383,9 +384,13 @@ export const whatsappService = {
       return;
     }
     const botId = await getBotUserId();
+    // rpc_edit_reservation tem duas assinaturas com defaults: sem p_extra_data/p_status a
+    // chamada fica ambígua (42725) e falha sempre
     const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
       p_reservation_id: reservationId,
       p_details: { dropoff_location: location },
+      p_extra_data: null,
+      p_status: null,
       p_actor: botId,
     });
     if (error) throw new WhatsappServiceError(`Falha ao mudar o desembarque: ${error.message}`);
@@ -395,6 +400,32 @@ export const whatsappService = {
     await logAiAction("reservations", reservationId, "update", {
       acao: "desembarque_alterado", origem: "whatsapp", dropoff_location: location,
     });
+  },
+
+  /**
+   * O cliente deu o nome completo e o cadastro tinha só um nome/apelido: completa o
+   * cadastro (pela edição da reserva, que também deixa rastro). Melhor esforço.
+   */
+  async completarNomeDoCliente(reservationId: string, customerId: string, nome: string) {
+    if (emSombra()) {
+      await notaSombra(`Completaria o nome do cadastro para "${nome}".`);
+      return;
+    }
+    const botId = await getBotUserId();
+    const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
+      p_reservation_id: reservationId,
+      p_details: null,
+      p_quantity: null,
+      p_contact: { customer_id: customerId, name: nome },
+      p_move: null,
+      p_paid: null,
+      p_proof: null,
+      p_extra_data: null,
+      p_status: null,
+      p_actor: botId,
+    });
+    if (error || !data?.success) throw new WhatsappServiceError(`Falha ao completar o nome: ${error?.message ?? data?.message}`);
+    await logAiAction("customers", customerId, "update", { acao: "nome_completado", origem: "whatsapp", nome });
   },
 
   /** Reservas ativas do cliente — usado nos fluxos de cancelar/alterar (a IA nunca "lembra" sozinha, sempre relista). */
