@@ -182,6 +182,15 @@ export default function AgendaTab({
       }
       return acao(R.cancelReservation(id), "Não foi possível cancelar.");
     }
+    // encomenda não "embarca": a caixa da linha marca (e desmarca) a entrega
+    if (reservas.find((x) => x.id === id)?.tipo === "encomenda") {
+      if (novoStatus === "embarcado") return entregarEncomenda(id);
+      if (novoStatus === "confirmada")
+        return acao(
+          R.editReservationFull(id, { status: "confirmada" }),
+          "Não foi possível desfazer a entrega.",
+        );
+    }
     if (novoStatus === "embarcado")
       return acao(R.markPassengers(id, "embarcado"), "Não foi possível marcar embarque.");
     if (novoStatus === "nao_compareceu")
@@ -696,52 +705,11 @@ export default function AgendaTab({
               <Plus size={13} /> Nova
             </button>
           </div>
-          {encomendasAgendadas.length === 0 ? (
-            <p className="text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma encomenda agendada pra {fmtDate(data)}.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {encomendasAgendadas.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
-                  style={{ background: C.panel2, opacity: r.status === "embarcado" ? 0.6 : 1 }}
-                >
-                  <div className="text-xs">
-                    <span className="font-semibold">{r.direcao === "ida" ? "Ida" : "Volta"}</span> ·{" "}
-                    {r.extra?.encItem || "encomenda"} ·{" "}
-                    {trips[r.direcao]?.pontos.find((p) => p.id === r.pontoId)?.nome || "?"} →{" "}
-                    {r.desembarque || "?"}
-                    <br />
-                    <span style={{ color: C.inkFaint }}>
-                      entrega: {r.extra?.encRemetenteNome || "—"} (
-                      {r.extra?.encRemetenteTelefone || "—"}){" · "}recebe: {r.nome} ({r.telefone})
-                      {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    {r.status !== "embarcado" && (
-                      <button
-                        onClick={() => entregarEncomenda(r.id)}
-                        className="btn-press text-xs px-2 py-1 rounded-md"
-                        style={{ background: C.greenSoft, color: C.green }}
-                      >
-                        Entregue
-                      </button>
-                    )}
-                    <button
-                      onClick={() => atualizarStatus(r.id, "cancelada")}
-                      className="btn-press text-xs px-2 py-1 rounded-md"
-                      style={{ background: C.redSoft, color: C.red }}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-xs" style={{ color: C.inkFaint }}>
+            {encomendasAgendadas.length === 0
+              ? `Nenhuma encomenda agendada pra ${fmtDate(data)}.`
+              : `${encomendasAgendadas.length} encomenda(s) pra ${fmtDate(data)} — aparecem na viagem, no ponto de embarque, junto das passagens.`}
+          </p>
         </Card>
 
         {["ida", "volta"].map((dir) => (
@@ -758,6 +726,8 @@ export default function AgendaTab({
             onEditar={setEditando}
             onExtra={alternarExtra}
             onNovoExtra={() => setExtraModal({ direcao: dir })}
+            encomendas={encomendasAgendadas}
+            onEditarEncomenda={(r) => setEncomendaModal({ editar: r })}
             onSalvarBusca={salvarBusca}
             onAnotar={criarViaAnotacao}
           />
@@ -804,6 +774,7 @@ export default function AgendaTab({
       {encomendaModal && (
         <NovaEncomendaModal
           pendente={encomendaModal.pendente}
+          editar={encomendaModal.editar}
           dataInicial={data}
           trips={trips}
           onClose={() => setEncomendaModal(null)}
@@ -937,6 +908,9 @@ function QuickActions({ r, onStatus, onEditar, onExtra, textoCopia }) {
 }
 function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
+  // Encomenda usa a mesma linha da passagem, trocando "NP" por "ENC" e
+  // "embarque" por "entrega" (nunca ocupa vaga).
+  const ehEnc = r.tipo === "encomenda";
   // O endereço é o que o motorista precisa: vem em destaque e o nome em
   // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
   // repetem o nome do ponto — o título da seção já diz; só aparece o detalhe
@@ -970,6 +944,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         overflowWrap: "anywhere",
       }}
     >
+      {ehEnc ? "recebe: " : ""}
       {r.nome || "—"}
     </span>
   );
@@ -978,7 +953,14 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       className="text-[13px] font-bold shrink-0"
       style={{ fontFamily: "'JetBrains Mono', monospace", color: corTexto }}
     >
-      {r.quantidade}P
+      {ehEnc ? (
+        <>
+          <Package size={12} className="inline mr-0.5" aria-hidden="true" />
+          ENC
+        </>
+      ) : (
+        `${r.quantidade}P`
+      )}
     </span>
   );
   const chipTel = (numero, digitosTel, rotulo) => (
@@ -1002,7 +984,15 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       <div className="flex items-start gap-2">
         <button
           type="button"
-          aria-label={r.status === "embarcado" ? "Desmarcar embarque" : "Marcar embarque"}
+          aria-label={
+            ehEnc
+              ? r.status === "embarcado"
+                ? "Desmarcar entrega"
+                : "Marcar entrega"
+              : r.status === "embarcado"
+                ? "Desmarcar embarque"
+                : "Marcar embarque"
+          }
           onClick={() => onStatus(r.id, r.status === "embarcado" ? "confirmada" : "embarcado")}
           className="check-fast shrink-0 mt-0.5 w-[15px] h-[15px] rounded-[4px] border flex items-center justify-center"
           style={{
@@ -1032,15 +1022,29 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
               {nome(true)}
             </div>
           )}
-          {(r.desembarque || r.pagamento === "pix") && (
+          {ehEnc ? (
             <div
               className="text-[11px] mt-0.5"
               style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
             >
-              {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
-              {r.desembarque && r.pagamento === "pix" ? " · " : ""}
-              {r.pagamento === "pix" ? "Pix" : ""}
+              {r.extra?.encItem || "encomenda"}
+              {r.desembarque ? ` · entrega: ${r.desembarque}` : ""}
+              {r.extra?.encRemetenteNome || r.extra?.encRemetenteTelefone
+                ? ` · de: ${[r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone].filter(Boolean).join(" ")}`
+                : ""}
+              {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
             </div>
+          ) : (
+            (r.desembarque || r.pagamento === "pix") && (
+              <div
+                className="text-[11px] mt-0.5"
+                style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
+              >
+                {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
+                {r.desembarque && r.pagamento === "pix" ? " · " : ""}
+                {r.pagamento === "pix" ? "Pix" : ""}
+              </div>
+            )
           )}
           {(tel || tel2) && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
@@ -1052,7 +1056,11 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
             className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap"
             style={{ color: C.inkFaint }}
           >
-            <StatusPill status={r.status} />
+            {ehEnc && r.status === "embarcado" ? (
+              <Pill color={C.green}>✓ Entregue</Pill>
+            ) : (
+              <StatusPill status={r.status} />
+            )}
           </div>
           {modoBusca && (
             <span
@@ -1138,6 +1146,15 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
     </div>
   );
 }
+// "3 passagem(ns) · 1 encomenda(s)" no cabeçalho do ponto.
+function resumoDoPonto(itens, encomendas) {
+  const partes = [];
+  if (itens.length > 0) {
+    partes.push(`${itens.reduce((s, r) => s + r.quantidade, 0)} passagem(ns)`);
+  }
+  if (encomendas.length > 0) partes.push(`${encomendas.length} encomenda(s)`);
+  return partes.length > 0 ? partes.join(" · ") : "sem reservas";
+}
 function ViagemOperacional({
   direcao,
   segunda,
@@ -1152,10 +1169,18 @@ function ViagemOperacional({
   onNovoExtra,
   onSalvarBusca,
   onAnotar,
+  encomendas = [],
+  onEditarEncomenda,
 }) {
   const viagem = trips[direcao];
   const [editandoBusca, setEditandoBusca] = useState(false);
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
+  // Encomendas agendadas ficam no ponto de embarque, junto das passagens, mas
+  // nunca entram na lotação. Sem ponto conhecido, ganham um grupo no fim.
+  const encDoGrupo = encomendas.filter((r) => r.direcao === direcao);
+  const idsDosPontos = new Set(viagem.pontos.map((p) => p.id));
+  const encSemPonto = encDoGrupo.filter((r) => !idsDosPontos.has(r.pontoId));
+  const editarLinha = (r) => (r.tipo === "encomenda" ? onEditarEncomenda?.(r) : onEditar(r));
   const confirmados = doGrupo
     .filter((r) => OCUPA_VAGA.includes(r.status) && !ehExtra(r))
     .reduce((s, r) => s + r.quantidade, 0);
@@ -1319,6 +1344,7 @@ function ViagemOperacional({
           // "Buscar em casa" segue a ordem que o dono montou (issue #198)
           const ehBusca = p.id === "busca";
           const itens = ehBusca ? ordenarBusca(doPonto) : doPonto;
+          const encDoPonto = encDoGrupo.filter((r) => r.pontoId === p.id);
           const editando = ehBusca && editandoBusca;
           return (
             <div key={p.id}>
@@ -1353,9 +1379,7 @@ function ViagemOperacional({
                   </button>
                 )}
                 <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
-                  {itens.length === 0
-                    ? "sem reservas"
-                    : `${itens.reduce((s, r) => s + r.quantidade, 0)} passagem(ns)`}
+                  {resumoDoPonto(itens, encDoPonto)}
                 </span>
                 {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
                 {p.janela && (
@@ -1375,19 +1399,19 @@ function ViagemOperacional({
                   onSalvar={onSalvarBusca}
                   onFechar={() => setEditandoBusca(false)}
                 />
-              ) : itens.length === 0 ? (
+              ) : itens.length === 0 && encDoPonto.length === 0 ? (
                 <div className="text-xs pl-1 mb-1.5" style={{ color: C.inkFaint }}>
                   Sem reservas.
                 </div>
               ) : (
                 <div className="space-y-1.5 mb-1.5">
-                  {itens.map((r) => (
+                  {[...itens, ...encDoPonto].map((r) => (
                     <LinhaOperacional
                       key={r.id}
                       r={r}
                       trips={trips}
                       onStatus={onStatus}
-                      onEditar={onEditar}
+                      onEditar={editarLinha}
                       onExtra={onExtra}
                     />
                   ))}
@@ -1402,6 +1426,35 @@ function ViagemOperacional({
             </div>
           );
         })}
+        {encSemPonto.length > 0 && (
+          <div>
+            <div
+              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
+              style={{ background: `${C.brand}1F`, borderLeft: `4px solid ${C.brand}` }}
+            >
+              <span
+                className="text-[15px] font-bold tracking-wide"
+                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+              >
+                ENCOMENDAS
+              </span>
+              <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
+                {encSemPonto.length} encomenda(s) · sem ponto de embarque
+              </span>
+            </div>
+            <div className="space-y-1.5 mb-1.5">
+              {encSemPonto.map((r) => (
+                <LinhaOperacional
+                  key={r.id}
+                  r={r}
+                  trips={trips}
+                  onStatus={onStatus}
+                  onEditar={editarLinha}
+                />
+              ))}
+            </div>
+          </div>
+        )}
         {onNovoExtra && (
           <div>
             <div
@@ -2185,6 +2238,7 @@ export function NovaReservaModal({
  * 'cancelado' sempre pra este tipo). */
 function NovaEncomendaModal({
   pendente,
+  editar,
   dataInicial,
   direcaoInicial = "ida",
   trips,
@@ -2192,18 +2246,21 @@ function NovaEncomendaModal({
   onSalvar,
 }) {
   const primeiroPonto = (dir) => trips[dir]?.pontos?.[0]?.id || "";
-  const direcaoBase = pendente?.direcao || direcaoInicial;
+  // `pendente` = encomenda do bot ainda sem viagem (vai ser agendada);
+  // `editar` = encomenda já agendada (corrigir/completar os dados).
+  const base = pendente ?? editar;
+  const direcaoBase = base?.direcao || direcaoInicial;
   const [f, setF] = useState({
     direcao: direcaoBase,
-    data: dataInicial || todayStr(),
-    pontoId: primeiroPonto(direcaoBase),
-    desembarque: pendente?.extra?.encDesembarque || "",
-    item: pendente?.extra?.encItem || "",
-    remetenteNome: pendente?.extra?.encRemetenteNome || "",
-    remetenteTelefone: pendente?.extra?.encRemetenteTelefone || "",
-    destinatarioNome: pendente?.nome || "",
-    destinatarioTelefone: pendente?.telefone || "",
-    valor: "",
+    data: editar?.data || dataInicial || todayStr(),
+    pontoId: base?.pontoId || primeiroPonto(direcaoBase),
+    desembarque: editar?.desembarque || pendente?.extra?.encDesembarque || "",
+    item: base?.extra?.encItem || "",
+    remetenteNome: base?.extra?.encRemetenteNome || "",
+    remetenteTelefone: base?.extra?.encRemetenteTelefone || "",
+    destinatarioNome: base?.nome || "",
+    destinatarioTelefone: base?.telefone || "",
+    valor: editar?.valorTotal ? String(editar.valorTotal) : "",
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -2242,7 +2299,7 @@ function NovaEncomendaModal({
         : null,
       f.destinatarioNome.trim() ? validarNome(f.destinatarioNome) : null,
       f.destinatarioTelefone.trim() ? validarTelefone(f.destinatarioTelefone) : null,
-      validarData(f.data, { min: pendente ? undefined : todayStr() }),
+      validarData(f.data, { min: base ? undefined : todayStr() }),
       f.valor !== "" ? validarValor(f.valor, { min: 0 }) : null,
     ]);
     if (problema) {
@@ -2259,21 +2316,22 @@ function NovaEncomendaModal({
         encRemetenteNome: f.remetenteNome.trim() || null,
         encRemetenteTelefone: f.remetenteTelefone.trim() || null,
       };
-      if (pendente) {
+      if (base) {
         await onSalvar({
-          id: pendente.id,
+          id: base.id,
           move: { trip_date: f.data, direction: f.direcao, route_point_code: f.pontoId },
           details: {
             dropoff_location: f.desembarque.trim() || null,
             ...(f.valor !== "" ? { unit_price: Number.parseFloat(f.valor) || 0 } : {}),
           },
           contact: {
-            customer_id: pendente.customer_id,
+            customer_id: base.customer_id,
             ...(f.destinatarioNome.trim() ? { name: f.destinatarioNome.trim() } : {}),
             ...(telefoneNormalizado ? { phone: telefoneNormalizado } : {}),
           },
           extraData,
-          status: "confirmada",
+          // encomenda já agendada mantém o status (ex.: entregue); a pendente passa a confirmada
+          ...(editar ? {} : { status: "confirmada" }),
         });
       } else {
         await onSalvar({
@@ -2313,7 +2371,8 @@ function NovaEncomendaModal({
             className="font-semibold text-sm flex items-center gap-1.5"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
-            <Package size={15} /> {pendente ? "Agendar encomenda" : "Nova encomenda"}
+            <Package size={15} />{" "}
+            {editar ? "Editar encomenda" : pendente ? "Agendar encomenda" : "Nova encomenda"}
           </div>
           <button type="button" onClick={() => onClose()}>
             <X size={16} style={{ color: C.inkSoft }} />
@@ -2330,7 +2389,7 @@ function NovaEncomendaModal({
           </div>
         )}
 
-        {!pendente && (
+        {!base && (
           <div className="mb-3">
             <Field label="Linha rápida: endereço, telefone e nome">
               <TextInput
@@ -2441,7 +2500,7 @@ function NovaEncomendaModal({
               color: salvando || !podeEnviar ? C.inkFaint : C.onBrand,
             }}
           >
-            {salvando ? "Salvando…" : pendente ? "Agendar" : "Criar"}
+            {salvando ? "Salvando…" : editar ? "Salvar" : pendente ? "Agendar" : "Criar"}
           </button>
         </div>
       </div>
