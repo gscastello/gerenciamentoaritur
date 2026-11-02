@@ -36,8 +36,10 @@ create table if not exists public.bot_observations (
   created_at               timestamptz not null default now(),
   processed_at             timestamptz
 );
+-- índice ÚNICO COMUM (não parcial): o upsert do bot usa ON CONFLICT (chatwoot_message_id)
+-- e o Postgres recusa isso contra um índice parcial (ver 65). NULLs repetem à vontade.
 create unique index if not exists uq_bot_observations_msg
-  on public.bot_observations (chatwoot_message_id) where chatwoot_message_id is not null;
+  on public.bot_observations (chatwoot_message_id);
 create index if not exists idx_bot_observations_pendentes
   on public.bot_observations (created_at) where processed_at is null;
 create index if not exists idx_bot_observations_created
