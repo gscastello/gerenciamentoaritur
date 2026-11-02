@@ -41,7 +41,7 @@ const TOOL = {
 
 const hhmm = (t?: string | null) => (t ? String(t).slice(0, 5) : "");
 
-async function montarFatos(): Promise<{ fatos: string; estilo: string }> {
+export async function montarFatos(): Promise<{ fatos: string; estilo: string }> {
   const [pontos, bairros, settings, base] = await Promise.all([
     supabaseAdmin
       .from("route_points")

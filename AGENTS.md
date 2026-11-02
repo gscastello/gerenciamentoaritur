@@ -112,7 +112,7 @@ O contrato acima é validado por `npm run arch`
 
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
-`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`),
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -262,10 +262,19 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - Reservas fora da área padrão (São Luís, Cantanhede, Pirapemas) entram
   como `pendente` e exigem confirmação manual — nunca vão sozinhas para a
   Agenda.
-- O Claude **nunca** decide preço, vaga, horário ou confirmação. Respostas livres
-  só com a base de conhecimento (aba Sistema) + dados ao vivo, e número/horário/
-  valor fora dessas fontes **barra** a resposta (`botGuard`). O bot **nunca**
-  cadastra cliente com o nome do perfil do WhatsApp (costuma ser apelido):
+- **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
+  inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
+  e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e
+  horário **desde que lidos do app na hora**: número que não vem de uma ferramenta, da base de
+  conhecimento (aba Sistema) ou da mensagem do cliente **barra** a resposta (`botGuard`). Preço e
+  vaga continuam **decididos pelo banco** (o modelo nunca digita preço; o total sai de
+  `calcular_valor`; `rpc_create_reservation` valida a capacidade). Pode **criar, remarcar e
+  cancelar as reservas do próprio cliente** depois do "sim" dele; nunca expõe dados de outros
+  passageiros e só afirma ter mexido numa reserva se a ferramenta deu certo. Encomenda/frete,
+  reclamação, reembolso, negociação de preço, mais de 10 passagens e trajeto que ele não resolve
+  vão para a equipe (`chamar_atendente`); encomenda **nunca** recebe valor. Depois que a equipe
+  responde, o bot fica **10 min em silêncio**. `settings.bot_engine = 'roteiro'` volta ao motor
+  antigo. O bot **nunca** cadastra cliente com o nome do perfil do WhatsApp (costuma ser apelido):
   pergunta o nome.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
