@@ -11,6 +11,7 @@
 // route_points, preço por bairro). O LLM nunca decide se cabe, nunca
 // decide o preço — só entende o que a pessoa quis dizer.
 
+import { responderComAgente } from "./agente.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { responderComBase } from "./botAnswer.ts";
@@ -73,6 +74,13 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
 
   const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
   if (mode !== "ia") return; // HUMANO: só loga, equipe responde direto pelo WhatsApp Business
+
+  // Atendente de IA conversacional (issue #224): lê a conversa inteira, consulta o app
+  // e responde sem menu. A chave settings.bot_engine = 'roteiro' devolve o roteiro antigo.
+  if ((msg.text ?? "").trim() && (await motorDoBot()) === "agente") {
+    await responderComAgente({ conversationId: conversation.id, telefone: msg.from, waMessageId: msg.waMessageId });
+    return;
+  }
 
   let state = conversation.state ?? { step: "idle" };
   const to = msg.from;
@@ -151,6 +159,12 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
   }
 }
 
+/** Qual motor atende o texto: o agente de IA (padrão) ou o roteiro antigo (chave de emergência). */
+async function motorDoBot(): Promise<"agente" | "roteiro"> {
+  const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "bot_engine").maybeSingle();
+  return data?.value?.engine === "roteiro" ? "roteiro" : "agente";
+}
+
 /** Resposta livre (base de conhecimento). Sem base pra responder → equipe assume. */
 async function responderPergunta(conversation: any, state: any, text: string, to: string) {
   let resposta: Awaited<ReturnType<typeof responderComBase>>;
@@ -190,7 +204,7 @@ async function handleAudio(conversation: any) {
     }
     await whatsappService.updateConversationState(conversation.id, { ...state, audioAvisado: true });
     await sendText(conversation.id, to,
-      "Recebi seu áudio, mas ainda não consigo ouvir. 🙏 Pode me escrever o que precisa? Se preferir, digite *atendente* que chamo alguém da equipe.");
+      "Recebi seu áudio, mas ainda não consigo ouvir. 🙏 Pode me escrever o que precisa? Se preferir, é só pedir que chamo alguém da equipe.");
   } catch (err) {
     if (err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE") return;
     throw err;
@@ -380,7 +394,7 @@ async function handleProofUpload(conversation: any, msg: IncomingMessage, falar:
     } else {
       await whatsappService.avisarEquipe(conversation.id, "Cliente enviou imagem/arquivo sem Pix pendente para associar.");
       await sendText(conversation.id, to,
-        "Recebi seu arquivo! 🙏 Não encontrei um pagamento por Pix pendente no seu número, então avisei a equipe para conferir. Se quiser reservar, é só dizer *quero reservar* ou digitar *menu*.");
+        "Recebi seu arquivo! 🙏 Não encontrei um pagamento por Pix pendente no seu número, então avisei a equipe para conferir. Se quiser reservar, é só me dizer.");
     }
   } catch (err) {
     console.error("Erro ao processar comprovante:", err);

@@ -147,6 +147,33 @@ O bot continua **sem decidir preço, vaga, horário ou confirmação**: isso seg
 As lições só mudam como ele entende e como ele fala. O dono pode editar, recusar ou desativar
 qualquer lição a qualquer momento.
 
+## 6c. Atendente de IA conversacional (issue #224)
+
+O bot **não usa mais menu numerado**. Cada mensagem de texto vai para um agente (Claude) que:
+
+1. **espera ~5 s** para juntar mensagens seguidas do cliente (quem escreveu por último é quem recebe a resposta);
+2. **lê a conversa inteira** direto do Chatwoot (o que o cliente disse, o que a equipe respondeu pelo celular e, no modo Sombra, os rascunhos anteriores do próprio bot);
+3. fica **em silêncio por 10 min** depois de uma resposta humana, e só fala quando a última palavra foi do cliente;
+4. **interpreta e responde** com: as informações da empresa (pontos, preços, base de conhecimento), as lições aprendidas (§6b), a anotação do cliente recorrente e **dados reais do app**, buscados por ferramentas.
+
+| Ferramenta | Para quê |
+|---|---|
+| `consultar_viagem` | vagas, lotação, status (agendada/em andamento/concluída) e hora de saída de uma data/direção |
+| `listar_pontos_e_precos`, `calcular_valor` | horários, preço por ponto/bairro e total (o modelo nunca faz a conta nem digita preço) |
+| `ver_minhas_reservas` | reservas e pagamentos **do próprio cliente** (nunca de outras pessoas) |
+| `criar_reserva`, `remarcar_reserva`, `cancelar_reserva`, `entrar_na_lista_de_espera` | só depois do "sim" do cliente; preço e vaga conferidos pelo banco; fora da área padrão vira `pendente`; reserva duplicada na mesma viagem é recusada |
+| `avisar_equipe`, `chamar_atendente` | recado na aba Pendências / passar a conversa para uma pessoa (encomenda, reclamação, reembolso, negociação, >10 passagens, algo que o app não mostra) |
+| `nao_responder` | quando a mensagem não pede resposta ("ok", 👍) |
+
+**Travas:** número/horário/valor da resposta só se vier de uma ferramenta, das informações da empresa
+ou do cliente (`botGuard`; uma volta de correção antes de desistir e chamar a equipe); a resposta só
+diz que mexeu numa reserva se a ferramenta deu certo; nada de identificador interno nem dado de
+terceiros. **Sombra:** a resposta vira nota privada e as gravações viram "criaria…" (nada é salvo).
+**Chave de emergência:** `update settings set value = '{"engine":"roteiro"}' where key = 'bot_engine'`
+(ou insira a linha) devolve o roteiro antigo na hora, sem deploy; `{"engine":"agente"}` volta ao novo.
+**Log:** `bot_agente_resposta` (ferramentas usadas, tokens, tempo), `bot_agente_barrado`,
+`bot_agente_silencio`, `bot_agente_cedeu`.
+
 ## 7. Checklist de teste (em modo Sombra)
 
 1. Mande uma mensagem de outro número → aparece uma nota privada `[SOMBRA]` com a resposta.
