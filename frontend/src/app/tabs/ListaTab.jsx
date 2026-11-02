@@ -63,19 +63,12 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   const pendentes = doDia.filter((r) => r.status === "pendente");
   const ativos = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
   // Encomendas agendadas pro dia — não entram em `doDia` (não são
-  // "passageiro"). Visível em qualquer sub-aba: quem tá na rua precisa
-  // ver o que tem pra pegar/entregar independente de Embarque/Desembarque.
+  // "passageiro", nunca contam como pax), mas aparecem nas seções do ponto de
+  // embarque, com a mesma linha das passagens: quem tá na rua precisa ver o
+  // que tem pra pegar/entregar em cada parada.
   const encomendasDoDia = reservas.filter(
     (r) => r.tipo === "encomenda" && r.data === data && r.status !== "cancelada",
   );
-  const entregarEncomenda = async (id) => {
-    setErro("");
-    try {
-      await R.editReservationFull(id, { status: "embarcado" });
-    } catch (e) {
-      setErro(mensagemAmigavel(e, "Não foi possível marcar como entregue."));
-    }
-  };
   const alvos = useMemo(
     () => [
       ...trips.ida.pontos.map((p) => ({
@@ -119,6 +112,12 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   const marcar = async (id, acao) => {
     setErro("");
     try {
+      if (reservas.find((x) => x.id === id)?.tipo === "encomenda") {
+        await R.editReservationFull(id, {
+          status: acao === "embarcado" ? "embarcado" : "confirmada",
+        });
+        return;
+      }
       if (acao === "embarcado") await R.markPassengers(id, "embarcado");
       else if (acao === "nao_compareceu") await R.markPassengers(id, "nao_compareceu");
       else await R.markPassengers(id, "confirmado").then(() => R.confirmReservation(id));
@@ -138,9 +137,10 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   };
   // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
   // mas o motorista ainda vê e pode reverter).
-  const naRota = doDia.filter(
-    (r) => OCUPA_VAGA.includes(r.status) || r.status === "nao_compareceu",
-  );
+  const naRota = [
+    ...doDia.filter((r) => OCUPA_VAGA.includes(r.status) || r.status === "nao_compareceu"),
+    ...encomendasDoDia,
+  ];
   // A ordem salva em "Organizar" (buscaSeq) vale para todas as seções; sem ela,
   // cada seção segue a ordem de sempre.
   const comOrdemSalva = (itens) =>
@@ -248,63 +248,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             </div>
           </div>
         </div>
-        {encomendasDoDia.length > 0 && (
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={16} style={{ color: C.inkSoft }} />
-              <div className="text-sm font-semibold" style={{ color: C.ink }}>
-                Encomendas do dia{" "}
-                <span style={{ color: C.inkFaint }}>({encomendasDoDia.length})</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {encomendasDoDia.map((r) => {
-                const ponto = trips[r.direcao]?.pontos.find((p) => p.id === r.pontoId);
-                const entregue = r.status === "embarcado";
-                return (
-                  <div
-                    key={r.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
-                    style={{ background: C.panel2, opacity: entregue ? 0.6 : 1 }}
-                  >
-                    <div className="text-xs">
-                      <span className="font-semibold">{r.direcao === "ida" ? "Ida" : "Volta"}</span>{" "}
-                      · {r.extra?.encItem || "encomenda"} · {ponto?.nome || "?"} →{" "}
-                      {r.desembarque || "?"}
-                      <br />
-                      <span style={{ color: C.inkFaint }}>
-                        entrega: {r.extra?.encRemetenteNome || "—"} (
-                        {r.extra?.encRemetenteTelefone || "—"}) · recebe: {r.nome} ({r.telefone})
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      {r.telefone && (
-                        <a
-                          href={`https://wa.me/55${digitos(r.telefone)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-                          style={{ background: C.panel, color: C.inkSoft }}
-                        >
-                          <MessageCircle size={12} /> WhatsApp
-                        </a>
-                      )}
-                      {!entregue && (
-                        <button
-                          onClick={() => entregarEncomenda(r.id)}
-                          className="btn-press flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-                          style={{ background: C.greenSoft, color: C.green }}
-                        >
-                          <Check size={12} /> Entregue
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
         <SubTabs
           value={subview}
           onChange={setSubview}
@@ -576,8 +519,9 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
 function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }) {
   const [organizando, setOrganizando] = useState(false);
   const paxAtivos = itens
-    .filter((r) => OCUPA_VAGA.includes(r.status))
+    .filter((r) => OCUPA_VAGA.includes(r.status) && r.tipo !== "encomenda")
     .reduce((s, r) => s + r.quantidade, 0);
+  const qtdEncomendas = itens.filter((r) => r.tipo === "encomenda").length;
   // Só interessa contar quem NÃO vai de táxi (Gustavo / Maurício).
   const tally = buscar
     ? itens
@@ -616,6 +560,11 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
             >
               <ListOrdered size={12} /> ORGANIZAR
             </button>
+          )}
+          {qtdEncomendas > 0 && (
+            <Pill color={C.amber}>
+              {qtdEncomendas} {qtdEncomendas === 1 ? "encomenda" : "encomendas"}
+            </Pill>
           )}
           <Pill>{paxAtivos} pax</Pill>
         </div>
@@ -658,6 +607,7 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const tel = digitos(r.telefone);
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
+  const ehEnc = r.tipo === "encomenda";
   const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
   return (
     <div
@@ -668,7 +618,15 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
         <button
           type="button"
           onClick={() => marcar(r.id, embarcado ? "reverter" : "embarcado")}
-          aria-label={embarcado ? "Desmarcar embarque" : "Marcar embarque"}
+          aria-label={
+            ehEnc
+              ? embarcado
+                ? "Desmarcar entrega"
+                : "Marcar entrega"
+              : embarcado
+                ? "Desmarcar embarque"
+                : "Marcar embarque"
+          }
           className="check-fast shrink-0 mt-0.5 rounded-[4px] border flex items-center justify-center w-4 h-4"
           style={{
             borderColor: embarcado ? C.ink : C.inkFaint,
@@ -684,7 +642,14 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
             className="text-[15px] font-bold shrink-0"
             style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink }}
           >
-            {r.quantidade}P
+            {ehEnc ? (
+              <>
+                <Package size={13} className="inline mr-0.5" aria-hidden="true" />
+                ENC
+              </>
+            ) : (
+              `${r.quantidade}P`
+            )}
           </span>
           <span
             className="text-[14px] font-semibold leading-snug"
@@ -698,8 +663,21 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           </span>
         </div>
         <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
+          {ehEnc ? "recebe: " : ""}
           {r.nome || "—"}
         </div>
+        {ehEnc && (
+          <div
+            className="text-[11px] mt-0.5"
+            style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
+          >
+            {r.extra?.encItem || "encomenda"}
+            {r.desembarque ? ` · entrega: ${r.desembarque}` : ""}
+            {r.extra?.encRemetenteNome || r.extra?.encRemetenteTelefone
+              ? ` · de: ${[r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone].filter(Boolean).join(" ")}`
+              : ""}
+          </div>
+        )}
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           {tel && (
             <>
@@ -746,6 +724,7 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
   const endereco = enderecoEmbarque(r, trips) || "não informado";
+  const ehEnc = r.tipo === "encomenda";
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -774,7 +753,10 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
         <div className="flex items-start justify-between gap-2 mb-3">
           <div>
             <div className="text-base font-bold" style={{ color: C.ink }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{r.quantidade}P</span> ·{" "}
+              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                {ehEnc ? "ENC" : `${r.quantidade}P`}
+              </span>{" "}
+              · {ehEnc ? "recebe: " : ""}
               {r.nome || "—"}
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
@@ -788,11 +770,19 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
 
         <div className="space-y-1.5">
           {linha("Embarque", endereco)}
-          {linha("Desembarque", r.desembarque)}
-          {linha(
-            "Pagamento",
-            `${r.pagamento === "pix" ? "Pix" : "Dinheiro"} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`,
-          )}
+          {ehEnc ? linha("Item", r.extra?.encItem) : null}
+          {linha(ehEnc ? "Entrega" : "Desembarque", r.desembarque)}
+          {ehEnc
+            ? linha(
+                "Quem entrega",
+                [r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone]
+                  .filter(Boolean)
+                  .join(" "),
+              )
+            : linha(
+                "Pagamento",
+                `${r.pagamento === "pix" ? "Pix" : "Dinheiro"} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`,
+              )}
           {linha("Telefone", r.telefone)}
         </div>
 
@@ -828,20 +818,29 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
                 color: embarcado ? C.panel : C.ink,
               }}
             >
-              <Check size={15} /> {embarcado ? "Embarcou ✓" : "Marcar embarque"}
+              <Check size={15} />{" "}
+              {ehEnc
+                ? embarcado
+                  ? "Entregue ✓"
+                  : "Marcar entregue"
+                : embarcado
+                  ? "Embarcou ✓"
+                  : "Marcar embarque"}
             </button>
-            <button
-              type="button"
-              onClick={() => marcar(r.id, faltou ? "reverter" : "nao_compareceu")}
-              className="btn-press flex items-center justify-center gap-1.5 text-[13px] py-2.5 rounded-lg"
-              style={{ background: C.panel2, color: faltou ? C.ink : C.inkSoft }}
-            >
-              {faltou ? "Desfazer “não veio”" : "Não veio"}
-            </button>
+            {!ehEnc && (
+              <button
+                type="button"
+                onClick={() => marcar(r.id, faltou ? "reverter" : "nao_compareceu")}
+                className="btn-press flex items-center justify-center gap-1.5 text-[13px] py-2.5 rounded-lg"
+                style={{ background: C.panel2, color: faltou ? C.ink : C.inkSoft }}
+              >
+                {faltou ? "Desfazer “não veio”" : "Não veio"}
+              </button>
+            )}
           </div>
         )}
 
-        {mover && alvos && (
+        {mover && alvos && !ehEnc && (
           <label className="mt-2 block text-[11px]" style={{ color: C.inkFaint }}>
             Mudar ponto de embarque
             <select
