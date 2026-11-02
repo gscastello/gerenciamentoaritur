@@ -15,19 +15,20 @@
 // uma pessoa em vez de responder errado.
 
 import {
-  afirmaTerMexidoEmReserva,
   calendarioParaOPrompt,
-  contemDadoInterno,
   converterMensagensDoChatwoot,
   diaCivil,
   equipeRespondeuRecentemente,
+  converterObservacoes,
   existeTextoNovoDoCliente,
   formatarHistorico,
+  type MensagemDaConversa,
+  numerosPorExtenso,
+  problemasDaResposta,
   ultimaFoiDoCliente,
 } from "./agentePuro.ts";
 import { type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
 import { montarFatos } from "./botAnswer.ts";
-import { numerosNaoFundamentados } from "./botGuard.ts";
 import { getBotContext } from "./botContext.ts";
 import { blocoDasLicoes, blocoDoClienteAtual } from "./botLicoes.ts";
 import { chatwootClient } from "./chatwootClient.ts";
@@ -59,6 +60,7 @@ COMO ATENDER
 RESERVAS
 - Para reservar você precisa de: data, direção, ponto de embarque, quantidade, local de desembarque, forma de pagamento (dinheiro ou Pix) e, se o cliente ainda não é cadastrado, o nome completo (nunca use o nome do perfil do WhatsApp: pergunte). Busca em casa: bairro e endereço/referência. Pergunte só o que faltar, aproveitando o que ele já disse.
 - Antes de gravar: confira a viagem (consultar_viagem — há vaga?) e o valor (calcular_valor), mostre um resumo curto (data, ponto, quantidade, total, pagamento) e peça a confirmação. Só depois de um "sim" claro chame criar_reserva com cliente_confirmou=true.
+- Embarque é onde o passageiro SOBE; desembarque é onde ele DESCE. Passageiros se confundem: se na Volta ele disser "retorno" como embarque (Retorno é um local de desembarque em São Luís) ou citar um local do lado errado, explique com gentileza e confirme o que ele quer.
 - Sem vaga: diga quantas restam, ofereça outro dia ou a lista de espera.
 - Cliente que já tem reserva na mesma viagem: mostre a que existe (ver_minhas_reservas) e pergunte o que prefere.
 - Remarcar ou cancelar: confira a reserva em ver_minhas_reservas, diga o que será feito, espere o "sim" e só então use a ferramenta.
@@ -109,6 +111,22 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: s
   const nota = await blocoDoClienteAtual();
   const cliente = await whatsappService.identifyCustomer(telefone);
   const calendario = calendarioParaOPrompt(agora);
+  const { data: areas } = await supabaseAdmin
+    .from("dropoff_areas")
+    .select("direction, label")
+    .eq("active", true)
+    .is("deleted_at", null)
+    .order("direction")
+    .order("sort_order");
+  const desembarques = ["ida", "volta"]
+    .map((d) => {
+      const nomes = (areas ?? []).filter((a) => a.direction === d).map((a) => a.label);
+      return nomes.length
+        ? `- ${d === "ida" ? "Ida (desce em Pirapemas/Cantanhede/região)" : "Volta (desce em São Luís)"}: ${nomes.join(", ")}`
+        : "";
+    })
+    .filter(Boolean)
+    .join("\n");
   const sobreOCliente = cliente
     ? `CLIENTE DESTA CONVERSA: cadastrado como "${cliente.name}" (trate pelo primeiro nome, com naturalidade; o telefone dele já é o da conversa).`
     : "CLIENTE DESTA CONVERSA: ainda NÃO cadastrado. Antes de reservar, peça o nome completo (o nome do perfil do WhatsApp costuma ser apelido e não vale).";
@@ -120,30 +138,39 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: s
     sobreOCliente,
     nota ? `${nota}\n(Não repita números dessa anotação: valores, horários e vagas só vêm das ferramentas.)` : "",
     `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
+    desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
   return { system, fontes: [fatos, calendario] };
 }
 
-/** Motivos pelos quais a resposta é barrada ANTES de ser enviada. */
-function problemasDaResposta(texto: string, fontes: string[], ctx: ContextoDoAgente): string[] {
-  const problemas: string[] = [];
-  const invencionices = numerosNaoFundamentados(texto, fontes);
-  if (invencionices.length > 0) {
-    problemas.push(
-      `Você citou números que não vieram das ferramentas, das informações da empresa nem do cliente: ${invencionices.join(", ")}. Consulte a ferramenta certa (consultar_viagem, listar_pontos_e_precos, calcular_valor, ver_minhas_reservas) e use só os dados dela, ou tire o número.`,
-    );
+/**
+ * A conversa que o modelo lê. Primeiro o Chatwoot (histórico completo); se o token do
+ * bot não puder ler as mensagens, cai para o que o próprio bot gravou (bot_observations).
+ * `cedeu` = chegou mensagem de texto mais nova do cliente (ela é que responde).
+ */
+async function carregarConversa(
+  chatwootConversationId: number,
+  mensagemId: number,
+): Promise<{ historico: MensagemDaConversa[]; cedeu: boolean }> {
+  try {
+    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 2);
+    return { historico: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
+  } catch (err) {
+    evento("bot_aviso", { aviso: "historico_pelo_banco", erro: String(err).slice(0, 200) });
+    const { data } = await supabaseAdmin
+      .from("bot_observations")
+      .select("author, content, created_at, chatwoot_message_id")
+      .eq("chatwoot_conversation_id", chatwootConversationId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    const historico = converterObservacoes(data ?? []);
+    return {
+      historico,
+      cedeu: historico.some((m) => m.quem === "cliente" && (m.id ?? 0) > mensagemId),
+    };
   }
-  const mexeu = ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou;
-  if (afirmaTerMexidoEmReserva(texto) && !mexeu && !ctx.consultouReservas) {
-    problemas.push(
-      "Você afirmou que uma reserva foi confirmada/feita/cancelada/remarcada, mas nenhuma ferramenta de reserva deu certo neste atendimento. Só afirme depois do resultado da ferramenta; se ainda falta confirmação do cliente, peça-a.",
-    );
-  }
-  if (contemDadoInterno(texto)) problemas.push("Não escreva identificadores internos (códigos longos) para o cliente.");
-  if (texto.length > 1500) problemas.push("Resposta longa demais para o WhatsApp: resuma em poucas frases.");
-  return problemas;
 }
 
 export async function responderComAgente(entrada: { conversationId: string; telefone: string; waMessageId: string }) {
@@ -154,12 +181,11 @@ export async function responderComAgente(entrada: { conversationId: string; tele
 
   // 1) junta mensagens seguidas: quem escreveu por último é quem responde
   await dormir(ESPERA_PARA_JUNTAR_MS);
-  const brutas = await chatwootClient.listarMensagens(bot.chatwootConversationId, 2);
-  if (existeTextoNovoDoCliente(brutas, mensagemId)) {
+  const { historico, cedeu } = await carregarConversa(bot.chatwootConversationId, mensagemId);
+  if (cedeu) {
     evento("bot_agente_cedeu", { conversa: bot.chatwootConversationId, motivo: "chegou mensagem mais nova" });
     return;
   }
-  const historico = converterMensagensDoChatwoot(brutas);
   const agora = new Date();
 
   // 2) a equipe está na conversa? silêncio de 10 min; e só fala quando a última palavra foi do cliente
@@ -193,7 +219,7 @@ export async function responderComAgente(entrada: { conversationId: string; tele
   try {
     const { system, fontes: fontesBase } = await montarSistema(agora, entrada.telefone);
     const textoDoHistorico = formatarHistorico(historico);
-    const fontes = [...fontesBase, ...historico.map((m) => m.texto)];
+    const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
     const ferramentasUsadas: string[] = [];
     let tokensEntrada = 0;
     let tokensSaida = 0;
@@ -238,7 +264,10 @@ export async function responderComAgente(entrada: { conversationId: string; tele
         messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
         continue;
       }
-      const problemas = problemasDaResposta(texto, fontes, ctx);
+      const problemas = problemasDaResposta(texto, fontes, {
+        mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
+        consultouReservas: ctx.consultouReservas,
+      });
       if (problemas.length === 0) {
         resposta = texto;
         break;

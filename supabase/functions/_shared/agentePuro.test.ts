@@ -5,6 +5,9 @@ import {
   calendarioParaOPrompt,
   contemDadoInterno,
   converterMensagensDoChatwoot,
+  converterObservacoes,
+  numerosPorExtenso,
+  problemasDaResposta,
   existeTextoNovoDoCliente,
   PREFIXO_DO_RASCUNHO,
   type MensagemBruta,
@@ -203,4 +206,64 @@ Deno.test("mensagem nova de texto do cliente faz esta rodada ceder; figurinha/an
   assertEquals(existeTextoNovoDoCliente([...msgs, bruta(13, 0, "tem vaga?")], 10), true);
   assertEquals(existeTextoNovoDoCliente([...msgs, bruta(13, 0, "tem vaga?")], 13), false);
   assertEquals(existeTextoNovoDoCliente([bruta(14, 0, "nota", { private: true })], 10), false);
+});
+
+Deno.test("números por extenso viram dígitos para a trava de números", () => {
+  assertEquals(numerosPorExtenso("quero duas passagens pra amanhã"), "2");
+  assertEquals(numerosPorExtenso("Três pessoas e uma criança"), "3 1");
+  assertEquals(numerosPorExtenso("bom dia"), "");
+  // "uma" como artigo também entra: só afrouxa o número 1, nunca valores nem horários
+  assertEquals(numerosPorExtenso("tem uma vaga?"), "1");
+});
+
+Deno.test("plano B: observações do banco viram conversa (rascunho conta como fala do bot)", () => {
+  const r = converterObservacoes([
+    { author: "bot_rascunho", content: "Tem sim!", created_at: "2026-11-03T12:01:00Z", chatwoot_message_id: null },
+    { author: "cliente", content: "tem vaga?", created_at: "2026-11-03T12:00:00Z", chatwoot_message_id: 7 },
+    { author: "equipe", content: "   ", created_at: "2026-11-03T12:02:00Z", chatwoot_message_id: 8 },
+    { author: "equipe", content: "já vejo", created_at: "2026-11-03T12:03:00Z", chatwoot_message_id: 9 },
+  ]);
+  assertEquals(r.map((x) => x.quem), ["cliente", "bot", "equipe"]);
+  assertEquals(r[0].id, 7);
+});
+
+// Cenário real: o app diz que há 5 vagas na Ida de amanhã e a Rodoviária sai às 05:40 por R$ 60.
+const FONTES = [
+  "PONTOS: Ida: Rodoviária às 05:40, R$ 60,00 por passagem",
+  '{"ok":true,"data":"2026-11-04","direcao":"ida","capacidade":31,"vagas_disponiveis":5,"status_da_viagem":"ainda nao iniciada"}',
+  "quero duas passagens amanhã",
+  numerosPorExtenso("quero duas passagens amanhã"),
+  '{"ok":true,"preco_por_passagem":60,"quantidade":2,"total":120}',
+];
+const LIVRE = { mexeuEmReserva: false, consultouReservas: false };
+
+Deno.test("trava: resposta com números das ferramentas passa (vaga, horário, total, 'duas' → 2)", () => {
+  assertEquals(
+    problemasDaResposta("Amanhã na Ida tem 5 vagas! Saímos da Rodoviária às 5h40 e as 2 passagens dão R$ 120.", FONTES, LIVRE),
+    [],
+  );
+  assertEquals(problemasDaResposta("Tem vaga sim, 5 disponíveis. Quer que eu reserve?", FONTES, LIVRE), []);
+});
+
+Deno.test("trava: vaga, valor ou horário inventados são barrados", () => {
+  const vaga = problemasDaResposta("Tem 8 vagas amanhã.", FONTES, LIVRE);
+  assertEquals(vaga.length, 1);
+  assertStringIncludes(vaga[0], "8");
+  assertEquals(problemasDaResposta("A passagem custa R$ 70.", FONTES, LIVRE).length, 1);
+  assertEquals(problemasDaResposta("Saímos às 7h30.", FONTES, LIVRE).length, 1);
+});
+
+Deno.test("trava: 'reserva confirmada' sem ferramenta que deu certo é barrado; com ela passa", () => {
+  const txt = "Pronto! Sua reserva está confirmada para amanhã.";
+  assertEquals(problemasDaResposta(txt, FONTES, LIVRE).length, 1);
+  assertEquals(problemasDaResposta(txt, FONTES, { mexeuEmReserva: true, consultouReservas: false }), []);
+  // descrever uma reserva que já existe (depois de ver_minhas_reservas) também é válido
+  assertEquals(problemasDaResposta(txt, FONTES, { mexeuEmReserva: false, consultouReservas: true }), []);
+  // perguntar/oferecer não é afirmar
+  assertEquals(problemasDaResposta("Posso confirmar a reserva se você disser sim.", FONTES, LIVRE), []);
+});
+
+Deno.test("trava: identificador interno e resposta longa demais", () => {
+  assertEquals(problemasDaResposta("Sua reserva 3f2b8c1e-1a2b-4c3d-9e8f-0a1b2c3d4e5f", FONTES, LIVRE).length >= 1, true);
+  assertEquals(problemasDaResposta("a".repeat(1600), FONTES, LIVRE).length, 1);
 });

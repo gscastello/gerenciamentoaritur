@@ -5,6 +5,8 @@
 // de reserva, valor total e as travas contra invenção. A parte com I/O fica em
 // agente.ts / agenteFerramentas.ts.
 
+import { numerosNaoFundamentados } from "./botGuard.ts";
+
 export type MensagemDaConversa = {
   /** id da mensagem no Chatwoot, quando se sabe */
   id?: number;
@@ -243,4 +245,65 @@ export function afirmaTerMexidoEmReserva(textoDaResposta: string): boolean {
 /** Não deixa a resposta citar telefone ou identificador interno. */
 export function contemDadoInterno(textoDaResposta: string): boolean {
   return /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(textoDaResposta);
+}
+
+const NUMEROS_POR_EXTENSO: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+
+/**
+ * "duas passagens" → "2": o cliente escreve por extenso e o atendente responde com
+ * dígito; sem isto a trava de números barraria uma resposta correta.
+ */
+export function numerosPorExtenso(texto: string): string {
+  const palavras = texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .split(/[^a-z]+/);
+  const achados = new Set<number>();
+  for (const w of palavras) if (w in NUMEROS_POR_EXTENSO) achados.add(NUMEROS_POR_EXTENSO[w]);
+  return [...achados].join(" ");
+}
+
+type ObservacaoDoBanco = { author: string; content: string; created_at: string; chatwoot_message_id: number | null };
+
+/** Plano B do histórico: as observações gravadas pelo próprio bot (cliente, equipe, bot e rascunho). */
+export function converterObservacoes(obs: ObservacaoDoBanco[]): MensagemDaConversa[] {
+  return obs
+    .map((o): MensagemDaConversa | null => {
+      const texto = String(o.content ?? "").trim();
+      if (!texto) return null;
+      const quem = o.author === "cliente" ? "cliente" : o.author === "equipe" ? "equipe" : "bot";
+      return { id: o.chatwoot_message_id ?? undefined, quem, texto, em: new Date(o.created_at).toISOString() };
+    })
+    .filter((m): m is MensagemDaConversa => m !== null)
+    .sort((a, b) => a.em.localeCompare(b.em));
+}
+
+/**
+ * Motivos pelos quais a resposta NÃO pode ser enviada. Vazio = pode enviar.
+ * `fontes`: informações da empresa, calendário, o que o cliente escreveu e o resultado
+ * das ferramentas — só números dali valem.
+ */
+export function problemasDaResposta(
+  texto: string,
+  fontes: string[],
+  estado: { mexeuEmReserva: boolean; consultouReservas: boolean },
+): string[] {
+  const problemas: string[] = [];
+  const invencionices = numerosNaoFundamentados(texto, fontes);
+  if (invencionices.length > 0) {
+    problemas.push(
+      `Você citou números que não vieram das ferramentas, das informações da empresa nem do cliente: ${invencionices.join(", ")}. Consulte a ferramenta certa (consultar_viagem, listar_pontos_e_precos, calcular_valor, ver_minhas_reservas) e use só os dados dela, ou tire o número.`,
+    );
+  }
+  if (afirmaTerMexidoEmReserva(texto) && !estado.mexeuEmReserva && !estado.consultouReservas) {
+    problemas.push(
+      "Você afirmou que uma reserva foi confirmada/feita/cancelada/remarcada, mas nenhuma ferramenta de reserva deu certo neste atendimento. Só afirme depois do resultado da ferramenta; se ainda falta confirmação do cliente, peça-a.",
+    );
+  }
+  if (contemDadoInterno(texto)) problemas.push("Não escreva identificadores internos (códigos longos) para o cliente.");
+  if (texto.length > 1500) problemas.push("Resposta longa demais para o WhatsApp: resuma em poucas frases.");
+  return problemas;
 }
