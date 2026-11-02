@@ -87,6 +87,63 @@ export const customersService = {
     );
   },
 
+  /**
+   * Endereço de costume do cliente (database/66): por sentido, o fixado pela
+   * equipe ou o mais frequente no histórico. { ida, volta, sentido_sugerido }.
+   */
+  async getEnderecoDeCostume(customerId) {
+    const data = await handle(
+      supabase.rpc("rpc_endereco_de_costume", { p_customer_id: customerId }),
+      "getEnderecoDeCostume",
+    );
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível ler o endereço de costume.", {
+        retryable: false,
+      });
+    return data;
+  },
+
+  /** A equipe fixa (ou corrige) o endereço de costume de um sentido. */
+  async definirEnderecoDeCostume(
+    customerId,
+    direcao,
+    { pontoId, bairro, detalhe, desembarque, area },
+  ) {
+    const data = await handle(
+      supabase.rpc("rpc_definir_endereco_de_costume", {
+        p_customer_id: customerId,
+        p_direction: direcao,
+        p_route_point_code: pontoId,
+        p_neighborhood: bairro || null,
+        p_detail: detalhe || null,
+        p_dropoff_location: desembarque || null,
+        p_dropoff_area: area || null,
+      }),
+      "definirEnderecoDeCostume",
+    );
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível fixar o endereço de costume.", {
+        retryable: false,
+      });
+    return data;
+  },
+
+  /** Solta o endereço fixado: o sentido volta a usar o histórico. */
+  async limparEnderecoDeCostume(customerId, direcao) {
+    const data = await handle(
+      supabase.rpc("rpc_limpar_endereco_de_costume", {
+        p_customer_id: customerId,
+        p_direction: direcao,
+      }),
+      "limparEnderecoDeCostume",
+    );
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível soltar o endereço de costume.", {
+        retryable: false,
+      });
+    return data;
+  },
+
   async removeCustomer(customerId) {
     const { data, error } = await supabase.rpc("rpc_soft_delete_customer", { p_id: customerId });
     if (error)

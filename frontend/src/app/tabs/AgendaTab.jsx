@@ -1824,25 +1824,27 @@ export function NovaReservaModal({
   onCriar,
   capacidade = 31,
   extraInicial = false,
+  inicial = null,
 }) {
   // Extra na ida: começa em "Outro local de embarque" (beira da estrada etc.).
   const primeiroPonto = (dir) =>
     (extraInicial && trips[dir]?.pontos?.find((p) => p.id === "outro")?.id) ||
     trips[dir]?.pontos?.[0]?.id ||
     "";
+  // `inicial`: endereço de costume do passageiro recorrente (#228) — abre já preenchido
   const [f, setF] = useState({
-    nome: "",
-    telefone: "",
-    data: dataInicial || todayStr(),
-    direcao: direcaoInicial,
-    pontoId: primeiroPonto(direcaoInicial),
-    bairro: "",
-    anotacao: "",
+    nome: inicial?.nome || "",
+    telefone: inicial?.telefone || "",
+    data: inicial?.data || dataInicial || todayStr(),
+    direcao: inicial?.direcao || direcaoInicial,
+    pontoId: inicial?.pontoId || primeiroPonto(inicial?.direcao || direcaoInicial),
+    bairro: inicial?.bairro || "",
+    anotacao: inicial?.anotacao || "",
     quantidade: "1",
-    pagamento: "dinheiro",
+    pagamento: inicial?.pagamento || "dinheiro",
     valorManual: "",
-    desembarque: "",
-    desembarqueArea: "",
+    desembarque: inicial?.desembarque || "",
+    desembarqueArea: inicial?.desembarqueArea || "",
     telefone2: "",
     comoPendente: false,
     foraLotacao: extraInicial,
@@ -2006,11 +2008,21 @@ export function NovaReservaModal({
           </div>
         )}
 
+        {inicial?.aviso && (
+          <div
+            data-testid="aviso-costume"
+            className="mb-3 text-xs rounded-lg px-3 py-2"
+            style={{ background: C.panel2, color: C.inkSoft }}
+          >
+            {inicial.aviso}
+          </div>
+        )}
+
         <div className="mb-2">
           <Field label="Linha rápida (opcional)">
             <TextInput
               value={linha}
-              autoFocus
+              autoFocus={!inicial}
               onChange={(e) => aplicarLinha(e.target.value)}
               placeholder="1P Cohatrac Rua 7 98999998888 Maria Silva"
             />

@@ -15,6 +15,7 @@
 import {
   areaDoDesembarque,
   calcularTotal,
+  costumeParaFerramenta,
   nomeDeveSerCompletado,
   type PedidoValidado,
   validarPedidoDeReserva,
@@ -84,6 +85,12 @@ export const FERRAMENTAS: Ferramenta[] = [
     name: "ver_minhas_reservas",
     description:
       "Mostra as reservas ativas DESTE cliente (data, direção, ponto, quantidade, status, valor, pagamento) e se ele já está cadastrado. Use para 'minha reserva está confirmada?', 'já paguei?', cancelar/remarcar, ou antes de criar uma reserva para não duplicar.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "endereco_de_costume",
+    description:
+      "Devolve o endereço de costume DESTE cliente por sentido (ponto de embarque, bairro, rua/referência e desembarque que ele sempre usa — fixado pela equipe ou visto no histórico) e o sentido provável da próxima viagem. Use quando um cliente quiser passagem (principalmente se já viajou antes) para propor o pedido pronto em vez de perguntar tudo de novo. Não traz valor.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -338,6 +345,14 @@ async function verMinhasReservas(ctx: ContextoDoAgente) {
   return { ok: true, cliente_cadastrado: true, nome_cadastrado: cliente.name, reservas: saida };
 }
 
+async function enderecoDeCostume(ctx: ContextoDoAgente) {
+  const cliente = await clienteDaConversa(ctx);
+  if (!cliente) return { ok: true, cliente_cadastrado: false, tem_endereco_de_costume: false };
+  const { data, error } = await supabaseAdmin.rpc("rpc_endereco_de_costume", { p_customer_id: cliente.id });
+  if (error || !data?.success) throw new Error(`rpc_endereco_de_costume: ${error?.message ?? data?.message}`);
+  return costumeParaFerramenta(data);
+}
+
 async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const valido = validarPedidoDeReserva(args, ctx.hoje);
   if (!valido.ok) return { ok: false, codigo: "PEDIDO_INCOMPLETO", problemas: valido.erros };
@@ -533,6 +548,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
         return await calcularValor(args);
       case "ver_minhas_reservas":
         return await verMinhasReservas(ctx);
+      case "endereco_de_costume":
+        return await enderecoDeCostume(ctx);
       case "criar_reserva":
         return await criarReserva(args, ctx);
       case "remarcar_reserva":

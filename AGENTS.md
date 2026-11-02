@@ -276,6 +276,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   responde, o bot fica **10 min em silêncio**. `settings.bot_engine = 'roteiro'` volta ao motor
   antigo. O bot **nunca** cadastra cliente com o nome do perfil do WhatsApp (costuma ser apelido):
   pergunta o nome.
+- **Cliente recorrente / endereço de costume** (issue #228, `WHATSAPP.md §6d`): por cliente e sentido, fixado pela
+  equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
+  *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
+  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).

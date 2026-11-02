@@ -4,6 +4,7 @@ import { primeiroErro, validarNome, validarTelefone } from "../../domain/validac
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
+import EnderecoDeCostume from "./EnderecoDeCostume.jsx";
 import {
   C,
   Card,
@@ -62,7 +63,7 @@ const SAIDA_MS = 200;
 // CRM paginado: lista agregada vem do banco (v_customers_stats), página
 // a página, busca no servidor. O histórico de cada passageiro (para os
 // endereços mais usados) carrega só quando o card abre.
-export default function PassageirosTab({ trips, deepLink }) {
+export default function PassageirosTab({ trips, deepLink, onAgendar }) {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState(null);
   const deepLinkAplicado = useRef(null);
@@ -200,6 +201,7 @@ export default function PassageirosTab({ trips, deepLink }) {
                 onSalvarNota={salvarNota}
                 onSalvarPerfil={salvarPerfil}
                 onRemover={iniciarRemocao}
+                onAgendar={onAgendar}
               />
             </Presence>
           ))}
@@ -232,7 +234,16 @@ function classificacao(viagensCount) {
 
 const ROTULO_PAGAMENTO = { dinheiro: "Dinheiro", pix: "Pix" };
 
-function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerfil, onRemover }) {
+function PassageiroCard({
+  p,
+  trips,
+  aberto,
+  onToggle,
+  onSalvarNota,
+  onSalvarPerfil,
+  onRemover,
+  onAgendar,
+}) {
   const { viagens, loading } = usePassageiroDetalhe(aberto ? p.customer_id : null);
   const enderecosIda = useMemo(
     () =>
@@ -380,6 +391,7 @@ function PassageiroCard({ p, trips, aberto, onToggle, onSalvarNota, onSalvarPerf
             <EnderecosFreq titulo="Embarque (ida)" itens={loading ? [] : enderecosIda} />
             <EnderecosFreq titulo="Desembarque (volta)" itens={loading ? [] : enderecosVolta} />
           </div>
+          <EnderecoDeCostume p={p} trips={trips} onAgendar={onAgendar} />
           <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
             <div>
               Passagens: <b style={{ color: C.ink }}>{p.total_passagens}</b>
