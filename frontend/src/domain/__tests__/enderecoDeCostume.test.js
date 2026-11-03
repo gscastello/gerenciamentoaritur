@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dataDeAgendamentoValida,
   erroDoFormularioDeCostume,
   formularioDoCostume,
   inicialDoAgendamento,
@@ -180,5 +181,19 @@ describe("formulário do costume", () => {
       "Escolha o ponto de embarque.",
     );
     expect(erroDoFormularioDeCostume(null, PONTOS_IDA)).toBe("Escolha o ponto de embarque.");
+  });
+});
+
+describe("dataDeAgendamentoValida", () => {
+  it("aceita hoje e datas futuras", () => {
+    expect(dataDeAgendamentoValida("2026-11-04", "2026-11-04")).toBe(true);
+    expect(dataDeAgendamentoValida("2026-12-25", "2026-11-04")).toBe(true);
+  });
+  it("recusa data passada, vazia ou fora do formato", () => {
+    expect(dataDeAgendamentoValida("2026-11-03", "2026-11-04")).toBe(false);
+    expect(dataDeAgendamentoValida("", "2026-11-04")).toBe(false);
+    expect(dataDeAgendamentoValida(null, "2026-11-04")).toBe(false);
+    expect(dataDeAgendamentoValida("04/11/2026", "2026-11-04")).toBe(false);
+    expect(dataDeAgendamentoValida("2026-11-04x", "2026-11-04")).toBe(false);
   });
 });

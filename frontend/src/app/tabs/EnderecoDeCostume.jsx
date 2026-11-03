@@ -5,6 +5,7 @@
 import { Pencil, Pin, PinOff, Save, X, Zap } from "lucide-react";
 import { useState } from "react";
 import {
+  dataDeAgendamentoValida,
   erroDoFormularioDeCostume,
   formularioDoCostume,
   inicialDoAgendamento,
@@ -15,7 +16,7 @@ import {
 import { useEnderecoDeCostume } from "../../hooks/useEnderecoDeCostume.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Skeleton } from "../../ui/motion/index.js";
-import { C, Field, Select, TextInput, dataOperacao } from "../tabShared.jsx";
+import { C, Field, Select, TextInput, dataOperacao, todayStr } from "../tabShared.jsx";
 
 const ROTULO = { ida: "Ida", volta: "Volta" };
 
@@ -25,7 +26,17 @@ const botao = (extra = {}) => ({
   style: { background: C.panel, color: C.inkSoft, ...extra },
 });
 
-function Sentido({ direcao, costume, destaque, trips, onAgendar, onFixar, onSoltar, ocupado }) {
+function Sentido({
+  direcao,
+  costume,
+  destaque,
+  trips,
+  onAgendar,
+  onFixar,
+  onSoltar,
+  ocupado,
+  dataOk,
+}) {
   const pontos = trips?.[direcao]?.pontos || [];
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(null);
@@ -155,7 +166,8 @@ function Sentido({ direcao, costume, destaque, trips, onAgendar, onFixar, onSolt
               <button
                 type="button"
                 onClick={() => onAgendar(direcao, costume)}
-                className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium"
+                disabled={!dataOk}
+                className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
                 style={{ background: C.amber, color: C.onBrand }}
               >
                 <Zap size={13} /> Agendar {ROTULO[direcao]}
@@ -197,6 +209,9 @@ function Sentido({ direcao, costume, destaque, trips, onAgendar, onFixar, onSolt
 export default function EnderecoDeCostume({ p, trips, onAgendar }) {
   const { costume, sugerido, loading, erro, fixar, soltar } = useEnderecoDeCostume(p.customer_id);
   const [ocupado, setOcupado] = useState(false);
+  // data da viagem a agendar: amanhã de partida, mas a equipe escolhe qualquer dia
+  const [data, setData] = useState(() => dataOperacao(1));
+  const dataOk = dataDeAgendamentoValida(data, todayStr());
   const destaque = sentidoDestacado(sugerido, costume);
 
   const comTravaDeCliques =
@@ -218,7 +233,7 @@ export default function EnderecoDeCostume({ p, trips, onAgendar }) {
             direcao,
             costume: c,
             trips,
-            data: dataOperacao(1),
+            data,
           }),
         )
     : null;
@@ -231,6 +246,18 @@ export default function EnderecoDeCostume({ p, trips, onAgendar }) {
       {erro && (
         <div className="text-xs mb-2" style={{ color: C.red }}>
           {erro}
+        </div>
+      )}
+      {onAgendar && (
+        <div className="mb-3 max-w-[11rem]">
+          <Field label="Data da viagem">
+            <TextInput
+              type="date"
+              min={todayStr()}
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+            />
+          </Field>
         </div>
       )}
       {loading && !costume ? (
@@ -248,6 +275,7 @@ export default function EnderecoDeCostume({ p, trips, onAgendar }) {
               destaque={destaque === d}
               trips={trips}
               onAgendar={agendar}
+              dataOk={dataOk}
               onFixar={comTravaDeCliques(fixar)}
               onSoltar={comTravaDeCliques(soltar)}
               ocupado={ocupado}

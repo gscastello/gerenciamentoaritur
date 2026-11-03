@@ -83,3 +83,8 @@ export function erroDoFormularioDeCostume(form, pontos = []) {
   }
   return null;
 }
+
+/** A data escolhida serve para agendar? Formato AAAA-MM-DD e hoje ou depois. */
+export function dataDeAgendamentoValida(data, hoje) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(data || "") && data >= hoje;
+}

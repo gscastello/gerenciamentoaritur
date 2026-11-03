@@ -67,6 +67,9 @@ test("Passageiros: agenda a Ida com o endereço de costume já preenchido", asyn
   await expect(ida).toContainText("sugerida agora");
   await expect(page.getByTestId("costume-volta")).toContainText("sem endereço de costume");
 
+  // a data da viagem é escolhida ali mesmo (padrão: amanhã); aqui, daqui a 10 dias
+  const alvo = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  await page.getByLabel("Data da viagem").fill(alvo);
   await ida.getByRole("button", { name: "Agendar Ida" }).click();
 
   // modal da nova reserva, já com o costume
@@ -86,7 +89,7 @@ test("Passageiros: agenda a Ida com o endereço de costume já preenchido", asyn
     p_quantity: 1,
     p_unit_price: 80,
   });
-  expect(criadas[0].p_trip_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(criadas[0].p_trip_date).toBe(alvo);
 });
 
 test("Passageiros: a equipe fixa o endereço de costume da Volta e depois solta", async ({

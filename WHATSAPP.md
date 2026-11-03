@@ -195,7 +195,7 @@ sentido** (Ida e Volta separados) e a regra mora num lugar só, `rpc_endereco_de
    local; "Cohab Anil II" e "III" **não** se misturam. O botão *Fixar* promove o do histórico a fixado.
 
 **No app:** *Agendar Ida/Volta* (destaque no sentido provável: o oposto da última viagem) abre a **nova reserva já
-preenchida** (ponto, bairro, rua, desembarque, pagamento padrão, amanhã); a equipe confere e clica *Agendar*. Preço,
+preenchida** (ponto, bairro, rua, desembarque, pagamento padrão); a **data da viagem é escolhida ali mesmo** (padrão: amanhã); a equipe confere e clica *Agendar*. Preço,
 vaga e duplicidade seguem como em qualquer reserva.
 
 **No bot:** a ferramenta `endereco_de_costume` devolve o costume do **próprio cliente** (sem valor). O bot propõe o
