@@ -148,6 +148,7 @@ function json(body, status = 200, headers = null) {
  * @param {object} [opts.createResult]     resposta de rpc_create_reservation
  * @param {(route)=>void} [opts.onCreate]  callback quando rpc_create_reservation é chamado
  * @param {(route)=>void} [opts.onEdit]    callback quando rpc_edit_reservation é chamado
+ * @param {object} [opts.costumes={}]       endereço de costume por cliente: { [customer_id]: { ida, volta, sentido_sugerido } }
  * @param {Array}  [opts.notifications=[]]  linhas de v_app_notifications
  * @param {Array}  [opts.pendencias=[]]     linhas de v_pendencias_atendimento
  * @param {Array}  [opts.notes=[]]          linhas iniciais de notes (bloco de notas)
@@ -293,6 +294,8 @@ export async function mockSupabase(page, opts = {}) {
   let botKnowledgeSeq = 0;
   // passageiros/CRM (database/49) — stateful pra testar remover cadastro
   let customersStatsRows = (opts.customersStats ?? []).map((c) => ({ ...c }));
+  // endereço de costume (database/66) — stateful: fixar/soltar mudam o que a tela relê
+  const costumes = structuredClone(opts.costumes ?? {});
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   const seqOverride = {};
@@ -544,6 +547,38 @@ export async function mockSupabase(page, opts = {}) {
         }
         statusOverride[b.p_reservation_id] = "confirmada";
         return route.fulfill(json({ success: true, status: "confirmada" }));
+      }
+      if (fn === "rpc_endereco_de_costume") {
+        const c = costumes[req.postDataJSON?.()?.p_customer_id] ?? {};
+        return route.fulfill(
+          json({
+            success: true,
+            ida: c.ida ?? null,
+            volta: c.volta ?? null,
+            sentido_sugerido: c.sentido_sugerido ?? null,
+          }),
+        );
+      }
+      if (fn === "rpc_definir_endereco_de_costume") {
+        const b = req.postDataJSON?.() ?? {};
+        costumes[b.p_customer_id] = {
+          ...costumes[b.p_customer_id],
+          [b.p_direction]: {
+            fonte: "manual",
+            route_point_code: b.p_route_point_code,
+            route_point_name: b.p_route_point_code,
+            neighborhood: b.p_neighborhood,
+            detail: b.p_detail,
+            dropoff_location: b.p_dropoff_location,
+            dropoff_area: b.p_dropoff_area,
+          },
+        };
+        return route.fulfill(json({ success: true, id: "e2e-costume" }));
+      }
+      if (fn === "rpc_limpar_endereco_de_costume") {
+        const b = req.postDataJSON?.() ?? {};
+        if (costumes[b.p_customer_id]) costumes[b.p_customer_id][b.p_direction] = null;
+        return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_bot_learning_stats") return route.fulfill(json(botStats));
       if (fn === "rpc_set_reservation_extra") {

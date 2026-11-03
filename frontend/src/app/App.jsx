@@ -893,6 +893,8 @@ function AppInner() {
   const [tab, setTab] = useState("dashboard");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
+  // preenchimento vindo do endereço de costume do passageiro (#228)
+  const [agendarInicial, setAgendarInicial] = useState(null);
   const [agendou, setAgendou] = useState("");
   // deep-link da busca global: leva a aba destino a pré-selecionar data /
   // pré-preencher o filtro. `at` força o efeito a rodar de novo mesmo se
@@ -1031,8 +1033,10 @@ function AppInner() {
                     trips={trips}
                     capacidade={capacidadeAtiva}
                     onCriar={R.createReservation}
+                    inicial={agendarInicial}
                     onClose={(r) => {
                       setAgendarAberto(false);
+                      setAgendarInicial(null);
                       if (r?.ok) {
                         setTab("lista");
                         setDeepLink({ kind: "data", data: r.data, at: Date.now() });
@@ -1286,7 +1290,18 @@ function AppInner() {
                       {tab === "bloco" && <BlocoDeNotasTab />}
                       {tab === "pendencias" && <PendenciasTab pend={pend} />}
                       {tab === "passageiros" && (
-                        <PassageirosTab trips={trips} deepLink={deepLink} />
+                        <PassageirosTab
+                          trips={trips}
+                          deepLink={deepLink}
+                          onAgendar={
+                            podeAgendar
+                              ? (inicial) => {
+                                  setAgendarInicial(inicial);
+                                  setAgendarAberto(true);
+                                }
+                              : null
+                          }
+                        />
                       )}
                       {tab === "financeiro" && (
                         <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />

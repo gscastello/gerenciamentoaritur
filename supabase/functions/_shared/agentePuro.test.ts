@@ -7,6 +7,7 @@ import {
   converterMensagensDoChatwoot,
   areaDoDesembarque,
   converterObservacoes,
+  costumeParaFerramenta,
   nomeDeveSerCompletado,
   numerosPorExtenso,
   problemasDaResposta,
@@ -304,4 +305,48 @@ Deno.test("nome completo completa o cadastro sem trocar um nome por outro", () =
   assertEquals(nomeDeveSerCompletado("Maria", "Maria Silva Santos"), true);
   assertEquals(nomeDeveSerCompletado("Ana", "Ana"), false);
   assertEquals(nomeDeveSerCompletado("Maria Silva", "Maria"), false); // novo precisa ser nome completo
+});
+
+Deno.test("costume: devolve por sentido o local de costume, sem nenhum valor", () => {
+  const r = costumeParaFerramenta({
+    sentido_sugerido: "volta",
+    ida: {
+      fonte: "historico",
+      vezes: 4,
+      route_point_code: "busca",
+      route_point_name: "Buscar em Casa",
+      neighborhood: "Prime Calhau",
+      detail: "Quadra 3",
+      dropoff_location: "Pirapemas",
+    },
+    volta: { fonte: "manual", route_point_code: "cantanhede", route_point_name: "Cantanhede", detail: "Rua do Sol" },
+  });
+  assertEquals(r.tem_endereco_de_costume, true);
+  assertEquals(r.sentido_provavel, "volta");
+  assertEquals(r.ida?.origem, "visto 4 vezes no histórico");
+  assertEquals(r.ida?.codigo_do_ponto, "busca");
+  assertEquals(r.ida?.bairro, "Prime Calhau");
+  assertEquals(r.ida?.endereco_de_embarque, "Quadra 3");
+  assertEquals(r.ida?.desembarque, "Pirapemas");
+  assertEquals(r.volta?.origem, "fixado pela equipe");
+  assertEquals(r.volta?.bairro, null);
+  assertEquals(r.volta?.desembarque, null);
+  // o resultado vira fonte da trava de números: não pode carregar preço
+  assertEquals(/preco|valor|total/i.test(JSON.stringify(r)), false);
+});
+
+Deno.test("costume: uma viagem só vira 'última viagem'; sem costume avisa que não há", () => {
+  const um = costumeParaFerramenta({
+    ida: { fonte: "historico", vezes: 1, route_point_code: "rodoviaria" },
+    volta: null,
+  });
+  assertEquals(um.ida?.origem, "última viagem do cliente");
+  assertEquals(um.ida?.ponto, "rodoviaria");
+  assertEquals(um.volta, null);
+  assertEquals(um.sentido_provavel, null);
+
+  const nada = costumeParaFerramenta({ ida: null, volta: null, sentido_sugerido: "sabado" });
+  assertEquals(nada.tem_endereco_de_costume, false);
+  assertEquals(nada.sentido_provavel, null);
+  assertEquals(costumeParaFerramenta({}).tem_endereco_de_costume, false);
 });

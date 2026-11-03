@@ -47,6 +47,8 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 3. Criar o usuário do bot em **Sistema → Equipe**: nome exato `Bot WhatsApp`, e-mail
    `bot@rota-pirapemas.local`, papel **atendente**. É ele que aparece na auditoria.
 4. `database/64-sombra-aprende.sql` — observações, lições e anotações de clientes: o bot aprende em qualquer modo (ver §6b).
+5. `database/66-endereco-de-costume.sql` — endereço de costume do cliente recorrente, para agendar com 1 clique no app e
+   para o bot propor o pedido pronto (ver §6d). (O 65 corrige o índice das observações.)
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -180,6 +182,26 @@ terceiros. **Sombra:** a resposta vira nota privada e as gravações viram "cria
 (ou insira a linha) devolve o roteiro antigo na hora, sem deploy; `{"engine":"agente"}` volta ao novo.
 **Log:** `bot_agente_resposta` (ferramentas usadas, tokens, tempo), `bot_agente_barrado`,
 `bot_agente_silencio`, `bot_agente_cedeu`.
+
+## 6d. Cliente recorrente: endereço de costume (issue #228)
+
+Quem viaja sempre do mesmo lugar não precisa repetir tudo. O **endereço de costume** é **por cliente e por
+sentido** (Ida e Volta separados) e a regra mora num lugar só, `rpc_endereco_de_costume` (o app e o bot chamam a mesma):
+
+1. **Fixado pela equipe** (aba Passageiros → card do passageiro → *Endereço de costume* → Fixar/Editar). Vale sempre
+   e sobrepõe o automático. *Soltar* devolve o sentido ao histórico. Fica em `customer_habitual_addresses`.
+2. **Histórico:** o local mais frequente (empate: o mais recente) entre as reservas confirmadas/embarcadas daquele
+   sentido, desde que o cliente tenha **2 ou mais**. Grafia parecida ("Prime Calhau", "prime  calhau") é o mesmo
+   local; "Cohab Anil II" e "III" **não** se misturam. O botão *Fixar* promove o do histórico a fixado.
+
+**No app:** *Agendar Ida/Volta* (destaque no sentido provável: o oposto da última viagem) abre a **nova reserva já
+preenchida** (ponto, bairro, rua, desembarque, pagamento padrão); a **data da viagem é escolhida ali mesmo** (padrão: amanhã); a equipe confere e clica *Agendar*. Preço,
+vaga e duplicidade seguem como em qualquer reserva.
+
+**No bot:** a ferramenta `endereco_de_costume` devolve o costume do **próprio cliente** (sem valor). O bot propõe o
+pedido pronto ("Ida amanhã, saindo de …, descendo em …, 1 passagem, no dinheiro. Posso confirmar?"), **sem citar
+valor** a menos que o cliente pergunte, nunca presume a data e **só cria depois do "sim"**. Se o cliente mudar algo,
+vale o que ele disser. Sem costume (cliente novo ou sem repetição) o fluxo normal continua igual.
 
 ## 7. Checklist de teste (em modo Sombra)
 

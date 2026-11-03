@@ -346,3 +346,54 @@ export function nomeDeveSerCompletado(atual: string | null | undefined, novo: st
   const pn = n.split(" ");
   return pn.length > pa.length && pa.every((p) => pn.includes(p));
 }
+
+type CostumeDoBanco = {
+  fonte?: string;
+  vezes?: number | null;
+  route_point_code?: string | null;
+  route_point_name?: string | null;
+  neighborhood?: string | null;
+  detail?: string | null;
+  dropoff_location?: string | null;
+} | null;
+
+function costumeParaOModelo(c: CostumeDoBanco) {
+  if (!c?.route_point_code) return null;
+  const vezes = Number(c.vezes) || 0;
+  return {
+    origem:
+      c.fonte === "manual"
+        ? "fixado pela equipe"
+        : vezes > 1
+          ? `visto ${vezes} vezes no histórico`
+          : "última viagem do cliente",
+    ponto: c.route_point_name ?? c.route_point_code,
+    codigo_do_ponto: c.route_point_code,
+    bairro: c.neighborhood ?? null,
+    endereco_de_embarque: c.detail ?? null,
+    desembarque: c.dropoff_location ?? null,
+  };
+}
+
+/**
+ * O que a ferramenta endereco_de_costume devolve ao modelo: por sentido o local de
+ * costume do cliente (sem NENHUM valor — o preço sai da tabela na hora de gravar) e o
+ * sentido que a viagem seguinte provavelmente tem (o oposto da última).
+ */
+export function costumeParaFerramenta(r: {
+  ida?: CostumeDoBanco;
+  volta?: CostumeDoBanco;
+  sentido_sugerido?: string | null;
+}) {
+  const ida = costumeParaOModelo(r.ida ?? null);
+  const volta = costumeParaOModelo(r.volta ?? null);
+  const sugerido = r.sentido_sugerido === "ida" || r.sentido_sugerido === "volta" ? r.sentido_sugerido : null;
+  return {
+    ok: true,
+    cliente_cadastrado: true,
+    tem_endereco_de_costume: Boolean(ida || volta),
+    sentido_provavel: sugerido,
+    ida,
+    volta,
+  };
+}
