@@ -10,6 +10,7 @@ export type TipoLicao =
   | "estilo_atendente"
   | "fluxo_agendamento"
   | "situacao"
+  | "operacao"
   | "fato"
   | "negocio";
 export const TIPOS_DE_LICAO: TipoLicao[] = [
@@ -17,6 +18,7 @@ export const TIPOS_DE_LICAO: TipoLicao[] = [
   "estilo_atendente",
   "fluxo_agendamento",
   "situacao",
+  "operacao",
   "fato",
   "negocio",
 ];
@@ -84,10 +86,13 @@ export function montarTranscricoes(
 /**
  * Fato e negócio valem só aprovados; linguagem/estilo/fluxo entram valendo e
  * pedem revisão. Resposta por situação também, a menos que cite número
- * (valor, horário, prazo) — aí é informação e espera o dono aprovar.
+ * (valor, horário, prazo) — aí é informação e espera o dono aprovar. Operação
+ * (parada, plataforma, chegada) vale na hora, com horário e tudo, a menos que
+ * cite dinheiro: preço nunca entra sem o dono.
  */
 export function statusInicial(kind: TipoLicao, content = ""): "ativa" | "proposta" {
   if (kind === "fato" || kind === "negocio") return "proposta";
+  if (kind === "operacao" && /r\$|\breais\b/i.test(content)) return "proposta";
   if (kind === "situacao" && /\d/.test(content)) return "proposta";
   return "ativa";
 }
@@ -178,6 +183,7 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
   estilo_atendente: "COMO O ATENDENTE COSTUMA RESPONDER",
   fluxo_agendamento: "COMO O ATENDENTE AGENDA AS PASSAGENS",
   situacao: "O QUE RESPONDER EM CADA SITUAÇÃO (jeito do atendente)",
+  operacao: "COMO A VIAGEM FUNCIONA NA PRÁTICA (dito pelo atendente: paradas, plataforma, horários de chegada e de passagem)",
   fato: "INFORMAÇÕES DITAS PELO ATENDENTE (aprovadas pelo dono)",
   negocio: "COMO A EMPRESA FUNCIONA (aprovado pelo dono)",
 };

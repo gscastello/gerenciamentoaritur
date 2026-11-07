@@ -97,6 +97,9 @@ export async function montarFatos(): Promise<{ fatos: string; estilo: string }> 
   // pelo mesmo botGuard; estilo e fluxo do atendente afinam o tom das respostas.
   const fatosAprendidos = await blocoDasLicoes(["fato", "negocio"], { maxChars: 5000, max: 40 });
   if (fatosAprendidos) linhas.push("", fatosAprendidos);
+  // Paradas, plataforma e horários de chegada: valem na hora, e o que está aqui passa pela trava de números.
+  const operacao = await blocoDasLicoes(["operacao"], { maxChars: 3000, max: 30 });
+  if (operacao) linhas.push("", operacao);
   const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento", "situacao"], { maxChars: 6000, max: 20 });
   const estiloBase = (cfg.bot_style_guide?.text ?? "").trim() || ESTILO_PADRAO;
 
