@@ -339,9 +339,10 @@ export default function SistemaBotAprendizado() {
         o que cada situação pede e quem são os clientes recorrentes. Quando as conversas mostram
         algo diferente do que você já aprovou, ele sugere a atualização (você decide), e lições que
         não aparecem há 4 meses voltam para conferência. Disso saem lições, sem nomes nem telefones.
-        O jeito dos clientes falarem, o estilo do atendente e as respostas por situação já passam a
-        valer (confira abaixo); informações como preço, regra, horário e o funcionamento da empresa
-        só valem depois que você aprovar. O texto das conversas é apagado após 90 dias.
+        O jeito dos clientes falarem, o estilo do atendente, as respostas por situação e como a
+        viagem funciona (paradas, plataforma, chegada) já passam a valer (confira abaixo);
+        informações como preço, regra e o funcionamento da empresa só valem depois que você aprovar.
+        O texto das conversas é apagado após 90 dias.
       </p>
 
       {erro && (

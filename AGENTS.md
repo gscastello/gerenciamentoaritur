@@ -280,14 +280,19 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
   pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+- **No ritmo do cliente** (issue #238): o bot não segue roteiro nem pede tudo de uma vez. Cumprimento recebe
+  cumprimento, uma pergunta por mensagem, responde o que foi perguntado antes de retomar. O resumo com "Posso
+  confirmar?" antes de gravar continua obrigatório. **Andamento da viagem:** a equipe quase não marca a saída no app,
+  então a ferramenta `andamento_da_viagem` lê o que o atendente escreveu nas últimas 6 horas, em qualquer conversa,
+  sem expor nomes. Paradas, plataforma e chegada viram lições `operacao`.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
   recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
   orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
-  dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação valem na hora com
-  aviso; fato e negócio (inclusive valor de trecho) só aprovados. Lição já revisada nunca é
+  dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação/operação valem na hora com
+  aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é
   reescrita sozinha: o bot deixa uma sugestão de atualização para o dono aceitar ou manter. Mudança no aprendizado não pode quebrar essas
   garantias (nem fazer o bot decidir preço, vaga, horário ou confirmação).
 
