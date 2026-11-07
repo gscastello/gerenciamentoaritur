@@ -117,6 +117,16 @@ Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolv
 (`bot_learnings`), acumulando: lição já conhecida só ganha evidência; texto melhor só substitui
 o antigo se o dono ainda não revisou.
 
+**Aprende só com o atendente (issue #232):** o que o bot enviou e os rascunhos ficam guardados, mas
+não entram nas conversas lidas pelo aprendizado; o cliente entra como contexto e para aprender como
+os clientes escrevem. O pedido ao modelo é de orientações gerais e casos isolados que ensinem o que
+fazer, nunca roteiro, menu ou formulário fixo, nem relato sem orientação. Valor de trecho citado pelo
+atendente vira `fato` e só vale depois de aprovado. Lição arquivada ou recusada não volta sozinha.
+
+**O que chega às respostas:** o limite de tamanho é dividido entre os tipos, e a sobra passa para o
+seguinte. Fatos e negócio: até 5.000 caracteres; estilo, fluxo e situação: até 6.000 e 20 por tipo;
+linguagem: até 2.200. Dentro de cada tipo entram primeiro as mais vistas.
+
 | Tipo | Como entra | Para que serve |
 |---|---|---|
 | Jeito dos clientes falarem | **Já vale**, com aviso "Está certo?" | O bot entende melhor gírias e pedidos (só leitura da mensagem) |

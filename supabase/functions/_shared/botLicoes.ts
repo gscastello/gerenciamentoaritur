@@ -30,8 +30,8 @@ export async function licoesAtivas(): Promise<LicaoGuardada[]> {
   }
 }
 
-export async function blocoDasLicoes(tipos: TipoLicao[]): Promise<string> {
-  return blocoDeLicoes(await licoesAtivas(), tipos);
+export async function blocoDasLicoes(tipos: TipoLicao[], limites?: { max?: number; maxChars?: number }): Promise<string> {
+  return blocoDeLicoes(await licoesAtivas(), tipos, limites);
 }
 
 /** Depois que o dono revisa, as lições novas passam a valer sem esperar o cache. */
