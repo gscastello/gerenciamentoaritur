@@ -181,7 +181,15 @@ terceiros. **Sombra:** a resposta vira nota privada e as gravações viram "cria
 **Chave de emergência:** `update settings set value = '{"engine":"roteiro"}' where key = 'bot_engine'`
 (ou insira a linha) devolve o roteiro antigo na hora, sem deploy; `{"engine":"agente"}` volta ao novo.
 **Log:** `bot_agente_resposta` (ferramentas usadas, tokens, tempo), `bot_agente_barrado`,
-`bot_agente_silencio`, `bot_agente_cedeu`.
+`bot_agente_silencio`, `bot_agente_cedeu`. `tokens_entrada` conta só o que não veio do cache;
+`tokens_cache_escrita` e `tokens_cache_leitura` têm preço próprio (issue #230).
+
+**Cache de prompt (issue #230):** as ferramentas e o bloco estável das instruções (regras, estilo, dados da
+empresa) são reaproveitados por 5 minutos, renovados a cada uso. Por isso, horário, calendário e dados do cliente
+ficam **sempre depois** do ponto de cache (`blocosDoSistema`): um dado variável antes dele anula a economia sem
+dar erro. Editar preço, regra ou lição apenas gera um cache novo; o bot nunca usa texto antigo. Vagas e reservas
+vêm das ferramentas na hora e não entram no cache. Se `tokens_cache_leitura` ficar em zero nos logs, algo variável
+entrou no bloco estável.
 
 ## 6d. Cliente recorrente: endereço de costume (issue #228)
 

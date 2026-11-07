@@ -15,6 +15,8 @@
 // uma pessoa em vez de responder errado.
 
 import {
+  type BlocoDoSistema,
+  blocosDoSistema,
   calendarioParaOPrompt,
   converterMensagensDoChatwoot,
   diaCivil,
@@ -25,7 +27,9 @@ import {
   type MensagemDaConversa,
   numerosPorExtenso,
   problemasDaResposta,
+  somarUso,
   ultimaFoiDoCliente,
+  USO_ZERADO,
 } from "./agentePuro.ts";
 import { type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
 import { montarFatos } from "./botAnswer.ts";
@@ -89,7 +93,7 @@ LIMITES
 
 type Bloco = Record<string, any>;
 
-async function chamarModelo(system: string, messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco }> {
+async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco }> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
   for (let tentativa = 0; ; tentativa++) {
@@ -116,7 +120,7 @@ async function chamarModelo(system: string, messages: Bloco[]): Promise<{ conten
   }
 }
 
-async function montarSistema(agora: Date, telefone: string): Promise<{ system: string; fontes: string[] }> {
+async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
   const linguagem = await blocoDasLicoes(["linguagem_cliente"]);
   const nota = await blocoDoClienteAtual();
@@ -141,18 +145,21 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: s
   const sobreOCliente = cliente
     ? `CLIENTE DESTA CONVERSA: cadastrado como "${cliente.name}" (trate pelo primeiro nome, com naturalidade; o telefone dele já é o da conversa).`
     : "CLIENTE DESTA CONVERSA: ainda NÃO cadastrado. Antes de reservar, peça o nome completo (o nome do perfil do WhatsApp costuma ser apelido e não vale).";
-  const system = [
-    REGRAS,
-    `CALENDÁRIO:\n${calendario}`,
-    `COMO FALAR (guia de estilo do dono e o que aprendemos com o atendimento da equipe): ${estilo}`,
-    linguagem ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem.)` : "",
-    sobreOCliente,
-    nota ? `${nota}\n(Não repita números dessa anotação: valores, horários e vagas só vêm das ferramentas.)` : "",
-    `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
-    desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  // ordem importa para o cache de prompt: nada que mude por hora ou por cliente antes do ponto de cache
+  const system = blocosDoSistema(
+    [
+      REGRAS,
+      `COMO FALAR (guia de estilo do dono e o que aprendemos com o atendimento da equipe): ${estilo}`,
+      linguagem ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem.)` : "",
+      `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
+      desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
+    ],
+    [
+      `CALENDÁRIO:\n${calendario}`,
+      sobreOCliente,
+      nota ? `${nota}\n(Não repita números dessa anotação: valores, horários e vagas só vêm das ferramentas.)` : "",
+    ],
+  );
   return { system, fontes: [fatos, calendario] };
 }
 
@@ -232,8 +239,7 @@ export async function responderComAgente(entrada: { conversationId: string; tele
     const textoDoHistorico = formatarHistorico(historico);
     const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
     const ferramentasUsadas: string[] = [];
-    let tokensEntrada = 0;
-    let tokensSaida = 0;
+    let uso = USO_ZERADO;
     let correcoes = 0;
 
     const messages: Bloco[] = [
@@ -246,8 +252,7 @@ export async function responderComAgente(entrada: { conversationId: string; tele
     let resposta = "";
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
       const res = await chamarModelo(system, messages);
-      tokensEntrada += Number(res.usage?.input_tokens ?? 0);
-      tokensSaida += Number(res.usage?.output_tokens ?? 0);
+      uso = somarUso(uso, res.usage);
       messages.push({ role: "assistant", content: res.content });
 
       const usos = res.content.filter((c) => c.type === "tool_use");
@@ -261,7 +266,8 @@ export async function responderComAgente(entrada: { conversationId: string; tele
           resultados.push({ type: "tool_result", tool_use_id: uso.id, content: json });
         }
         messages.push({ role: "user", content: resultados });
-        if (ctx.parar) break;
+        // nao_responder encerra aqui: outra chamada pagaria por um texto que seria descartado
+        if (ctx.parar || ctx.silencio) break;
         continue;
       }
 
@@ -270,7 +276,6 @@ export async function responderComAgente(entrada: { conversationId: string; tele
         .map((c) => String(c.text))
         .join("\n")
         .trim();
-      if (ctx.silencio && !texto) break;
       if (!texto) {
         messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
         continue;
@@ -324,8 +329,10 @@ export async function responderComAgente(entrada: { conversationId: string; tele
       correcoes,
       enviou: !!resposta,
       transferiu: ctx.transferiu,
-      tokens_entrada: tokensEntrada,
-      tokens_saida: tokensSaida,
+      tokens_entrada: uso.entrada,
+      tokens_saida: uso.saida,
+      tokens_cache_escrita: uso.cacheEscrita,
+      tokens_cache_leitura: uso.cacheLeitura,
       ms: Date.now() - inicio,
     });
   } catch (err) {
