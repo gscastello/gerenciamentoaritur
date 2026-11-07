@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ordenarBusca } from "../../domain/buscaEmCasa.js";
+import { rotuloPagamento } from "../../domain/format.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   BUSCA_MODOS,
@@ -781,7 +782,7 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
               )
             : linha(
                 "Pagamento",
-                `${r.pagamento === "pix" ? "Pix" : "Dinheiro"} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`,
+                `${rotuloPagamento(r.pagamento)} · ${r.pago ? "pago" : `a receber ${fmtBRL(r.valorTotal)}`}`,
               )}
           {linha("Telefone", r.telefone)}
         </div>

@@ -1,5 +1,6 @@
 import { ChevronRight, MessageCircle, Pencil, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -231,8 +232,6 @@ function classificacao(viagensCount) {
   if (viagensCount >= 2) return "Recorrente";
   return "Novo";
 }
-
-const ROTULO_PAGAMENTO = { dinheiro: "Dinheiro", pix: "Pix" };
 
 function PassageiroCard({
   p,
@@ -483,8 +482,11 @@ function PassageiroCard({
                       onChange={(e) => setForm({ ...form, pagamentoPadrao: e.target.value })}
                     >
                       <option value="">— nenhum —</option>
-                      <option value="dinheiro">Dinheiro</option>
-                      <option value="pix">Pix</option>
+                      {FORMAS_PAGAMENTO.map((f) => (
+                        <option key={f.valor} value={f.valor}>
+                          {f.rotulo}
+                        </option>
+                      ))}
                     </Select>
                   </Field>
                 </div>
@@ -531,7 +533,7 @@ function PassageiroCard({
                 <span>
                   Pagamento padrão:{" "}
                   <b style={{ color: C.ink }}>
-                    {ROTULO_PAGAMENTO[p.pagamento_padrao] || "não definido"}
+                    {p.pagamento_padrao ? rotuloPagamento(p.pagamento_padrao) : "não definido"}
                   </b>
                 </span>
               </div>
