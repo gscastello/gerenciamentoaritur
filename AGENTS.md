@@ -284,9 +284,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
-  recorrente. Linguagem/estilo/fluxo/situação valem na hora com aviso; fato e negócio só
-  aprovados. Lição já revisada nunca é reescrita sozinha: o bot deixa uma sugestão de
-  atualização para o dono aceitar ou manter. Mudança no aprendizado não pode quebrar essas
+  recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
+  orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
+  dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação valem na hora com
+  aviso; fato e negócio (inclusive valor de trecho) só aprovados. Lição já revisada nunca é
+  reescrita sozinha: o bot deixa uma sugestão de atualização para o dono aceitar ou manter. Mudança no aprendizado não pode quebrar essas
   garantias (nem fazer o bot decidir preço, vaga, horário ou confirmação).
 
 ---

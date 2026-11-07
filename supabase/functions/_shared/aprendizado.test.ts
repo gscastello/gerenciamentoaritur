@@ -45,8 +45,18 @@ Deno.test("transcrição agrupa por conversa, ordena no tempo e rotula quem falo
   assertEquals(c1.texto.split("\n"), [
     "CLIENTE: quero ir amanhã, [telefone]",
     "ATENDENTE: Qual o endereço?",
-    "BOT (rascunho, não enviado): Qual o endereço de embarque?",
   ]);
+});
+
+Deno.test("transcrição: o bot aprende só com o atendente, nunca com o que ele mesmo escreveu", () => {
+  const t = montarTranscricoes([
+    obs(1, "bot_rascunho", "1 - Ida 2 - Volta. Responda com o número da opção.", "2026-10-28T10:00:00Z"),
+    obs(1, "bot", "Oi! Como posso ajudar?", "2026-10-28T10:00:30Z"),
+    obs(1, "equipe", "Bom dia, é ida ou volta?", "2026-10-28T10:01:00Z"),
+    obs(2, "bot_rascunho", "Para qual data?", "2026-10-28T11:00:00Z"),
+  ]);
+  assertEquals(t.length, 1);
+  assertEquals(t[0].texto, "ATENDENTE: Bom dia, é ida ou volta?");
 });
 
 Deno.test("transcrição respeita o limite de tamanho e de conversas", () => {
@@ -114,6 +124,34 @@ Deno.test("bloco do prompt: tipos pedidos, mais vistas primeiro, com limite", ()
   assertEquals(bloco.includes("Tom"), false);
   assertEquals(blocoDeLicoes(licoes, ["fato"]), "");
   assertEquals(blocoDeLicoes(licoes, ["linguagem_cliente"], { maxChars: 40 }).includes("Rara"), false);
+});
+
+Deno.test("bloco do prompt: o limite é dividido e nenhum tipo fica sem lição", () => {
+  const licao = (id: string, kind: LicaoGuardada["kind"], evidence_count: number): LicaoGuardada => ({
+    id,
+    kind,
+    evidence_count,
+    title: `L${id}`,
+    content: "x".repeat(96),
+  });
+  const licoes = [
+    ...["1", "2", "3", "4", "5"].map((id) => licao(id, "estilo_atendente", 50)),
+    licao("6", "situacao", 1),
+  ];
+  const bloco = blocoDeLicoes(licoes, ["estilo_atendente", "situacao"], { maxChars: 420 });
+  assertStringIncludes(bloco, "L6:");
+  assertEquals((bloco.match(/- L/g) ?? []).length, 3);
+});
+
+Deno.test("bloco do prompt: o que um tipo não usa passa para o seguinte", () => {
+  const licoes: LicaoGuardada[] = [
+    { id: "1", kind: "situacao", title: "A", content: "x".repeat(150), evidence_count: 3 },
+    { id: "2", kind: "situacao", title: "B", content: "y".repeat(150), evidence_count: 2 },
+  ];
+  // sem nenhuma lição de estilo, a situação fica com o limite inteiro
+  const bloco = blocoDeLicoes(licoes, ["estilo_atendente", "situacao"], { maxChars: 320 });
+  assertEquals((bloco.match(/^- /gm) ?? []).length, 2);
+  assertEquals(blocoDeLicoes(licoes, ["estilo_atendente", "situacao"], { maxChars: 200 }).includes("yyy"), false);
 });
 
 Deno.test("bloco do prompt traz negócio e situação com os títulos certos", () => {
