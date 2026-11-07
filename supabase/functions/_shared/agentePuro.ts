@@ -480,6 +480,8 @@ export function bairroDaTabela<T extends { neighborhood: string }>(
     if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.neighborhood).length)) melhor = b;
   }
   return melhor;
+}
+
 const RE_ANDAMENTO =
   /\b(a caminho|em rota|na estrada|chegando|chegamos|chegou|cheguei|chega|passando|passamos|passei|passou|estamos (em|no|na)|estou (em|no|na)|saindo|saimos|saiu|parados?|paramos|parada|plataforma|atrasad[oa]s?|atraso|transito)\b/;
 

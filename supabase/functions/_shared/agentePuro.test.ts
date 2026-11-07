@@ -447,6 +447,8 @@ Deno.test("bairro da tabela: acha pelo nome dentro do texto; o mais longo vence"
   assertEquals(bairroDaTabela("Maiobão", tabela), null);
   assertEquals(bairroDaTabela("Coroadinho", [{ neighborhood: "Coroado" }]), null);
   assertEquals(bairroDaTabela(null, tabela), null);
+});
+
 Deno.test("recados da viagem: só o que a equipe disse sobre a viagem, nas últimas horas", () => {
   const agora = new Date("2026-11-07T17:00:00Z"); // 14:00 em São Luís
   const obs = (author: string, content: string, created_at: string) => ({ author, content, created_at });

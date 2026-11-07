@@ -244,6 +244,8 @@ Deno.test("sugestões de preço: valores nos limites e valores diferentes do mes
     ]).map((s) => s.valor),
     [5, 500],
   );
+});
+
 Deno.test("bloco de lições: operação entra com título próprio", () => {
   const bloco = blocoDeLicoes(
     [{ id: "1", kind: "operacao", title: "Plataforma", content: "Primeira plataforma, ao lado do café." }],
