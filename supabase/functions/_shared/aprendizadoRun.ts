@@ -43,7 +43,7 @@ const TOOL = {
           properties: {
             kind: {
               type: "string",
-              enum: ["linguagem_cliente", "estilo_atendente", "fluxo_agendamento", "situacao", "fato", "negocio"],
+              enum: ["linguagem_cliente", "estilo_atendente", "fluxo_agendamento", "situacao", "operacao", "fato", "negocio"],
             },
             title: { type: "string", description: "Título curto (3 a 80 caracteres)." },
             content: { type: "string", description: "A lição em 1 a 3 frases, sem nomes, telefones nem endereços." },
@@ -101,11 +101,12 @@ const TOOL = {
 
 const SYSTEM = `Você analisa conversas de WhatsApp de uma empresa de transporte de passageiros (São Luís ⇄ Pirapemas/Cantanhede) para ensinar um atendente virtual, que conversa com naturalidade e se adapta a cada atendimento. Cada conversa mostra o CLIENTE e o ATENDENTE humano: aprenda com o que o atendente faz, e use o cliente como contexto e para aprender como os clientes escrevem.
 
-Extraia só o que as conversas realmente mostram, em 6 tipos:
+Extraia só o que as conversas realmente mostram, em 7 tipos:
 - linguagem_cliente: como os clientes escrevem e pedem (gírias, abreviações, jeitos de dizer data/local/quantidade, confusões comuns). Pode citar trechos curtos e genéricos como exemplo.
 - estilo_atendente: como o atendente responde (tom, como confirma, como conduz a conversa).
 - fluxo_agendamento: que informações o atendente pede para agendar uma passagem e em que ordem, como trata endereço, pagamento e confirmação.
 - situacao: o que o atendente responde diante de uma situação recorrente (cliente pergunta se tem vaga de última hora, quer cancelar, reclama de atraso, pede desconto, manda comprovante, quer enviar encomenda, não sabe o ponto de embarque…). Descreva a situação e a resposta ou atitude do atendente. Se houver número (valor, horário, prazo), registre também, pois o dono vai conferir.
+- operacao: como a viagem funciona no dia a dia, do jeito que o atendente disse ao cliente: onde a van para ou espera, qual plataforma, por onde passa, a que horas costuma sair, passar por cada cidade e chegar. Ex.: "Na rodoviária, a van fica na primeira plataforma, ao lado do café"; "Sai de Pirapemas às 12h e costuma chegar em São Luís por volta das 17h". Só o que vale para outras viagens: um recado do momento ("estou passando em Miranda") não é lição. Não coloque preço aqui.
 - fato: informação CONCRETA que o atendente informou ao cliente (regra, política, valor, horário), inclusive o valor de trechos curtos ou específicos: diga de onde até onde e quanto custa. Só registre se o ATENDENTE afirmou claramente; nunca deduza.
 - negocio: como a empresa funciona, em visão geral (rotas e dias de viagem, como é a busca em casa, como funciona o pagamento, bagagem, encomendas, quem atende, o que a empresa faz e não faz). Só o que o atendente deixou claro.
 

@@ -49,6 +49,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 4. `database/64-sombra-aprende.sql` — observações, lições e anotações de clientes: o bot aprende em qualquer modo (ver §6b).
 5. `database/66-endereco-de-costume.sql` — endereço de costume do cliente recorrente, para agendar com 1 clique no app e
    para o bot propor o pedido pronto (ver §6d). (O 65 corrige o índice das observações.)
+6. `database/69-licao-operacao.sql` — lições de operação: paradas, plataforma e chegada (ver §6c).
 7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
 
 ## 3b. Painel "Atendimento" (no app)
@@ -171,16 +172,18 @@ O bot **não usa mais menu numerado**. Cada mensagem de texto vai para um agente
 
 | Ferramenta | Para quê |
 |---|---|
-| `consultar_viagem` | vagas, lotação, status (agendada/em andamento/concluída) e hora de saída de uma data/direção |
+| `consultar_viagem` | vagas e lotação de uma data/direção |
+| `andamento_da_viagem` | o que a equipe escreveu nas últimas 6 horas sobre a viagem ("passando em Miranda"), em qualquer conversa: é a posição real da van |
 | `listar_pontos_e_precos`, `calcular_valor` | horários e valor comparando embarque e desembarque: tabela de trechos, depois ponto/bairro (o modelo nunca faz a conta nem digita preço). Trecho em cidade intermediária sem valor vai para a equipe |
 | `ver_minhas_reservas` | reservas e pagamentos **do próprio cliente** (nunca de outras pessoas) |
 | `criar_reserva`, `remarcar_reserva`, `cancelar_reserva`, `entrar_na_lista_de_espera` | só depois do "sim" do cliente; preço e vaga conferidos pelo banco; fora da área padrão vira `pendente`; reserva duplicada na mesma viagem é recusada |
 | `avisar_equipe`, `chamar_atendente` | recado na aba Pendências / passar a conversa para uma pessoa (encomenda, reclamação, reembolso, negociação, >10 passagens, algo que o app não mostra) |
 | `nao_responder` | quando a mensagem não pede resposta ("ok", 👍) |
 
-**Como ele reserva:** junta os dados que o cliente manda picados em várias mensagens; infere o sentido
+**Como ele reserva:** no ritmo do cliente (issue #238), com uma pergunta por mensagem e sem formulário; junta
+os dados que o cliente manda picados em várias mensagens; infere o sentido
 (embarque em São Luís = Ida; Cantanhede/Pirapemas = Volta; "madrugada" = Ida da manhã com busca em casa),
-o ponto e o local de desembarque cadastrado; pede de uma vez tudo o que falta; confere vaga e valor no app;
+o ponto e o local de desembarque cadastrado; confere vaga e valor no app;
 manda um **resumo completo** (nome, dia/data, sentido e horário, ponto e endereço, desembarque, quantidade,
 pagamento, total) e pergunta "Posso confirmar?"; **só cria a reserva depois do "sim"**. Se o cliente der o
 nome completo e o cadastro tiver só um nome/apelido, o cadastro é completado.

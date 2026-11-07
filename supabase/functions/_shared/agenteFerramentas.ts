@@ -20,6 +20,7 @@ import {
   nomeDeveSerCompletado,
   type PedidoValidado,
   trechoDoPedido,
+  recadosDaViagem,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
 import { getBotContext } from "./botContext.ts";
@@ -59,8 +60,14 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "consultar_viagem",
     description:
-      "Consulta no app a viagem de uma data e direção: capacidade, passageiros, VAGAS DISPONÍVEIS agora e o status da viagem (agendada, em andamento — com a hora em que saiu — ou concluída). Use sempre que o cliente perguntar de vaga, lotação, se a van já saiu/está a caminho ou antes de oferecer reserva.",
+      "Consulta no app a viagem de uma data e direção: capacidade, passageiros e VAGAS DISPONÍVEIS agora. Use sempre que o cliente perguntar de vaga ou lotação e antes de oferecer reserva. Para saber se a van já saiu ou onde está, use andamento_da_viagem.",
     input_schema: { type: "object", properties: { data: DATA, direcao: DIRECAO }, required: ["data", "direcao"] },
+  },
+  {
+    name: "andamento_da_viagem",
+    description:
+      "Mostra o que a equipe escreveu nas últimas horas sobre a viagem (ex.: 'passando em Miranda', 'chegando em Cantanhede', 'estamos em rota'), com a hora de cada recado. É a posição real da van. Use quando o cliente perguntar se já saiu, onde está, se está chegando ou que horas passa.",
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "listar_pontos_e_precos",
@@ -303,9 +310,32 @@ async function consultarViagem(args: Linha) {
     passageiros_confirmados: disp.occupied,
     vagas_disponiveis: disp.available,
     passagens_extras_fora_das_vagas: disp.extras ?? 0,
-    status_da_viagem: viagem?.status ?? "ainda nao iniciada",
+    // a equipe quase nunca marca a saída no app: "agendada" não quer dizer que a van não saiu
+    status_no_app: viagem?.started_at || viagem?.finished_at ? viagem.status : "sem_registro",
     saiu_as: viagem?.started_at ? fmtHora.format(new Date(viagem.started_at)) : null,
     chegou_as: viagem?.finished_at ? fmtHora.format(new Date(viagem.finished_at)) : null,
+  };
+}
+
+async function andamentoDaViagem() {
+  const agora = new Date();
+  const desde = new Date(agora.getTime() - 6 * 3600 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("bot_observations")
+    .select("author, content, created_at")
+    .eq("author", "equipe")
+    .gte("created_at", desde)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (error) throw new Error(`andamento_da_viagem: ${error.message}`);
+  const recados = recadosDaViagem(data ?? [], agora);
+  return {
+    ok: true,
+    agora: fmtHora.format(agora),
+    tem_recados: recados.length > 0,
+    recados_da_equipe: recados,
+    como_usar:
+      "Cada recado foi escrito para um passageiro: serve para saber onde a van está, não que ela está chegando na porta deste cliente. Não repita nomes de pessoas. Sem recados, diga o horário previsto e não invente a posição.",
   };
 }
 
@@ -585,6 +615,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
     switch (nome) {
       case "consultar_viagem":
         return await consultarViagem(args);
+      case "andamento_da_viagem":
+        return await andamentoDaViagem();
       case "listar_pontos_e_precos":
         return await listarPontosEPrecos(args);
       case "calcular_valor":

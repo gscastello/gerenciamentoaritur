@@ -3,6 +3,7 @@ import {
   afirmaTerMexidoEmReserva,
   bairroDaTabela,
   trechoDoPedido,
+  recadosDaViagem,
   calcularTotal,
   calendarioParaOPrompt,
   contemDadoInterno,
@@ -446,4 +447,74 @@ Deno.test("bairro da tabela: acha pelo nome dentro do texto; o mais longo vence"
   assertEquals(bairroDaTabela("Maiobão", tabela), null);
   assertEquals(bairroDaTabela("Coroadinho", [{ neighborhood: "Coroado" }]), null);
   assertEquals(bairroDaTabela(null, tabela), null);
+Deno.test("recados da viagem: só o que a equipe disse sobre a viagem, nas últimas horas", () => {
+  const agora = new Date("2026-11-07T17:00:00Z"); // 14:00 em São Luís
+  const obs = (author: string, content: string, created_at: string) => ({ author, content, created_at });
+  const r = recadosDaViagem(
+    [
+      obs("equipe", "Estou passando em Miranda", "2026-11-07T16:40:00Z"),
+      obs("equipe", "Chegando   em Cantanhede", "2026-11-07T16:55:00Z"),
+      obs("equipe", "Saindo da onde?", "2026-11-07T16:56:00Z"),
+      obs("equipe", "Ok, reservado", "2026-11-07T16:57:00Z"),
+      obs("cliente", "Estou chegando", "2026-11-07T16:58:00Z"),
+      obs("bot", "A van está a caminho", "2026-11-07T16:58:00Z"),
+      obs("bot_rascunho", "Estamos em rota", "2026-11-07T16:58:00Z"),
+      obs("equipe", "Saímos cedo", "2026-11-07T10:59:00Z"),
+      obs("equipe", "Estamos em rota", "2026-11-07T17:30:00Z"),
+    ],
+    agora,
+  );
+  assertEquals(r, [
+    { hora: "13:55", ha_minutos: 5, disse: "Chegando em Cantanhede" },
+    { hora: "13:40", ha_minutos: 20, disse: "Estou passando em Miranda" },
+  ]);
+});
+
+Deno.test("recados da viagem: entende as frases reais da equipe, com ou sem acento", () => {
+  const agora = new Date("2026-11-07T17:00:00Z");
+  const frases = [
+    "Bom dia já saímos",
+    "Estamos saindo de são Luís",
+    "Está a caminho",
+    "Estamos em rota",
+    "Passando",
+    "A primeira plataforma ao lado do café",
+    "Estou chegando",
+    "Teve trânsito, atrasado um pouco",
+  ];
+  const r = recadosDaViagem(
+    frases.map((content, i) => ({
+      author: "equipe",
+      content,
+      created_at: new Date(agora.getTime() - (i + 1) * 60000).toISOString(),
+    })),
+    agora,
+  );
+  assertEquals(r.map((x) => x.disse), frases);
+});
+
+Deno.test("recados da viagem: sem repetir, sem telefone, com limite de quantidade e tamanho", () => {
+  const agora = new Date("2026-11-07T17:00:00Z");
+  const em = (min: number) => new Date(agora.getTime() - min * 60000).toISOString();
+  const r = recadosDaViagem(
+    [
+      { author: "equipe", content: "A caminho", created_at: em(1) },
+      { author: "equipe", content: "a caminho", created_at: em(2) },
+      { author: "equipe", content: "Chegando, me liga 98 98101-2388", created_at: em(3) },
+      { author: "equipe", content: `Passando ${"x".repeat(50)}`, created_at: em(4) },
+    ],
+    agora,
+    { max: 3, maxChars: 20 },
+  );
+  assertEquals(r.map((x) => x.disse), ["A caminho", "Chegando, me liga [t", "Passando xxxxxxxxxxx"]);
+});
+
+Deno.test("recados da viagem: janela em horas é configurável; data inválida fica de fora", () => {
+  const agora = new Date("2026-11-07T17:00:00Z");
+  const o = [
+    { author: "equipe", content: "Passando", created_at: "2026-11-07T15:30:00Z" },
+    { author: "equipe", content: "A caminho", created_at: "nada" },
+  ];
+  assertEquals(recadosDaViagem(o, agora, { horas: 1 }), []);
+  assertEquals(recadosDaViagem(o, agora, { horas: 2 }).length, 1);
 });

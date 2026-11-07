@@ -5,6 +5,7 @@
 // de reserva, valor total e as travas contra invenção. A parte com I/O fica em
 // agente.ts / agenteFerramentas.ts.
 
+import { mascararDados } from "./aprendizado.ts";
 import { numerosNaoFundamentados } from "./botGuard.ts";
 
 export type MensagemDaConversa = {
@@ -479,4 +480,39 @@ export function bairroDaTabela<T extends { neighborhood: string }>(
     if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.neighborhood).length)) melhor = b;
   }
   return melhor;
+const RE_ANDAMENTO =
+  /\b(a caminho|em rota|na estrada|chegando|chegamos|chegou|cheguei|chega|passando|passamos|passei|passou|estamos (em|no|na)|estou (em|no|na)|saindo|saimos|saiu|parados?|paramos|parada|plataforma|atrasad[oa]s?|atraso|transito)\b/;
+
+export type RecadoDaEquipe = { hora: string; ha_minutos: number; disse: string };
+
+/**
+ * O que a equipe escreveu há pouco sobre a viagem, em qualquer conversa: é onde está a
+ * posição real da van, porque o app quase nunca tem a saída marcada. Sem perguntas nem
+ * repetições, mais recentes primeiro, sem telefone, e-mail ou link.
+ */
+export function recadosDaViagem(
+  observacoes: { author: string; content: string; created_at: string }[],
+  agora: Date,
+  { horas = 6, max = 12, maxChars = 160 } = {},
+): RecadoDaEquipe[] {
+  const limite = agora.getTime() - horas * 3600 * 1000;
+  const hora = new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const vistos = new Set<string>();
+  const saida: RecadoDaEquipe[] = [];
+  const ordenadas = [...observacoes].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const o of ordenadas) {
+    if (saida.length >= max) break;
+    const instante = new Date(o.created_at).getTime();
+    if (o.author !== "equipe" || !(instante >= limite) || instante > agora.getTime()) continue;
+    const texto = mascararDados(o.content).replace(/\s+/g, " ").trim();
+    const normal = normalizar(texto);
+    if (texto.endsWith("?") || !RE_ANDAMENTO.test(normal) || vistos.has(normal)) continue;
+    vistos.add(normal);
+    saida.push({
+      hora: hora.format(new Date(instante)),
+      ha_minutos: Math.round((agora.getTime() - instante) / 60000),
+      disse: texto.slice(0, maxChars),
+    });
+  }
+  return saida;
 }
