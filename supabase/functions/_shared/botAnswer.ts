@@ -95,9 +95,9 @@ export async function montarFatos(): Promise<{ fatos: string; estilo: string }> 
 
   // Aprendido observando as conversas: fatos e negócio só entram APROVADOS (status 'ativa') e passam
   // pelo mesmo botGuard; estilo e fluxo do atendente afinam o tom das respostas.
-  const fatosAprendidos = await blocoDasLicoes(["fato", "negocio"]);
+  const fatosAprendidos = await blocoDasLicoes(["fato", "negocio"], { maxChars: 5000, max: 40 });
   if (fatosAprendidos) linhas.push("", fatosAprendidos);
-  const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento", "situacao"]);
+  const estiloAprendido = await blocoDasLicoes(["estilo_atendente", "fluxo_agendamento", "situacao"], { maxChars: 6000, max: 20 });
   const estiloBase = (cfg.bot_style_guide?.text ?? "").trim() || ESTILO_PADRAO;
 
   return {

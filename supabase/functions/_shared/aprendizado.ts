@@ -39,11 +39,10 @@ export type LicaoGuardada = {
   last_seen_at?: string;
 };
 
-const ROTULO_AUTOR: Record<Observacao["author"], string> = {
+/** O bot aprende só com o atendente: o que o próprio bot escreveu não ensina nada (issue #232). */
+const ROTULO_AUTOR: Partial<Record<Observacao["author"], string>> = {
   cliente: "CLIENTE",
   equipe: "ATENDENTE",
-  bot: "BOT (enviada)",
-  bot_rascunho: "BOT (rascunho, não enviado)",
 };
 
 /** Esconde telefone, e-mail e link antes de qualquer texto sair do banco. */
@@ -70,7 +69,9 @@ export function montarTranscricoes(
     lista.sort((a, b) => a.created_at.localeCompare(b.created_at));
     let texto = "";
     for (const o of lista) {
-      const linha = `${ROTULO_AUTOR[o.author]}: ${mascararDados(o.content).replace(/\s+/g, " ").trim()}\n`;
+      const rotulo = ROTULO_AUTOR[o.author];
+      if (!rotulo) continue;
+      const linha = `${rotulo}: ${mascararDados(o.content).replace(/\s+/g, " ").trim()}\n`;
       if (texto.length + linha.length > maxCharsPorConversa) break;
       texto += linha;
     }
@@ -183,7 +184,8 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
 
 /**
  * Bloco de texto para os prompts do bot, com as lições dos tipos pedidos.
- * Mais vistas primeiro; corta no limite para não inflar o prompt.
+ * Mais vistas primeiro. O limite é dividido entre os tipos, e o que um não usa passa
+ * para o seguinte: dividir por ordem deixava os últimos tipos sem nenhuma lição.
  */
 export function blocoDeLicoes(
   licoes: LicaoGuardada[],
@@ -191,23 +193,24 @@ export function blocoDeLicoes(
   { max = 12, maxChars = 2200 } = {},
 ): string {
   const linhas: string[] = [];
-  let total = 0;
-  for (const tipo of tipos) {
+  let restante = maxChars;
+  tipos.forEach((tipo, i) => {
+    const cota = Math.floor(restante / (tipos.length - i));
     const doTipo = licoes
       .filter((l) => l.kind === tipo)
       .sort((a, b) => pontuacaoDaLicao(b) - pontuacaoDaLicao(a))
       .slice(0, max);
-    if (doTipo.length === 0) continue;
-    const cabecalho = `${TITULO_DO_BLOCO[tipo]}:`;
     const corpo: string[] = [];
+    let usado = 0;
     for (const l of doTipo) {
       const linha = `- ${l.title}: ${l.content}`;
-      if (total + linha.length > maxChars) break;
-      total += linha.length;
+      if (usado + linha.length > cota) break;
+      usado += linha.length;
       corpo.push(linha);
     }
-    if (corpo.length) linhas.push(cabecalho, ...corpo, "");
-  }
+    restante -= usado;
+    if (corpo.length) linhas.push(`${TITULO_DO_BLOCO[tipo]}:`, ...corpo, "");
+  });
   return linhas.join("\n").trim();
 }
 
