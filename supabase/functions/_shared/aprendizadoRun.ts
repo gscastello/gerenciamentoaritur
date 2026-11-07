@@ -280,7 +280,15 @@ export async function executarAprendizado({ forcar = false } = {}): Promise<Resu
       clientes: nClientes,
       ignoradas: (uso.input?.novas?.length ?? 0) - novas.length,
     };
-    console.log(JSON.stringify({ evento: "bot_aprendizado", forcar, ...resumo }));
+    console.log(
+      JSON.stringify({
+        evento: "bot_aprendizado",
+        forcar,
+        ...resumo,
+        tokens_entrada: data.usage?.input_tokens ?? 0,
+        tokens_saida: data.usage?.output_tokens ?? 0,
+      }),
+    );
     return resumo;
   }
 

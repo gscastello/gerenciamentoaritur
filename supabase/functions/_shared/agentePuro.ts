@@ -397,3 +397,39 @@ export function costumeParaFerramenta(r: {
     volta,
   };
 }
+
+export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+
+/**
+ * Instruções do modelo com cache de prompt. O cache só reaproveita um início idêntico,
+ * byte a byte (ferramentas + bloco estável). O que muda a cada minuto ou por cliente vai
+ * no bloco variável, depois do ponto de cache; antes dele, nada seria reaproveitado.
+ */
+export function blocosDoSistema(estavel: string[], variavel: string[]): BlocoDoSistema[] {
+  const juntar = (partes: string[]) => partes.filter(Boolean).join("\n\n");
+  const blocos: BlocoDoSistema[] = [{ type: "text", text: juntar(estavel), cache_control: { type: "ephemeral" } }];
+  const resto = juntar(variavel);
+  if (resto) blocos.push({ type: "text", text: resto });
+  return blocos;
+}
+
+export type UsoDoModelo = { entrada: number; saida: number; cacheEscrita: number; cacheLeitura: number };
+export const USO_ZERADO: UsoDoModelo = { entrada: 0, saida: 0, cacheEscrita: 0, cacheLeitura: 0 };
+
+/** Acumula o `usage` da API. `entrada` é só o que não veio do cache: cada tipo tem seu preço. */
+export function somarUso(
+  total: UsoDoModelo,
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  } | null,
+): UsoDoModelo {
+  return {
+    entrada: total.entrada + Number(usage?.input_tokens ?? 0),
+    saida: total.saida + Number(usage?.output_tokens ?? 0),
+    cacheEscrita: total.cacheEscrita + Number(usage?.cache_creation_input_tokens ?? 0),
+    cacheLeitura: total.cacheLeitura + Number(usage?.cache_read_input_tokens ?? 0),
+  };
+}

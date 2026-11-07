@@ -6,11 +6,14 @@ import {
   contemDadoInterno,
   converterMensagensDoChatwoot,
   areaDoDesembarque,
+  blocosDoSistema,
   converterObservacoes,
   costumeParaFerramenta,
   nomeDeveSerCompletado,
   numerosPorExtenso,
   problemasDaResposta,
+  somarUso,
+  USO_ZERADO,
   existeTextoNovoDoCliente,
   PREFIXO_DO_RASCUNHO,
   type MensagemBruta,
@@ -349,4 +352,36 @@ Deno.test("costume: uma viagem só vira 'última viagem'; sem costume avisa que 
   assertEquals(nada.tem_endereco_de_costume, false);
   assertEquals(nada.sentido_provavel, null);
   assertEquals(costumeParaFerramenta({}).tem_endereco_de_costume, false);
+});
+
+Deno.test("cache: o que varia fica depois do ponto de cache", () => {
+  const blocos = blocosDoSistema(["REGRAS", "", "FATOS"], ["Agora são 14:32", "", "CLIENTE: Ana"]);
+  assertEquals(blocos, [
+    { type: "text", text: "REGRAS\n\nFATOS", cache_control: { type: "ephemeral" } },
+    { type: "text", text: "Agora são 14:32\n\nCLIENTE: Ana" },
+  ]);
+});
+
+Deno.test("cache: o bloco estável é idêntico para qualquer horário e cliente", () => {
+  const manha = blocosDoSistema(["REGRAS"], ["Agora são 08:00", "CLIENTE: Ana"]);
+  const tarde = blocosDoSistema(["REGRAS"], ["Agora são 17:45", "CLIENTE: João"]);
+  assertEquals(manha[0], tarde[0]);
+});
+
+Deno.test("cache: sem conteúdo variável não manda bloco vazio (a API recusaria)", () => {
+  assertEquals(blocosDoSistema(["REGRAS"], ["", ""]).length, 1);
+});
+
+Deno.test("uso: soma cada tipo de token e aguenta campos ausentes", () => {
+  const um = somarUso(USO_ZERADO, {
+    input_tokens: 100,
+    output_tokens: 20,
+    cache_creation_input_tokens: 11000,
+    cache_read_input_tokens: 0,
+  });
+  const dois = somarUso(um, { input_tokens: 50, output_tokens: 5, cache_read_input_tokens: 11000 });
+  assertEquals(dois, { entrada: 150, saida: 25, cacheEscrita: 11000, cacheLeitura: 11000 });
+  assertEquals(somarUso(dois, undefined), dois);
+  assertEquals(somarUso(dois, null), dois);
+  assertEquals(USO_ZERADO, { entrada: 0, saida: 0, cacheEscrita: 0, cacheLeitura: 0 });
 });
