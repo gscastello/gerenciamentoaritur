@@ -46,3 +46,15 @@ export function normalizar(s) {
 }
 
 export const digitos = (tel) => (tel || "").replace(/\D/g, "");
+
+/** Formas de pagamento aceitas, na ordem das telas (valores do tipo payment_method no banco). */
+export const FORMAS_PAGAMENTO = [
+  { valor: "dinheiro", rotulo: "Dinheiro" },
+  { valor: "pix", rotulo: "Pix" },
+  { valor: "cartao", rotulo: "Cartão" },
+];
+
+/** "Pix", "Cartão"… Sem forma conhecida, "Dinheiro", que é o padrão do banco. */
+export function rotuloPagamento(forma) {
+  return FORMAS_PAGAMENTO.find((f) => f.valor === forma)?.rotulo ?? "Dinheiro";
+}

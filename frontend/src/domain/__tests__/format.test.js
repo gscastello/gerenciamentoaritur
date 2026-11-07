@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { digitos, fmtBRL, fmtDate, fmtHora, normalizar, todayStr } from "../format.js";
+import {
+  FORMAS_PAGAMENTO,
+  digitos,
+  fmtBRL,
+  fmtDate,
+  fmtHora,
+  normalizar,
+  rotuloPagamento,
+  todayStr,
+} from "../format.js";
 
 describe("format", () => {
   it("fmtBRL", () => {
@@ -32,5 +41,19 @@ describe("format", () => {
   it("digitos", () => {
     expect(digitos("(98) 98101-2388")).toBe("98981012388");
     expect(digitos(null)).toBe("");
+  });
+});
+
+describe("formas de pagamento", () => {
+  it("lista dinheiro, Pix e cartão, nessa ordem", () => {
+    expect(FORMAS_PAGAMENTO.map((f) => f.valor)).toEqual(["dinheiro", "pix", "cartao"]);
+  });
+
+  it("dá o rótulo de cada forma; sem forma conhecida, Dinheiro", () => {
+    expect(rotuloPagamento("dinheiro")).toBe("Dinheiro");
+    expect(rotuloPagamento("pix")).toBe("Pix");
+    expect(rotuloPagamento("cartao")).toBe("Cartão");
+    expect(rotuloPagamento(undefined)).toBe("Dinheiro");
+    expect(rotuloPagamento("cheque")).toBe("Dinheiro");
   });
 });

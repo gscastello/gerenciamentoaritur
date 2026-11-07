@@ -40,6 +40,7 @@ import {
   separarBairro,
 } from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
+import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { mensagemDeCancelamento } from "../../domain/lixeira.js";
 import { ehExtra } from "../../domain/vagas.js";
 import {
@@ -920,6 +921,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
     ? detalheDoPonto(r)
     : enderecoEmbarque(r, trips) || "endereço não informado";
   const tel = digitos(r.telefone);
+  const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
   const tel2 = digitos(r.telefone2);
   const ehBusca = r.pontoId === "busca";
   const modoBusca = ehBusca ? BUSCA_MODOS[responsavelDaBusca(r)] : null;
@@ -1035,14 +1037,14 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
               {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
             </div>
           ) : (
-            (r.desembarque || r.pagamento === "pix") && (
+            (r.desembarque || pagamentoEmDestaque) && (
               <div
                 className="text-[11px] mt-0.5"
                 style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
               >
                 {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
-                {r.desembarque && r.pagamento === "pix" ? " · " : ""}
-                {r.pagamento === "pix" ? "Pix" : ""}
+                {r.desembarque && pagamentoEmDestaque ? " · " : ""}
+                {pagamentoEmDestaque ? rotuloPagamento(r.pagamento) : ""}
               </div>
             )
           )}
@@ -1760,8 +1762,11 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
               value={f.pagamento || "dinheiro"}
               onChange={(e) => setF({ ...f, pagamento: e.target.value })}
             >
-              <option value="dinheiro">Dinheiro</option>
-              <option value="pix">Pix</option>
+{FORMAS_PAGAMENTO.map((f) => (
+                <option key={f.valor} value={f.valor}>
+                  {f.rotulo}
+                </option>
+              ))}
             </Select>
           </Field>
           <div />
@@ -2161,8 +2166,11 @@ export function NovaReservaModal({
         <div className="grid grid-cols-2 gap-2 mb-3">
           <Field label="Pagamento">
             <Select value={f.pagamento} onChange={(e) => setF({ ...f, pagamento: e.target.value })}>
-              <option value="dinheiro">Dinheiro</option>
-              <option value="pix">Pix</option>
+{FORMAS_PAGAMENTO.map((f) => (
+                <option key={f.valor} value={f.valor}>
+                  {f.rotulo}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label={`Valor / passagem (auto: ${fmtBRL(precoAuto)})`}>

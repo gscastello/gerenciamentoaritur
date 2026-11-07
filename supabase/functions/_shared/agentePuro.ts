@@ -181,7 +181,7 @@ export type PedidoValidado = {
   bairro: string | null;
   enderecoEmbarque: string | null;
   desembarque: string;
-  formaPagamento: "dinheiro" | "pix";
+  formaPagamento: "dinheiro" | "pix" | "cartao";
 };
 
 const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -208,7 +208,9 @@ export function validarPedidoDeReserva(
   const desembarque = texto(p.desembarque);
   if (desembarque.length < 2) erros.push("falta o local de desembarque");
   const pagamento = texto(p.forma_pagamento || "dinheiro").toLowerCase();
-  if (pagamento !== "dinheiro" && pagamento !== "pix") erros.push("forma_pagamento deve ser dinheiro ou pix");
+  if (pagamento !== "dinheiro" && pagamento !== "pix" && pagamento !== "cartao") {
+    erros.push("forma_pagamento deve ser dinheiro, pix ou cartao");
+  }
   const nome = texto(p.nome_cliente);
   if (nome && nome.length < 3) erros.push("nome do cliente curto demais");
   if (p.cliente_confirmou !== true) erros.push("o cliente ainda não confirmou o resumo do pedido");
@@ -224,7 +226,7 @@ export function validarPedidoDeReserva(
       bairro: texto(p.bairro) || null,
       enderecoEmbarque: texto(p.endereco_embarque) || null,
       desembarque,
-      formaPagamento: pagamento as "dinheiro" | "pix",
+      formaPagamento: pagamento as PedidoValidado["formaPagamento"],
     },
   };
 }

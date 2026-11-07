@@ -108,7 +108,7 @@ export const FERRAMENTAS: Ferramenta[] = [
         bairro: { type: "string", description: "Bairro (busca em casa)." },
         endereco_embarque: { type: "string", description: "Rua/ponto de referência onde buscar, ou detalhe do local de embarque." },
         desembarque: { type: "string", description: "Onde o cliente vai ficar/descer." },
-        forma_pagamento: { type: "string", enum: ["dinheiro", "pix"] },
+        forma_pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
         cliente_confirmou: { type: "boolean", description: "true só se o cliente confirmou o resumo com um sim claro nesta conversa." },
       },
       required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
