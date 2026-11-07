@@ -71,6 +71,7 @@ import {
   OCUPA_VAGA,
   Pill,
   Select,
+  SeloCidadeIntermediaria,
   StatusPill,
   TextArea,
   TextInput,
@@ -90,6 +91,7 @@ import {
   shiftHour,
   todayStr,
   useBairros,
+  useCidadeIntermediaria,
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
@@ -926,6 +928,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const ehBusca = r.pontoId === "busca";
   const modoBusca = ehBusca ? BUSCA_MODOS[responsavelDaBusca(r)] : null;
   const corBusca = modoBusca?.cor ?? null;
+  const cidadeIntermediaria = useCidadeIntermediaria(r);
   // texto para repassar ao taxista: endereço + contato (só em "Buscar em casa")
   const textoCopia = ehBusca
     ? textoParaTaxista({
@@ -979,8 +982,12 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
     <div
       className="row-hover rounded-md px-2 py-2"
       style={{
-        background: corBusca ? `${corBusca}14` : C.panel,
-        borderLeft: corBusca ? `3px solid ${corBusca}` : undefined,
+        background: cidadeIntermediaria ? C.rotaSoft : corBusca ? `${corBusca}14` : C.panel,
+        borderLeft: cidadeIntermediaria
+          ? `3px solid ${C.rota}`
+          : corBusca
+            ? `3px solid ${corBusca}`
+            : undefined,
       }}
     >
       <div className="flex items-start gap-2">
@@ -1024,6 +1031,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
               {nome(true)}
             </div>
           )}
+          {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
           {ehEnc ? (
             <div
               className="text-[11px] mt-0.5"
@@ -1762,7 +1770,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
               value={f.pagamento || "dinheiro"}
               onChange={(e) => setF({ ...f, pagamento: e.target.value })}
             >
-{FORMAS_PAGAMENTO.map((f) => (
+              {FORMAS_PAGAMENTO.map((f) => (
                 <option key={f.valor} value={f.valor}>
                   {f.rotulo}
                 </option>
@@ -2166,7 +2174,7 @@ export function NovaReservaModal({
         <div className="grid grid-cols-2 gap-2 mb-3">
           <Field label="Pagamento">
             <Select value={f.pagamento} onChange={(e) => setF({ ...f, pagamento: e.target.value })}>
-{FORMAS_PAGAMENTO.map((f) => (
+              {FORMAS_PAGAMENTO.map((f) => (
                 <option key={f.valor} value={f.valor}>
                   {f.rotulo}
                 </option>

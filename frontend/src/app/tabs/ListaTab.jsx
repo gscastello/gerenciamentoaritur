@@ -31,6 +31,7 @@ import {
   IDA_PRIORIDADE,
   OCUPA_VAGA,
   Pill,
+  SeloCidadeIntermediaria,
   StatusPill,
   SubTabs,
   TextInput,
@@ -43,6 +44,7 @@ import {
   inferirBaldeDesembarque,
   linhaReserva,
   todayStr,
+  useCidadeIntermediaria,
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
@@ -610,10 +612,15 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const faltou = r.status === "nao_compareceu";
   const ehEnc = r.tipo === "encomenda";
   const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
+  const cidadeIntermediaria = useCidadeIntermediaria(r);
   return (
     <div
       className="rounded-lg px-3 py-2.5 flex items-start gap-2.5"
-      style={{ background: C.panel2, opacity: faltou ? 0.5 : 1 }}
+      style={{
+        background: cidadeIntermediaria ? C.rotaSoft : C.panel2,
+        borderLeft: cidadeIntermediaria ? `3px solid ${C.rota}` : undefined,
+        opacity: faltou ? 0.5 : 1,
+      }}
     >
       {marcar && (
         <button
@@ -667,6 +674,7 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           {ehEnc ? "recebe: " : ""}
           {r.nome || "—"}
         </div>
+        {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
         {ehEnc && (
           <div
             className="text-[11px] mt-0.5"

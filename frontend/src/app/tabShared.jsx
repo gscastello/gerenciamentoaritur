@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { cidadeIntermediariaDaVolta } from "../domain/cidades.js";
 import { ehExtra } from "../domain/vagas.js";
 
 /* ============================================================================
@@ -64,6 +65,10 @@ export const C = {
   purpleSoft: "#232427",
   gray: "#B9BDC6",
   graySoft: "#232427",
+  // Exceção pedida pelo dono à regra acima: na Volta, quem desce em cidade que não
+  // é parada fixa precisa saltar aos olhos do motorista.
+  rota: "#F5A524",
+  rotaSoft: "rgba(245,165,36,.16)",
 };
 export const PIX_KEY = "98981012388";
 
@@ -433,6 +438,24 @@ const DROPOFF_FALLBACK = (() => {
 })();
 export const DropoffContext = React.createContext(DROPOFF_FALLBACK);
 export const useDropoff = () => useContext(DropoffContext) || DROPOFF_FALLBACK;
+
+/** Nome da cidade intermediária onde esta reserva desce, na Volta (senão, null). */
+export function useCidadeIntermediaria(r) {
+  const dropoff = useDropoff();
+  return cidadeIntermediariaDaVolta(r, { areas: dropoff.porDirecao("volta") });
+}
+
+export function SeloCidadeIntermediaria({ cidade }) {
+  return (
+    <div
+      data-testid="selo-cidade-intermediaria"
+      className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold rounded px-1.5 py-0.5"
+      style={{ background: C.rota, color: "#1A1205" }}
+    >
+      <MapPin size={11} aria-hidden="true" /> Desce em {cidade}
+    </div>
+  );
+}
 
 // Sino de notificações — provido uma vez no AppInner (uma assinatura de
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
