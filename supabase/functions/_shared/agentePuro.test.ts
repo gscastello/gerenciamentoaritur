@@ -127,7 +127,7 @@ Deno.test("pedido: sem confirmação do cliente não grava", () => {
 
 Deno.test("pedido: data passada, quantidade ruim e campos faltando voltam como erros", () => {
   const r = validarPedidoDeReserva(
-    { data: "2026-11-01", direcao: "meio", ponto: "", quantidade: 0, desembarque: "", forma_pagamento: "cartao" },
+    { data: "2026-11-01", direcao: "meio", ponto: "", quantidade: 0, desembarque: "", forma_pagamento: "cheque" },
     "2026-11-03",
   );
   assertEquals(r.ok, false);
@@ -384,4 +384,21 @@ Deno.test("uso: soma cada tipo de token e aguenta campos ausentes", () => {
   assertEquals(somarUso(dois, undefined), dois);
   assertEquals(somarUso(dois, null), dois);
   assertEquals(USO_ZERADO, { entrada: 0, saida: 0, cacheEscrita: 0, cacheLeitura: 0 });
+});
+
+Deno.test("pedido: aceita dinheiro, pix e cartão; outra forma volta como erro", () => {
+  const pedido = {
+    data: "2026-11-10",
+    direcao: "ida",
+    ponto: "rodoviaria",
+    quantidade: 1,
+    desembarque: "Pirapemas",
+    cliente_confirmou: true,
+  };
+  for (const forma of ["dinheiro", "pix", "cartao"] as const) {
+    const r = validarPedidoDeReserva({ ...pedido, forma_pagamento: forma }, "2026-11-07");
+    assertEquals(r.ok && r.pedido.formaPagamento, forma);
+  }
+  const ruim = validarPedidoDeReserva({ ...pedido, forma_pagamento: "cheque" }, "2026-11-07");
+  assertEquals(ruim.ok ? [] : ruim.erros, ["forma_pagamento deve ser dinheiro, pix ou cartao"]);
 });
