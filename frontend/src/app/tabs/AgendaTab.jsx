@@ -26,7 +26,7 @@ import {
   X,
   X as XIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   detalheDoPonto,
   pontoSoNome,
@@ -56,7 +56,7 @@ import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
 import { useTrips } from "../../hooks/useTrips.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
-import { Presence } from "../../ui/motion/index.js";
+import { FadeIn, Presence } from "../../ui/motion/index.js";
 import {
   BUSCA_MODOS,
   BotaoAgendar,
@@ -1860,6 +1860,25 @@ export function NovaReservaModal({
   const [linha, setLinha] = useState("");
   const bairros = useBairros();
   const dropoff = useDropoff();
+  // Telefone digitado de qualquer jeito: mostra de quem é o cadastro antes de agendar.
+  const buscarCadastro = useCustomerLookup();
+  const [cadastro, setCadastro] = useState(null);
+  useEffect(() => {
+    const v = validarTelefone(f.telefone);
+    if (!v.ok) {
+      setCadastro(null);
+      return;
+    }
+    let vivo = true;
+    const espera = setTimeout(async () => {
+      const nome = await buscarCadastro(v.valor);
+      if (vivo) setCadastro(nome);
+    }, 250);
+    return () => {
+      vivo = false;
+      clearTimeout(espera);
+    };
+  }, [f.telefone, buscarCadastro]);
   // Cidade fora de São Luís/Cantanhede/Pirapemas: a reserva nasce pendente
   // para o dono revisar antes de ocupar vaga (issue #192).
   const areaExigeRevisao =
@@ -2046,6 +2065,18 @@ export function NovaReservaModal({
             />
           </Field>
         </div>
+        {cadastro && (
+          <FadeIn>
+            <div
+              data-testid="cadastro-encontrado"
+              className="mb-2 text-xs rounded-lg px-3 py-2"
+              style={{ background: C.greenSoft, color: C.green }}
+            >
+              Cadastro encontrado: <b>{cadastro}</b>
+              {f.nome.trim() ? "" : ". Pode deixar o nome em branco."}
+            </div>
+          </FadeIn>
+        )}
 
         <div className="mb-2">
           <Field label="Telefone secundário (opcional)">

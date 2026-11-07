@@ -1,4 +1,5 @@
 // src/services/customersService.js
+import { digitosDeBusca, variantesTelefone } from "../domain/validacao.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -31,7 +32,9 @@ export const customersService = {
         .replace(/[,()*:\\%]/g, " ")
         .trim()
         .slice(0, 80);
-      if (termo) query = query.or(`name.ilike.%${termo}%,phone.ilike.%${termo}%`);
+      const fone = digitosDeBusca(search);
+      if (fone) query = query.or(`phone.ilike.%${fone}%,phone_secondary.ilike.%${fone}%`);
+      else if (termo) query = query.or(`name.ilike.%${termo}%,phone.ilike.%${termo}%`);
     }
     return handle(query, "list");
   },
@@ -56,7 +59,9 @@ export const customersService = {
         .replace(/[,()*:\\%]/g, " ")
         .trim()
         .slice(0, 80);
-      if (termo) query = query.or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`);
+      const fone = digitosDeBusca(search);
+      if (fone) query = query.or(`telefone.ilike.%${fone}%,telefone2.ilike.%${fone}%`);
+      else if (termo) query = query.or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`);
     }
     const { data, error, count } = await query;
     if (error) {
@@ -158,16 +163,21 @@ export const customersService = {
     return data;
   },
 
+  /** O cadastro desse número, com ou sem o nono dígito, também como telefone secundário. */
   async getByPhone(phone) {
-    return handle(
+    const formas = variantesTelefone(phone).join(",");
+    if (!formas) return null;
+    const linhas = await handle(
       supabase
         .from("customers")
         .select(CUSTOMER_COLS)
-        .eq("phone", phone)
+        .or(`phone.in.(${formas}),phone_secondary.in.(${formas})`)
         .is("deleted_at", null)
-        .maybeSingle(),
+        .order("created_at")
+        .limit(1),
       "getByPhone",
     );
+    return linhas?.[0] ?? null;
   },
 
   /** Histórico + total gerado, calculado no banco para não depender de somar tudo no cliente. */

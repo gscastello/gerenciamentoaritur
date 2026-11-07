@@ -848,7 +848,7 @@ export async function mockSupabase(page, opts = {}) {
           needs_review: false,
         },
       ];
-    else if (table === "customers") rows = [];
+    else if (table === "customers") rows = opts.customers ?? [];
     else if (table === "financial_entries") rows = financeiroRows;
     else if (table === "v_contas_a_receber") rows = [];
     else if (table === "v_app_notifications")

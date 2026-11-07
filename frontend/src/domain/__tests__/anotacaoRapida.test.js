@@ -292,3 +292,23 @@ describe("parseLinhaEncomenda — endereço, telefone, nome (issue #214)", () =>
     });
   });
 });
+
+describe("telefone sem DDD na anotação (#236)", () => {
+  it("reconhece o número e assume o DDD da operação", () => {
+    const a = parseAnotacaoRapida("1P Cohatrac Rua 7 8101-2388 Maria");
+    expect(a).toMatchObject({
+      ok: true,
+      local: "Cohatrac Rua 7",
+      telefone: "9881012388",
+      nome: "Maria",
+    });
+  });
+  it("com DDD separado por espaço, o DDD continua sendo o digitado", () => {
+    const a = parseAnotacaoRapida("1P Cohatrac 99 8101-2388");
+    expect(a).toMatchObject({ ok: true, local: "Cohatrac", telefone: "9981012388" });
+  });
+  it("CEP no endereço não vira telefone", () => {
+    const a = parseLinhaEncomenda("Rua A, 65000-000");
+    expect(a).toMatchObject({ ok: true, telefone: "" });
+  });
+});
