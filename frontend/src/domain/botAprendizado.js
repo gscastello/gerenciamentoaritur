@@ -109,6 +109,7 @@ export function mensagemDoAprendizado(r) {
   if (r.atualizadas) partes.push(`${r.atualizadas} atualizada(s)`);
   if (r.sugestoes) partes.push(`${r.sugestoes} sugestão(ões) de atualização para você`);
   if (r.clientes) partes.push(`${r.clientes} cliente(s) anotado(s)`);
+  if (r.precos) partes.push(`${r.precos} preço(s) para você aprovar`);
   const lido = `Li ${r.observacoes} mensagem(ns).`;
   return partes.length ? `${lido} ${partes.join(", ")}.` : `${lido} Nada de novo para registrar.`;
 }

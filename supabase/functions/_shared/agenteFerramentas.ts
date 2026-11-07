@@ -14,10 +14,12 @@
 
 import {
   areaDoDesembarque,
+  bairroDaTabela,
   calcularTotal,
   costumeParaFerramenta,
   nomeDeveSerCompletado,
   type PedidoValidado,
+  trechoDoPedido,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
 import { getBotContext } from "./botContext.ts";
@@ -69,16 +71,18 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "calcular_valor",
     description:
-      "Calcula o valor total de um pedido a partir da tabela do sistema (preço do ponto ou do bairro × quantidade). Use antes de falar um total ao cliente; nunca faça a conta de cabeça.",
+      "Calcula o valor de um pedido comparando onde o cliente sobe e onde desce: tabela de trechos, senão preço do ponto ou do bairro, × quantidade. Use antes de falar um valor ao cliente; nunca faça a conta de cabeça. Se voltar TRECHO_SEM_VALOR, não diga valor: chame o atendente.",
     input_schema: {
       type: "object",
       properties: {
         direcao: DIRECAO,
         ponto: { type: "string", description: "Código ou nome do ponto de embarque (ex.: rodoviaria, busca)." },
         bairro: { type: "string", description: "Bairro, só para busca em casa." },
+        endereco_embarque: { type: "string", description: "Rua ou cidade de onde ele sai, se disse." },
+        desembarque: { type: "string", description: "Onde o cliente vai descer. Se não souber, pergunte antes." },
         quantidade: { type: "integer", description: "Número de passagens." },
       },
-      required: ["direcao", "ponto", "quantidade"],
+      required: ["direcao", "ponto", "desembarque", "quantidade"],
     },
   },
   {
@@ -234,9 +238,9 @@ async function precoUnitario(
   if (ponto.price != null && Number(ponto.price) > 0) return { ok: true, preco: Number(ponto.price) };
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
-    const preco = await whatsappService.getNeighborhoodPrice(bairro);
-    if (preco == null) {
-      const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood");
+    const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
+    const achado = bairroDaTabela(bairro, data ?? []);
+    if (!achado) {
       return {
         ok: false,
         erro: {
@@ -246,12 +250,34 @@ async function precoUnitario(
         },
       };
     }
-    return { ok: true, preco: Number(preco) };
+    return { ok: true, preco: Number(achado.price) };
   }
   return {
     ok: false,
     erro: { codigo: "SEM_PRECO_NA_TABELA", erro: "Este ponto não tem preço na tabela do sistema. Chame o atendente para combinar o valor." },
   };
+}
+
+/** O valor por passagem deste pedido: compara onde sobe e onde desce e só então cai na tabela do ponto/bairro. */
+async function valorDoPedido(
+  ponto: Linha,
+  pedido: { bairro: string | null; endereco: string | null; desembarque: string },
+): Promise<{ ok: true; preco: number; trecho?: string } | { ok: false; erro: Record<string, unknown> }> {
+  const { data: trechos } = await supabaseAdmin.from("route_fares").select("origem, destino, price");
+  const trecho = trechoDoPedido([ponto.name, ponto.code, pedido.bairro, pedido.endereco], pedido.desembarque, trechos ?? []);
+  if (trecho) return { ok: true, preco: Number(trecho.price), trecho: `${trecho.origem} a ${trecho.destino}` };
+
+  const cidade = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.endereco, pedido.bairro]);
+  if (cidade) {
+    return {
+      ok: false,
+      erro: {
+        codigo: "TRECHO_SEM_VALOR",
+        erro: `Não há valor cadastrado para esse trecho (${cidade}). Não diga valor: chame o atendente.`,
+      },
+    };
+  }
+  return precoUnitario(ponto, pedido.bairro);
 }
 
 async function consultarViagem(args: Linha) {
@@ -317,9 +343,22 @@ async function calcularValor(args: Linha) {
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
   const quantidade = Number(args.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) return { ok: false, erro: "quantidade deve ser um inteiro de 1 em diante" };
-  const preco = await precoUnitario(ponto, String(args.bairro ?? "").trim() || null);
+  const desembarque = String(args.desembarque ?? "").trim();
+  if (!desembarque) return { ok: false, codigo: "FALTA_DESEMBARQUE", erro: "O valor depende de onde ele desce: pergunte antes de calcular." };
+  const preco = await valorDoPedido(ponto, {
+    bairro: String(args.bairro ?? "").trim() || null,
+    endereco: String(args.endereco_embarque ?? "").trim() || null,
+    desembarque,
+  });
   if (!preco.ok) return { ok: false, ...preco.erro };
-  return { ok: true, ponto: ponto.name, preco_por_passagem: preco.preco, quantidade, total: calcularTotal(preco.preco, quantidade) };
+  return {
+    ok: true,
+    ponto: ponto.name,
+    trecho: preco.trecho ?? null,
+    preco_por_passagem: preco.preco,
+    quantidade,
+    total: calcularTotal(preco.preco, quantidade),
+  };
 }
 
 async function verMinhasReservas(ctx: ContextoDoAgente) {
@@ -366,7 +405,11 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const nome = cliente?.name ?? pedido.nomeCliente;
   if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo antes de reservar." };
 
-  const preco = await precoUnitario(ponto, pedido.bairro);
+  const preco = await valorDoPedido(ponto, {
+    bairro: pedido.bairro,
+    endereco: pedido.enderecoEmbarque,
+    desembarque: pedido.desembarque,
+  });
   if (!preco.ok) return { ok: false, ...preco.erro };
 
   const disp = await whatsappService.checkAvailability(pedido.data, pedido.direcao);

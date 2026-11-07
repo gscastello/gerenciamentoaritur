@@ -49,6 +49,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 4. `database/64-sombra-aprende.sql` — observações, lições e anotações de clientes: o bot aprende em qualquer modo (ver §6b).
 5. `database/66-endereco-de-costume.sql` — endereço de costume do cliente recorrente, para agendar com 1 clique no app e
    para o bot propor o pedido pronto (ver §6d). (O 65 corrige o índice das observações.)
+7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -171,7 +172,7 @@ O bot **não usa mais menu numerado**. Cada mensagem de texto vai para um agente
 | Ferramenta | Para quê |
 |---|---|
 | `consultar_viagem` | vagas, lotação, status (agendada/em andamento/concluída) e hora de saída de uma data/direção |
-| `listar_pontos_e_precos`, `calcular_valor` | horários, preço por ponto/bairro e total (o modelo nunca faz a conta nem digita preço) |
+| `listar_pontos_e_precos`, `calcular_valor` | horários e valor comparando embarque e desembarque: tabela de trechos, depois ponto/bairro (o modelo nunca faz a conta nem digita preço). Trecho em cidade intermediária sem valor vai para a equipe |
 | `ver_minhas_reservas` | reservas e pagamentos **do próprio cliente** (nunca de outras pessoas) |
 | `criar_reserva`, `remarcar_reserva`, `cancelar_reserva`, `entrar_na_lista_de_espera` | só depois do "sim" do cliente; preço e vaga conferidos pelo banco; fora da área padrão vira `pendente`; reserva duplicada na mesma viagem é recusada |
 | `avisar_equipe`, `chamar_atendente` | recado na aba Pendências / passar a conversa para uma pessoa (encomenda, reclamação, reembolso, negociação, >10 passagens, algo que o app não mostra) |

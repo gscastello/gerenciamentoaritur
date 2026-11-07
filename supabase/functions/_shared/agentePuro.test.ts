@@ -1,6 +1,8 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   afirmaTerMexidoEmReserva,
+  bairroDaTabela,
+  trechoDoPedido,
   calcularTotal,
   calendarioParaOPrompt,
   contemDadoInterno,
@@ -401,4 +403,47 @@ Deno.test("pedido: aceita dinheiro, pix e cartão; outra forma volta como erro",
   }
   const ruim = validarPedidoDeReserva({ ...pedido, forma_pagamento: "cheque" }, "2026-11-07");
   assertEquals(ruim.ok ? [] : ruim.erros, ["forma_pagamento deve ser dinheiro, pix ou cartao"]);
+});
+
+const TRECHOS = [
+  { origem: "Pirapemas", destino: "Miranda", price: 30 },
+  { origem: "Vila Embratel", destino: "Matões do Norte", price: 70 },
+  { origem: "Pirapemas", destino: "Jordoa", price: 80 },
+];
+
+Deno.test("trecho: compara onde sobe e onde desce, nos dois sentidos", () => {
+  assertEquals(trechoDoPedido(["Pirapemas"], "Miranda do Norte", TRECHOS)?.price, 30);
+  assertEquals(trechoDoPedido(["Miranda", null], "desço em Pirapemas", TRECHOS)?.price, 30);
+  assertEquals(trechoDoPedido(["Buscar em Casa", "Vila Embratel"], "Matões", TRECHOS)?.price, 70);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Jordoa, Rua 7", TRECHOS)?.price, 80);
+});
+
+Deno.test("trecho: sem os dois lados na tabela, não há trecho", () => {
+  assertEquals(trechoDoPedido(["Cantanhede"], "Miranda", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Cohama", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], null, TRECHOS), null);
+  assertEquals(trechoDoPedido([], "Miranda", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Mira", TRECHOS), null);
+});
+
+Deno.test("trecho: palavra solta não vale, e o mais específico vence", () => {
+  assertEquals(trechoDoPedido(["Pirapemas"], "Mirandinha", TRECHOS), null);
+  const t = [
+    { origem: "Pirapemas", destino: "Vila", price: 10 },
+    { origem: "Pirapemas", destino: "Vila Nova", price: 20 },
+  ];
+  assertEquals(trechoDoPedido(["Pirapemas"], "Vila Nova", t)?.price, 20);
+});
+
+Deno.test("bairro da tabela: acha pelo nome dentro do texto; o mais longo vence", () => {
+  const tabela = [
+    { neighborhood: "Anil", price: 80 },
+    { neighborhood: "Cruzeiro do Anil", price: 85 },
+    { neighborhood: "Cohatrac", price: 80 },
+  ];
+  assertEquals(bairroDaTabela("Cohatrac Condomínio Mazil", tabela)?.neighborhood, "Cohatrac");
+  assertEquals(bairroDaTabela("cruzeiro do anil", tabela)?.price, 85);
+  assertEquals(bairroDaTabela("Maiobão", tabela), null);
+  assertEquals(bairroDaTabela("Coroadinho", [{ neighborhood: "Coroado" }]), null);
+  assertEquals(bairroDaTabela(null, tabela), null);
 });

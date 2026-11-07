@@ -9,6 +9,7 @@ import {
   normalizarTitulo,
   pontuacaoDaLicao,
   statusInicial,
+  validarSugestoesDePreco,
   validarLicoesNovas,
   validarNotasDeClientes,
   type LicaoGuardada,
@@ -206,4 +207,37 @@ Deno.test("lição nova e recente não fica de fora do prompt só por ter pouca 
   const bloco = blocoDeLicoes([velha, nova], ["situacao"], { max: 1 });
   assertStringIncludes(bloco, "Nova");
   assertEquals(bloco.includes("Antiga"), false);
+});
+
+Deno.test("sugestões de preço: só bairro ou trecho completos, com valor plausível", () => {
+  assertEquals(
+    validarSugestoesDePreco([
+      { tipo: "bairro", origem: " Maiobinha ", valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", destino: "Matões", valor: "35" },
+      { tipo: "bairro", origem: "maiobinha", valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", valor: 35 },
+      { tipo: "encomenda", origem: "Pirapemas", valor: 20 },
+      { tipo: "bairro", origem: "AB", valor: 80 },
+      { tipo: "bairro", origem: "Fale em 98981012388", valor: 80 },
+      { tipo: "bairro", origem: "Fale com [telefone]", valor: 80 },
+      { tipo: "bairro", origem: "Turu", valor: 4 },
+      { tipo: "bairro", origem: "Turu", valor: 501 },
+      { tipo: "bairro", origem: "Turu" },
+    ]),
+    [
+      { tipo: "bairro", origem: "Maiobinha", destino: null, valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", destino: "Matões", valor: 35 },
+    ],
+  );
+  assertEquals(validarSugestoesDePreco("nada"), []);
+});
+
+Deno.test("sugestões de preço: valores nos limites e valores diferentes do mesmo lugar", () => {
+  assertEquals(
+    validarSugestoesDePreco([
+      { tipo: "bairro", origem: "Turu", valor: 5 },
+      { tipo: "bairro", origem: "Turu", valor: 500 },
+    ]).map((s) => s.valor),
+    [5, 500],
+  );
 });

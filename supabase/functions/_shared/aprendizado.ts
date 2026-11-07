@@ -214,6 +214,32 @@ export function blocoDeLicoes(
   return linhas.join("\n").trim();
 }
 
+export type SugestaoDePreco = { tipo: "bairro" | "trecho"; origem: string; destino: string | null; valor: number };
+
+const lugarValido = (t: string) => t.length >= 3 && t.length <= 60 && !/\d{5,}|\[(telefone|email|link)\]/.test(t);
+
+/** Preços que o modelo viu o atendente dizer: bairro ou trecho, valor plausível, sem dado pessoal. */
+export function validarSugestoesDePreco(brutas: unknown): SugestaoDePreco[] {
+  if (!Array.isArray(brutas)) return [];
+  const vistos = new Set<string>();
+  const saida: SugestaoDePreco[] = [];
+  for (const b of brutas) {
+    const bruto = b as { tipo?: unknown; origem?: unknown; destino?: unknown; valor?: unknown };
+    const tipo = bruto?.tipo;
+    const origem = String(bruto?.origem ?? "").trim();
+    const destino = String(bruto?.destino ?? "").trim();
+    const valor = Number(bruto?.valor);
+    if (tipo !== "bairro" && tipo !== "trecho") continue;
+    if (!lugarValido(origem) || (tipo === "trecho" && !lugarValido(destino))) continue;
+    if (!Number.isFinite(valor) || valor < 5 || valor > 500) continue;
+    const chave = `${tipo}|${normalizarTitulo(origem)}|${tipo === "trecho" ? normalizarTitulo(destino) : ""}|${valor}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    saida.push({ tipo, origem, destino: tipo === "trecho" ? destino : null, valor });
+  }
+  return saida;
+}
+
 export type NotaDeCliente = { customerId: string; notes: string };
 
 /**
