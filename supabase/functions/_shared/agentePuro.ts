@@ -437,6 +437,51 @@ export function somarUso(
   };
 }
 
+const citaLugar = (texto: string | null | undefined, lugar: string) => {
+  const t = normalizar(texto ?? "");
+  const l = normalizar(lugar);
+  if (!t || !l) return false;
+  // "Miranda do Norte" cita Miranda; e "Matões" cita o trecho cadastrado como "Matões do Norte"
+  return ` ${t} `.includes(` ${l} `) || (t.length >= 4 && ` ${l} `.includes(` ${t} `));
+};
+
+export type Trecho = { origem: string; destino: string; price: number | string };
+
+/**
+ * O trecho da tabela que liga onde o cliente sobe a onde ele desce, nos dois sentidos.
+ * Com mais de um candidato, vence o mais específico.
+ */
+export function trechoDoPedido(
+  embarques: (string | null | undefined)[],
+  desembarque: string | null | undefined,
+  trechos: Trecho[],
+): Trecho | null {
+  const sobe = (lugar: string) => embarques.some((e) => citaLugar(e, lugar));
+  let melhor: Trecho | null = null;
+  for (const t of trechos) {
+    const liga =
+      (sobe(t.origem) && citaLugar(desembarque, t.destino)) || (sobe(t.destino) && citaLugar(desembarque, t.origem));
+    if (liga && (!melhor || t.origem.length + t.destino.length > melhor.origem.length + melhor.destino.length)) {
+      melhor = t;
+    }
+  }
+  return melhor;
+}
+
+/** O bairro da tabela citado no texto ("Cohatrac Condomínio X" é Cohatrac); o nome mais longo vence. */
+export function bairroDaTabela<T extends { neighborhood: string }>(
+  texto: string | null | undefined,
+  tabela: T[],
+): T | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  let melhor: T | null = null;
+  for (const b of tabela) {
+    const nome = normalizar(b.neighborhood);
+    if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.neighborhood).length)) melhor = b;
+  }
+  return melhor;
+}
+
 const RE_ANDAMENTO =
   /\b(a caminho|em rota|na estrada|chegando|chegamos|chegou|cheguei|chega|passando|passamos|passei|passou|estamos (em|no|na)|estou (em|no|na)|saindo|saimos|saiu|parados?|paramos|parada|plataforma|atrasad[oa]s?|atraso|transito)\b/;
 

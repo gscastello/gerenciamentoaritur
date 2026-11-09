@@ -56,6 +56,7 @@ import {
 } from "../tabShared.jsx";
 import BackupReservasDoDia from "./BackupReservasDoDia.jsx";
 import SistemaBot from "./SistemaBot.jsx";
+import SistemaTrechos from "./SistemaTrechos.jsx";
 
 /* ============================= 8. SISTEMA ============================= */
 const DIAG_KIND_LABEL = {
@@ -1406,6 +1407,8 @@ export default function SistemaTab({
         </Card>
 
         <SistemaBairros />
+
+        <SistemaTrechos />
 
         <SistemaBaldes />
 

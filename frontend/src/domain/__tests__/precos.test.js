@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { VALOR_BUSCA_PADRAO, VALOR_PONTO_PADRAO, _tabelas, precoBairro, valorTotal, valorUnitario } from "../precos.js";
+import {
+  VALOR_BUSCA_PADRAO,
+  VALOR_PONTO_PADRAO,
+  _tabelas,
+  descreverSugestaoDePreco,
+  precoBairro,
+  valorTotal,
+  valorUnitario,
+} from "../precos.js";
 
 describe("constantes e tabelas", () => {
   it("os padrões são R$60 (ponto) e R$80 (busca)", () => {
@@ -71,5 +79,24 @@ describe("valorUnitario / valorTotal", () => {
   it("quantidade 0 ou não numérica conta como 1", () => {
     expect(valorTotal({ ponto: pontoBR, quantidade: 0 })).toBe(60);
     expect(valorTotal({ ponto: pontoBR, quantidade: "x" })).toBe(60);
+  });
+});
+
+describe("descreverSugestaoDePreco", () => {
+  it("bairro e trecho em uma frase", () => {
+    expect(
+      descreverSugestaoDePreco({ tipo: "bairro", origem: "Maiobinha", price: 80 }).replace(
+        /\s/g,
+        " ",
+      ),
+    ).toBe("Busca em casa em Maiobinha: R$ 80,00");
+    expect(
+      descreverSugestaoDePreco({
+        tipo: "trecho",
+        origem: "Pirapemas",
+        destino: "Miranda",
+        price: 30,
+      }).replace(/\s/g, " "),
+    ).toBe("Pirapemas a Miranda: R$ 30,00");
   });
 });
