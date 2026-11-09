@@ -288,6 +288,8 @@ export async function mockSupabase(page, opts = {}) {
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
   // painel de atendimento (database/52): fila espelhada do Chatwoot + perguntas sem resposta
   const atendimentoRows = (opts.atendimento ?? []).map((c) => ({ ...c }));
+  // reservas preparadas pela IA (issue #254)
+  let rascunhosRows = (opts.rascunhos ?? []).map((r) => ({ status: "pronta", ...r }));
   let botUnansweredRows = (opts.botUnanswered ?? []).map((q) => ({ resolved_at: null, ...q }));
   // base de conhecimento do bot (database/50) — stateful pra testar o CRUD
   let botKnowledgeRows = (opts.botKnowledge ?? []).map((k) => ({ ...k }));
@@ -548,6 +550,13 @@ export async function mockSupabase(page, opts = {}) {
         statusOverride[b.p_reservation_id] = "confirmada";
         return route.fulfill(json({ success: true, status: "confirmada" }));
       }
+      if (fn === "rpc_descartar_rascunho_de_reserva") {
+        const id = req.postDataJSON?.()?.p_draft_id;
+        rascunhosRows = rascunhosRows.map((r) =>
+          r.id === id ? { ...r, status: "descartada" } : r,
+        );
+        return route.fulfill(json({ success: true }));
+      }
       if (fn === "rpc_endereco_de_costume") {
         const c = costumes[req.postDataJSON?.()?.p_customer_id] ?? {};
         return route.fulfill(
@@ -730,6 +739,8 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
     else if (table === "v_atendimento_whatsapp") rows = atendimentoRows;
+    else if (table === "reservation_drafts")
+      rows = rascunhosRows.filter((r) => r.status === "pronta");
     else if (table === "bot_unanswered" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
