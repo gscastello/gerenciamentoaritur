@@ -5,10 +5,27 @@
 // `{ ok: boolean, valor?, erro? }` — `valor` é a versão normalizada
 // quando faz sentido (ex.: telefone só com dígitos).
 
-/** Telefone BR: aceita com/sem +55 e com máscara; guarda só os dígitos. */
+// A operação é em São Luís, Cantanhede e Pirapemas: número sem DDD é daqui.
+const DDD_PADRAO = "98";
+const RE_CEP = /^\s*\d{5}-\d{3}\s*$/;
+
+function ehNumeroSemDdd(numero, entrada) {
+  if (RE_CEP.test(String(entrada ?? ""))) return false;
+  return (
+    (numero.length === 8 && /^[2-9]/.test(numero)) || (numero.length === 9 && numero[0] === "9")
+  );
+}
+
+/**
+ * Telefone BR: aceita máscara, espaço, +55, zero antes do DDD e número sem DDD
+ * (assume o da operação); guarda só os dígitos.
+ */
 export function validarTelefone(entrada) {
-  const digitos = String(entrada ?? "").replace(/\D/g, "");
+  const digitos = String(entrada ?? "")
+    .replace(/\D/g, "")
+    .replace(/^0+/, "");
   const semPais = digitos.startsWith("55") && digitos.length > 11 ? digitos.slice(2) : digitos;
+  if (ehNumeroSemDdd(semPais, entrada)) return { ok: true, valor: `${DDD_PADRAO}${semPais}` };
   if (semPais.length < 10 || semPais.length > 11) {
     return { ok: false, erro: "Telefone precisa ter DDD + número (10 ou 11 dígitos)." };
   }
@@ -20,6 +37,31 @@ export function validarTelefone(entrada) {
     return { ok: false, erro: "Celular com 11 dígitos deve começar com 9 depois do DDD." };
   }
   return { ok: true, valor: semPais };
+}
+
+/**
+ * Formas do mesmo celular, com e sem o nono dígito (a maior parte dos cadastros
+ * não tem o 9). Espelha fn_variantes_telefone no banco. Número inválido: lista vazia.
+ */
+export function variantesTelefone(entrada) {
+  const v = validarTelefone(entrada);
+  if (!v.ok) return [];
+  const n = v.valor;
+  if (n.length === 10 && /^[6-9]/.test(n[2])) return [n, `${n.slice(0, 2)}9${n.slice(2)}`];
+  if (n.length === 11 && /^[6-9]/.test(n[3])) return [n, `${n.slice(0, 2)}${n.slice(3)}`];
+  return [n];
+}
+
+/**
+ * O termo de busca parece telefone? Devolve os dígitos a procurar: com 8 ou mais,
+ * só os 8 finais, que são iguais com ou sem +55, DDD e nono dígito. Senão, null.
+ */
+export function digitosDeBusca(termo) {
+  const t = String(termo ?? "").trim();
+  if (!/^[+\d\s().-]+$/.test(t)) return null;
+  const digitos = t.replace(/\D/g, "");
+  if (digitos.length < 4) return null;
+  return digitos.length >= 8 ? digitos.slice(-8) : digitos;
 }
 
 const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -54,7 +96,8 @@ export function validarHora(entrada) {
 
 /** Valor monetário: número finito >= `min` (0 por padrão). Aceita vírgula. */
 export function validarValor(entrada, { min = 0, max } = {}) {
-  const bruto = typeof entrada === "string" ? entrada.replace(/\s/g, "").replace(",", ".") : entrada;
+  const bruto =
+    typeof entrada === "string" ? entrada.replace(/\s/g, "").replace(",", ".") : entrada;
   const n = Number(bruto);
   if (bruto === "" || bruto == null || !Number.isFinite(n)) {
     return { ok: false, erro: "Valor inválido." };
