@@ -1,6 +1,13 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   afirmaTerMexidoEmReserva,
+  andamentoPeloHorario,
+  CRONOGRAMA_PADRAO,
+  cronogramaParaTexto,
+  cronogramaValido,
+  lugarNoCronograma,
+  bairroDaTabela,
+  trechoDoPedido,
   calcularTotal,
   calendarioParaOPrompt,
   contemDadoInterno,
@@ -401,4 +408,142 @@ Deno.test("pedido: aceita dinheiro, pix e cartão; outra forma volta como erro",
   }
   const ruim = validarPedidoDeReserva({ ...pedido, forma_pagamento: "cheque" }, "2026-11-07");
   assertEquals(ruim.ok ? [] : ruim.erros, ["forma_pagamento deve ser dinheiro, pix ou cartao"]);
+});
+
+const TRECHOS = [
+  { origem: "Pirapemas", destino: "Miranda", price: 30 },
+  { origem: "Vila Embratel", destino: "Matões do Norte", price: 70 },
+  { origem: "Pirapemas", destino: "Jordoa", price: 80 },
+];
+
+Deno.test("trecho: compara onde sobe e onde desce, nos dois sentidos", () => {
+  assertEquals(trechoDoPedido(["Pirapemas"], "Miranda do Norte", TRECHOS)?.price, 30);
+  assertEquals(trechoDoPedido(["Miranda", null], "desço em Pirapemas", TRECHOS)?.price, 30);
+  assertEquals(trechoDoPedido(["Buscar em Casa", "Vila Embratel"], "Matões", TRECHOS)?.price, 70);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Jordoa, Rua 7", TRECHOS)?.price, 80);
+});
+
+Deno.test("trecho: sem os dois lados na tabela, não há trecho", () => {
+  assertEquals(trechoDoPedido(["Cantanhede"], "Miranda", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Cohama", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], null, TRECHOS), null);
+  assertEquals(trechoDoPedido([], "Miranda", TRECHOS), null);
+  assertEquals(trechoDoPedido(["Pirapemas"], "Mira", TRECHOS), null);
+});
+
+Deno.test("trecho: palavra solta não vale, e o mais específico vence", () => {
+  assertEquals(trechoDoPedido(["Pirapemas"], "Mirandinha", TRECHOS), null);
+  const t = [
+    { origem: "Pirapemas", destino: "Vila", price: 10 },
+    { origem: "Pirapemas", destino: "Vila Nova", price: 20 },
+  ];
+  assertEquals(trechoDoPedido(["Pirapemas"], "Vila Nova", t)?.price, 20);
+});
+
+Deno.test("bairro da tabela: acha pelo nome dentro do texto; o mais longo vence", () => {
+  const tabela = [
+    { neighborhood: "Anil", price: 80 },
+    { neighborhood: "Cruzeiro do Anil", price: 85 },
+    { neighborhood: "Cohatrac", price: 80 },
+  ];
+  assertEquals(bairroDaTabela("Cohatrac Condomínio Mazil", tabela)?.neighborhood, "Cohatrac");
+  assertEquals(bairroDaTabela("cruzeiro do anil", tabela)?.price, 85);
+  assertEquals(bairroDaTabela("Maiobão", tabela), null);
+  assertEquals(bairroDaTabela("Coroadinho", [{ neighborhood: "Coroado" }]), null);
+  assertEquals(bairroDaTabela(null, tabela), null);
+});
+
+
+// 2026-11-10 é terça; 2026-11-09 é segunda. São Luís = UTC-3.
+const em = (data: string, hora: string) => new Date(`${data}T${hora}:00-03:00`);
+const andamento = (direcao: "ida" | "volta", hora: string, textos: (string | null)[], data = "2026-11-10") =>
+  andamentoPeloHorario({ cronograma: CRONOGRAMA_PADRAO, direcao, data, agora: em("2026-11-10", hora), textos, ajusteSegundaHoras: 1 });
+
+Deno.test("andamento: o exemplo do dono (Pirapemas, 12:10) é em rota e logo passa", () => {
+  const r = andamento("volta", "12:10", ["Rua da Floresta, Pirapemas", "Pirapemas"]);
+  assertEquals(r.situacao, "em_rota_passando");
+  assertEquals(r.lugar, "Pirapemas");
+  assertEquals(r.janela, { de: "12:00", ate: "13:00" });
+  assertEquals(r.chegada_prevista, { de: "16:30", ate: "17:00" });
+  assertEquals(r.agora, "12:10");
+});
+
+Deno.test("andamento: cada momento da volta para quem embarca em Matões", () => {
+  const matoes = ["Matões", "Cantanhede"];
+  assertEquals(andamento("volta", "11:00", matoes).situacao, "ainda_nao_saiu");
+  assertEquals(andamento("volta", "12:00", matoes).situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "13:59", matoes).situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "14:00", matoes).situacao, "em_rota_passando");
+  assertEquals(andamento("volta", "15:30", matoes).situacao, "em_rota_passando");
+  assertEquals(andamento("volta", "15:31", matoes).situacao, "passou_do_previsto");
+  assertEquals(andamento("volta", "17:59", matoes).situacao, "passou_do_previsto");
+  assertEquals(andamento("volta", "18:01", matoes).situacao, "viagem_encerrada");
+  assertEquals(andamento("volta", "14:00", matoes).janela, { de: "14:00", ate: "15:00" });
+});
+
+Deno.test("andamento: janela com fim dito pelo dono e último ponto sem próximo", () => {
+  assertEquals(andamento("volta", "15:40", ["Bacabeira"]).janela, { de: "15:30", ate: "16:00" });
+  assertEquals(andamento("ida", "09:00", ["cantanhede"]).janela, { de: "09:00", ate: "10:00" });
+});
+
+Deno.test("andamento: a ida da segunda sai 1 hora mais cedo; a volta não", () => {
+  const ida = andamentoPeloHorario({
+    cronograma: CRONOGRAMA_PADRAO,
+    direcao: "ida",
+    data: "2026-11-09",
+    agora: em("2026-11-09", "04:30"),
+    textos: ["busca"],
+    ajusteSegundaHoras: 1,
+  });
+  assertEquals(ida.janela, { de: "04:00", ate: "04:40" });
+  assertEquals(ida.situacao, "em_rota_passando");
+  assertEquals(ida.chegada_prevista, { de: "08:00", ate: "08:00" });
+  const volta = andamentoPeloHorario({
+    cronograma: CRONOGRAMA_PADRAO,
+    direcao: "volta",
+    data: "2026-11-09",
+    agora: em("2026-11-09", "11:30"),
+    textos: ["Pirapemas"],
+    ajusteSegundaHoras: 1,
+  });
+  assertEquals(volta.janela, { de: "12:00", ate: "13:00" });
+  assertEquals(volta.situacao, "ainda_nao_saiu");
+});
+
+Deno.test("andamento: outro dia, lugar desconhecido e lista de horários", () => {
+  assertEquals(andamento("ida", "05:10", ["busca"], "2026-11-11").situacao, "programada");
+  assertEquals(andamento("ida", "05:10", ["busca"], "2026-11-09").situacao, "viagem_encerrada");
+  const semLugar = andamento("volta", "12:30", ["Pindaré"]);
+  assertEquals(semLugar.lugar, null);
+  assertEquals(semLugar.janela, null);
+  assertEquals(semLugar.situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "17:30", [null]).situacao, "viagem_encerrada");
+  assertEquals(semLugar.horarios[0], "Pirapemas: a partir de 12:00");
+  assertEquals(semLugar.horarios.at(-1), "São Luís (chegada): 16:30 às 17:00");
+});
+
+Deno.test("lugar no cronograma: endereço primeiro, palavra inteira, apelidos", () => {
+  const volta = CRONOGRAMA_PADRAO.volta;
+  assertEquals(lugarNoCronograma(volta, ["Rua X, Miranda", "Cantanhede"])?.lugar, "Miranda do Norte");
+  assertEquals(lugarNoCronograma(volta, [null, "", "cantanhede"])?.lugar, "Cantanhede");
+  assertEquals(lugarNoCronograma(volta, ["Mirandinha"]), null);
+  assertEquals(lugarNoCronograma(CRONOGRAMA_PADRAO.ida, ["postocarone"])?.lugar, "Posto Carone");
+});
+
+Deno.test("cronograma salvo: só vale se bem formado, por sentido", () => {
+  const ida = [{ lugar: "Rodoviária", de: "05:00" }];
+  assertEquals(cronogramaValido({ ida }).ida, ida);
+  assertEquals(cronogramaValido({ ida }).volta, CRONOGRAMA_PADRAO.volta);
+  assertEquals(cronogramaValido({ ida: [{ lugar: "X", de: "5h" }] }).ida, CRONOGRAMA_PADRAO.ida);
+  assertEquals(cronogramaValido({ ida: [{ lugar: "Rodoviária", de: "05:00", ate: "25:00" }] }).ida, CRONOGRAMA_PADRAO.ida);
+  assertEquals(cronogramaValido({ volta: [] }).volta, CRONOGRAMA_PADRAO.volta);
+  assertEquals(cronogramaValido(null), CRONOGRAMA_PADRAO);
+});
+
+Deno.test("cronograma em texto: os dois sentidos e o aviso da segunda", () => {
+  const t = cronogramaParaTexto(CRONOGRAMA_PADRAO, 1);
+  assertStringIncludes(t, "Pirapemas a partir de 12:00");
+  assertStringIncludes(t, "Bacabeira de 15:30 às 16:00");
+  assertStringIncludes(t, "a ida sai 1 hora(s) mais cedo");
+  assertEquals(cronogramaParaTexto(CRONOGRAMA_PADRAO).includes("segunda"), false);
 });

@@ -6,16 +6,20 @@
 // precisam ser as mesmas para todos os sócios.
 
 import { settingsService } from "../services/settingsService";
-import { useSupabaseQuery } from "./useSupabaseQuery";
-import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
+import { useRealtimeTable } from "./useRealtimeTable";
+import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useSettings() {
   const query = useSupabaseQuery(() => settingsService.getAll(), []);
   useRealtimeTable("settings", () => query.refetch());
 
   const setKey = useAsyncAction(settingsService.set);
-  const after = async (p) => { const r = await p; await query.refetch(); return r; };
+  const after = async (p) => {
+    const r = await p;
+    await query.refetch();
+    return r;
+  };
 
   const settings = query.data ?? {};
 
@@ -32,16 +36,22 @@ export function useSettings() {
     autoRevenue: settings.auto_revenue?.enabled ?? true,
     // cidades da rota (issue #6) — listas normalizadas (minúsculas/sem acento no banco)
     servedCities: Array.isArray(settings.served_cities) ? settings.served_cities : [],
-    intermediateCities: Array.isArray(settings.intermediate_cities) ? settings.intermediate_cities : [],
+    intermediateCities: Array.isArray(settings.intermediate_cities)
+      ? settings.intermediate_cities
+      : [],
 
     botStyleGuide: settings.bot_style_guide?.text ?? "",
+    // enviado pelo bot quando o cliente insiste em saber onde a van está (issue #244)
+    driverContact: settings.driver_contact ?? null,
     // link base da conta no Chatwoot (database/52) pro "Abrir no Chatwoot"
     chatwootUrl: settings.chatwoot?.url ?? null,
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),
+    setDriverContact: ({ name, phone }) => after(setKey.run("driver_contact", { name, phone })),
     setAutoRevenue: (enabled) => after(setKey.run("auto_revenue", { enabled })),
-    setMondayAdjustment: ({ active, hours }) => after(setKey.run("monday_adjustment", { active, hours })),
+    setMondayAdjustment: ({ active, hours }) =>
+      after(setKey.run("monday_adjustment", { active, hours })),
     setServedCities: (list) => after(setKey.run("served_cities", list)),
     setIntermediateCities: (list) => after(setKey.run("intermediate_cities", list)),
     saving: setKey.loading,

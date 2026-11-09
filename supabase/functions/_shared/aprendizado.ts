@@ -10,6 +10,7 @@ export type TipoLicao =
   | "estilo_atendente"
   | "fluxo_agendamento"
   | "situacao"
+  | "operacao"
   | "fato"
   | "negocio";
 export const TIPOS_DE_LICAO: TipoLicao[] = [
@@ -17,6 +18,7 @@ export const TIPOS_DE_LICAO: TipoLicao[] = [
   "estilo_atendente",
   "fluxo_agendamento",
   "situacao",
+  "operacao",
   "fato",
   "negocio",
 ];
@@ -84,10 +86,13 @@ export function montarTranscricoes(
 /**
  * Fato e negócio valem só aprovados; linguagem/estilo/fluxo entram valendo e
  * pedem revisão. Resposta por situação também, a menos que cite número
- * (valor, horário, prazo) — aí é informação e espera o dono aprovar.
+ * (valor, horário, prazo) — aí é informação e espera o dono aprovar. Operação
+ * (parada, plataforma, chegada) vale na hora, com horário e tudo, a menos que
+ * cite dinheiro: preço nunca entra sem o dono.
  */
 export function statusInicial(kind: TipoLicao, content = ""): "ativa" | "proposta" {
   if (kind === "fato" || kind === "negocio") return "proposta";
+  if (kind === "operacao" && /r\$|\breais\b/i.test(content)) return "proposta";
   if (kind === "situacao" && /\d/.test(content)) return "proposta";
   return "ativa";
 }
@@ -178,6 +183,7 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
   estilo_atendente: "COMO O ATENDENTE COSTUMA RESPONDER",
   fluxo_agendamento: "COMO O ATENDENTE AGENDA AS PASSAGENS",
   situacao: "O QUE RESPONDER EM CADA SITUAÇÃO (jeito do atendente)",
+  operacao: "COMO A VIAGEM FUNCIONA NA PRÁTICA (dito pelo atendente: paradas, plataforma, horários de chegada e de passagem)",
   fato: "INFORMAÇÕES DITAS PELO ATENDENTE (aprovadas pelo dono)",
   negocio: "COMO A EMPRESA FUNCIONA (aprovado pelo dono)",
 };
@@ -212,6 +218,32 @@ export function blocoDeLicoes(
     if (corpo.length) linhas.push(`${TITULO_DO_BLOCO[tipo]}:`, ...corpo, "");
   });
   return linhas.join("\n").trim();
+}
+
+export type SugestaoDePreco = { tipo: "bairro" | "trecho"; origem: string; destino: string | null; valor: number };
+
+const lugarValido = (t: string) => t.length >= 3 && t.length <= 60 && !/\d{5,}|\[(telefone|email|link)\]/.test(t);
+
+/** Preços que o modelo viu o atendente dizer: bairro ou trecho, valor plausível, sem dado pessoal. */
+export function validarSugestoesDePreco(brutas: unknown): SugestaoDePreco[] {
+  if (!Array.isArray(brutas)) return [];
+  const vistos = new Set<string>();
+  const saida: SugestaoDePreco[] = [];
+  for (const b of brutas) {
+    const bruto = b as { tipo?: unknown; origem?: unknown; destino?: unknown; valor?: unknown };
+    const tipo = bruto?.tipo;
+    const origem = String(bruto?.origem ?? "").trim();
+    const destino = String(bruto?.destino ?? "").trim();
+    const valor = Number(bruto?.valor);
+    if (tipo !== "bairro" && tipo !== "trecho") continue;
+    if (!lugarValido(origem) || (tipo === "trecho" && !lugarValido(destino))) continue;
+    if (!Number.isFinite(valor) || valor < 5 || valor > 500) continue;
+    const chave = `${tipo}|${normalizarTitulo(origem)}|${tipo === "trecho" ? normalizarTitulo(destino) : ""}|${valor}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    saida.push({ tipo, origem, destino: tipo === "trecho" ? destino : null, valor });
+  }
+  return saida;
 }
 
 export type NotaDeCliente = { customerId: string; notes: string };

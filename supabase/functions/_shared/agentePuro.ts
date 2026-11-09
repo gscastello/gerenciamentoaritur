@@ -435,3 +435,221 @@ export function somarUso(
     cacheLeitura: total.cacheLeitura + Number(usage?.cache_read_input_tokens ?? 0),
   };
 }
+
+const citaLugar = (texto: string | null | undefined, lugar: string) => {
+  const t = normalizar(texto ?? "");
+  const l = normalizar(lugar);
+  if (!t || !l) return false;
+  // "Miranda do Norte" cita Miranda; e "Matões" cita o trecho cadastrado como "Matões do Norte"
+  return ` ${t} `.includes(` ${l} `) || (t.length >= 4 && ` ${l} `.includes(` ${t} `));
+};
+
+export type Trecho = { origem: string; destino: string; price: number | string };
+
+/**
+ * O trecho da tabela que liga onde o cliente sobe a onde ele desce, nos dois sentidos.
+ * Com mais de um candidato, vence o mais específico.
+ */
+export function trechoDoPedido(
+  embarques: (string | null | undefined)[],
+  desembarque: string | null | undefined,
+  trechos: Trecho[],
+): Trecho | null {
+  const sobe = (lugar: string) => embarques.some((e) => citaLugar(e, lugar));
+  let melhor: Trecho | null = null;
+  for (const t of trechos) {
+    const liga =
+      (sobe(t.origem) && citaLugar(desembarque, t.destino)) || (sobe(t.destino) && citaLugar(desembarque, t.origem));
+    if (liga && (!melhor || t.origem.length + t.destino.length > melhor.origem.length + melhor.destino.length)) {
+      melhor = t;
+    }
+  }
+  return melhor;
+}
+
+/** O bairro da tabela citado no texto ("Cohatrac Condomínio X" é Cohatrac); o nome mais longo vence. */
+export function bairroDaTabela<T extends { neighborhood: string }>(
+  texto: string | null | undefined,
+  tabela: T[],
+): T | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  let melhor: T | null = null;
+  for (const b of tabela) {
+    const nome = normalizar(b.neighborhood);
+    if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.neighborhood).length)) melhor = b;
+  }
+  return melhor;
+}
+
+export type PontoDoCronograma = { lugar: string; apelidos?: string[]; de: string; ate?: string };
+export type Cronograma = { ida: PontoDoCronograma[]; volta: PontoDoCronograma[] };
+
+/** Horários da rota passados pelo dono (2026-11-09). `de` é o começo da janela; `ate`, quando ele disse. */
+export const CRONOGRAMA_PADRAO: Cronograma = {
+  ida: [
+    { lugar: "Busca em casa (bairros de São Luís)", apelidos: ["busca", "buscar em casa", "em casa"], de: "05:00" },
+    { lugar: "Rodoviária", de: "05:40" },
+    { lugar: "Posto Carone", apelidos: ["postocarone", "carone"], de: "05:40" },
+    { lugar: "Retorno", apelidos: ["retorno das vans"], de: "06:00" },
+    { lugar: "BR", apelidos: ["br 135"], de: "06:30" },
+    { lugar: "Bacabeira", de: "07:00" },
+    { lugar: "Santa Rita", de: "07:00" },
+    { lugar: "Entroncamento", de: "07:30" },
+    { lugar: "Miranda do Norte", apelidos: ["miranda"], de: "08:00" },
+    { lugar: "Matões do Norte", apelidos: ["matoes"], de: "08:30" },
+    { lugar: "Cantanhede (chegada)", apelidos: ["cantanhede"], de: "09:00" },
+  ],
+  volta: [
+    { lugar: "Pirapemas", de: "12:00" },
+    { lugar: "Cantanhede", de: "13:00" },
+    { lugar: "Campestre", de: "13:00" },
+    { lugar: "Matões do Norte", apelidos: ["matoes"], de: "14:00" },
+    { lugar: "Miranda do Norte", apelidos: ["miranda"], de: "14:00" },
+    { lugar: "Entroncamento", de: "15:00" },
+    { lugar: "Bacabeira", de: "15:30", ate: "16:00" },
+    { lugar: "São Luís (chegada)", apelidos: ["sao luis"], de: "16:30", ate: "17:00" },
+  ],
+};
+
+const RE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+const minutos = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+const hhmmDe = (min: number) => {
+  const m = ((min % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+
+function pontosValidos(lista: unknown): PontoDoCronograma[] | null {
+  if (!Array.isArray(lista) || lista.length === 0) return null;
+  const ok = lista.every(
+    (p) =>
+      typeof p?.lugar === "string" &&
+      p.lugar.trim().length >= 2 &&
+      RE_HORA.test(String(p?.de ?? "")) &&
+      (p.ate === undefined || RE_HORA.test(String(p.ate))),
+  );
+  return ok ? (lista as PontoDoCronograma[]) : null;
+}
+
+/** O cronograma salvo em settings, se estiver bem formado; senão o padrão. */
+export function cronogramaValido(salvo: unknown): Cronograma {
+  const s = salvo as { ida?: unknown; volta?: unknown } | null;
+  return {
+    ida: pontosValidos(s?.ida) ?? CRONOGRAMA_PADRAO.ida,
+    volta: pontosValidos(s?.volta) ?? CRONOGRAMA_PADRAO.volta,
+  };
+}
+
+/** Na segunda-feira a ida sai mais cedo em todos os pontos; a volta não muda. */
+function pontosDoDia(c: Cronograma, direcao: "ida" | "volta", data: string, ajusteSegundaHoras: number) {
+  const [a, m, d] = data.split("-").map(Number);
+  const segunda = new Date(Date.UTC(a, m - 1, d, 12)).getUTCDay() === 1;
+  const atraso = direcao === "ida" && segunda ? -ajusteSegundaHoras * 60 : 0;
+  return c[direcao].map((p) => ({
+    ...p,
+    de: hhmmDe(minutos(p.de) + atraso),
+    ate: p.ate ? hhmmDe(minutos(p.ate) + atraso) : undefined,
+  }));
+}
+
+/** O ponto do cronograma citado no primeiro texto que bater (endereço antes do ponto de embarque). */
+export function lugarNoCronograma(
+  pontos: PontoDoCronograma[],
+  textos: (string | null | undefined)[],
+): PontoDoCronograma | null {
+  for (const texto of textos) {
+    const t = ` ${normalizar(texto ?? "")} `;
+    if (!t.trim()) continue;
+    const achado = pontos.find((p) =>
+      [p.lugar, ...(p.apelidos ?? [])].some((n) => {
+        const nome = normalizar(n);
+        return nome && t.includes(` ${nome} `);
+      }),
+    );
+    if (achado) return achado;
+  }
+  return null;
+}
+
+/** Folga depois do fim da janela antes de dizer que já devíamos ter passado. */
+const FOLGA_MIN = 30;
+
+export type SituacaoDaViagem =
+  | "programada"
+  | "ainda_nao_saiu"
+  | "em_rota_a_caminho"
+  | "em_rota_passando"
+  | "passou_do_previsto"
+  | "viagem_encerrada";
+
+/**
+ * Andamento da viagem só pela ESTIMATIVA do cronograma (pedido do dono): a janela do
+ * lugar do cliente e, pelo relógio de São Luís, se ainda não saímos, se já estamos em
+ * rota a caminho, passando por lá agora, ou se já passou do previsto. Nunca diz onde a
+ * van está.
+ */
+export function andamentoPeloHorario({
+  cronograma,
+  direcao,
+  data,
+  agora,
+  textos,
+  ajusteSegundaHoras = 0,
+}: {
+  cronograma: Cronograma;
+  direcao: "ida" | "volta";
+  data: string;
+  agora: Date;
+  textos: (string | null | undefined)[];
+  ajusteSegundaHoras?: number;
+}) {
+  const pontos = pontosDoDia(cronograma, direcao, data, ajusteSegundaHoras);
+  const inicio = pontos[0].de;
+  const ultimo = pontos[pontos.length - 1];
+  const chegada = { de: ultimo.de, ate: ultimo.ate ?? ultimo.de };
+  const ponto = lugarNoCronograma(pontos, textos);
+  const janela = ponto
+    ? {
+        de: ponto.de,
+        ate: ponto.ate ?? pontos.find((p) => minutos(p.de) > minutos(ponto.de))?.de ?? hhmmDe(minutos(ponto.de) + 60),
+      }
+    : null;
+
+  const hoje = diaCivil(agora);
+  const agoraMin = minutos(
+    new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(agora),
+  );
+  let situacao: SituacaoDaViagem;
+  if (data > hoje) situacao = "programada";
+  else if (data < hoje || agoraMin > minutos(chegada.ate) + 60) situacao = "viagem_encerrada";
+  else if (agoraMin < minutos(inicio)) situacao = "ainda_nao_saiu";
+  else if (!janela) situacao = agoraMin <= minutos(chegada.ate) ? "em_rota_a_caminho" : "viagem_encerrada";
+  else if (agoraMin < minutos(janela.de)) situacao = "em_rota_a_caminho";
+  else if (agoraMin <= minutos(janela.ate) + FOLGA_MIN) situacao = "em_rota_passando";
+  else situacao = "passou_do_previsto";
+
+  return {
+    direcao,
+    data,
+    agora: hhmmDe(agoraMin),
+    lugar: ponto?.lugar ?? null,
+    janela,
+    inicio_da_viagem: inicio,
+    chegada_prevista: chegada,
+    situacao,
+    horarios: pontos.map((p) => `${p.lugar}: ${p.ate ? `${p.de} às ${p.ate}` : `a partir de ${p.de}`}`),
+  };
+}
+
+/** O cronograma em texto, para as INFORMAÇÕES do prompt (e para a trava de números). */
+export function cronogramaParaTexto(c: Cronograma, ajusteSegundaHoras = 0): string {
+  const linha = (p: PontoDoCronograma) => `${p.lugar} ${p.ate ? `de ${p.de} às ${p.ate}` : `a partir de ${p.de}`}`;
+  const partes = [
+    "HORÁRIOS PREVISTOS EM CADA LUGAR (cronograma do dono; é estimativa, vale sobre o horário do ponto):",
+    `- Ida (sai de São Luís): ${c.ida.map(linha).join("; ")}.`,
+    `- Volta (para São Luís): ${c.volta.map(linha).join("; ")}.`,
+  ];
+  if (ajusteSegundaHoras > 0) {
+    partes.push(`- Na segunda-feira a ida sai ${ajusteSegundaHoras} hora(s) mais cedo em todos os pontos; a volta não muda.`);
+  }
+  return partes.join("\n");
+}

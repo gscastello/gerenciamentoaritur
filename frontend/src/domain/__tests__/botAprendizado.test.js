@@ -127,6 +127,11 @@ describe("sugestões de atualização do bot (conhecimento que não estagna)", (
 });
 
 describe("mensagemDoAprendizado", () => {
+  it("avisa dos preços para aprovar", () => {
+    expect(mensagemDoAprendizado({ observacoes: 8, precos: 2 })).toBe(
+      "Li 8 mensagem(ns). 2 preço(s) para você aprovar.",
+    );
+  });
   it("resume o que foi aprendido", () => {
     expect(mensagemDoAprendizado({ observacoes: 40, novas: 3, reforcos: 2, atualizadas: 1 })).toBe(
       "Li 40 mensagem(ns). 3 lição(ões) nova(s), 2 reforçada(s), 1 atualizada(s).",

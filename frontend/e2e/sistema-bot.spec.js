@@ -81,3 +81,48 @@ test("Sistema > Bot: salva o guia de estilo e troca para o modo Sombra", async (
     .poll(() => gravacoes.find((g) => g?.key === "attendance_mode")?.value?.mode)
     .toBe("sombra");
 });
+
+test("Sistema > Bot: salva o contato do motorista com o telefone normalizado (#244)", async ({
+  page,
+}) => {
+  const gravacoes = [];
+  await mockSupabase(page, { role: "admin" });
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().includes("/rest/v1/settings")) {
+      gravacoes.push(r.postDataJSON?.());
+    }
+  });
+  await page.goto("/");
+  await abrirSistema(page);
+
+  const telefone = page.getByLabel("Telefone do motorista");
+  await telefone.scrollIntoViewIfNeeded();
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Nome", { exact: true }).fill("Maurício");
+  await telefone.fill("(98) 98101-2388");
+  await expect(telefone).toHaveValue("(98) 98101-2388");
+  await page.getByRole("button", { name: "Salvar contato" }).click();
+  await expect
+    .poll(() => gravacoes.find((g) => g?.key === "driver_contact")?.value)
+    .toEqual({ name: "Maurício", phone: "98981012388" });
+});
+
+test("Sistema > Bot: telefone do motorista inválido não é salvo", async ({ page }) => {
+  const gravacoes = [];
+  await mockSupabase(page, { role: "admin" });
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().includes("/rest/v1/settings")) {
+      gravacoes.push(r.postDataJSON?.());
+    }
+  });
+  await page.goto("/");
+  await abrirSistema(page);
+
+  const telefone = page.getByLabel("Telefone do motorista");
+  await telefone.scrollIntoViewIfNeeded();
+  await page.waitForLoadState("networkidle");
+  await telefone.fill("123");
+  await page.getByRole("button", { name: "Salvar contato" }).click();
+  await expect(page.getByText(/Telefone precisa ter DDD/)).toBeVisible();
+  expect(gravacoes.some((g) => g?.key === "driver_contact")).toBe(false);
+});

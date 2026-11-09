@@ -432,7 +432,7 @@ export const whatsappService = {
   async listCustomerReservations(customerId: string) {
     const { data, error } = await supabaseAdmin
       .from("reservations")
-      .select("id, status, quantity, total_price, dropoff_location, trip:trips(trip_date, direction), route_point:route_points(code, name)")
+      .select("id, status, quantity, total_price, dropoff_location, pickup_neighborhood, pickup_detail, trip:trips(trip_date, direction), route_point:route_points(code, name)")
       .eq("customer_id", customerId)
       .in("status", ["confirmada", "pendente", "espera"])
       .is("deleted_at", null)

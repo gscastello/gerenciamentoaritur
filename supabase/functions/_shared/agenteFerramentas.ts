@@ -13,11 +13,15 @@
 // mesmas RPCs de sempre — a capacidade continua decidida pelo banco).
 
 import {
+  andamentoPeloHorario,
   areaDoDesembarque,
+  bairroDaTabela,
   calcularTotal,
   costumeParaFerramenta,
+  cronogramaValido,
   nomeDeveSerCompletado,
   type PedidoValidado,
+  trechoDoPedido,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
 import { getBotContext } from "./botContext.ts";
@@ -57,8 +61,20 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "consultar_viagem",
     description:
-      "Consulta no app a viagem de uma data e direção: capacidade, passageiros, VAGAS DISPONÍVEIS agora e o status da viagem (agendada, em andamento — com a hora em que saiu — ou concluída). Use sempre que o cliente perguntar de vaga, lotação, se a van já saiu/está a caminho ou antes de oferecer reserva.",
+      "Consulta no app a viagem de uma data e direção: capacidade, passageiros e VAGAS DISPONÍVEIS agora. Use sempre que o cliente perguntar de vaga ou lotação e antes de oferecer reserva. Para saber se a van já saiu ou onde está, use andamento_da_viagem.",
     input_schema: { type: "object", properties: { data: DATA, direcao: DIRECAO }, required: ["data", "direcao"] },
+  },
+  {
+    name: "andamento_da_viagem",
+    description:
+      "Estimativa do andamento pelo horário: confere se o cliente tem reserva e devolve a janela de embarque do lugar dele e a situação agora (ainda não saiu, em rota a caminho, em rota passando, passou do previsto). Também traz o contato do motorista. Use quando perguntarem se já saiu, se está chegando, onde estamos ou que horas passa num lugar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        direcao: DIRECAO,
+        lugar: { type: "string", description: "Cidade ou ponto que o cliente citou, se ele não tiver reserva ou falar de outro lugar." },
+      },
+    },
   },
   {
     name: "listar_pontos_e_precos",
@@ -69,16 +85,18 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "calcular_valor",
     description:
-      "Calcula o valor total de um pedido a partir da tabela do sistema (preço do ponto ou do bairro × quantidade). Use antes de falar um total ao cliente; nunca faça a conta de cabeça.",
+      "Calcula o valor de um pedido comparando onde o cliente sobe e onde desce: tabela de trechos, senão preço do ponto ou do bairro, × quantidade. Use antes de falar um valor ao cliente; nunca faça a conta de cabeça. Se voltar TRECHO_SEM_VALOR, não diga valor: chame o atendente.",
     input_schema: {
       type: "object",
       properties: {
         direcao: DIRECAO,
         ponto: { type: "string", description: "Código ou nome do ponto de embarque (ex.: rodoviaria, busca)." },
         bairro: { type: "string", description: "Bairro, só para busca em casa." },
+        endereco_embarque: { type: "string", description: "Rua ou cidade de onde ele sai, se disse." },
+        desembarque: { type: "string", description: "Onde o cliente vai descer. Se não souber, pergunte antes." },
         quantidade: { type: "integer", description: "Número de passagens." },
       },
-      required: ["direcao", "ponto", "quantidade"],
+      required: ["direcao", "ponto", "desembarque", "quantidade"],
     },
   },
   {
@@ -234,9 +252,9 @@ async function precoUnitario(
   if (ponto.price != null && Number(ponto.price) > 0) return { ok: true, preco: Number(ponto.price) };
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
-    const preco = await whatsappService.getNeighborhoodPrice(bairro);
-    if (preco == null) {
-      const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood");
+    const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
+    const achado = bairroDaTabela(bairro, data ?? []);
+    if (!achado) {
       return {
         ok: false,
         erro: {
@@ -246,12 +264,34 @@ async function precoUnitario(
         },
       };
     }
-    return { ok: true, preco: Number(preco) };
+    return { ok: true, preco: Number(achado.price) };
   }
   return {
     ok: false,
     erro: { codigo: "SEM_PRECO_NA_TABELA", erro: "Este ponto não tem preço na tabela do sistema. Chame o atendente para combinar o valor." },
   };
+}
+
+/** O valor por passagem deste pedido: compara onde sobe e onde desce e só então cai na tabela do ponto/bairro. */
+async function valorDoPedido(
+  ponto: Linha,
+  pedido: { bairro: string | null; endereco: string | null; desembarque: string },
+): Promise<{ ok: true; preco: number; trecho?: string } | { ok: false; erro: Record<string, unknown> }> {
+  const { data: trechos } = await supabaseAdmin.from("route_fares").select("origem, destino, price");
+  const trecho = trechoDoPedido([ponto.name, ponto.code, pedido.bairro, pedido.endereco], pedido.desembarque, trechos ?? []);
+  if (trecho) return { ok: true, preco: Number(trecho.price), trecho: `${trecho.origem} a ${trecho.destino}` };
+
+  const cidade = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.endereco, pedido.bairro]);
+  if (cidade) {
+    return {
+      ok: false,
+      erro: {
+        codigo: "TRECHO_SEM_VALOR",
+        erro: `Não há valor cadastrado para esse trecho (${cidade}). Não diga valor: chame o atendente.`,
+      },
+    };
+  }
+  return precoUnitario(ponto, pedido.bairro);
 }
 
 async function consultarViagem(args: Linha) {
@@ -277,9 +317,54 @@ async function consultarViagem(args: Linha) {
     passageiros_confirmados: disp.occupied,
     vagas_disponiveis: disp.available,
     passagens_extras_fora_das_vagas: disp.extras ?? 0,
-    status_da_viagem: viagem?.status ?? "ainda nao iniciada",
+    // a equipe quase nunca marca a saída no app: "agendada" não quer dizer que a van não saiu
+    status_no_app: viagem?.started_at || viagem?.finished_at ? viagem.status : "sem_registro",
     saiu_as: viagem?.started_at ? fmtHora.format(new Date(viagem.started_at)) : null,
     chegou_as: viagem?.finished_at ? fmtHora.format(new Date(viagem.finished_at)) : null,
+  };
+}
+
+async function andamentoDaViagem(args: Linha, ctx: ContextoDoAgente) {
+  const agora = new Date();
+  ctx.consultouReservas = true;
+  const cliente = await clienteDaConversa(ctx);
+  const reservas = cliente ? await reservasDoCliente(ctx, true) : [];
+  const pedida = args.direcao === "ida" || args.direcao === "volta" ? args.direcao : null;
+  const proximas = reservas
+    .filter((r) => ["confirmada", "pendente"].includes(r.status) && (r.trip?.trip_date ?? "") >= ctx.hoje)
+    .filter((r) => !pedida || r.trip?.direction === pedida)
+    .sort((x, y) => String(x.trip?.trip_date).localeCompare(String(y.trip?.trip_date)));
+  const reserva = proximas[0] ?? null;
+
+  const { data: cfg } = await supabaseAdmin
+    .from("settings")
+    .select("key, value")
+    .in("key", ["trip_schedule", "monday_adjustment", "driver_contact"]);
+  const valor = (k: string) => cfg?.find((c: Linha) => c.key === k)?.value;
+  const segunda = valor("monday_adjustment");
+  const motorista = valor("driver_contact");
+
+  const lugar = String(args.lugar ?? "").trim() || null;
+  const direcao = reserva?.trip?.direction ?? pedida ?? (fmtHora.format(agora) < "11:00" ? "ida" : "volta");
+  const estimativa = andamentoPeloHorario({
+    cronograma: cronogramaValido(valor("trip_schedule")),
+    direcao,
+    data: reserva?.trip?.trip_date ?? ctx.hoje,
+    agora,
+    textos: reserva
+      ? [reserva.pickup_detail, reserva.pickup_neighborhood, reserva.route_point?.name, reserva.route_point?.code, lugar]
+      : [lugar],
+    ajusteSegundaHoras: segunda?.active ? Number(segunda.hours) || 0 : 0,
+  });
+  return {
+    ok: true,
+    tem_reserva: !!reserva,
+    reserva: reserva
+      ? { data: reserva.trip?.trip_date, direcao: reserva.trip?.direction, ponto: reserva.route_point?.name ?? null, status: reserva.status }
+      : null,
+    direcao_suposta: !reserva && !pedida,
+    ...estimativa,
+    contato_do_motorista: motorista?.phone ? { nome: motorista.name ?? "motorista", telefone: motorista.phone } : null,
   };
 }
 
@@ -317,9 +402,22 @@ async function calcularValor(args: Linha) {
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
   const quantidade = Number(args.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) return { ok: false, erro: "quantidade deve ser um inteiro de 1 em diante" };
-  const preco = await precoUnitario(ponto, String(args.bairro ?? "").trim() || null);
+  const desembarque = String(args.desembarque ?? "").trim();
+  if (!desembarque) return { ok: false, codigo: "FALTA_DESEMBARQUE", erro: "O valor depende de onde ele desce: pergunte antes de calcular." };
+  const preco = await valorDoPedido(ponto, {
+    bairro: String(args.bairro ?? "").trim() || null,
+    endereco: String(args.endereco_embarque ?? "").trim() || null,
+    desembarque,
+  });
   if (!preco.ok) return { ok: false, ...preco.erro };
-  return { ok: true, ponto: ponto.name, preco_por_passagem: preco.preco, quantidade, total: calcularTotal(preco.preco, quantidade) };
+  return {
+    ok: true,
+    ponto: ponto.name,
+    trecho: preco.trecho ?? null,
+    preco_por_passagem: preco.preco,
+    quantidade,
+    total: calcularTotal(preco.preco, quantidade),
+  };
 }
 
 async function verMinhasReservas(ctx: ContextoDoAgente) {
@@ -366,7 +464,11 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const nome = cliente?.name ?? pedido.nomeCliente;
   if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo antes de reservar." };
 
-  const preco = await precoUnitario(ponto, pedido.bairro);
+  const preco = await valorDoPedido(ponto, {
+    bairro: pedido.bairro,
+    endereco: pedido.enderecoEmbarque,
+    desembarque: pedido.desembarque,
+  });
   if (!preco.ok) return { ok: false, ...preco.erro };
 
   const disp = await whatsappService.checkAvailability(pedido.data, pedido.direcao);
@@ -542,6 +644,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
     switch (nome) {
       case "consultar_viagem":
         return await consultarViagem(args);
+      case "andamento_da_viagem":
+        return await andamentoDaViagem(args, ctx);
       case "listar_pontos_e_precos":
         return await listarPontosEPrecos(args);
       case "calcular_valor":
