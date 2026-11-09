@@ -43,6 +43,20 @@ export function pareceTerPedido(textosDoCliente: string[]): boolean {
   return tudo.trim().length >= 6 && RE_DATA.test(tudo);
 }
 
+const RE_CHECK = /[☑✅✔]/u; // ☑ ✅ ✔ (com ou sem o seletor de emoji)
+
+/**
+ * A equipe confirmou com a marca combinada pelo dono: "Agendado ☑️" (issue #257).
+ * Aceita agendado/agendada/agendados, sem acento ou maiúscula, e ☑ ✅ ✔ em
+ * qualquer posição da mensagem. Pergunta ("está agendado?") não conta.
+ */
+export function ehMarcaDeAgendado(texto: string | null | undefined): boolean {
+  const t = semAcento(String(texto ?? ""));
+  if (!/\bagendad[oa]s?\b/.test(t) || !RE_CHECK.test(t)) return false;
+  // "está agendado ☑️?" é pergunta, não confirmação
+  return !/\?\s*$/.test(t.replace(/[☑✅✔️\s]+$/u, ""));
+}
+
 /** Um pedido como o modelo devolve (ferramenta registrar_pedidos). */
 export type PedidoExtraido = {
   tipo?: string;
@@ -176,12 +190,20 @@ export const FERRAMENTA_PEDIDOS = {
   },
 } as const;
 
-export function instrucoesDaLeitura(ctx: { calendario: string; pontos: string; desembarques: string }): string {
-  return `Você lê conversas de WhatsApp da AriTur (vans entre São Luís e Pirapemas/Cantanhede) e prepara reservas para a equipe conferir. Você NÃO conversa com o cliente e NÃO reserva nada.
+export function instrucoesDaLeitura(ctx: {
+  calendario: string;
+  pontos: string;
+  desembarques: string;
+  confirmadoPelaEquipe?: boolean;
+}): string {
+  const quando = ctx.confirmadoPelaEquipe
+    ? `A EQUIPE ACABOU DE CONFIRMAR o pedido desta conversa com "Agendado ☑️". Registre o(s) pedido(s) que a equipe confirmou agora (o mais recente), com o dia e o local combinados entre cliente e equipe. Se o cliente desistiu depois, não registre.`
+    : `Registre um pedido quando o CLIENTE pediu passagem (ou encomenda) e disse o DIA da viagem e de onde sai (endereço, bairro ou ponto). Se faltar o dia, não registre. Se a equipe já disse que reservou, que está lotado ou o cliente desistiu, não registre.`;
+  return `Você lê conversas de WhatsApp da AriTur (vans entre São Luís e Pirapemas/Cantanhede) e prepara reservas para a equipe conferir. Você NÃO conversa com o cliente e NÃO decide preço nem vaga.
 
-Registre um pedido quando o CLIENTE pediu passagem (ou encomenda) e disse o DIA da viagem e de onde sai (endereço, bairro ou ponto). Se faltar o dia, não registre. Se a equipe já disse que reservou, que está lotado ou o cliente desistiu, não registre.
+${quando}
 
-- Use só o que o CLIENTE escreveu. A equipe pode ajudar a entender (ex.: "é pra amanhã?" "sim").
+- Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.
