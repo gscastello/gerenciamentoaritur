@@ -1,9 +1,13 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   afirmaTerMexidoEmReserva,
+  andamentoPeloHorario,
+  CRONOGRAMA_PADRAO,
+  cronogramaParaTexto,
+  cronogramaValido,
+  lugarNoCronograma,
   bairroDaTabela,
   trechoDoPedido,
-  recadosDaViagem,
   calcularTotal,
   calendarioParaOPrompt,
   contemDadoInterno,
@@ -449,74 +453,97 @@ Deno.test("bairro da tabela: acha pelo nome dentro do texto; o mais longo vence"
   assertEquals(bairroDaTabela(null, tabela), null);
 });
 
-Deno.test("recados da viagem: só o que a equipe disse sobre a viagem, nas últimas horas", () => {
-  const agora = new Date("2026-11-07T17:00:00Z"); // 14:00 em São Luís
-  const obs = (author: string, content: string, created_at: string) => ({ author, content, created_at });
-  const r = recadosDaViagem(
-    [
-      obs("equipe", "Estou passando em Miranda", "2026-11-07T16:40:00Z"),
-      obs("equipe", "Chegando   em Cantanhede", "2026-11-07T16:55:00Z"),
-      obs("equipe", "Saindo da onde?", "2026-11-07T16:56:00Z"),
-      obs("equipe", "Ok, reservado", "2026-11-07T16:57:00Z"),
-      obs("cliente", "Estou chegando", "2026-11-07T16:58:00Z"),
-      obs("bot", "A van está a caminho", "2026-11-07T16:58:00Z"),
-      obs("bot_rascunho", "Estamos em rota", "2026-11-07T16:58:00Z"),
-      obs("equipe", "Saímos cedo", "2026-11-07T10:59:00Z"),
-      obs("equipe", "Estamos em rota", "2026-11-07T17:30:00Z"),
-    ],
-    agora,
-  );
-  assertEquals(r, [
-    { hora: "13:55", ha_minutos: 5, disse: "Chegando em Cantanhede" },
-    { hora: "13:40", ha_minutos: 20, disse: "Estou passando em Miranda" },
-  ]);
+
+// 2026-11-10 é terça; 2026-11-09 é segunda. São Luís = UTC-3.
+const em = (data: string, hora: string) => new Date(`${data}T${hora}:00-03:00`);
+const andamento = (direcao: "ida" | "volta", hora: string, textos: (string | null)[], data = "2026-11-10") =>
+  andamentoPeloHorario({ cronograma: CRONOGRAMA_PADRAO, direcao, data, agora: em("2026-11-10", hora), textos, ajusteSegundaHoras: 1 });
+
+Deno.test("andamento: o exemplo do dono (Pirapemas, 12:10) é em rota e logo passa", () => {
+  const r = andamento("volta", "12:10", ["Rua da Floresta, Pirapemas", "Pirapemas"]);
+  assertEquals(r.situacao, "em_rota_passando");
+  assertEquals(r.lugar, "Pirapemas");
+  assertEquals(r.janela, { de: "12:00", ate: "13:00" });
+  assertEquals(r.chegada_prevista, { de: "16:30", ate: "17:00" });
+  assertEquals(r.agora, "12:10");
 });
 
-Deno.test("recados da viagem: entende as frases reais da equipe, com ou sem acento", () => {
-  const agora = new Date("2026-11-07T17:00:00Z");
-  const frases = [
-    "Bom dia já saímos",
-    "Estamos saindo de são Luís",
-    "Está a caminho",
-    "Estamos em rota",
-    "Passando",
-    "A primeira plataforma ao lado do café",
-    "Estou chegando",
-    "Teve trânsito, atrasado um pouco",
-  ];
-  const r = recadosDaViagem(
-    frases.map((content, i) => ({
-      author: "equipe",
-      content,
-      created_at: new Date(agora.getTime() - (i + 1) * 60000).toISOString(),
-    })),
-    agora,
-  );
-  assertEquals(r.map((x) => x.disse), frases);
+Deno.test("andamento: cada momento da volta para quem embarca em Matões", () => {
+  const matoes = ["Matões", "Cantanhede"];
+  assertEquals(andamento("volta", "11:00", matoes).situacao, "ainda_nao_saiu");
+  assertEquals(andamento("volta", "12:00", matoes).situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "13:59", matoes).situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "14:00", matoes).situacao, "em_rota_passando");
+  assertEquals(andamento("volta", "15:30", matoes).situacao, "em_rota_passando");
+  assertEquals(andamento("volta", "15:31", matoes).situacao, "passou_do_previsto");
+  assertEquals(andamento("volta", "17:59", matoes).situacao, "passou_do_previsto");
+  assertEquals(andamento("volta", "18:01", matoes).situacao, "viagem_encerrada");
+  assertEquals(andamento("volta", "14:00", matoes).janela, { de: "14:00", ate: "15:00" });
 });
 
-Deno.test("recados da viagem: sem repetir, sem telefone, com limite de quantidade e tamanho", () => {
-  const agora = new Date("2026-11-07T17:00:00Z");
-  const em = (min: number) => new Date(agora.getTime() - min * 60000).toISOString();
-  const r = recadosDaViagem(
-    [
-      { author: "equipe", content: "A caminho", created_at: em(1) },
-      { author: "equipe", content: "a caminho", created_at: em(2) },
-      { author: "equipe", content: "Chegando, me liga 98 98101-2388", created_at: em(3) },
-      { author: "equipe", content: `Passando ${"x".repeat(50)}`, created_at: em(4) },
-    ],
-    agora,
-    { max: 3, maxChars: 20 },
-  );
-  assertEquals(r.map((x) => x.disse), ["A caminho", "Chegando, me liga [t", "Passando xxxxxxxxxxx"]);
+Deno.test("andamento: janela com fim dito pelo dono e último ponto sem próximo", () => {
+  assertEquals(andamento("volta", "15:40", ["Bacabeira"]).janela, { de: "15:30", ate: "16:00" });
+  assertEquals(andamento("ida", "09:00", ["cantanhede"]).janela, { de: "09:00", ate: "10:00" });
 });
 
-Deno.test("recados da viagem: janela em horas é configurável; data inválida fica de fora", () => {
-  const agora = new Date("2026-11-07T17:00:00Z");
-  const o = [
-    { author: "equipe", content: "Passando", created_at: "2026-11-07T15:30:00Z" },
-    { author: "equipe", content: "A caminho", created_at: "nada" },
-  ];
-  assertEquals(recadosDaViagem(o, agora, { horas: 1 }), []);
-  assertEquals(recadosDaViagem(o, agora, { horas: 2 }).length, 1);
+Deno.test("andamento: a ida da segunda sai 1 hora mais cedo; a volta não", () => {
+  const ida = andamentoPeloHorario({
+    cronograma: CRONOGRAMA_PADRAO,
+    direcao: "ida",
+    data: "2026-11-09",
+    agora: em("2026-11-09", "04:30"),
+    textos: ["busca"],
+    ajusteSegundaHoras: 1,
+  });
+  assertEquals(ida.janela, { de: "04:00", ate: "04:40" });
+  assertEquals(ida.situacao, "em_rota_passando");
+  assertEquals(ida.chegada_prevista, { de: "08:00", ate: "08:00" });
+  const volta = andamentoPeloHorario({
+    cronograma: CRONOGRAMA_PADRAO,
+    direcao: "volta",
+    data: "2026-11-09",
+    agora: em("2026-11-09", "11:30"),
+    textos: ["Pirapemas"],
+    ajusteSegundaHoras: 1,
+  });
+  assertEquals(volta.janela, { de: "12:00", ate: "13:00" });
+  assertEquals(volta.situacao, "ainda_nao_saiu");
+});
+
+Deno.test("andamento: outro dia, lugar desconhecido e lista de horários", () => {
+  assertEquals(andamento("ida", "05:10", ["busca"], "2026-11-11").situacao, "programada");
+  assertEquals(andamento("ida", "05:10", ["busca"], "2026-11-09").situacao, "viagem_encerrada");
+  const semLugar = andamento("volta", "12:30", ["Pindaré"]);
+  assertEquals(semLugar.lugar, null);
+  assertEquals(semLugar.janela, null);
+  assertEquals(semLugar.situacao, "em_rota_a_caminho");
+  assertEquals(andamento("volta", "17:30", [null]).situacao, "viagem_encerrada");
+  assertEquals(semLugar.horarios[0], "Pirapemas: a partir de 12:00");
+  assertEquals(semLugar.horarios.at(-1), "São Luís (chegada): 16:30 às 17:00");
+});
+
+Deno.test("lugar no cronograma: endereço primeiro, palavra inteira, apelidos", () => {
+  const volta = CRONOGRAMA_PADRAO.volta;
+  assertEquals(lugarNoCronograma(volta, ["Rua X, Miranda", "Cantanhede"])?.lugar, "Miranda do Norte");
+  assertEquals(lugarNoCronograma(volta, [null, "", "cantanhede"])?.lugar, "Cantanhede");
+  assertEquals(lugarNoCronograma(volta, ["Mirandinha"]), null);
+  assertEquals(lugarNoCronograma(CRONOGRAMA_PADRAO.ida, ["postocarone"])?.lugar, "Posto Carone");
+});
+
+Deno.test("cronograma salvo: só vale se bem formado, por sentido", () => {
+  const ida = [{ lugar: "Rodoviária", de: "05:00" }];
+  assertEquals(cronogramaValido({ ida }).ida, ida);
+  assertEquals(cronogramaValido({ ida }).volta, CRONOGRAMA_PADRAO.volta);
+  assertEquals(cronogramaValido({ ida: [{ lugar: "X", de: "5h" }] }).ida, CRONOGRAMA_PADRAO.ida);
+  assertEquals(cronogramaValido({ ida: [{ lugar: "Rodoviária", de: "05:00", ate: "25:00" }] }).ida, CRONOGRAMA_PADRAO.ida);
+  assertEquals(cronogramaValido({ volta: [] }).volta, CRONOGRAMA_PADRAO.volta);
+  assertEquals(cronogramaValido(null), CRONOGRAMA_PADRAO);
+});
+
+Deno.test("cronograma em texto: os dois sentidos e o aviso da segunda", () => {
+  const t = cronogramaParaTexto(CRONOGRAMA_PADRAO, 1);
+  assertStringIncludes(t, "Pirapemas a partir de 12:00");
+  assertStringIncludes(t, "Bacabeira de 15:30 às 16:00");
+  assertStringIncludes(t, "a ida sai 1 hora(s) mais cedo");
+  assertEquals(cronogramaParaTexto(CRONOGRAMA_PADRAO).includes("segunda"), false);
 });

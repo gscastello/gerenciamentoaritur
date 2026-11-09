@@ -173,7 +173,7 @@ O bot **não usa mais menu numerado**. Cada mensagem de texto vai para um agente
 | Ferramenta | Para quê |
 |---|---|
 | `consultar_viagem` | vagas e lotação de uma data/direção |
-| `andamento_da_viagem` | o que a equipe escreveu nas últimas 6 horas sobre a viagem ("passando em Miranda"), em qualquer conversa: é a posição real da van |
+| `andamento_da_viagem` | estimativa pelo cronograma do dono (issue #244): confere a reserva, devolve a janela do lugar do cliente e se já estamos em rota; traz o contato do motorista (Sistema → Bot) para quando o cliente insiste em saber onde a van está |
 | `listar_pontos_e_precos`, `calcular_valor` | horários e valor comparando embarque e desembarque: tabela de trechos, depois ponto/bairro (o modelo nunca faz a conta nem digita preço). Trecho em cidade intermediária sem valor vai para a equipe |
 | `ver_minhas_reservas` | reservas e pagamentos **do próprio cliente** (nunca de outras pessoas) |
 | `criar_reserva`, `remarcar_reserva`, `cancelar_reserva`, `entrar_na_lista_de_espera` | só depois do "sim" do cliente; preço e vaga conferidos pelo banco; fora da área padrão vira `pendente`; reserva duplicada na mesma viagem é recusada |

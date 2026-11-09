@@ -3,6 +3,7 @@ import {
   MessageSquareText,
   Pause,
   Pencil,
+  PhoneCall,
   Play,
   Plus,
   Save,
@@ -10,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { validarTelefone } from "../../domain/validacao.js";
 import { useBotKnowledge } from "../../hooks/useBotKnowledge.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -168,6 +170,65 @@ function GuiaDeEstilo({ valor, onSalvar, salvando }) {
   );
 }
 
+function ContatoDoMotorista({ valor, onSalvar, salvando }) {
+  const [form, setForm] = useState({ name: valor?.name ?? "", phone: valor?.phone ?? "" });
+  const [erro, setErro] = useState("");
+  useEffect(() => setForm({ name: valor?.name ?? "", phone: valor?.phone ?? "" }), [valor]);
+  const salvar = () => {
+    const tel = validarTelefone(form.phone);
+    if (!tel.ok) {
+      setErro(tel.erro);
+      return;
+    }
+    setErro("");
+    onSalvar({ name: form.name.trim() || "Motorista", phone: tel.valor });
+  };
+  return (
+    <Card>
+      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <PhoneCall size={16} style={{ color: C.amber }} /> Contato do motorista
+      </div>
+      <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        O bot informa só a previsão pelo horário. Se o cliente insistir em saber onde a van está,
+        ele envia este contato. Sem contato aqui, ele chama a equipe.
+      </p>
+      {erro && (
+        <div className="text-xs mb-2" style={{ color: C.red }}>
+          {erro}
+        </div>
+      )}
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Nome">
+          <TextInput
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Ex.: Maurício"
+            className="w-40"
+          />
+        </Field>
+        <Field label="Telefone do motorista">
+          <TextInput
+            value={form.phone}
+            inputMode="tel"
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="98 99999-0000"
+            className="w-44"
+          />
+        </Field>
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={salvando || !form.phone.trim()}
+          className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-md disabled:opacity-40"
+          style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+        >
+          <Save size={13} /> Salvar contato
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 export default function SistemaBot() {
   const base = useBotKnowledge();
   const cfg = useSettings();
@@ -229,6 +290,17 @@ export default function SistemaBot() {
         valor={cfg.botStyleGuide}
         onSalvar={(texto) =>
           tentar(() => cfg.setBotStyleGuide(texto), "Não foi possível salvar o guia (só admin).")
+        }
+        salvando={cfg.saving}
+      />
+
+      <ContatoDoMotorista
+        valor={cfg.driverContact}
+        onSalvar={(contato) =>
+          tentar(
+            () => cfg.setDriverContact(contato),
+            "Não foi possível salvar o contato (só admin).",
+          )
         }
         salvando={cfg.saving}
       />

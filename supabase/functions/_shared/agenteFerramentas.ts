@@ -13,14 +13,15 @@
 // mesmas RPCs de sempre — a capacidade continua decidida pelo banco).
 
 import {
+  andamentoPeloHorario,
   areaDoDesembarque,
   bairroDaTabela,
   calcularTotal,
   costumeParaFerramenta,
+  cronogramaValido,
   nomeDeveSerCompletado,
   type PedidoValidado,
   trechoDoPedido,
-  recadosDaViagem,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
 import { getBotContext } from "./botContext.ts";
@@ -66,8 +67,14 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "andamento_da_viagem",
     description:
-      "Mostra o que a equipe escreveu nas últimas horas sobre a viagem (ex.: 'passando em Miranda', 'chegando em Cantanhede', 'estamos em rota'), com a hora de cada recado. É a posição real da van. Use quando o cliente perguntar se já saiu, onde está, se está chegando ou que horas passa.",
-    input_schema: { type: "object", properties: {} },
+      "Estimativa do andamento pelo horário: confere se o cliente tem reserva e devolve a janela de embarque do lugar dele e a situação agora (ainda não saiu, em rota a caminho, em rota passando, passou do previsto). Também traz o contato do motorista. Use quando perguntarem se já saiu, se está chegando, onde estamos ou que horas passa num lugar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        direcao: DIRECAO,
+        lugar: { type: "string", description: "Cidade ou ponto que o cliente citou, se ele não tiver reserva ou falar de outro lugar." },
+      },
+    },
   },
   {
     name: "listar_pontos_e_precos",
@@ -317,25 +324,47 @@ async function consultarViagem(args: Linha) {
   };
 }
 
-async function andamentoDaViagem() {
+async function andamentoDaViagem(args: Linha, ctx: ContextoDoAgente) {
   const agora = new Date();
-  const desde = new Date(agora.getTime() - 6 * 3600 * 1000).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from("bot_observations")
-    .select("author, content, created_at")
-    .eq("author", "equipe")
-    .gte("created_at", desde)
-    .order("created_at", { ascending: false })
-    .limit(300);
-  if (error) throw new Error(`andamento_da_viagem: ${error.message}`);
-  const recados = recadosDaViagem(data ?? [], agora);
+  ctx.consultouReservas = true;
+  const cliente = await clienteDaConversa(ctx);
+  const reservas = cliente ? await reservasDoCliente(ctx, true) : [];
+  const pedida = args.direcao === "ida" || args.direcao === "volta" ? args.direcao : null;
+  const proximas = reservas
+    .filter((r) => ["confirmada", "pendente"].includes(r.status) && (r.trip?.trip_date ?? "") >= ctx.hoje)
+    .filter((r) => !pedida || r.trip?.direction === pedida)
+    .sort((x, y) => String(x.trip?.trip_date).localeCompare(String(y.trip?.trip_date)));
+  const reserva = proximas[0] ?? null;
+
+  const { data: cfg } = await supabaseAdmin
+    .from("settings")
+    .select("key, value")
+    .in("key", ["trip_schedule", "monday_adjustment", "driver_contact"]);
+  const valor = (k: string) => cfg?.find((c: Linha) => c.key === k)?.value;
+  const segunda = valor("monday_adjustment");
+  const motorista = valor("driver_contact");
+
+  const lugar = String(args.lugar ?? "").trim() || null;
+  const direcao = reserva?.trip?.direction ?? pedida ?? (fmtHora.format(agora) < "11:00" ? "ida" : "volta");
+  const estimativa = andamentoPeloHorario({
+    cronograma: cronogramaValido(valor("trip_schedule")),
+    direcao,
+    data: reserva?.trip?.trip_date ?? ctx.hoje,
+    agora,
+    textos: reserva
+      ? [reserva.pickup_detail, reserva.pickup_neighborhood, reserva.route_point?.name, reserva.route_point?.code, lugar]
+      : [lugar],
+    ajusteSegundaHoras: segunda?.active ? Number(segunda.hours) || 0 : 0,
+  });
   return {
     ok: true,
-    agora: fmtHora.format(agora),
-    tem_recados: recados.length > 0,
-    recados_da_equipe: recados,
-    como_usar:
-      "Cada recado foi escrito para um passageiro: serve para saber onde a van está, não que ela está chegando na porta deste cliente. Não repita nomes de pessoas. Sem recados, diga o horário previsto e não invente a posição.",
+    tem_reserva: !!reserva,
+    reserva: reserva
+      ? { data: reserva.trip?.trip_date, direcao: reserva.trip?.direction, ponto: reserva.route_point?.name ?? null, status: reserva.status }
+      : null,
+    direcao_suposta: !reserva && !pedida,
+    ...estimativa,
+    contato_do_motorista: motorista?.phone ? { nome: motorista.name ?? "motorista", telefone: motorista.phone } : null,
   };
 }
 
@@ -616,7 +645,7 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
       case "consultar_viagem":
         return await consultarViagem(args);
       case "andamento_da_viagem":
-        return await andamentoDaViagem();
+        return await andamentoDaViagem(args, ctx);
       case "listar_pontos_e_precos":
         return await listarPontosEPrecos(args);
       case "calcular_valor":

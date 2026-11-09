@@ -11,6 +11,7 @@
 // por aqui — continuam no motor determinístico (conversationEngine).
 
 import { blocoDasLicoes, blocoDoClienteAtual } from "./botLicoes.ts";
+import { cronogramaParaTexto, cronogramaValido } from "./agentePuro.ts";
 import { numerosNaoFundamentados } from "./botGuard.ts";
 import { hojeSaoLuis } from "./dataOperacao.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -54,7 +55,7 @@ export async function montarFatos(): Promise<{ fatos: string; estilo: string }> 
     supabaseAdmin
       .from("settings")
       .select("key, value")
-      .in("key", ["pix", "monday_adjustment", "served_cities", "bot_style_guide"]),
+      .in("key", ["pix", "monday_adjustment", "served_cities", "bot_style_guide", "trip_schedule"]),
     supabaseAdmin
       .from("bot_knowledge")
       .select("title, content")
@@ -83,6 +84,8 @@ export async function montarFatos(): Promise<{ fatos: string; estilo: string }> 
   if (cfg.monday_adjustment?.active) {
     linhas.push("", `Às segundas-feiras a ida sai ${cfg.monday_adjustment.hours} hora(s) mais cedo.`);
   }
+  const ajusteSegunda = cfg.monday_adjustment?.active ? Number(cfg.monday_adjustment.hours) || 0 : 0;
+  linhas.push("", cronogramaParaTexto(cronogramaValido(cfg.trip_schedule), ajusteSegunda));
   if (cfg.pix?.key) linhas.push("", `Chave Pix: ${cfg.pix.key} (${cfg.pix.name ?? "titular da empresa"}).`);
   if (Array.isArray(cfg.served_cities) && cfg.served_cities.length) {
     linhas.push(`Cidades atendidas: ${cfg.served_cities.join(", ")}.`);
