@@ -164,30 +164,33 @@ describe("parseAnotacaoRapida — ordem NP, endereço, telefone, nome (issue #20
   });
 });
 
-describe("parseAnotacaoEncomenda", () => {
-  it("só telefone: 'E <telefone>'", () => {
-    const r = parseAnotacaoEncomenda("E 98999998888");
-    expect(r).toEqual({ ok: true, item: "", telefone: "98999998888" });
+describe("parseAnotacaoEncomenda — endereço de busca e telefone (issue #246)", () => {
+  it("endereço de busca + telefone", () => {
+    expect(parseAnotacaoEncomenda("E Rua 7 Centro 98999998888")).toEqual({
+      ok: true,
+      endereco: "Rua 7 Centro",
+      telefone: "98999998888",
+      nome: "",
+    });
   });
 
-  it("com item opcional antes do telefone", () => {
-    const r = parseAnotacaoEncomenda("E Documentos 98999998888");
-    expect(r.ok).toBe(true);
-    expect(r.item).toBe("Documentos");
-    expect(r.telefone).toBe("98999998888");
+  it("nome opcional depois do telefone", () => {
+    expect(parseAnotacaoEncomenda("E Mercadinho do Zé 98999998888 Zé")).toEqual({
+      ok: true,
+      endereco: "Mercadinho do Zé",
+      telefone: "98999998888",
+      nome: "Zé",
+    });
   });
 
-  it("'e' minúsculo e com ponto, telefone com máscara", () => {
-    const r = parseAnotacaoEncomenda("e. Caixa de sapato +55 98 8516-6052");
-    expect(r.ok).toBe(true);
-    expect(r.item).toBe("Caixa de sapato");
-    expect(r.telefone).toBe("9885166052");
+  it("'e' minúsculo e com ponto, telefone com máscara e separadores", () => {
+    const r = parseAnotacaoEncomenda("e. Cohatrac Rua 7 - +55 98 8516-6052");
+    expect(r).toMatchObject({ ok: true, endereco: "Cohatrac Rua 7", telefone: "9885166052" });
   });
 
   it("telefone colado do WhatsApp/iOS com marcas invisíveis coladas no fim", () => {
-    const r = parseAnotacaoEncomenda("E 98999998888‎");
-    expect(r.ok).toBe(true);
-    expect(r.telefone).toBe("98999998888");
+    const r = parseAnotacaoEncomenda("E Centro 98999998888‎");
+    expect(r).toMatchObject({ ok: true, telefone: "98999998888" });
   });
 
   it("sem prefixo 'E' => sinaliza semPrefixo (deixa a anotação de passagem tentar)", () => {
@@ -208,15 +211,21 @@ describe("parseAnotacaoEncomenda", () => {
     expect(r.semPrefixo).toBe(true);
   });
 
-  it("com prefixo mas sem telefone reconhecível => erro", () => {
-    const r = parseAnotacaoEncomenda("E Documentos");
+  it("sem endereço de busca => erro pedindo o endereço", () => {
+    const r = parseAnotacaoEncomenda("E 98999998888");
     expect(r.ok).toBe(false);
     expect(r.semPrefixo).toBeUndefined();
+    expect(r.erro).toMatch(/buscar/i);
+  });
+
+  it("com endereço mas sem telefone reconhecível => erro", () => {
+    const r = parseAnotacaoEncomenda("E Rua das Flores");
+    expect(r.ok).toBe(false);
     expect(r.erro).toMatch(/telefone/i);
   });
 
   it("telefone inválido => erro da própria validação de telefone", () => {
-    const r = parseAnotacaoEncomenda("E 123");
+    const r = parseAnotacaoEncomenda("E Centro 123");
     expect(r.ok).toBe(false);
     expect(r.erro).toMatch(/DDD/i);
   });
@@ -256,7 +265,7 @@ describe("separarBairro", () => {
   });
 });
 
-describe("parseLinhaEncomenda — endereço, telefone, nome (issue #214)", () => {
+describe("parseLinhaEncomenda — endereço de busca, telefone, nome (issues #214 e #246)", () => {
   it("endereço + telefone", () => {
     expect(parseLinhaEncomenda("Rua das Flores 12 centro 98999998888")).toEqual({
       ok: true,
@@ -288,7 +297,7 @@ describe("parseLinhaEncomenda — endereço, telefone, nome (issue #214)", () =>
   it("vazio pede ao menos o endereço", () => {
     expect(parseLinhaEncomenda("   ")).toEqual({
       ok: false,
-      erro: "Escreva ao menos o endereço de entrega.",
+      erro: "Escreva o endereço onde vamos buscar a encomenda.",
     });
   });
 });

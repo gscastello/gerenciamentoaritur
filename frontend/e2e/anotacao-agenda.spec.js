@@ -58,7 +58,8 @@ test("Agenda: anotação rápida com prefixo 'E' agenda uma encomenda no ponto, 
 
   const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
   await expect(campo).toBeVisible();
-  await campo.fill("E Documentos 98988887777");
+  // issue #246: o texto antes do telefone é onde vamos buscar a encomenda
+  await campo.fill("E Cohatrac Rua 7 98988887777");
   await campo.press("Enter");
 
   await expect.poll(() => corpo?.p_customer_phone).toBe("98988887777");
@@ -67,7 +68,8 @@ test("Agenda: anotação rápida com prefixo 'E' agenda uma encomenda no ponto, 
   expect(corpo.p_route_point_code).toBe("busca");
   expect(corpo.p_unit_price).toBe(0);
   expect(corpo.p_status).toBe("confirmada");
-  expect(corpo.p_extra_data).toMatchObject({ encItem: "Documentos" });
+  expect(corpo.p_pickup_detail).toBe("Cohatrac Rua 7");
+  expect(corpo.p_dropoff_location).toBeNull();
 
   await expect(campo).toHaveValue("");
 });

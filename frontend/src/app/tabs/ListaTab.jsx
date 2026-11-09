@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { resumoDaEncomenda } from "../../domain/agendaLinha.js";
 import { ordenarBusca } from "../../domain/buscaEmCasa.js";
 import { rotuloPagamento } from "../../domain/format.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -31,6 +32,7 @@ import {
   IDA_PRIORIDADE,
   OCUPA_VAGA,
   Pill,
+  SeloCidadeIntermediaria,
   StatusPill,
   SubTabs,
   TextInput,
@@ -43,6 +45,7 @@ import {
   inferirBaldeDesembarque,
   linhaReserva,
   todayStr,
+  useCidadeIntermediaria,
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
@@ -610,10 +613,15 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const faltou = r.status === "nao_compareceu";
   const ehEnc = r.tipo === "encomenda";
   const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
+  const cidadeIntermediaria = useCidadeIntermediaria(r);
   return (
     <div
       className="rounded-lg px-3 py-2.5 flex items-start gap-2.5"
-      style={{ background: C.panel2, opacity: faltou ? 0.5 : 1 }}
+      style={{
+        background: cidadeIntermediaria ? C.rotaSoft : C.panel2,
+        borderLeft: cidadeIntermediaria ? `3px solid ${C.rota}` : undefined,
+        opacity: faltou ? 0.5 : 1,
+      }}
     >
       {marcar && (
         <button
@@ -664,19 +672,16 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           </span>
         </div>
         <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
-          {ehEnc ? "recebe: " : ""}
-          {r.nome || "—"}
+          {ehEnc ? "contato: " : ""}
+          {r.nome || (ehEnc ? r.telefone : "") || "—"}
         </div>
+        {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
         {ehEnc && (
           <div
             className="text-[11px] mt-0.5"
             style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
           >
-            {r.extra?.encItem || "encomenda"}
-            {r.desembarque ? ` · entrega: ${r.desembarque}` : ""}
-            {r.extra?.encRemetenteNome || r.extra?.encRemetenteTelefone
-              ? ` · de: ${[r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone].filter(Boolean).join(" ")}`
-              : ""}
+            {resumoDaEncomenda(r)}
           </div>
         )}
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
@@ -757,8 +762,8 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
               <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {ehEnc ? "ENC" : `${r.quantidade}P`}
               </span>{" "}
-              · {ehEnc ? "recebe: " : ""}
-              {r.nome || "—"}
+              · {ehEnc ? "contato: " : ""}
+              {r.nome || (ehEnc ? r.telefone : "") || "—"}
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
               <StatusPill status={r.status} />
@@ -770,13 +775,23 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
         </div>
 
         <div className="space-y-1.5">
-          {linha("Embarque", endereco)}
+          {linha(ehEnc ? "Buscar em" : "Embarque", endereco)}
           {ehEnc ? linha("Item", r.extra?.encItem) : null}
-          {linha(ehEnc ? "Entrega" : "Desembarque", r.desembarque)}
+          {ehEnc
+            ? linha("Entrega", r.desembarque || "a definir")
+            : linha("Desembarque", r.desembarque)}
           {ehEnc
             ? linha(
                 "Quem entrega",
                 [r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone]
+                  .filter(Boolean)
+                  .join(" "),
+              )
+            : null}
+          {ehEnc
+            ? linha(
+                "Quem recebe",
+                [r.extra?.encDestinatarioNome, r.extra?.encDestinatarioTelefone]
                   .filter(Boolean)
                   .join(" "),
               )

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CIDADES_ATENDIDAS,
   CIDADES_INTERMEDIARIAS,
+  cidadeIntermediariaDaVolta,
   classificarLocal,
   foraDaAreaPadrao,
 } from "../cidades.js";
@@ -58,5 +59,51 @@ describe("listas", () => {
   it("as duas listas não têm sobreposição", () => {
     const inter = new Set(CIDADES_INTERMEDIARIAS);
     expect(CIDADES_ATENDIDAS.filter((c) => inter.has(c))).toEqual([]);
+  });
+});
+
+describe("cidadeIntermediariaDaVolta", () => {
+  const areas = [
+    { code: "retorno", label: "Retorno", needs_review: false },
+    { code: "miranda", label: "Miranda do Norte", needs_review: true },
+    { code: "santa_rita", label: "Santa Rita", needs_review: true },
+    { code: "cantanhede", label: "Cantanhede", needs_review: true },
+  ];
+  const volta = (campos) => cidadeIntermediariaDaVolta({ direcao: "volta", ...campos }, { areas });
+
+  it("cidade marcada no desembarque, mesmo sem texto", () => {
+    expect(volta({ desembarqueArea: "miranda" })).toBe("Miranda do Norte");
+  });
+  it("cidade citada no texto, pelo nome ou pelo código da área", () => {
+    expect(volta({ desembarque: "Miranda do Norte, perto da praça" })).toBe("Miranda do Norte");
+    expect(volta({ desembarque: "desce em miranda" })).toBe("Miranda do Norte");
+    expect(volta({ desembarque: "Santa Rita" })).toBe("Santa Rita");
+  });
+  it("intermediária que não virou área também conta, com o nome capitalizado", () => {
+    expect(volta({ desembarque: "no entroncamento" })).toBe("Entroncamento");
+    expect(
+      cidadeIntermediariaDaVolta(
+        { direcao: "volta", desembarque: "Vila Nova" },
+        { intermediarias: ["vila nova"] },
+      ),
+    ).toBe("Vila Nova");
+  });
+  it("cidade fixa nunca destaca, mesmo marcada para revisão", () => {
+    expect(volta({ desembarqueArea: "cantanhede" })).toBeNull();
+    expect(volta({ desembarque: "Cantanhede" })).toBeNull();
+  });
+  it("local comum de São Luís não destaca", () => {
+    expect(volta({ desembarqueArea: "retorno", desembarque: "Retorno do Aeroporto" })).toBeNull();
+    expect(volta({ desembarque: "Cohama" })).toBeNull();
+    expect(volta({})).toBeNull();
+  });
+  it("área comum com texto de cidade intermediária destaca", () => {
+    expect(volta({ desembarqueArea: "retorno", desembarque: "Miranda" })).toBe("Miranda do Norte");
+  });
+  it("só na Volta", () => {
+    expect(
+      cidadeIntermediariaDaVolta({ direcao: "ida", desembarqueArea: "miranda" }, { areas }),
+    ).toBeNull();
+    expect(cidadeIntermediariaDaVolta()).toBeNull();
   });
 });
