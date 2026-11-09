@@ -1264,6 +1264,15 @@ function AppInner() {
                           pend={pend}
                           modoAtendimento={modoAtendimento}
                           onNavigate={irParaBusca}
+                          trips={trips}
+                          onAgendar={
+                            podeAgendar
+                              ? (inicial) => {
+                                  setAgendarInicial(inicial);
+                                  setAgendarAberto(true);
+                                }
+                              : null
+                          }
                         />
                       )}
                       {tab === "agenda" && (
