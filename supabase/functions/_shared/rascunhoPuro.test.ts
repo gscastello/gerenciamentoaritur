@@ -8,6 +8,7 @@ import {
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
   pareceTerPedido,
+  telefoneDoPassageiro,
   validarPedidoExtraido,
   viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
@@ -272,4 +273,40 @@ Deno.test("instruções: separar embarque e desembarque com a lista de bairros d
   assert(t.includes("BAIRROS DE SÃO LUÍS: Anil, Cidade Operária, Cohatrac"));
   assert(t.includes("separe onde ele SOBE de onde ele DESCE"));
   assert(!instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" }).includes("BAIRROS DE SÃO LUÍS:"));
+});
+
+Deno.test("telefone do passageiro: só dígitos, sem 55, 10 ou 11 dígitos (issue #268)", () => {
+  assertEquals(telefoneDoPassageiro("+55 98 98888-7777"), "98988887777");
+  assertEquals(telefoneDoPassageiro("5598988887777"), "98988887777");
+  assertEquals(telefoneDoPassageiro("9888887777"), "9888887777");
+  assertEquals(telefoneDoPassageiro("123"), null);
+  assertEquals(telefoneDoPassageiro(null), null);
+});
+
+Deno.test("marcando para outra pessoa: o rascunho leva o passageiro (nome e telefone)", () => {
+  const r = validarPedidoExtraido(
+    {
+      data: "2026-11-10",
+      direcao: "volta",
+      ponto: "pirapemas",
+      endereco: "Estrada Matões, em frente à quadra",
+      desembarque: "Cidade Operária, rua 2, casa 16",
+      nome_informado: "Quem pediu",
+      passageiro_nome: "Dede Silva",
+      passageiro_telefone: "+55 98 98888-7777",
+    },
+    ctx,
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.passageiro, { nome: "Dede Silva", telefone: "98988887777" });
+  assertEquals(r.rascunho.customer_name, "Dede Silva");
+});
+
+Deno.test("passageiro com telefone inválido: sem passageiro e com aviso", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta", ponto: "pirapemas", passageiro_telefone: "123" }, ctx);
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.passageiro, null);
+  assert(r.rascunho.notes?.includes("Telefone do passageiro inválido"));
 });

@@ -88,6 +88,15 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
 
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any) {
+  // o que o Chatwoot entrega como anexo (card de contato, issue #268): tipos e campos, sem conteúdo
+  if (body?.event === "message_created" && Array.isArray(body.attachments) && body.attachments.length) {
+    evento("bot_anexo_recebido", {
+      conversa: body.conversation?.id ?? null,
+      tipo_mensagem: body.message_type ?? null,
+      tipos: body.attachments.map((a: { file_type?: string }) => a?.file_type ?? null),
+      campos: Object.keys(body.attachments[0] ?? {}),
+    });
+  }
   const atividade = extrairAtividade(body, INBOX_ID);
   const conversaEspelhada = atividade ? await espelhar(atividade) : undefined;
 

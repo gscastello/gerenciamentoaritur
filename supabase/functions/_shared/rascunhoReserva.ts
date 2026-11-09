@@ -34,7 +34,7 @@ import {
   validarPedidoExtraido,
 } from "./rascunhoPuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
-import { normalizarTelefone } from "./telefone.ts";
+import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
 
 const MODELO = Deno.env.get("BOT_RASCUNHO_MODELO") ?? "claude-haiku-5-5";
@@ -210,18 +210,25 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
-    if (jaReservadas.has(`${r.trip_date}|${r.direction}`)) {
+    // marcando para outra pessoa: a reserva é do passageiro (issue #268)
+    const outro = v.passageiro && !variantesTelefone(entrada.telefone).includes(v.passageiro.telefone) ? v.passageiro : null;
+    const dono = outro ? await whatsappService.identifyCustomer(outro.telefone) : cliente;
+    const reservadasDoDono = outro ? await viagensJaReservadas(dono?.id ?? null, hoje) : jaReservadas;
+    if (reservadasDoDono.has(`${r.trip_date}|${r.direction}`)) {
       motivos.push("ja_reservado");
       continue;
     }
     const linha = {
       ...r,
       // nome: o do cadastro; senão o que o CLIENTE escreveu (nunca o perfil do WhatsApp)
-      customer_name: cliente?.name ?? r.customer_name,
+      customer_name: dono?.name ?? r.customer_name,
       conversation_id: entrada.conversationId,
       chatwoot_conversation_id: entrada.chatwootConversationId,
-      customer_id: cliente?.id ?? null,
-      phone: telefone || null,
+      customer_id: dono?.id ?? null,
+      phone: outro ? outro.telefone : telefone || null,
+      notes: outro
+        ? [r.notes, `Marcado por outra pessoa (${cliente?.name ?? telefone}).`].filter(Boolean).join(" ").slice(0, 300)
+        : r.notes,
       source_message_id: entrada.mensagemId,
     };
     // um rascunho aberto por conversa e sentido: o cliente corrigiu a data? atualiza o mesmo
@@ -326,8 +333,9 @@ export async function lancarPeloAgendado(entrada: Entrada) {
         preco = valor.preco;
       }
 
-      // o cliente já cadastrado reusa o telefone dele (com ou sem o nono dígito)
-      const existente = lido.cliente ?? (await whatsappService.identifyCustomer(entrada.telefone));
+      // dono da reserva: o do rascunho (o passageiro, se marcaram para outra pessoa — issue #268);
+      // cliente já cadastrado reusa o telefone dele (com ou sem o nono dígito)
+      const existente = await whatsappService.identifyCustomer(d.phone ?? entrada.telefone);
       const { data: res, error } = await supabaseAdmin.rpc("rpc_create_reservation", {
         p_trip_date: d.trip_date,
         p_direction: direcao,

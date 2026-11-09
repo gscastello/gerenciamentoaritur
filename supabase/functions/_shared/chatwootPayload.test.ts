@@ -1,5 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
-import { extrairAtividade, extrairMensagemDeCliente } from "./chatwootPayload.ts";
+import {
+  contatosCompartilhados,
+  extrairAtividade,
+  extrairMensagemDeCliente,
+  textoComContatos,
+} from "./chatwootPayload.ts";
 
 const base = () => ({
   event: "message_created",
@@ -147,4 +152,42 @@ Deno.test("atividade: nota privada (inclusive o rascunho do bot) nunca é observ
   const a = extrairAtividade({ event: "message_created", id: 79, content: "🤖 [SOMBRA] ...", message_type: "outgoing", private: true,
     sender: { id: 3, type: "agent_bot" }, conversation: conversa() });
   assertEquals(a, null);
+});
+
+const CARD = {
+  file_type: "contact",
+  fallback_title: "+55 98 98888-7777",
+  meta: { firstName: "Maria", lastName: "Silva" },
+};
+
+Deno.test("card de contato do WhatsApp vira nome e telefone (issue #268)", () => {
+  assertEquals(contatosCompartilhados([CARD]), [{ nome: "Maria Silva", telefone: "5598988887777" }]);
+  assertEquals(contatosCompartilhados([{ file_type: "contact", fallback_title: "98988887777" }]), [
+    { nome: null, telefone: "98988887777" },
+  ]);
+  // sem número de verdade, imagem ou nada: ignora
+  assertEquals(contatosCompartilhados([{ file_type: "contact", fallback_title: "Phone number is not available" }]), []);
+  assertEquals(contatosCompartilhados([{ file_type: "image", data_url: "x" }]), []);
+  assertEquals(contatosCompartilhados(undefined), []);
+});
+
+Deno.test("card de contato entra no texto da mensagem do cliente e da atividade", () => {
+  assertEquals(textoComContatos("", [CARD]), "[contato compartilhado: Maria Silva — 5598988887777]");
+  assertEquals(textoComContatos("O contato do passageiro", [CARD]), "O contato do passageiro [contato compartilhado: Maria Silva — 5598988887777]");
+  assertEquals(textoComContatos("oi", []), "oi");
+  assertEquals(textoComContatos("  ", []), undefined);
+
+  const body = {
+    event: "message_created",
+    message_type: "incoming",
+    id: 77,
+    content: null,
+    attachments: [CARD],
+    conversation: { id: 214, status: "open", meta: { sender: { phone_number: "+559884227729" } } },
+    sender: { phone_number: "+559884227729" },
+  };
+  const m = extrairMensagemDeCliente(body);
+  assertEquals(m?.texto, "[contato compartilhado: Maria Silva — 5598988887777]");
+  assertEquals(m?.anexo, undefined);
+  assertEquals(extrairAtividade(body)?.texto, "[contato compartilhado: Maria Silva — 5598988887777]");
 });
