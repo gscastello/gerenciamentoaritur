@@ -45,25 +45,30 @@ test("Agenda: agenda uma encomenda pendente numa viagem/ponto real", async ({ pa
   await expect(linhaPendente).toBeVisible();
   await linhaPendente.getByRole("button", { name: "Agendar" }).click();
 
-  // modal pré-preenchido com os dados de quem recebe e o desembarque
+  // modal pré-preenchido com o contato, onde buscar e a entrega
   await expect(
     page
       .getByRole("heading", { name: "Agendar encomenda" })
       .or(page.getByText("Agendar encomenda")),
   ).toBeVisible();
-  await expect(page.getByLabel("Quem recebe (nome ou telefone)")).toHaveValue("Maria Receptora");
-  await expect(page.getByLabel("Quem recebe (telefone ou nome)")).toHaveValue("98988887777");
+  await expect(page.getByLabel("Nome do contato (opcional)")).toHaveValue("Maria Receptora");
+  await expect(page.getByLabel("Telefone do contato *")).toHaveValue("98988887777");
+  await expect(page.getByLabel("Onde buscar (endereço) *")).toHaveValue("Rodoviária");
+  await expect(page.getByLabel("Endereço de entrega (pode ser depois)")).toHaveValue(
+    "Pirapemas centro",
+  );
 
   await page.getByRole("button", { name: "Agendar", exact: true }).last().click();
 
   await expect(page.getByText(/Encomenda: Documentos/)).toHaveCount(0);
   await expect(page.getByText("Encomendas do dia")).toBeVisible();
   // agora aparece dentro da viagem, no ponto de embarque, como uma passagem
-  await expect(page.getByText(/recebe: Maria Receptora/)).toBeVisible();
+  await expect(page.getByText(/contato: Maria Receptora/)).toBeVisible();
   await expect(page.getByText(/Documentos · entrega: Pirapemas centro/)).toBeVisible();
 
   expect(chamadas).toHaveLength(1);
   expect(chamadas[0].p_move).toMatchObject({ direction: "ida" });
+  expect(chamadas[0].p_details.pickup_detail).toBe("Rodoviária");
   expect(chamadas[0].p_status).toBe("confirmada");
 });
 
@@ -86,17 +91,20 @@ test("Agenda: cria uma encomenda nova do zero", async ({ page }) => {
     .click();
 
   await page.getByRole("button", { name: "Nova" }).click();
-  await page.getByLabel("Endereço de entrega *").fill("Pirapemas centro");
-  await page.getByLabel("Quem recebe (nome ou telefone)").fill("João Destino");
-  await page.getByLabel("Quem recebe (telefone ou nome)").fill("98977776666");
+  await page.getByLabel("Onde buscar (endereço) *").fill("Rua 7, Centro");
+  await page.getByLabel("Telefone do contato *").fill("98977776666");
+  await page.getByLabel("Nome do contato (opcional)").fill("João Remetente");
+  await page.getByLabel("Endereço de entrega (pode ser depois)").fill("Pirapemas centro");
+  await page.getByLabel("Quem recebe (nome)").fill("Maria Destino");
   await page.getByRole("button", { name: "Criar" }).click();
 
-  await expect(page.getByText("Nenhuma encomenda agendada"))
-    .toHaveCount(0)
-    .catch(() => {});
-  expect(chamadas).toHaveLength(1);
+  await expect.poll(() => chamadas.length).toBe(1);
   expect(chamadas[0].p_type).toBe("encomenda");
-  expect(chamadas[0].p_customer_name).toBe("João Destino");
+  expect(chamadas[0].p_customer_name).toBe("João Remetente");
+  expect(chamadas[0].p_pickup_detail).toBe("Rua 7, Centro");
+  expect(chamadas[0].p_dropoff_location).toBe("Pirapemas centro");
+  expect(chamadas[0].p_extra_data.encDestinatarioNome).toBe("Maria Destino");
+  expect(chamadas[0].p_unit_price).toBe(0);
 });
 
 test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({ page }) => {
@@ -186,9 +194,9 @@ test("Agenda: encomenda agendada aparece no ponto da viagem como uma passagem, s
 }) => {
   await abrirAgendaComEncomenda(page);
 
-  // mesma linha das passagens: etiqueta no lugar do "NP", quem recebe, item e entrega
+  // mesma linha das passagens: etiqueta no lugar do "NP", contato, item e entrega
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
-  await expect(page.getByText(/recebe: Maria Receptora/)).toBeVisible();
+  await expect(page.getByText(/contato: Maria Receptora/)).toBeVisible();
   await expect(
     page.getByText(/Documentos · entrega: Pirapemas centro · de: José Remetente/),
   ).toBeVisible();
@@ -226,10 +234,14 @@ test("Agenda: Editar abre o formulário da encomenda já preenchido e salva sem 
 
   await page.getByRole("button", { name: "Editar", exact: true }).click();
   await expect(page.getByText("Editar encomenda")).toBeVisible();
-  await expect(page.getByLabel("Endereço de entrega *")).toHaveValue("Pirapemas centro");
+  await expect(page.getByLabel("Endereço de entrega (pode ser depois)")).toHaveValue(
+    "Pirapemas centro",
+  );
   await expect(page.getByLabel("O que é (opcional)")).toHaveValue("Documentos");
   await expect(page.getByLabel("Quem entrega (nome)")).toHaveValue("José Remetente");
-  await expect(page.getByLabel("Quem recebe (nome ou telefone)")).toHaveValue("Maria Receptora");
+  await expect(page.getByLabel("Nome do contato (opcional)")).toHaveValue("Maria Receptora");
+  // encomenda de antes da regra, sem onde buscar: a edição não trava
+  await expect(page.getByLabel("Onde buscar (endereço)")).toHaveValue("");
 
   await page.getByLabel("O que é (opcional)").fill("Caixa de sapato");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
@@ -241,7 +253,7 @@ test("Agenda: Editar abre o formulário da encomenda já preenchido e salva sem 
   await expect(page.getByText(/Caixa de sapato · entrega: Pirapemas centro/)).toBeVisible();
 });
 
-test("Agenda: nova encomenda pela linha rápida (só endereço e contato)", async ({ page }) => {
+test("Agenda: nova encomenda pela linha rápida (só onde buscar e telefone)", async ({ page }) => {
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
@@ -261,20 +273,22 @@ test("Agenda: nova encomenda pela linha rápida (só endereço e contato)", asyn
 
   await page.getByRole("button", { name: "Nova" }).click();
   await page
-    .getByLabel("Linha rápida: endereço, telefone e nome")
-    .fill("Pirapemas centro 98977776666");
-  await expect(page.getByLabel("Endereço de entrega *")).toHaveValue("Pirapemas centro");
-  await expect(page.getByLabel("Quem recebe (telefone ou nome)")).toHaveValue("98977776666");
+    .getByLabel("Linha rápida: onde buscar, telefone e nome")
+    .fill("Rua 7 Centro 98977776666");
+  await expect(page.getByLabel("Onde buscar (endereço) *")).toHaveValue("Rua 7 Centro");
+  await expect(page.getByLabel("Telefone do contato *")).toHaveValue("98977776666");
+  await expect(page.getByLabel("Endereço de entrega (pode ser depois)")).toHaveValue("");
   await page.getByRole("button", { name: "Criar" }).click();
 
   await expect.poll(() => chamadas.length).toBe(1);
   expect(chamadas[0].p_type).toBe("encomenda");
-  expect(chamadas[0].p_dropoff_location).toBe("Pirapemas centro");
+  expect(chamadas[0].p_pickup_detail).toBe("Rua 7 Centro");
+  expect(chamadas[0].p_dropoff_location).toBeNull();
   expect(chamadas[0].p_customer_phone).toBe("98977776666");
   expect(chamadas[0].p_customer_name).toBe("");
 });
 
-test("Agenda: encomenda sem endereço de entrega não envia", async ({ page }) => {
+test("Agenda: encomenda sem onde buscar ou sem telefone não envia", async ({ page }) => {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
   await page
@@ -282,6 +296,48 @@ test("Agenda: encomenda sem endereço de entrega não envia", async ({ page }) =
     .first()
     .click();
   await page.getByRole("button", { name: "Nova" }).click();
-  await page.getByLabel("Quem recebe (telefone ou nome)").fill("98977776666");
-  await expect(page.getByRole("button", { name: "Criar" })).toBeDisabled();
+  const criar = page.getByRole("button", { name: "Criar" });
+  await page.getByLabel("Telefone do contato *").fill("98977776666");
+  await expect(criar).toBeDisabled();
+  await page.getByLabel("Onde buscar (endereço) *").fill("Rua 7, Centro");
+  await expect(criar).toBeEnabled();
+  await page.getByLabel("Telefone do contato *").fill("");
+  await expect(criar).toBeDisabled();
+});
+
+test("Agenda: anotação rápida 'E endereço telefone' na caixinha do ponto cria a encomenda", async ({
+  page,
+}) => {
+  const chamadas = [];
+  await mockSupabase(page, {
+    role: "admin",
+    createResult: {
+      success: true,
+      reservation_id: "e2e-enc-caixinha",
+      status: "confirmada",
+      message: "created",
+    },
+    onCreate: (route) => chamadas.push(route.request().postDataJSON()),
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /Agenda/ })
+    .first()
+    .click();
+
+  const caixa = page.getByRole("textbox", { name: /Anotar reserva/ }).first();
+  await caixa.fill("E 98977776666");
+  await caixa.press("Enter");
+  await expect(page.getByText(/onde vamos buscar/)).toBeVisible();
+  expect(chamadas).toHaveLength(0);
+
+  await caixa.fill("E Rua 7 Centro 98977776666 Zé");
+  await caixa.press("Enter");
+  await expect.poll(() => chamadas.length).toBe(1);
+  expect(chamadas[0].p_type).toBe("encomenda");
+  expect(chamadas[0].p_pickup_detail).toBe("Rua 7 Centro");
+  expect(chamadas[0].p_customer_phone).toBe("98977776666");
+  expect(chamadas[0].p_customer_name).toBe("Zé");
+  expect(chamadas[0].p_dropoff_location).toBeNull();
+  expect(chamadas[0].p_unit_price).toBe(0);
 });
