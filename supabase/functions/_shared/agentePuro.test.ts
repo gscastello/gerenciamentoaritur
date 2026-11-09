@@ -32,6 +32,7 @@ import {
   ultimaFoiDoCliente,
   validarPedidoDeReserva,
   type MensagemDaConversa,
+  precoDoLocalDeOutros,
 } from "./agentePuro.ts";
 
 const m = (quem: MensagemDaConversa["quem"], texto: string, em: string): MensagemDaConversa => ({ quem, texto, em });
@@ -546,4 +547,32 @@ Deno.test("cronograma em texto: os dois sentidos e o aviso da segunda", () => {
   assertStringIncludes(t, "Bacabeira de 15:30 às 16:00");
   assertStringIncludes(t, "a ida sai 1 hora(s) mais cedo");
   assertEquals(cronogramaParaTexto(CRONOGRAMA_PADRAO).includes("segunda"), false);
+});
+
+const LOCAIS_OUTROS = [{ local: "Aeroporto", price: 70 }];
+
+Deno.test("preço de Outros: embarque dentro do aeroporto usa o preço próprio (issue #263)", () => {
+  for (const t of ["Aeroporto de São Luís", "no aeroporto", "AEROPORTO, saguão", "terminal do aeroporto"]) {
+    assertEquals(precoDoLocalDeOutros(t, LOCAIS_OUTROS), 70, t);
+  }
+});
+
+Deno.test("preço de Outros: 'retorno do aeroporto' NÃO é o aeroporto", () => {
+  for (const t of ["Retorno do aeroporto", "no retorno perto do aeroporto", "retorno"]) {
+    assertEquals(precoDoLocalDeOutros(t, LOCAIS_OUTROS), null, t);
+  }
+});
+
+Deno.test("preço de Outros: local sem preço próprio, vazio ou valor inválido → null", () => {
+  assertEquals(precoDoLocalDeOutros("BR — Maracanã", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros(null, LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("aeroportos", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("aeroporto", [{ local: "Aeroporto", price: "x" }]), null);
+});
+
+Deno.test("preço de Outros: o local mais específico vence", () => {
+  const locais = [{ local: "Aeroporto", price: 70 }, { local: "Aeroporto Hangar", price: 90 }];
+  assertEquals(precoDoLocalDeOutros("aeroporto hangar 2", locais), 90);
+  assertEquals(precoDoLocalDeOutros("aeroporto", locais), 70);
 });

@@ -5,6 +5,7 @@ import {
   _tabelas,
   descreverSugestaoDePreco,
   precoBairro,
+  precoDoLocalDeOutros,
   valorTotal,
   valorUnitario,
 } from "../precos.js";
@@ -98,5 +99,44 @@ describe("descreverSugestaoDePreco", () => {
         price: 30,
       }).replace(/\s/g, " "),
     ).toBe("Pirapemas a Miranda: R$ 30,00");
+  });
+});
+
+describe("precoDoLocalDeOutros — aeroporto ≠ retorno do aeroporto (issue #263)", () => {
+  const LOCAIS = [{ local: "Aeroporto", price: 70 }];
+
+  it("embarque dentro do aeroporto usa o preço próprio", () => {
+    for (const t of [
+      "Aeroporto de São Luís",
+      "no aeroporto",
+      "AEROPORTO, saguão",
+      "terminal do aeroporto",
+    ]) {
+      expect(precoDoLocalDeOutros(t, LOCAIS)).toBe(70);
+    }
+  });
+
+  it("'retorno do aeroporto' NÃO é o aeroporto", () => {
+    for (const t of ["Retorno do aeroporto", "no retorno perto do aeroporto", "retorno"]) {
+      expect(precoDoLocalDeOutros(t, LOCAIS)).toBeNull();
+    }
+  });
+
+  it("local sem preço próprio, vazio ou valor inválido → null", () => {
+    expect(precoDoLocalDeOutros("BR — Maracanã", LOCAIS)).toBeNull();
+    expect(precoDoLocalDeOutros("", LOCAIS)).toBeNull();
+    expect(precoDoLocalDeOutros(null, LOCAIS)).toBeNull();
+    expect(precoDoLocalDeOutros("aeroportos", LOCAIS)).toBeNull();
+    expect(precoDoLocalDeOutros("aeroporto", [{ local: "Aeroporto", price: "x" }])).toBeNull();
+    expect(precoDoLocalDeOutros("aeroporto")).toBeNull();
+  });
+
+  it("o local mais específico vence", () => {
+    const locais = [
+      { local: "Aeroporto", price: 70 },
+      { local: "Aeroporto Hangar", price: 90 },
+    ];
+    expect(precoDoLocalDeOutros("aeroporto hangar 2", locais)).toBe(90);
+    expect(precoDoLocalDeOutros("aeroporto", locais)).toBe(70);
   });
 });
