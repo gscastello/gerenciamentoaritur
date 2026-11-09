@@ -292,6 +292,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
   Paradas e plataforma viram lições `operacao`.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
+- **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
+  no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
+  com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de
+  nome do perfil do WhatsApp, nenhuma mensagem ao cliente sem o dono pedir.
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
