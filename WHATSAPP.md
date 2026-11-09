@@ -245,7 +245,15 @@ prepara a reserva para ela lançar com um toque:
    (ida e volta) pela ferramenta `registrar_pedidos`. A validação é pura (`_shared/rascunhoPuro.ts`): precisa de
    **data + endereço ou ponto** (regra do dono). O sentido sai do ponto; endereço em São Luís sem ponto = busca em casa;
    quantidade sem número = 1.
-4. Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
+4. **Interpretação (issue #266):** pedido sem embarque usa o **endereço de costume** do cliente naquele sentido
+   (`rpc_endereco_de_costume`) e o que ele citou em **conversas anteriores** (a leitura recebe até 4 páginas do Chatwoot),
+   com aviso em "Conferir". Pedido para hoje feito depois que a viagem daquele sentido saiu (Ida após 07:00, Volta após
+   14:00, `SAIDA_ENCERRADA`) vira **amanhã**, com aviso. Nome de rua ("Estrada Matões") não é cidade.
+   **Marcando para outra pessoa (issue #268):** o card de contato do WhatsApp (anexo `contact` do Chatwoot: telefone em
+   `fallback_title`, nome em `meta`) entra no texto como "[contato compartilhado: Nome — telefone]"; a reserva vai para o
+   **passageiro** (telefone e nome dele) e quem pediu fica anotado. O log `bot_anexo_recebido` mostra os tipos de anexo que
+   chegam (sem conteúdo).
+   Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).
 5. No app, aba **Atendimento → Reservas prontas para lançar**: **Lançar** abre a nova reserva já preenchida (preço e

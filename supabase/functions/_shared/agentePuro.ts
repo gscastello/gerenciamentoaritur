@@ -6,6 +6,7 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
+import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
   /** id da mensagem no Chatwoot, quando se sabe */
@@ -40,7 +41,8 @@ export function converterMensagensDoChatwoot(brutas: MensagemBruta[]): MensagemD
   const saida: MensagemDaConversa[] = [];
   for (const b of brutas) {
     if (b.message_type !== 0 && b.message_type !== 1) continue;
-    const conteudo = String(b.content ?? "").trim();
+    // card de contato (issue #268) entra como texto: é o número do passageiro
+    const conteudo = textoComContatos(String(b.content ?? ""), b.attachments) ?? "";
     let quem: MensagemDaConversa["quem"];
     let texto = conteudo;
     if (b.private) {

@@ -25,6 +25,7 @@ import {
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
+  type CostumeDoSentido,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -33,7 +34,7 @@ import {
   validarPedidoExtraido,
 } from "./rascunhoPuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
-import { normalizarTelefone } from "./telefone.ts";
+import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
 
 const MODELO = Deno.env.get("BOT_RASCUNHO_MODELO") ?? "claude-haiku-5-5";
@@ -58,7 +59,8 @@ type Entrada = {
 
 async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 2);
+    // 4 páginas: além do pedido atual, as conversas anteriores mostram onde o cliente costuma embarcar
+    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 4);
     return { mensagens: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch {
     const { data } = await supabaseAdmin
@@ -67,17 +69,18 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
       .eq("chatwoot_conversation_id", chatwootConversationId)
       .in("author", ["cliente", "equipe"])
       .order("created_at", { ascending: false })
-      .limit(40);
+      .limit(80);
     const mensagens = converterObservacoes(data ?? []);
     return { mensagens, cedeu: mensagens.some((m) => m.quem === "cliente" && (m.id ?? 0) > mensagemId) };
   }
 }
 
 async function contexto() {
-  const [ida, volta, { data: areas }] = await Promise.all([
+  const [ida, volta, { data: areas }, { data: bairros }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
     supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null),
+    supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood"),
   ]);
   const ativos = (l: Bloco[] | null) => (l ?? []).filter((p) => p.active !== false);
   const pontos = { ida: ativos(ida).map((p) => String(p.code)), volta: ativos(volta).map((p) => String(p.code)) };
@@ -92,6 +95,7 @@ async function contexto() {
     pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
     listaPontos,
     desembarques,
+    bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).join(", "),
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
   };
 }
@@ -121,6 +125,33 @@ async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: 
   return { pedidos: pedidos.slice(0, 2), uso };
 }
 
+const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Fortaleza",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+type CostumeDoCliente = { ida: CostumeDoSentido; volta: CostumeDoSentido };
+
+/** Endereço de costume (fixado pela equipe ou o mais frequente no histórico). Melhor esforço. */
+async function costumeDoCliente(customerId: string): Promise<CostumeDoCliente | null> {
+  const { data, error } = await supabaseAdmin.rpc("rpc_endereco_de_costume", { p_customer_id: customerId });
+  if (error || !data?.success) return null;
+  if (!data.ida && !data.volta) return null;
+  return { ida: data.ida ?? null, volta: data.volta ?? null };
+}
+
+function textoDoCostume(c: CostumeDoCliente): string {
+  const linha = (rotulo: string, s: CostumeDoSentido) =>
+    s?.route_point_code
+      ? `- ${rotulo}: ${[s.route_point_name ?? s.route_point_code, s.neighborhood, s.detail].filter(Boolean).join(", ")}${
+        s.dropoff_location ? ` → desce em ${s.dropoff_location}` : ""
+      }`
+      : "";
+  return [linha("Ida", c.ida), linha("Volta", c.volta)].filter(Boolean).join("\n");
+}
+
 /** Viagens (data|sentido) em que o cliente já tem reserva ativa. */
 async function viagensJaReservadas(customerId: string | null, hoje: string): Promise<Set<string>> {
   if (!customerId) return new Set();
@@ -145,41 +176,59 @@ async function lerEGravar(
 ) {
   const agora = new Date();
   const hoje = diaCivil(agora);
+  const horaAgora = fmtHoraSaoLuis.format(agora);
   const ctx = await contexto();
-  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= agora.getTime() - 72 * 3600 * 1000);
+  const limite = agora.getTime() - 72 * 3600 * 1000;
+  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= limite);
+  // conversas anteriores: só para saber onde o cliente costuma embarcar e descer (issue #266)
+  const anteriores = mensagens.filter((m) => new Date(m.em).getTime() < limite && m.quem !== "bot");
+
+  const cliente = await whatsappService.identifyCustomer(entrada.telefone);
+  const costume = cliente ? await costumeDoCliente(cliente.id) : null;
   const system = instrucoesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
     pontos: ctx.listaPontos,
     desembarques: ctx.desembarques,
     confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
+    costume: costume ? textoDoCostume(costume) : undefined,
+    bairrosSaoLuis: ctx.bairrosSaoLuis,
   });
-  const { pedidos, uso } = await lerPedidos(system, formatarHistorico(recentes, 30, 500));
+  const conversa = anteriores.length
+    ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 25, 200)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 30, 500)}`
+    : formatarHistorico(recentes, 30, 500);
+  const { pedidos, uso } = await lerPedidos(system, conversa);
 
-  const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
 
   const gravados: string[] = [];
   const motivos: string[] = [];
   for (const p of pedidos) {
-    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe });
+    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe, horaAgora, costume });
     if (!v.ok) {
       motivos.push(v.motivo);
       continue;
     }
     const r = v.rascunho;
-    if (jaReservadas.has(`${r.trip_date}|${r.direction}`)) {
+    // marcando para outra pessoa: a reserva é do passageiro (issue #268)
+    const outro = v.passageiro && !variantesTelefone(entrada.telefone).includes(v.passageiro.telefone) ? v.passageiro : null;
+    const dono = outro ? await whatsappService.identifyCustomer(outro.telefone) : cliente;
+    const reservadasDoDono = outro ? await viagensJaReservadas(dono?.id ?? null, hoje) : jaReservadas;
+    if (reservadasDoDono.has(`${r.trip_date}|${r.direction}`)) {
       motivos.push("ja_reservado");
       continue;
     }
     const linha = {
       ...r,
       // nome: o do cadastro; senão o que o CLIENTE escreveu (nunca o perfil do WhatsApp)
-      customer_name: cliente?.name ?? r.customer_name,
+      customer_name: dono?.name ?? r.customer_name,
       conversation_id: entrada.conversationId,
       chatwoot_conversation_id: entrada.chatwootConversationId,
-      customer_id: cliente?.id ?? null,
-      phone: telefone || null,
+      customer_id: dono?.id ?? null,
+      phone: outro ? outro.telefone : telefone || null,
+      notes: outro
+        ? [r.notes, `Marcado por outra pessoa (${cliente?.name ?? telefone}).`].filter(Boolean).join(" ").slice(0, 300)
+        : r.notes,
       source_message_id: entrada.mensagemId,
     };
     // um rascunho aberto por conversa e sentido: o cliente corrigiu a data? atualiza o mesmo
@@ -284,8 +333,9 @@ export async function lancarPeloAgendado(entrada: Entrada) {
         preco = valor.preco;
       }
 
-      // o cliente já cadastrado reusa o telefone dele (com ou sem o nono dígito)
-      const existente = lido.cliente ?? (await whatsappService.identifyCustomer(entrada.telefone));
+      // dono da reserva: o do rascunho (o passageiro, se marcaram para outra pessoa — issue #268);
+      // cliente já cadastrado reusa o telefone dele (com ou sem o nono dígito)
+      const existente = await whatsappService.identifyCustomer(d.phone ?? entrada.telefone);
       const { data: res, error } = await supabaseAdmin.rpc("rpc_create_reservation", {
         p_trip_date: d.trip_date,
         p_direction: direcao,
