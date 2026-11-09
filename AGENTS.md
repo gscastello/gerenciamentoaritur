@@ -280,14 +280,25 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
   pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+- **Preço por embarque e desembarque** (issue #239): `calcular_valor` e `criar_reserva` comparam os dois na tabela de
+  trechos (`route_fares`, editada em Sistema), depois no ponto/bairro. Trecho em cidade intermediária sem valor vai para
+  a equipe. **Bairros e trechos evoluem:** o que o atendente diz e o que a equipe repete nas reservas vira sugestão em
+  `bot_price_suggestions`, mas só entra na tabela com a aprovação do dono. O bot nunca decide preço.
+- **No ritmo do cliente** (issue #238): o bot não segue roteiro nem pede tudo de uma vez. Cumprimento recebe
+  cumprimento, uma pergunta por mensagem, responde o que foi perguntado antes de retomar. O resumo com "Posso
+  confirmar?" antes de gravar continua obrigatório. **Andamento da viagem** (issue #244): só a ESTIMATIVA pelo
+  cronograma do dono (`andamento_da_viagem`, `CRONOGRAMA_PADRAO` ou `settings.trip_schedule`): confere a reserva, dá a
+  janela do lugar do cliente e diz pelo horário se já estamos em rota. Nunca diz onde a van está; se o cliente insistir,
+  envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
+  Paradas e plataforma viram lições `operacao`.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
   recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
   orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
-  dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação valem na hora com
-  aviso; fato e negócio (inclusive valor de trecho) só aprovados. Lição já revisada nunca é
+  dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação/operação valem na hora com
+  aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é
   reescrita sozinha: o bot deixa uma sugestão de atualização para o dono aceitar ou manter. Mudança no aprendizado não pode quebrar essas
   garantias (nem fazer o bot decidir preço, vaga, horário ou confirmação).
 

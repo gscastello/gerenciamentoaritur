@@ -19,6 +19,11 @@ export const TIPOS_DE_LICAO = {
     rotulo: "O que responder em cada situação",
     ajuda: "Como o atendente reage a pedidos e problemas comuns. Com número, só vale aprovada.",
   },
+  operacao: {
+    rotulo: "Como a viagem funciona",
+    ajuda:
+      "Paradas, plataforma e horários de chegada ditos pelo atendente. Com valor em dinheiro, só vale aprovada.",
+  },
   fato: {
     rotulo: "Informação do atendente",
     ajuda: "Regra, valor ou horário dito ao cliente. Só vale depois de aprovada.",
@@ -109,6 +114,7 @@ export function mensagemDoAprendizado(r) {
   if (r.atualizadas) partes.push(`${r.atualizadas} atualizada(s)`);
   if (r.sugestoes) partes.push(`${r.sugestoes} sugestão(ões) de atualização para você`);
   if (r.clientes) partes.push(`${r.clientes} cliente(s) anotado(s)`);
+  if (r.precos) partes.push(`${r.precos} preço(s) para você aprovar`);
   const lido = `Li ${r.observacoes} mensagem(ns).`;
   return partes.length ? `${lido} ${partes.join(", ")}.` : `${lido} Nada de novo para registrar.`;
 }

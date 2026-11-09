@@ -9,6 +9,7 @@ import {
   normalizarTitulo,
   pontuacaoDaLicao,
   statusInicial,
+  validarSugestoesDePreco,
   validarLicoesNovas,
   validarNotasDeClientes,
   type LicaoGuardada,
@@ -70,6 +71,10 @@ Deno.test("transcrição respeita o limite de tamanho e de conversas", () => {
 Deno.test("fato e negócio nascem proposta; situação com número também; o resto nasce ativa", () => {
   assertEquals(statusInicial("fato"), "proposta");
   assertEquals(statusInicial("negocio"), "proposta");
+  assertEquals(statusInicial("operacao", "Na rodoviária, a van fica na primeira plataforma."), "ativa");
+  assertEquals(statusInicial("operacao", "Sai 12h de Pirapemas e chega em São Luís por volta das 17h."), "ativa");
+  assertEquals(statusInicial("operacao", "O trecho até Miranda fica R$ 30."), "proposta");
+  assertEquals(statusInicial("operacao", "O trecho até Miranda fica 30 reais."), "proposta");
   assertEquals(statusInicial("situacao", "Se pedem desconto, o atendente diz que não há."), "ativa");
   assertEquals(statusInicial("situacao", "Se pedem desconto, o atendente faz por R$ 10."), "proposta");
   assertEquals(statusInicial("linguagem_cliente"), "ativa");
@@ -206,4 +211,46 @@ Deno.test("lição nova e recente não fica de fora do prompt só por ter pouca 
   const bloco = blocoDeLicoes([velha, nova], ["situacao"], { max: 1 });
   assertStringIncludes(bloco, "Nova");
   assertEquals(bloco.includes("Antiga"), false);
+});
+
+Deno.test("sugestões de preço: só bairro ou trecho completos, com valor plausível", () => {
+  assertEquals(
+    validarSugestoesDePreco([
+      { tipo: "bairro", origem: " Maiobinha ", valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", destino: "Matões", valor: "35" },
+      { tipo: "bairro", origem: "maiobinha", valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", valor: 35 },
+      { tipo: "encomenda", origem: "Pirapemas", valor: 20 },
+      { tipo: "bairro", origem: "AB", valor: 80 },
+      { tipo: "bairro", origem: "Fale em 98981012388", valor: 80 },
+      { tipo: "bairro", origem: "Fale com [telefone]", valor: 80 },
+      { tipo: "bairro", origem: "Turu", valor: 4 },
+      { tipo: "bairro", origem: "Turu", valor: 501 },
+      { tipo: "bairro", origem: "Turu" },
+    ]),
+    [
+      { tipo: "bairro", origem: "Maiobinha", destino: null, valor: 80 },
+      { tipo: "trecho", origem: "Cantanhede", destino: "Matões", valor: 35 },
+    ],
+  );
+  assertEquals(validarSugestoesDePreco("nada"), []);
+});
+
+Deno.test("sugestões de preço: valores nos limites e valores diferentes do mesmo lugar", () => {
+  assertEquals(
+    validarSugestoesDePreco([
+      { tipo: "bairro", origem: "Turu", valor: 5 },
+      { tipo: "bairro", origem: "Turu", valor: 500 },
+    ]).map((s) => s.valor),
+    [5, 500],
+  );
+});
+
+Deno.test("bloco de lições: operação entra com título próprio", () => {
+  const bloco = blocoDeLicoes(
+    [{ id: "1", kind: "operacao", title: "Plataforma", content: "Primeira plataforma, ao lado do café." }],
+    ["operacao"],
+  );
+  assertStringIncludes(bloco, "COMO A VIAGEM FUNCIONA NA PRÁTICA");
+  assertStringIncludes(bloco, "- Plataforma: Primeira plataforma, ao lado do café.");
 });
