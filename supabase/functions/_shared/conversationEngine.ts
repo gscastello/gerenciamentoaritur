@@ -321,11 +321,11 @@ async function finalizeReservation(conversation: any, state: any, to: string) {
   try {
     // issue #6: embarque/desembarque menciona cidade fora de São Luís /
     // Cantanhede / Pirapemas? A reserva nasce pendente (não ocupa vaga) e a
-    // equipe é avisada; o ponto de embarque "outro" também cai aqui.
+    // equipe é avisada. O ponto "outro" (Outros) reúne locais de São Luís e não conta (#261).
     const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([
       state.dropoffLocation, state.pickupDetail, state.pickupNeighborhood,
     ]);
-    const fora = !!cidadeFora || state.routePointCode === "outro";
+    const fora = !!cidadeFora;
     const pendingReason = fora
       ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
       : null;

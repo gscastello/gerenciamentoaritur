@@ -356,8 +356,10 @@ export const BUSCA_PROXIMO = {
 
 /* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
  * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
-export const IDA_PRIORIDADE = { rodoviaria: 0, retorno: 1, postocarone: 2, br: 3 };
-export const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "postocarone", "br"];
+// Ida: só Buscar em Casa, Rodoviária, Retorno e Outros (issue #261) — BR, Posto
+// Carone, aeroporto… são "Outros", com o local que o cliente citou.
+export const IDA_PRIORIDADE = { rodoviaria: 0, retorno: 1, outro: 2 };
+export const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "outro"];
 export const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
 
 /* ---- Desembarque (rota do motorista) — ver database/10-dropoff-plan.sql --- */
@@ -1099,8 +1101,9 @@ export function labelLocal(reserva, trips) {
   const p = pontoDe(reserva, trips);
   if (!p) return "—";
   if (p.id === "busca") return reserva.bairro || "bairro não informado";
-  if (p.id === "outro" && reserva.localOutro) return reserva.localOutro;
-  if (p.id === "br" && reserva.localExato) return `BR (${reserva.localExato})`;
+  // Outros: só o local citado pelo cliente ("Aeroporto", "BR — Maracanã"); a
+  // seção já diz que é embarque alternativo, não repete "Outros" (issue #261)
+  if (p.id === "outro") return reserva.localExato || p.nome;
   return p.nome;
 }
 /** formato pedido: para busca em casa "NP - BAIRRO - TELEFONE"; para os demais "NP Local (telefone)" */

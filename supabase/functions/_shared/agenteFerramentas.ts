@@ -498,7 +498,8 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   }
 
   const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.enderecoEmbarque, pedido.bairro]);
-  const fora = !!cidadeFora || ponto.code === "outro";
+  // "Outros" reúne locais de São Luís (BR, Posto Carone, aeroporto…): só cidade fora da área deixa pendente (#261)
+  const fora = !!cidadeFora;
   const motivoPendente = fora
     ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
     : null;

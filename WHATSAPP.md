@@ -52,6 +52,8 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 6. `database/69-licao-operacao.sql` — lições de operação: paradas, plataforma e chegada (ver §6c).
 7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
 8. `database/72-rascunhos-de-reserva.sql` — reservas preparadas pela IA para a equipe lançar com um toque (ver §6e).
+9. `database/73-embarque-outros.sql` — na Ida só Buscar em Casa, Rodoviária, Retorno e **Outros**: BR, Posto Carone,
+   aeroporto e qualquer outro local vão em Outros (código `outro`), com o local citado no detalhe. Outros não é "fora da área".
 
 ## 3b. Painel "Atendimento" (no app)
 
