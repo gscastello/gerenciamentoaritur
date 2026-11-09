@@ -16,12 +16,14 @@
 //   CHATWOOT_INBOX_ID        id da caixa "Aritur WhatsApp" (ex.: 146985) — opcional, filtra
 //   ANTHROPIC_API_KEY        leitura do texto + respostas da base de conhecimento
 //
-// Dois trabalhos por evento:
+// Trabalhos por evento:
 //   1) ESPELHO — grava em whatsapp_conversations o status da conversa no
 //      Chatwoot, quem falou por último e a prévia: é o que alimenta a fila
 //      do painel "Atendimento" do app (sem guardar token do Chatwoot no
 //      navegador).
 //   2) BOT — se for mensagem de cliente, roda o motor de reservas.
+//   3) RASCUNHO — quando quem atende é a equipe (modo manual/sombra ou conversa
+//      com humano), prepara a reserva para ela lançar com um toque (issue #254).
 //
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
@@ -33,6 +35,7 @@ import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootP
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
+import { prepararRascunhoDeReserva } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -143,6 +146,16 @@ async function processar(body: any) {
         raw: { chatwoot_message_id: m.chatwootMessageId, content: m.texto ?? null, anexo: m.anexo?.tipo ?? null },
       }),
   );
+
+  // quem atende é a equipe: deixa a reserva preparada (nada é reservado aqui)
+  if (m.texto && (modo !== "ia" || conversation.attendance_mode === "humano")) {
+    await prepararRascunhoDeReserva({
+      conversationId: conversation.id,
+      chatwootConversationId: m.chatwootConversationId,
+      mensagemId: m.chatwootMessageId,
+      telefone: m.telefone,
+    });
+  }
 
   // depois de responder ao cliente, para o aprendizado não atrasar o atendimento
   if (observou) await aprenderSePreciso();
