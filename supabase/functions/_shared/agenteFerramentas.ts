@@ -230,7 +230,7 @@ async function reservasDoCliente(ctx: ContextoDoAgente, recarregar = false): Pro
 }
 
 /** Acha o ponto por código ou nome (sem acento); devolve null se não existir naquela direção. */
-function acharPonto(pontos: Linha[], texto: unknown): Linha | null {
+export function acharPonto(pontos: Linha[], texto: unknown): Linha | null {
   const t = semAcento(String(texto ?? ""));
   if (!t) return null;
   return (
@@ -273,7 +273,7 @@ async function precoUnitario(
 }
 
 /** O valor por passagem deste pedido: compara onde sobe e onde desce e só então cai na tabela do ponto/bairro. */
-async function valorDoPedido(
+export async function valorDoPedido(
   ponto: Linha,
   pedido: { bairro: string | null; endereco: string | null; desembarque: string },
 ): Promise<{ ok: true; preco: number; trecho?: string } | { ok: false; erro: Record<string, unknown> }> {
