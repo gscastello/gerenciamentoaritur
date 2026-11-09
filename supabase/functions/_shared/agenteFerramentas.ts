@@ -25,6 +25,7 @@ import {
   trechoDoPedido,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
+import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
 import { telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
@@ -270,7 +271,12 @@ async function precoUnitario(
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
     const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
-    const achado = bairroDaTabela(bairro, data ?? []);
+    let achado = bairroDaTabela(bairro, data ?? []);
+    if (!achado) {
+      // condomínio/residencial fora da tabela: memória de endereços e internet (issue #270)
+      const deduzido = await resolverBairro([bairro, endereco].filter(Boolean).join(" "));
+      if (deduzido) achado = (data ?? []).find((b: Linha) => b.neighborhood === deduzido.bairro) ?? null;
+    }
     if (!achado) {
       return {
         ok: false,

@@ -253,6 +253,15 @@ prepara a reserva para ela lançar com um toque:
    `fallback_title`, nome em `meta`) entra no texto como "[contato compartilhado: Nome — telefone]"; a reserva vai para o
    **passageiro** (telefone e nome dele) e quem pediu fica anotado. O log `bot_anexo_recebido` mostra os tipos de anexo que
    chegam (sem conteúdo).
+   **Endereço que o bot não conhece (issue #270):** busca em casa cujo bairro não está na tabela de preços (ex.: o
+   cliente diz "Residencial Colinas") passa por `_shared/bairroResolver.ts`: primeiro a **memória de endereços**
+   (`bairro_aliases`, migração 75: o que a equipe confirmou, o que o dono cadastrou, o que já foi descoberto); senão, uma
+   **pesquisa na internet** (`BOT_BAIRRO_MODELO`, padrão `claude-sonnet-5-5`, ferramenta `web_search`, até 3 buscas) que
+   só pode responder um bairro **da tabela** ou "nenhum". O achado entra na memória como `fonte = 'internet'`,
+   `confirmado = false`, e no rascunho vai com aviso "Bairro deduzido pela internet… Confira." (o texto do cliente fica
+   no endereço). O preço continua sendo o do bairro na tabela: nada aqui inventa valor. O mesmo vale para
+   `calcular_valor`/`criar_reserva` do atendente. Bairro que a equipe confirmou na conversa ("Turu, certo?" → "sim") vale
+   direto. Log: `bot_bairro_deduzido` (fonte, bairro) e `bot_aviso` com `bairro_nao_resolvido`.
    Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).
