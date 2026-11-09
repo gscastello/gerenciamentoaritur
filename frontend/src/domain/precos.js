@@ -182,3 +182,36 @@ export function descreverSugestaoDePreco({ tipo, origem, destino, price }) {
   const lugar = tipo === "trecho" ? `${origem} a ${destino}` : `Busca em casa em ${origem}`;
   return `${lugar}: ${fmtBRL(price)}`;
 }
+
+const palavras = (s) =>
+  normalizar(s)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * Preço próprio de um local da categoria Outros (issue #263): o embarque DENTRO do
+ * aeroporto custa diferente. Compara palavras inteiras, sem acento; o nome mais
+ * longo vence. Texto que fala em "retorno" NUNCA conta: "retorno do aeroporto" é o
+ * ponto Retorno, não o aeroporto (regra do dono). Mesma regra do bot
+ * (supabase/functions/_shared/agentePuro.ts). Sem correspondência: null.
+ * @param {string} texto local citado pelo cliente
+ * @param {{local: string, price: number|string}[]} locais
+ * @returns {number|null}
+ */
+export function precoDoLocalDeOutros(texto, locais = []) {
+  const t = ` ${palavras(texto)} `;
+  if (!t.trim() || t.includes(" retorno ")) return null;
+  let melhor = null;
+  for (const l of locais) {
+    const nome = palavras(l.local);
+    if (
+      nome &&
+      t.includes(` ${nome} `) &&
+      (!melhor || nome.length > palavras(melhor.local).length)
+    ) {
+      melhor = l;
+    }
+  }
+  const preco = melhor ? Number(melhor.price) : Number.NaN;
+  return Number.isFinite(preco) && preco > 0 ? preco : null;
+}

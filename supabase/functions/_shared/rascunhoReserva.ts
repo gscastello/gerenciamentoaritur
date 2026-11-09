@@ -4,9 +4,15 @@
 // espera ele terminar de escrever, lê o fim da conversa e, se ele já mandou o
 // que basta (data + endereço ou ponto), grava/atualiza um rascunho em
 // reservation_drafts. A equipe lança com um toque na aba Atendimento (o app
-// calcula preço e vaga como sempre). NADA é reservado aqui. Melhor esforço:
-// erro aqui nunca pode derrubar o atendimento. Regras puras em rascunhoPuro.ts.
+// calcula preço e vaga como sempre).
+//
+// "Agendado ☑️" (issue #257): quando a EQUIPE confirma na conversa com a marca
+// combinada pelo dono, o rascunho é preparado na hora e LANÇADO — a marca da
+// equipe é a confirmação manual. Preço pela mesma regra do bot (trecho → ponto
+// → bairro); vaga validada pelo banco. Se faltar algo, o rascunho fica na lista
+// com o motivo. Melhor esforço: erro aqui nunca derruba o atendimento.
 
+import { acharPonto, valorDoPedido } from "./agenteFerramentas.ts";
 import {
   areaDoDesembarque,
   calendarioParaOPrompt,
@@ -42,6 +48,14 @@ const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // biome-ignore lint/suspicious/noExplicitAny: resposta externa da API
 type Bloco = Record<string, any>;
 
+type Entrada = {
+  conversationId: string;
+  chatwootConversationId: number;
+  /** id da mensagem que disparou (do cliente ou, no Agendado ☑️, da equipe) */
+  mensagemId: number;
+  telefone: string;
+};
+
 async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
     const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 2);
@@ -73,7 +87,13 @@ async function contexto() {
   ].join("\n");
   const porSentido = (d: string) => (areas ?? []).filter((a: Bloco) => a.direction === d) as { code: string; label: string }[];
   const desembarques = ["ida", "volta"].map((d) => `- ${d}: ${porSentido(d).map((a) => a.label).join(", ")}`).join("\n");
-  return { pontos, listaPontos, desembarques, areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)) };
+  return {
+    pontos,
+    pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
+    listaPontos,
+    desembarques,
+    areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
+  };
 }
 
 async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco }> {
@@ -114,12 +134,74 @@ async function viagensJaReservadas(customerId: string | null, hoje: string): Pro
   return new Set((data ?? []).map((r: Bloco) => `${r.trips.trip_date}|${r.trips.direction}`));
 }
 
-export async function prepararRascunhoDeReserva(entrada: {
-  conversationId: string;
-  chatwootConversationId: number;
-  mensagemId: number;
-  telefone: string;
-}) {
+/**
+ * Lê a conversa e grava/atualiza os rascunhos. Devolve o que foi lido para quem
+ * chamou (o Agendado ☑️ lança em seguida).
+ */
+async function lerEGravar(
+  entrada: Entrada,
+  mensagens: MensagemDaConversa[],
+  opcoes: { confirmadoPelaEquipe: boolean },
+) {
+  const agora = new Date();
+  const hoje = diaCivil(agora);
+  const ctx = await contexto();
+  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= agora.getTime() - 72 * 3600 * 1000);
+  const system = instrucoesDaLeitura({
+    calendario: calendarioParaOPrompt(agora),
+    pontos: ctx.listaPontos,
+    desembarques: ctx.desembarques,
+    confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
+  });
+  const { pedidos, uso } = await lerPedidos(system, formatarHistorico(recentes, 30, 500));
+
+  const cliente = await whatsappService.identifyCustomer(entrada.telefone);
+  const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
+  const telefone = normalizarTelefone(entrada.telefone);
+
+  const gravados: string[] = [];
+  const motivos: string[] = [];
+  for (const p of pedidos) {
+    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe });
+    if (!v.ok) {
+      motivos.push(v.motivo);
+      continue;
+    }
+    const r = v.rascunho;
+    if (jaReservadas.has(`${r.trip_date}|${r.direction}`)) {
+      motivos.push("ja_reservado");
+      continue;
+    }
+    const linha = {
+      ...r,
+      // nome: o do cadastro; senão o que o CLIENTE escreveu (nunca o perfil do WhatsApp)
+      customer_name: cliente?.name ?? r.customer_name,
+      conversation_id: entrada.conversationId,
+      chatwoot_conversation_id: entrada.chatwootConversationId,
+      customer_id: cliente?.id ?? null,
+      phone: telefone || null,
+      source_message_id: entrada.mensagemId,
+    };
+    // um rascunho aberto por conversa e sentido: o cliente corrigiu a data? atualiza o mesmo
+    const { data: aberto } = await supabaseAdmin
+      .from("reservation_drafts")
+      .select("id")
+      .eq("conversation_id", entrada.conversationId)
+      .eq("direction", r.direction)
+      .eq("status", "pronta")
+      .maybeSingle();
+    const { data: salvo, error } = aberto
+      ? await supabaseAdmin.from("reservation_drafts").update(linha).eq("id", aberto.id).select("id").single()
+      : await supabaseAdmin.from("reservation_drafts").insert(linha).select("id").single();
+    if (error) {
+      motivos.push("erro_gravar");
+      evento("bot_aviso", { aviso: "rascunho_nao_gravado", conversa: entrada.chatwootConversationId, erro: error.message.slice(0, 200) });
+    } else gravados.push(salvo.id);
+  }
+  return { pedidos, gravados, motivos, uso, ctx, cliente, hoje };
+}
+
+export async function prepararRascunhoDeReserva(entrada: Entrada) {
   const conversa = entrada.chatwootConversationId;
   try {
     // 1) o cliente costuma mandar o pedido picado: espera e deixa a mensagem mais nova cuidar
@@ -127,72 +209,120 @@ export async function prepararRascunhoDeReserva(entrada: {
     const { mensagens, cedeu } = await lerConversa(conversa, entrada.mensagemId);
     if (cedeu) return;
 
-    const agora = new Date();
-    const doCliente = mensagensRecentesDoCliente(mensagens, agora);
+    // 2) filtro barato: sem data citada pelo cliente, não chama o modelo
+    const doCliente = mensagensRecentesDoCliente(mensagens, new Date());
     if (!pareceTerPedido(doCliente.map((m) => m.texto))) return;
 
-    const hoje = diaCivil(agora);
-    const ctx = await contexto();
-    const recentes = mensagens.filter((m: MensagemDaConversa) => new Date(m.em).getTime() >= agora.getTime() - 72 * 3600 * 1000);
-    const system = instrucoesDaLeitura({
-      calendario: calendarioParaOPrompt(agora),
-      pontos: ctx.listaPontos,
-      desembarques: ctx.desembarques,
-    });
-    const { pedidos, uso } = await lerPedidos(system, formatarHistorico(recentes, 30, 500));
-
-    const cliente = await whatsappService.identifyCustomer(entrada.telefone);
-    const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
-    const telefone = normalizarTelefone(entrada.telefone);
-
-    let gravados = 0;
-    const motivos: string[] = [];
-    for (const p of pedidos) {
-      const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe });
-      if (!v.ok) {
-        motivos.push(v.motivo);
-        continue;
-      }
-      const r = v.rascunho;
-      if (jaReservadas.has(`${r.trip_date}|${r.direction}`)) {
-        motivos.push("ja_reservado");
-        continue;
-      }
-      const linha = {
-        ...r,
-        // nome: o do cadastro; senão o que o CLIENTE escreveu (nunca o perfil do WhatsApp)
-        customer_name: cliente?.name ?? r.customer_name,
-        conversation_id: entrada.conversationId,
-        chatwoot_conversation_id: conversa,
-        customer_id: cliente?.id ?? null,
-        phone: telefone || null,
-        source_message_id: entrada.mensagemId,
-      };
-      // um rascunho aberto por conversa e sentido: o cliente corrigiu a data? atualiza o mesmo
-      const { data: aberto } = await supabaseAdmin
-        .from("reservation_drafts")
-        .select("id")
-        .eq("conversation_id", entrada.conversationId)
-        .eq("direction", r.direction)
-        .eq("status", "pronta")
-        .maybeSingle();
-      const { error } = aberto
-        ? await supabaseAdmin.from("reservation_drafts").update(linha).eq("id", aberto.id)
-        : await supabaseAdmin.from("reservation_drafts").insert(linha);
-      if (error) {
-        motivos.push("erro_gravar");
-        evento("bot_aviso", { aviso: "rascunho_nao_gravado", conversa, erro: error.message.slice(0, 200) });
-      } else gravados++;
-    }
+    const r = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: false });
     evento("bot_rascunho_preparado", {
       conversa,
-      pedidos: pedidos.length,
-      gravados,
-      motivos,
-      entrada: uso?.input_tokens ?? null,
-      saida: uso?.output_tokens ?? null,
+      pedidos: r.pedidos.length,
+      gravados: r.gravados.length,
+      motivos: r.motivos,
+      entrada: r.uso?.input_tokens ?? null,
+      saida: r.uso?.output_tokens ?? null,
     });
   } catch (err) {
     evento("bot_aviso", { aviso: "rascunho_falhou", conversa, erro: String(err).slice(0, 300) });
+  }
+}
+
+/** Deixa o motivo no rascunho que ficou para a equipe resolver. */
+async function anotarPendencia(draftId: string, motivo: string) {
+  await supabaseAdmin
+    .from("reservation_drafts")
+    .update({ notes: `Agendado ☑️ não lançou: ${motivo}`.slice(0, 200) })
+    .eq("id", draftId);
+}
+
+/**
+ * A equipe escreveu "Agendado ☑️": prepara na hora e lança as reservas
+ * preparadas desta conversa. Idempotente pela mensagem da equipe.
+ */
+export async function lancarPeloAgendado(entrada: Entrada) {
+  const conversa = entrada.chatwootConversationId;
+  const lancadas: string[] = [];
+  const pendentes: string[] = [];
+  try {
+    const { mensagens } = await lerConversa(conversa, Number.MAX_SAFE_INTEGER);
+    const lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
+
+    const { data: prontos } = await supabaseAdmin
+      .from("reservation_drafts")
+      .select("*")
+      .eq("conversation_id", entrada.conversationId)
+      .eq("status", "pronta")
+      .gte("trip_date", lido.hoje);
+    if (!prontos?.length) {
+      evento("bot_agendado_lancado", { conversa, lancadas: 0, pendentes: ["sem_rascunho"], motivos: lido.motivos });
+      return;
+    }
+
+    const { data: bot } = await supabaseAdmin.from("users").select("id").eq("name", "Bot WhatsApp").maybeSingle();
+    for (const d of prontos as Bloco[]) {
+      const direcao = d.direction as "ida" | "volta";
+      const encomenda = d.type === "encomenda";
+      let ponto: Bloco | null = null;
+      let preco = 0;
+      if (!encomenda) {
+        ponto = acharPonto(lido.ctx.pontosCompletos[direcao], d.route_point_code);
+        if (!ponto) {
+          await anotarPendencia(d.id, "ponto de embarque não reconhecido");
+          pendentes.push("ponto");
+          continue;
+        }
+        const valor = await valorDoPedido(ponto, {
+          bairro: d.pickup_neighborhood,
+          endereco: d.pickup_detail,
+          desembarque: d.dropoff_location ?? "",
+        });
+        if (!valor.ok) {
+          await anotarPendencia(d.id, String(valor.erro?.erro ?? "sem preço na tabela"));
+          pendentes.push(String(valor.erro?.codigo ?? "preco"));
+          continue;
+        }
+        preco = valor.preco;
+      }
+
+      // o cliente já cadastrado reusa o telefone dele (com ou sem o nono dígito)
+      const existente = lido.cliente ?? (await whatsappService.identifyCustomer(entrada.telefone));
+      const { data: res, error } = await supabaseAdmin.rpc("rpc_create_reservation", {
+        p_trip_date: d.trip_date,
+        p_direction: direcao,
+        p_customer_name: existente?.name ?? d.customer_name ?? "",
+        p_customer_phone: existente?.phone ?? d.phone,
+        p_type: encomenda ? "encomenda" : "passagem",
+        p_route_point_code: ponto?.code ?? null,
+        p_quantity: d.quantity ?? 1,
+        p_unit_price: preco, // encomenda: nunca tem valor pelo bot
+        p_payment_method: "dinheiro",
+        p_pickup_neighborhood: d.pickup_neighborhood,
+        p_pickup_detail: d.pickup_detail,
+        p_dropoff_location: d.dropoff_location,
+        p_dropoff_area: d.dropoff_area,
+        p_status: "confirmada",
+        p_extra_data: { origem: "agendado_equipe", rascunho_id: d.id },
+        p_whatsapp_source_message_id: `cw-${entrada.mensagemId}-agendado-${direcao}`,
+        p_created_by: bot?.id ?? null,
+      });
+      if (error || !res?.success) {
+        const motivo = error?.message ?? res?.message ?? "reserva recusada";
+        await anotarPendencia(d.id, motivo);
+        pendentes.push(res?.code ?? res?.status ?? "recusada");
+        continue;
+      }
+      // o gatilho do banco fecha o rascunho; aqui só conta
+      lancadas.push(res.reservation_id);
+    }
+    evento("bot_agendado_lancado", {
+      conversa,
+      lancadas: lancadas.length,
+      pendentes,
+      motivos: lido.motivos,
+      entrada: lido.uso?.input_tokens ?? null,
+      saida: lido.uso?.output_tokens ?? null,
+    });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "agendado_falhou", conversa, erro: String(err).slice(0, 300) });
   }
 }

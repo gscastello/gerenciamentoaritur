@@ -52,6 +52,12 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 6. `database/69-licao-operacao.sql` — lições de operação: paradas, plataforma e chegada (ver §6c).
 7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
 8. `database/72-rascunhos-de-reserva.sql` — reservas preparadas pela IA para a equipe lançar com um toque (ver §6e).
+9. `database/73-embarque-outros.sql` — na Ida só Buscar em Casa, Rodoviária, Retorno e **Outros**: BR, Posto Carone,
+   aeroporto e qualquer outro local vão em Outros (código `outro`), com o local citado no detalhe. Outros não é "fora da área".
+10. `database/74-precos-locais-outros.sql` — locais de Outros com preço próprio (`boarding_spot_prices`, Sistema → Preços):
+   embarque **dentro do aeroporto** = R$ 70. **"Retorno do aeroporto" é o ponto Retorno**, não o aeroporto: a regra de preço
+   (`precoDoLocalDeOutros`, igual no bot e no app) ignora texto com "retorno", e o atendente/leitura de rascunhos pergunta
+   quando não dá para saber qual dos dois.
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -248,8 +254,18 @@ prepara a reserva para ela lançar com um toque:
 6. Criar a reserva daquele cliente naquela viagem, por **qualquer** caminho (app, anotação, bot, Claude), fecha o
    rascunho sozinho (gatilho `trg_reservations_fecha_rascunho`).
 
-Nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos, gravados, motivos,
-tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
+Sem a marca abaixo, nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos,
+gravados, motivos, tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
+
+**"Agendado ☑️" lança sozinho (issue #257).** Quando a **equipe** escreve na conversa a marca combinada pelo dono
+(**"Agendado ☑️"**; vale também agendada/agendados, ☑ ✅ ✔, em qualquer posição, mas não pergunta nem nota privada), o
+bot lê a conversa na hora (sem espera nem filtro de data), prepara o rascunho do que a equipe acabou de confirmar e o
+**lança**: preço pela mesma regra do bot (`valorDoPedido`: trecho → ponto → bairro), vaga validada pelo banco, status
+`confirmada` (a marca da equipe é a confirmação manual), pagamento em dinheiro, autor Bot com
+`extra_data.origem = 'agendado_equipe'`. É idempotente pela mensagem da equipe. Encomenda é lançada **sem valor**. Se faltar
+algo (ponto não reconhecido, trecho sem preço, lotado, recusa do banco), a reserva **não** é criada e o rascunho fica em
+"Reservas prontas para lançar" com o motivo em "Conferir". Nunca roda no modo **sombra**. Log: `bot_agendado_lancado`
+(lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
 
 ## 7. Checklist de teste (em modo Sombra)
 

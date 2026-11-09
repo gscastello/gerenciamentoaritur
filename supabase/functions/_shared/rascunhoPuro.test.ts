@@ -3,6 +3,7 @@ import {
   type MensagemDaConversa,
 } from "./agentePuro.ts";
 import {
+  ehMarcaDeAgendado,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -151,6 +152,54 @@ Deno.test("a ferramenta pede no máximo dois pedidos e as instruções levam o c
   assertEquals(FERRAMENTA_PEDIDOS.input_schema.properties.pedidos.maxItems, 2);
   const t = instrucoesDaLeitura({ calendario: "Amanhã: terça (2026-11-10)", pontos: "busca = Buscar em Casa", desembarques: "-" });
   assert(t.includes("2026-11-10"));
-  assert(t.includes("NÃO reserva"));
+  assert(t.includes("NÃO decide preço"));
+  assert(!t.includes("ACABOU DE CONFIRMAR"));
   assert(t.includes("Nunca o nome do perfil") || t.includes("Nunca invente"));
+});
+
+Deno.test("Outros (issue #261): ponto 'outro' precisa do local citado", () => {
+  const p = { ...pontos, ida: [...pontos.ida] };
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Aeroporto de São Luís" }, { ...ctx, pontos: p });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.rascunho.route_point_code, "outro");
+    assertEquals(r.rascunho.pickup_detail, "Aeroporto de São Luís");
+  }
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "outro" }, { ...ctx, pontos: p }), {
+    ok: false,
+    motivo: "sem_endereco",
+  });
+});
+
+Deno.test("marca da equipe: 'Agendado ☑️' e variações valem", () => {
+  for (const t of [
+    "Agendado ☑️",
+    "agendado ☑",
+    "AGENDADA ✅",
+    "Certo, Maria! Agendado ☑️ amanhã 5h",
+    "☑️ agendados",
+    "Agendado ✔️",
+  ]) {
+    assert(ehMarcaDeAgendado(t), t);
+  }
+});
+
+Deno.test("marca da equipe: sem o check, pergunta ou outra palavra não vale", () => {
+  for (const t of [
+    "Já está agendado",
+    "Sua passagem está agendada pra hoje? ☑️",
+    "Agendado ☑️?",
+    "☑️ confirmado",
+    "reagendamento ☑️",
+    "",
+    null,
+  ]) {
+    assertEquals(ehMarcaDeAgendado(t as string | null), false, String(t));
+  }
+});
+
+Deno.test("instruções no modo confirmado pela equipe", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
+  assert(t.includes("ACABOU DE CONFIRMAR"));
+  assert(!t.includes("Se a equipe já disse que reservou"));
 });
