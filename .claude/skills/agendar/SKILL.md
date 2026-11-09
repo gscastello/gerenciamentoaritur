@@ -54,6 +54,9 @@ Leia a partir do pedido mais recente. Veja também as reservas atuais do cliente
   `cantanhede`. **Qualquer outro local de embarque** (BR, Posto Carone, aeroporto, beira da estrada…) é
   `outro`, com o local que o cliente citou em `p_pickup_detail` (ex.: "Aeroporto de São Luís", "BR — Maracanã").
   Nunca lance aeroporto ou BR como busca em casa.
+- **Retorno do aeroporto ≠ aeroporto.** "Retorno do aeroporto", "no retorno" = ponto `retorno` (R$ 60). Embarque
+  **dentro** do aeroporto (terminal, chegando de voo) = `outro` com "Aeroporto de São Luís", que tem preço próprio
+  (R$ 70, tabela `boarding_spot_prices`, Sistema → Locais em Outros). Na dúvida, pergunte ao dono qual dos dois.
 - **Busca em casa:** bairro em `p_pickup_neighborhood` (nome igual ao de `neighborhood_pricing`),
   rua em `p_street`, referência em `p_reference_point`. Ponto com detalhe: `p_pickup_detail`.
 - **Desembarque:** texto em `p_dropoff_location` e área em `p_dropoff_area`
@@ -76,7 +79,8 @@ Leia a partir do pedido mais recente. Veja também as reservas atuais do cliente
    1. trecho em `route_fares` (origem × destino batendo com embarque e desembarque);
    2. desembarque/embarque em cidade intermediária sem trecho cadastrado → **não invente**:
       pergunte o valor ao dono;
-   3. preço do ponto (`route_points.price` > 0);
+   3. em Outros, o local citado com preço próprio em `boarding_spot_prices` (nunca texto com "retorno");
+      senão o preço do ponto (`route_points.price` > 0);
    4. busca em casa → preço do bairro em `neighborhood_pricing`; bairro fora da tabela → pergunte.
    Valor dito pelo dono no chat vale (ele é o dono). Valor dito só pelo cliente, não.
 4. **Encomenda:** `p_type => 'encomenda'`, `p_unit_price => 0` **sempre**, `p_pickup_detail` =
