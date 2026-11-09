@@ -1947,7 +1947,7 @@ export function NovaReservaModal({
     pontoId: inicial?.pontoId || primeiroPonto(inicial?.direcao || direcaoInicial),
     bairro: inicial?.bairro || "",
     anotacao: inicial?.anotacao || "",
-    quantidade: "1",
+    quantidade: String(inicial?.quantidade || 1),
     pagamento: inicial?.pagamento || "dinheiro",
     valorManual: "",
     desembarque: inicial?.desembarque || "",

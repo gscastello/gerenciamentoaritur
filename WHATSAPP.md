@@ -51,6 +51,7 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
    para o bot propor o pedido pronto (ver §6d). (O 65 corrige o índice das observações.)
 6. `database/69-licao-operacao.sql` — lições de operação: paradas, plataforma e chegada (ver §6c).
 7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
+8. `database/72-rascunhos-de-reserva.sql` — reservas preparadas pela IA para a equipe lançar com um toque (ver §6e).
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -224,6 +225,31 @@ vaga e duplicidade seguem como em qualquer reserva.
 pedido pronto ("Ida amanhã, saindo de …, descendo em …, 1 passagem, no dinheiro. Posso confirmar?"), **sem citar
 valor** a menos que o cliente pergunte, nunca presume a data e **só cria depois do "sim"**. Se o cliente mudar algo,
 vale o que ele disser. Sem costume (cliente novo ou sem repetição) o fluxo normal continua igual.
+
+## 6e. Reservas preparadas pela IA (issue #254)
+
+Quando quem atende é a equipe (modo **manual** ou **sombra**, ou conversa transferida para humano), o `chatwoot-bot`
+prepara a reserva para ela lançar com um toque:
+
+1. Depois de cada mensagem do cliente, espera ~20 s (`BOT_RASCUNHO_ESPERA_MS`) para ele terminar de escrever. Se
+   chegou mensagem mais nova, quem cuida é ela.
+2. Filtro barato: sem data citada pelo cliente nas últimas 48 h ("amanhã", "sexta", "dia 12", "12/11"), não chama o
+   modelo.
+3. Um modelo pequeno (`BOT_RASCUNHO_MODELO`, padrão `claude-haiku-5-5`) lê o fim da conversa e devolve até dois pedidos
+   (ida e volta) pela ferramenta `registrar_pedidos`. A validação é pura (`_shared/rascunhoPuro.ts`): precisa de
+   **data + endereço ou ponto** (regra do dono). O sentido sai do ponto; endereço em São Luís sem ponto = busca em casa;
+   quantidade sem número = 1.
+4. Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
+   cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
+   (nunca o perfil do WhatsApp).
+5. No app, aba **Atendimento → Reservas prontas para lançar**: **Lançar** abre a nova reserva já preenchida (preço e
+   vaga pelo app, como sempre); **Descartar** tira da lista. Encomenda não tem Lançar nem valor: **Copiar anotação**
+   gera a linha `E <onde buscar> <telefone>` para a caixinha da Agenda.
+6. Criar a reserva daquele cliente naquela viagem, por **qualquer** caminho (app, anotação, bot, Claude), fecha o
+   rascunho sozinho (gatilho `trg_reservations_fecha_rascunho`).
+
+Nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos, gravados, motivos,
+tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
 
 ## 7. Checklist de teste (em modo Sombra)
 
