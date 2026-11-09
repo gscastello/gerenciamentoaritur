@@ -70,7 +70,19 @@ export type PedidoExtraido = {
   nome_informado?: string | null;
   trecho_do_cliente?: string | null;
   duvida?: string | null;
+  /** marcando para OUTRA pessoa (issue #268): o passageiro de verdade */
+  passageiro_nome?: string | null;
+  passageiro_telefone?: string | null;
 };
+
+export type Passageiro = { nome: string | null; telefone: string };
+
+/** Telefone do passageiro: só dígitos, sem o 55 do país; 10 ou 11 dígitos, senão null. */
+export function telefoneDoPassageiro(bruto: unknown): string | null {
+  let d = String(bruto ?? "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
+  return d.length === 10 || d.length === 11 ? d : null;
+}
 
 /** O que é gravado em reservation_drafts. */
 export type Rascunho = {
@@ -136,7 +148,7 @@ export function validarPedidoExtraido(
     /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
     costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
   },
-): { ok: true; rascunho: Rascunho } | { ok: false; motivo: string } {
+): { ok: true; rascunho: Rascunho; passageiro: Passageiro | null } | { ok: false; motivo: string } {
   const tipo = p.tipo === "encomenda" ? "encomenda" : "passagem";
   let data = String(p.data ?? "");
   const avisos: string[] = [];
@@ -190,8 +202,13 @@ export function validarPedidoExtraido(
   const desembarque = texto(p.desembarque, 120) ?? desembarqueDoCostume;
   const detalhe = tipo === "encomenda" ? [bairro, endereco].filter(Boolean).join(", ") || null : endereco;
 
+  const telPassageiro = telefoneDoPassageiro(p.passageiro_telefone);
+  if (p.passageiro_telefone && !telPassageiro) avisos.push("Telefone do passageiro inválido: confira.");
+  const passageiro = telPassageiro ? { nome: texto(p.passageiro_nome, 80), telefone: telPassageiro } : null;
+
   return {
     ok: true,
+    passageiro,
     rascunho: {
       type: tipo,
       trip_date: data,
@@ -202,7 +219,7 @@ export function validarPedidoExtraido(
       dropoff_location: desembarque,
       dropoff_area: desembarque && ctx.areaDoDesembarque ? ctx.areaDoDesembarque(desembarque, direcao) : null,
       quantity: quantidade,
-      customer_name: texto(p.nome_informado, 80),
+      customer_name: texto(p.passageiro_nome, 80) ?? texto(p.nome_informado, 80),
       client_excerpt: texto(p.trecho_do_cliente, 300),
       notes: texto([...avisos, texto(p.duvida, 200)].filter(Boolean).join(" "), 300),
     },
@@ -234,6 +251,11 @@ export const FERRAMENTA_PEDIDOS = {
             nome_informado: { type: "string", description: "Nome que o cliente ESCREVEU para a reserva. Nunca o nome do perfil." },
             trecho_do_cliente: { type: "string", description: "As palavras do cliente que mostram o pedido (até 200 caracteres)." },
             duvida: { type: "string", description: "O que ficou incerto, para a equipe conferir (curto)." },
+            passageiro_nome: { type: "string", description: "Se marca para OUTRA pessoa: o nome do passageiro." },
+            passageiro_telefone: {
+              type: "string",
+              description: "Se marca para OUTRA pessoa: o telefone do passageiro (do card '[contato compartilhado: …]' ou digitado).",
+            },
           },
           required: ["tipo"],
         },
@@ -266,6 +288,7 @@ ${quando}
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
 - Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, o endereço em Pirapemas/Cantanhede (rua, estrada, referência) é o embarque (endereco) e o que tem bairro de São Luís (lista BAIRROS DE SÃO LUÍS) é o desembarque. Na Ida é o contrário: bairro de São Luís é o embarque e o endereço no interior é o desembarque. Ex.: Volta "na estrada Matões, em frente à quadra, Cidade Operária rua 2 casa 16" → endereco "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16".
+- Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]" ou outro número digitado): a reserva é do PASSAGEIRO. Preencha passageiro_nome e passageiro_telefone com os dados dele (o telefone do card), não os de quem está conversando.
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.
 - Ida e volta no mesmo pedido = dois pedidos.

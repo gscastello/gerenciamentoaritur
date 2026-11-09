@@ -26,6 +26,8 @@ import {
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
 import { getBotContext } from "./botContext.ts";
+import { telefoneDoPassageiro } from "./rascunhoPuro.ts";
+import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 
@@ -129,6 +131,11 @@ export const FERRAMENTAS: Ferramenta[] = [
         desembarque: { type: "string", description: "Onde o cliente vai ficar/descer." },
         forma_pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
         cliente_confirmou: { type: "boolean", description: "true só se o cliente confirmou o resumo com um sim claro nesta conversa." },
+        telefone_passageiro: {
+          type: "string",
+          description: "Só se ele marca para OUTRA pessoa: o telefone do passageiro (do card '[contato compartilhado: …]' ou digitado).",
+        },
+        nome_passageiro: { type: "string", description: "Só se ele marca para OUTRA pessoa: o nome do passageiro." },
       },
       required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
     },
@@ -470,9 +477,12 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const ponto = acharPonto(pontos, pedido.ponto);
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
 
-  const cliente = await clienteDaConversa(ctx);
-  const nome = cliente?.name ?? pedido.nomeCliente;
-  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo antes de reservar." };
+  // marcando para outra pessoa (issue #268): a reserva vai para o passageiro, não para quem conversa
+  const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
+  const outro = !!telPassageiro && !variantesTelefone(ctx.telefone).includes(telPassageiro);
+  const cliente = outro ? await whatsappService.identifyCustomer(telPassageiro as string) : await clienteDaConversa(ctx);
+  const nome = cliente?.name ?? (outro ? String(args.nome_passageiro ?? "").trim() || null : pedido.nomeCliente);
+  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Pergunte o nome completo do passageiro antes de reservar." };
 
   const preco = await valorDoPedido(ponto, {
     bairro: pedido.bairro,
@@ -494,7 +504,9 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
 
   // o bot é isento da checagem de duplicidade do banco (é idempotente por mensagem),
   // então a checagem do cliente com ele mesmo é feita aqui
-  const existentes = await reservasDoCliente(ctx, true);
+  const existentes = outro
+    ? (cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [])
+    : await reservasDoCliente(ctx, true);
   const duplicada = existentes.find(
     (r) => r.trip?.trip_date === pedido.data && r.trip?.direction === pedido.direcao && ["confirmada", "pendente"].includes(r.status),
   );
@@ -523,7 +535,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       tripDate: pedido.data,
       direction: pedido.direcao,
       customerName: nome,
-      customerPhone: ctx.telefone,
+      customerPhone: outro ? telPassageiro : ctx.telefone,
       routePointCode: ponto.code,
       quantity: pedido.quantidade,
       unitPrice: preco.preco,
@@ -539,7 +551,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     ctx.escrita.criou = true;
     ctx.reservasCache = undefined;
     // nome completo dado pelo cliente completa o cadastro que tinha só um nome/apelido
-    if (cliente && nomeDeveSerCompletado(cliente.name, pedido.nomeCliente)) {
+    if (!outro && cliente && nomeDeveSerCompletado(cliente.name, pedido.nomeCliente)) {
       await whatsappService
         .completarNomeDoCliente(r.reservation_id, cliente.id, pedido.nomeCliente as string)
         .catch((e) => console.error("Falha ao completar o nome do cliente:", String(e).slice(0, 200)));

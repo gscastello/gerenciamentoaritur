@@ -24,6 +24,46 @@ export function tipoDoAnexo(a: any): TipoAnexo {
   return "document";
 }
 
+export type ContatoCompartilhado = { nome: string | null; telefone: string };
+
+/**
+ * Card de contato do WhatsApp (issue #268): o Chatwoot entrega como anexo
+ * `file_type: "contact"`, com o telefone em `fallback_title` e o nome em `meta`
+ * (firstName/lastName). É como o cliente manda o número do passageiro quando
+ * marca para outra pessoa.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function contatosCompartilhados(attachments: any): ContatoCompartilhado[] {
+  if (!Array.isArray(attachments)) return [];
+  const saida: ContatoCompartilhado[] = [];
+  for (const a of attachments) {
+    if (a?.file_type !== "contact") continue;
+    const telefone = String(a.fallback_title ?? a.meta?.phone ?? "").replace(/\D/g, "");
+    if (telefone.length < 10) continue;
+    const meta = a.meta ?? {};
+    const nome = [meta.firstName ?? meta.first_name, meta.lastName ?? meta.last_name]
+      .filter((x: unknown) => typeof x === "string" && x.trim())
+      .join(" ")
+      .trim();
+    saida.push({ nome: nome || null, telefone });
+  }
+  return saida;
+}
+
+/** "[contato compartilhado: Maria Silva — 5598988887777]": entra no texto que o bot lê. */
+export function textoDosContatos(contatos: ContatoCompartilhado[]): string | undefined {
+  if (contatos.length === 0) return undefined;
+  return contatos.map((c) => `[contato compartilhado: ${c.nome ? `${c.nome} — ` : ""}${c.telefone}]`).join(" ");
+}
+
+/** Texto da mensagem com o card de contato junto (se houver). */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function textoComContatos(conteudo: string | undefined, attachments: any): string | undefined {
+  const contatos = textoDosContatos(contatosCompartilhados(attachments));
+  const t = (conteudo ?? "").trim();
+  return [t, contatos].filter(Boolean).join(" ") || undefined;
+}
+
 export type MensagemDeCliente = {
   chatwootMessageId: number;
   chatwootConversationId: number;
@@ -51,7 +91,7 @@ export function extrairMensagemDeCliente(body: any, inboxIdEsperado = 0): Mensag
   if (!telefone) return null;
 
   const a = body.attachments?.[0];
-  const anexo = a?.data_url
+  const anexo = a?.data_url && a.file_type !== "contact"
     ? {
         url: String(a.data_url),
         tipo: tipoDoAnexo(a),
@@ -63,7 +103,7 @@ export function extrairMensagemDeCliente(body: any, inboxIdEsperado = 0): Mensag
     chatwootConversationId,
     statusConversa: typeof conv.status === "string" ? conv.status : null,
     telefone,
-    texto: typeof body.content === "string" && body.content.trim() ? body.content : undefined,
+    texto: textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments),
     anexo,
   };
 }
@@ -117,7 +157,7 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     else return null;
     const a = body.attachments?.[0];
     const anexo = a ? tipoDoAnexo(a) : null;
-    const conteudo = typeof body.content === "string" ? body.content.trim() : "";
+    const conteudo = textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments) ?? "";
     const rotulo = { audio: "[áudio]", image: "[imagem]", sticker: "[figurinha]", document: "[arquivo]" };
     previa = (conteudo || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
     texto = conteudo || undefined;
