@@ -8,6 +8,7 @@ import { useSupabaseQuery } from "./useSupabaseQuery";
 export function useErrorLog({ enabled = true } = {}) {
   const query = useSupabaseQuery(() => errorLogService.list({ limit: 50 }), [enabled], { enabled });
   const resolveAcao = useAsyncAction(errorLogService.resolve);
+  const resolveAllAcao = useAsyncAction(errorLogService.resolveAll);
 
   const resolver = useCallback(
     async (id) => {
@@ -16,6 +17,11 @@ export function useErrorLog({ enabled = true } = {}) {
     },
     [resolveAcao, query],
   );
+  const limparTodos = useCallback(async () => {
+    const n = await resolveAllAcao.run();
+    await query.refetch();
+    return n;
+  }, [resolveAllAcao, query]);
 
   return {
     erros: query.data ?? [],
@@ -23,6 +29,7 @@ export function useErrorLog({ enabled = true } = {}) {
     error: query.error,
     recarregar: query.refetch,
     resolver,
-    resolvendo: resolveAcao.loading,
+    limparTodos,
+    resolvendo: resolveAcao.loading || resolveAllAcao.loading,
   };
 }

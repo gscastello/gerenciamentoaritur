@@ -42,6 +42,7 @@ import {
   watchSystemMotion,
 } from "../../lib/motion.js";
 import { EVENTS, emit } from "../../observability/index.js";
+import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import {
   C,
   Card,
@@ -1001,32 +1002,112 @@ function SistemaEquipe() {
 // animar mesmo assim. Ver src/lib/motion.js.
 // Erros recentes do app (database/36) — o admin vê o que os usuários
 // viram, com detalhe técnico. Alimentado por logTecnico() em lib/erros.js.
+// Duração da saída do item antes de tirar da lista (bate com o Presence, AGENTS.md §5).
+const SAIDA_ERRO_MS = 200;
+
 function SistemaErros() {
-  const { erros, loading, error, recarregar, resolver, resolvendo } = useErrorLog();
+  const { erros, loading, error, recarregar, resolver, limparTodos, resolvendo } = useErrorLog();
+  const [saindo, setSaindo] = useState(() => new Set());
+  const [confirmando, setConfirmando] = useState(false);
+  const [falha, setFalha] = useState("");
+
+  // o item some com transição e só então é resolvido; se falhar, volta para a lista
+  const sair = (ids, acao) => {
+    setFalha("");
+    setSaindo((prev) => new Set([...prev, ...ids]));
+    setTimeout(async () => {
+      try {
+        await acao();
+      } catch (e) {
+        setFalha(mensagemAmigavel(e, "Não foi possível limpar (só admin)."));
+      } finally {
+        setSaindo((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      }
+    }, SAIDA_ERRO_MS);
+  };
+  const limparTudo = () => {
+    setConfirmando(false);
+    sair(
+      erros.map((e) => e.id),
+      limparTodos,
+    );
+  };
+
   return (
     <Card className="anim-fadeUp">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="text-sm font-semibold flex items-center gap-2">
           <AlertTriangle size={16} style={{ color: C.amber }} /> Erros recentes do app
         </div>
-        <button
-          type="button"
-          onClick={recarregar}
-          className="btn-press text-[11px] px-2 py-1 rounded-md"
-          style={{ background: C.panel2, color: C.inkSoft }}
-        >
-          <RefreshCw size={12} className="inline mr-1" />
-          Atualizar
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {erros.length > 0 &&
+            (confirmando ? (
+              <>
+                <button
+                  type="button"
+                  onClick={limparTudo}
+                  disabled={resolvendo}
+                  className="btn-press text-[11px] px-2 py-1 rounded-md font-semibold disabled:opacity-40"
+                  style={{ background: C.redSoft, color: C.red }}
+                >
+                  <Trash2 size={12} className="inline mr-1" />
+                  Confirmar: limpar todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmando(false)}
+                  className="btn-press text-[11px] px-2 py-1 rounded-md"
+                  style={{ background: C.panel2, color: C.inkSoft }}
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmando(true)}
+                disabled={resolvendo}
+                className="btn-press text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
+                style={{ background: C.panel2, color: C.ink }}
+              >
+                <Trash2 size={12} className="inline mr-1" />
+                Limpar todos
+              </button>
+            ))}
+          <button
+            type="button"
+            onClick={recarregar}
+            className="btn-press text-[11px] px-2 py-1 rounded-md"
+            style={{ background: C.panel2, color: C.inkSoft }}
+          >
+            <RefreshCw size={12} className="inline mr-1" />
+            Atualizar
+          </button>
+        </div>
       </div>
+      {confirmando && (
+        <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
+          Todos os erros abertos saem da lista (ficam guardados no histórico).
+        </div>
+      )}
+      {falha && (
+        <div className="text-xs mb-2" style={{ color: C.red }}>
+          {falha}
+        </div>
+      )}
       {error && (
         <div className="text-xs" style={{ color: C.inkFaint }}>
           {mensagemAmigavel(error, "Não foi possível carregar o log.")}
         </div>
       )}
       {!error && loading && erros.length === 0 && (
-        <div className="text-xs" style={{ color: C.inkFaint }}>
-          carregando…
+        <div className="space-y-2">
+          <Skeleton height={64} rounded={8} />
+          <Skeleton height={64} rounded={8} />
         </div>
       )}
       {!error && !loading && erros.length === 0 && (
@@ -1040,33 +1121,34 @@ function SistemaErros() {
         // faixa minúscula e o botão "Resolver" acaba colado na borda.
         <div className="space-y-2 text-xs">
           {erros.map((e) => (
-            <div
-              key={e.id}
-              className="rounded-lg border p-2.5"
-              style={{ borderColor: C.borderSoft, background: C.panel2 }}
-            >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span style={{ color: C.inkSoft }}>{fmtDataHora(e.at)}</span>
-                <span style={{ color: C.inkFaint }}>{e.code || "—"}</span>
-              </div>
+            <Presence key={e.id} when={!saindo.has(e.id)} duration={SAIDA_ERRO_MS} {...fadeScale}>
               <div
-                className="mt-1.5"
-                style={{ color: C.ink, overflowWrap: "anywhere" }}
-                title={e.context ? JSON.stringify(e.context) : ""}
+                className="rounded-lg border p-2.5"
+                style={{ borderColor: C.borderSoft, background: C.panel2 }}
               >
-                {e.message}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span style={{ color: C.inkSoft }}>{fmtDataHora(e.at)}</span>
+                  <span style={{ color: C.inkFaint }}>{e.code || "—"}</span>
+                </div>
+                <div
+                  className="mt-1.5"
+                  style={{ color: C.ink, overflowWrap: "anywhere" }}
+                  title={e.context ? JSON.stringify(e.context) : ""}
+                >
+                  {e.message}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => sair([e.id], () => resolver(e.id))}
+                  disabled={resolvendo}
+                  aria-label={`Resolver: ${e.message}`}
+                  className="btn-press mt-2 flex items-center gap-1 text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
+                  style={{ background: C.greenSoft, color: C.green }}
+                >
+                  <Check size={11} /> Resolver
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => resolver(e.id)}
-                disabled={resolvendo}
-                aria-label={`Resolver: ${e.message}`}
-                className="btn-press mt-2 flex items-center gap-1 text-[11px] px-2 py-1 rounded-md disabled:opacity-40"
-                style={{ background: C.greenSoft, color: C.green }}
-              >
-                <Check size={11} /> Resolver
-              </button>
-            </div>
+            </Presence>
           ))}
         </div>
       )}

@@ -39,4 +39,21 @@ export const errorLogService = {
     }
     return data;
   },
+
+  /** "Limpar todos" (issue #264): marca como resolvidos todos os abertos. Nada é apagado. */
+  async resolveAll() {
+    const actor = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from("app_error_log")
+      .update({ resolved_at: new Date().toISOString(), resolved_by: actor })
+      .is("resolved_at", null)
+      .select("id");
+    if (error) {
+      throw new ServiceError(`errorLog.resolveAll: ${error.message}`, {
+        cause: error,
+        retryable: /fetch|network|timeout/i.test(error.message || ""),
+      });
+    }
+    return (data ?? []).length;
+  },
 };
