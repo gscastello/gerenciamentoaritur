@@ -3,6 +3,7 @@ import {
   detalheDoPonto,
   formatarTelefoneBR,
   pontoSoNome,
+  resumoDaEncomenda,
   textoDaListaDeBusca,
   textoParaTaxista,
 } from "../agendaLinha.js";
@@ -95,5 +96,32 @@ describe("textoDaListaDeBusca", () => {
 
   it("lista vazia vira texto vazio", () => {
     expect(textoDaListaDeBusca([])).toBe("");
+  });
+});
+
+describe("resumoDaEncomenda (issue #246)", () => {
+  it("anotação rápida: só onde buscar e telefone — entrega fica a definir", () => {
+    expect(resumoDaEncomenda({ extra: { origem: "anotacao_agenda" } })).toBe(
+      "encomenda · entrega: a definir",
+    );
+  });
+
+  it("completa: item, entrega, quem entrega e quem recebe", () => {
+    expect(
+      resumoDaEncomenda({
+        desembarque: "Pirapemas centro",
+        extra: {
+          encItem: "Documentos",
+          encRemetenteNome: "José",
+          encRemetenteTelefone: "98911112222",
+          encDestinatarioNome: "Maria",
+        },
+      }),
+    ).toBe("Documentos · entrega: Pirapemas centro · de: José 98911112222 · para: Maria");
+  });
+
+  it("sem extra nenhum não quebra", () => {
+    expect(resumoDaEncomenda({})).toBe("encomenda · entrega: a definir");
+    expect(resumoDaEncomenda(null)).toBe("encomenda · entrega: a definir");
   });
 });

@@ -7,7 +7,7 @@
 //   "1P Cohatrac Rua 7 98999998888 Maria Silva"
 //   "2P - Miranda - 98 8516-6052 - João"   (" - " entre as partes também vale)
 //   "1P Cohatrac 98999998888"               (sem nome: como sempre foi)
-//   "E 98999998888"                         (encomenda — ver parseAnotacaoEncomenda)
+//   "E Rua 7 Centro 98999998888"            (encomenda — ver parseAnotacaoEncomenda)
 //
 // A quantidade (NP) é opcional (assume 1). O telefone é o trecho numérico
 // válido (DDD + número) no meio da linha: o que vem ANTES é o endereço
@@ -19,14 +19,11 @@ import { validarTelefone } from "./validacao.js";
 
 const RE_QUANTIDADE = /^\s*(\d{1,2})\s*p\.?\s+/i;
 const RE_ENCOMENDA_PREFIXO = /^\s*e\.?\s+/i;
-// telefone = último trecho que começa em dígito/"+" e só tem dígito,
-// espaço, parênteses, ponto ou traço até o fim da linha.
-const RE_TELEFONE_FINAL = /([+\d][\d\s().-]*\d)\s*$/;
 // WhatsApp/iOS "linkam" o telefone ao detectar o número e, ao colar o
 // texto copiado, vêm junto marcas de controle bidirecional invisíveis
 // (LRM, isolamento direcional etc.) grudadas no fim do número. O
 // telefone aparece certinho pra quem lê, mas essas marcas ficam depois
-// do último dígito e quebram a âncora de fim de linha do regex acima.
+// do último dígito e atrapalham a leitura do telefone.
 const RE_INVISIVEIS = /[​-‏‪-‮⁦-⁩﻿]/g;
 
 // separador "NP - Endereço - telefone - Nome": " - " entre espaços vira espaço, e
@@ -142,13 +139,12 @@ export function separarBairro(local, nomesDeBairros) {
 }
 
 /**
- * Anotação rápida de ENCOMENDA: "E <item opcional> <telefone>". O "E" no
- * início distingue de uma anotação de passagem comum (sem prefixo, ou
- * "<n>P"); o ponto de embarque é o da caixinha onde foi digitado, então
- * não faz parte do texto — só sobra item (opcional) + telefone de quem
- * recebe.
+ * Anotação rápida de ENCOMENDA (issue #246): "E <endereço de busca> <telefone> <nome>".
+ * O "E" no início distingue de uma anotação de passagem. Só o endereço onde
+ * vamos BUSCAR a encomenda e o telefone do contato são exigidos; o nome depois
+ * do telefone é opcional, e entrega, item e o resto se completam editando.
  * @param {string} textoBruto
- * @returns {{ok:true, item:string, telefone:string} | {ok:false, erro:string, semPrefixo?:boolean}}
+ * @returns {{ok:true, endereco:string, telefone:string, nome:string} | {ok:false, erro:string, semPrefixo?:boolean}}
  */
 export function parseAnotacaoEncomenda(textoBruto) {
   const texto = String(textoBruto ?? "")
@@ -158,27 +154,26 @@ export function parseAnotacaoEncomenda(textoBruto) {
   if (!mPrefixo) {
     return { ok: false, erro: 'Comece com "E" pra anotar uma encomenda.', semPrefixo: true };
   }
-
-  const resto = texto.slice(mPrefixo[0].length);
-  const mFone = RE_TELEFONE_FINAL.exec(resto);
-  if (!mFone) {
-    return { ok: false, erro: "Não encontrei um telefone no final do texto." };
+  const linha = parseLinhaEncomenda(texto.slice(mPrefixo[0].length));
+  if (!linha.ok) return linha;
+  if (!linha.telefone) {
+    const palavras = limparSeparadores(texto.slice(mPrefixo[0].length)).split(" ");
+    return {
+      ok: false,
+      erro: acharTelefone(palavras).erro ?? "Não encontrei um telefone na anotação.",
+    };
   }
-  const telefone = validarTelefone(mFone[1]);
-  if (!telefone.ok) {
-    return { ok: false, erro: telefone.erro };
-  }
-
-  const item = resto.slice(0, mFone.index).trim().replace(/\s+/g, " ");
-
-  return { ok: true, item, telefone: telefone.valor };
+  if (!linha.endereco)
+    return { ok: false, erro: "Escreva o endereço onde vamos buscar a encomenda." };
+  return linha;
 }
 
 /**
- * Linha rápida da NOVA ENCOMENDA (issue #214): "<endereço> <telefone> <nome>".
- * Só o endereço de entrega e o contato são necessários de início; o nome vem
- * depois do telefone (opcional) e o resto se completa editando a reserva.
- * Sem telefone válido, o texto todo é o endereço.
+ * Linha rápida da NOVA ENCOMENDA: "<endereço de busca> <telefone> <nome>" (issue #246).
+ * O endereço é onde vamos BUSCAR a encomenda; com o telefone do contato, é o
+ * que basta de início. O nome vem depois do telefone (opcional) e o resto
+ * (entrega, item…) se completa editando. Sem telefone válido, o texto todo é o
+ * endereço — o formulário preenche o que der enquanto a pessoa digita.
  * @param {string} textoBruto
  * @returns {{ok:true, endereco:string, telefone:string, nome:string} | {ok:false, erro:string}}
  */
@@ -186,7 +181,7 @@ export function parseLinhaEncomenda(textoBruto) {
   const texto = String(textoBruto ?? "")
     .replace(RE_INVISIVEIS, "")
     .trim();
-  if (!texto) return { ok: false, erro: "Escreva ao menos o endereço de entrega." };
+  if (!texto) return { ok: false, erro: "Escreva o endereço onde vamos buscar a encomenda." };
 
   const palavras = limparSeparadores(texto).split(" ").filter(Boolean);
   const achado = acharTelefone(palavras);

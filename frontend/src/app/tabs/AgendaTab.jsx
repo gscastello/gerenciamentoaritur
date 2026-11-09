@@ -30,6 +30,7 @@ import { useMemo, useRef, useState } from "react";
 import {
   detalheDoPonto,
   pontoSoNome,
+  resumoDaEncomenda,
   textoDaListaDeBusca,
   textoParaTaxista,
 } from "../../domain/agendaLinha.js";
@@ -315,9 +316,9 @@ export default function AgendaTab({
   // do texto. Mesma RPC de sempre (rpc_create_reservation via
   // R.createReservation); capacidade e duplicidade continuam decididas
   // pelo banco. Prefixo "E" na mesma caixinha agenda uma encomenda em vez
-  // de passagem — embarque é o próprio ponto/horário da caixinha, só
-  // item (opcional) + telefone de quem recebe vêm do texto (database/42:
-  // nunca ocupa vaga).
+  // de passagem: "E <endereço de busca> <telefone> <nome>" (issue #246) — o
+  // ponto/horário é o da caixinha; entrega, item e o resto se completam
+  // editando (database/42: nunca ocupa vaga, nunca ganha valor sozinha).
   const bairrosAnotacao = useBairros();
   const buscarClientePorTelefone = useCustomerLookup();
   const criarViaAnotacao = async (direcao, ponto, texto) => {
@@ -325,17 +326,20 @@ export default function AgendaTab({
     if (!encomenda.semPrefixo) {
       if (!encomenda.ok) return { ok: false, erro: encomenda.erro };
       try {
-        const nomeExistente = await buscarClientePorTelefone(encomenda.telefone);
+        const nomeExistente = encomenda.nome
+          ? null
+          : await buscarClientePorTelefone(encomenda.telefone);
         const res = await R.createReservation({
           tripDate: data,
           direction: direcao,
-          customerName: nomeExistente || "Encomenda",
+          customerName: encomenda.nome || nomeExistente || "",
           customerPhone: encomenda.telefone,
           type: "encomenda",
           routePointCode: ponto.id,
           unitPrice: 0,
+          pickupDetail: encomenda.endereco,
           status: "confirmada",
-          extraData: { encItem: encomenda.item || null, origem: "anotacao_agenda" },
+          extraData: { origem: "anotacao_agenda" },
         });
         emit(EVENTS.RESERVA_CRIADA, {
           via: "anotacao_agenda_encomenda",
@@ -662,9 +666,11 @@ export default function AgendaTab({
                 >
                   <div className="text-xs flex items-center gap-1.5">
                     <Package size={12} /> Encomenda: {r.extra?.encItem || "—"}
-                    {r.extra?.encTipo ? ` (${r.extra.encTipo})` : ""} ·{" "}
-                    {r.extra?.encEmbarque || "?"} → {r.extra?.encDesembarque || "?"} · recebe:{" "}
-                    {r.nome} ({r.telefone}){dataFrete(r) ? ` · ${fmtDate(dataFrete(r))}` : ""}
+                    {r.extra?.encTipo ? ` (${r.extra.encTipo})` : ""} · buscar em:{" "}
+                    {r.extra?.encEmbarque || "?"} · entrega:{" "}
+                    {r.extra?.encDesembarque || "a definir"} · contato:{" "}
+                    {[r.nome, r.telefone].filter(Boolean).join(" ") || "—"}
+                    {dataFrete(r) ? ` · ${fmtDate(dataFrete(r))}` : ""}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -912,7 +918,8 @@ function QuickActions({ r, onStatus, onEditar, onExtra, textoCopia }) {
 function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
   // Encomenda usa a mesma linha da passagem, trocando "NP" por "ENC" e
-  // "embarque" por "entrega" (nunca ocupa vaga).
+  // "embarque" por "entrega" (nunca ocupa vaga). O endereço em destaque é onde
+  // buscar; a entrega aparece embaixo, ou "a definir" (issue #246).
   const ehEnc = r.tipo === "encomenda";
   // O endereço é o que o motorista precisa: vem em destaque e o nome em
   // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
@@ -949,8 +956,8 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         overflowWrap: "anywhere",
       }}
     >
-      {ehEnc ? "recebe: " : ""}
-      {r.nome || "—"}
+      {ehEnc ? "contato: " : ""}
+      {r.nome || (ehEnc ? r.telefone : "") || "—"}
     </span>
   );
   const quantidade = (
@@ -1037,11 +1044,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
               className="text-[11px] mt-0.5"
               style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
             >
-              {r.extra?.encItem || "encomenda"}
-              {r.desembarque ? ` · entrega: ${r.desembarque}` : ""}
-              {r.extra?.encRemetenteNome || r.extra?.encRemetenteTelefone
-                ? ` · de: ${[r.extra?.encRemetenteNome, r.extra?.encRemetenteTelefone].filter(Boolean).join(" ")}`
-                : ""}
+              {resumoDaEncomenda(r)}
               {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
             </div>
           ) : (
@@ -1128,7 +1131,7 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
             if (erro) setErro("");
           }}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
-          placeholder="Anotar — 1P Endereço 98999998888 Nome · encomenda: E 98999998888"
+          placeholder="Anotar — 1P Endereço 98999998888 Nome · encomenda: E Endereço 98999998888"
           aria-label={`Anotar reserva — ${nomePonto}`}
           className="text-xs py-1.5"
           readOnly={salvando}
@@ -2282,12 +2285,15 @@ function NovaEncomendaModal({
     direcao: direcaoBase,
     data: editar?.data || dataInicial || todayStr(),
     pontoId: base?.pontoId || primeiroPonto(direcaoBase),
+    busca: editar?.localExato || pendente?.extra?.encEmbarque || "",
     desembarque: editar?.desembarque || pendente?.extra?.encDesembarque || "",
     item: base?.extra?.encItem || "",
     remetenteNome: base?.extra?.encRemetenteNome || "",
     remetenteTelefone: base?.extra?.encRemetenteTelefone || "",
-    destinatarioNome: base?.nome || "",
-    destinatarioTelefone: base?.telefone || "",
+    destinatarioNome: base?.extra?.encDestinatarioNome || "",
+    destinatarioTelefone: base?.extra?.encDestinatarioTelefone || "",
+    contatoNome: base?.nome || "",
+    contatoTelefone: base?.telefone || "",
     valor: editar?.valorTotal ? String(editar.valorTotal) : "",
   });
   const [erro, setErro] = useState("");
@@ -2297,35 +2303,36 @@ function NovaEncomendaModal({
   const viagem = trips[f.direcao] || trips.ida;
   const trocarDirecao = (dir) => setF((s) => ({ ...s, direcao: dir, pontoId: primeiroPonto(dir) }));
 
-  // Linha rápida (issue #214): "endereço telefone nome" preenche os campos.
+  // Linha rápida (issue #246): "endereço de busca, telefone, nome" preenche os campos.
   const aplicarLinha = (texto) => {
     setLinha(texto);
     const a = parseLinhaEncomenda(texto);
     if (!a.ok) return;
     setF((atual) => ({
       ...atual,
-      desembarque: a.endereco || atual.desembarque,
-      destinatarioTelefone: a.telefone || atual.destinatarioTelefone,
-      destinatarioNome: a.nome || atual.destinatarioNome,
+      busca: a.endereco || atual.busca,
+      contatoTelefone: a.telefone || atual.contatoTelefone,
+      contatoNome: a.nome || atual.contatoNome,
     }));
   };
 
-  // Só endereço de entrega + um contato (nome ou telefone) são necessários de
-  // início; o resto se completa depois editando a encomenda.
-  const podeEnviar =
-    f.desembarque.trim() &&
-    (f.destinatarioNome.trim() || f.destinatarioTelefone.trim()) &&
-    f.pontoId &&
-    f.data;
+  // Só o endereço onde vamos BUSCAR e o telefone do contato são necessários de
+  // início; entrega, item e o resto se completam depois editando (issue #246).
+  // Encomenda antiga, de antes dessa regra, pode não ter onde buscar nem
+  // telefone: ao EDITAR basta um contato, para não travar a correção.
+  const novaRegra = !editar;
+  const temContato = f.contatoTelefone.trim() || (!novaRegra && f.contatoNome.trim());
+  const podeEnviar = (f.busca.trim() || !novaRegra) && temContato && f.pontoId && f.data;
 
   const salvar = async () => {
     setErro("");
     const problema = primeiroErro([
-      !f.desembarque.trim() ? { ok: false, erro: "Informe o endereço de entrega." } : null,
-      !f.destinatarioNome.trim() && !f.destinatarioTelefone.trim()
-        ? { ok: false, erro: "Informe ao menos o telefone ou o nome de quem recebe." }
+      novaRegra && !f.busca.trim()
+        ? { ok: false, erro: "Informe o endereço onde vamos buscar." }
         : null,
-      f.destinatarioNome.trim() ? validarNome(f.destinatarioNome) : null,
+      !temContato ? { ok: false, erro: "Informe o telefone do contato." } : null,
+      f.contatoTelefone.trim() ? validarTelefone(f.contatoTelefone) : null,
+      f.contatoNome.trim() ? validarNome(f.contatoNome) : null,
       f.destinatarioTelefone.trim() ? validarTelefone(f.destinatarioTelefone) : null,
       validarData(f.data, { min: base ? undefined : todayStr() }),
       f.valor !== "" ? validarValor(f.valor, { min: 0 }) : null,
@@ -2336,25 +2343,30 @@ function NovaEncomendaModal({
     }
     setSalvando(true);
     try {
-      const telefoneNormalizado = f.destinatarioTelefone.trim()
-        ? validarTelefone(f.destinatarioTelefone).valor
+      const telefoneNormalizado = f.contatoTelefone.trim()
+        ? validarTelefone(f.contatoTelefone).valor
         : null;
       const extraData = {
         encItem: f.item.trim() || null,
         encRemetenteNome: f.remetenteNome.trim() || null,
         encRemetenteTelefone: f.remetenteTelefone.trim() || null,
+        encDestinatarioNome: f.destinatarioNome.trim() || null,
+        encDestinatarioTelefone: f.destinatarioTelefone.trim()
+          ? validarTelefone(f.destinatarioTelefone).valor
+          : null,
       };
       if (base) {
         await onSalvar({
           id: base.id,
           move: { trip_date: f.data, direction: f.direcao, route_point_code: f.pontoId },
           details: {
+            pickup_detail: f.busca.trim() || null,
             dropoff_location: f.desembarque.trim() || null,
             ...(f.valor !== "" ? { unit_price: Number.parseFloat(f.valor) || 0 } : {}),
           },
           contact: {
             customer_id: base.customer_id,
-            ...(f.destinatarioNome.trim() ? { name: f.destinatarioNome.trim() } : {}),
+            ...(f.contatoNome.trim() ? { name: f.contatoNome.trim() } : {}),
             ...(telefoneNormalizado ? { phone: telefoneNormalizado } : {}),
           },
           extraData,
@@ -2366,10 +2378,11 @@ function NovaEncomendaModal({
           tripDate: f.data,
           direction: f.direcao,
           type: "encomenda",
-          customerName: f.destinatarioNome.trim(),
+          customerName: f.contatoNome.trim(),
           customerPhone: telefoneNormalizado,
           routePointCode: f.pontoId,
           unitPrice: f.valor !== "" ? Number.parseFloat(f.valor) || 0 : 0,
+          pickupDetail: f.busca.trim(),
           dropoffLocation: f.desembarque.trim() || null,
           status: "confirmada",
           extraData,
@@ -2419,11 +2432,11 @@ function NovaEncomendaModal({
 
         {!base && (
           <div className="mb-3">
-            <Field label="Linha rápida: endereço, telefone e nome">
+            <Field label="Linha rápida: onde buscar, telefone e nome">
               <TextInput
                 value={linha}
                 onChange={(e) => aplicarLinha(e.target.value)}
-                placeholder="Pirapemas centro 98999998888 João"
+                placeholder="Rua 7, Centro 98999998888 João"
               />
             </Field>
           </div>
@@ -2455,7 +2468,33 @@ function NovaEncomendaModal({
               ))}
             </Select>
           </Field>
-          <Field label="Endereço de entrega *">
+          <Field label={novaRegra ? "Onde buscar (endereço) *" : "Onde buscar (endereço)"}>
+            <TextInput
+              value={f.busca}
+              onChange={(e) => setF({ ...f, busca: e.target.value })}
+              placeholder="Ex.: Rua 7, Centro"
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <Field label="Telefone do contato *">
+            <TextInput
+              inputMode="tel"
+              value={f.contatoTelefone}
+              onChange={(e) => setF({ ...f, contatoTelefone: e.target.value })}
+            />
+          </Field>
+          <Field label="Nome do contato (opcional)">
+            <TextInput
+              value={f.contatoNome}
+              onChange={(e) => setF({ ...f, contatoNome: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="mb-2">
+          <Field label="Endereço de entrega (pode ser depois)">
             <TextInput
               value={f.desembarque}
               onChange={(e) => setF({ ...f, desembarque: e.target.value })}
@@ -2491,13 +2530,13 @@ function NovaEncomendaModal({
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <Field label="Quem recebe (nome ou telefone)">
+          <Field label="Quem recebe (nome)">
             <TextInput
               value={f.destinatarioNome}
               onChange={(e) => setF({ ...f, destinatarioNome: e.target.value })}
             />
           </Field>
-          <Field label="Quem recebe (telefone ou nome)">
+          <Field label="Quem recebe (telefone)">
             <TextInput
               inputMode="tel"
               value={f.destinatarioTelefone}

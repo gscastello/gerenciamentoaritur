@@ -48,3 +48,24 @@ export function textoParaTaxista({ endereco, telefone, telefone2, quantidade }) 
 export function textoDaListaDeBusca(itens) {
   return itens.map((i, n) => `${n + 1}) ${textoParaTaxista(i)}`).join("\n");
 }
+
+const juntar = (...partes) => partes.filter(Boolean).join(" ");
+
+/**
+ * Linha de detalhes da encomenda (Agenda e Lista do Dia): item, entrega (ou
+ * "a definir" — a anotação rápida só exige onde buscar e o telefone, issue
+ * #246), quem entrega e quem recebe.
+ */
+export function resumoDaEncomenda(r) {
+  const extra = r?.extra ?? {};
+  const de = juntar(extra.encRemetenteNome, extra.encRemetenteTelefone);
+  const para = juntar(extra.encDestinatarioNome, extra.encDestinatarioTelefone);
+  return [
+    extra.encItem || "encomenda",
+    `entrega: ${r?.desembarque || "a definir"}`,
+    de && `de: ${de}`,
+    para && `para: ${para}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
