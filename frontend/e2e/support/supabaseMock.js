@@ -288,6 +288,10 @@ export async function mockSupabase(page, opts = {}) {
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
   // painel de atendimento (database/52): fila espelhada do Chatwoot + perguntas sem resposta
   const atendimentoRows = (opts.atendimento ?? []).map((c) => ({ ...c }));
+  // locais de Outros com preço próprio (issue #263)
+  const locaisOutrosRows = opts.locaisOutros ?? [
+    { id: "lo-aeroporto", local: "Aeroporto", price: 70 },
+  ];
   // reservas preparadas pela IA (issue #254)
   let rascunhosRows = (opts.rascunhos ?? []).map((r) => ({ status: "pronta", ...r }));
   let botUnansweredRows = (opts.botUnanswered ?? []).map((q) => ({ resolved_at: null, ...q }));
@@ -739,6 +743,7 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
     else if (table === "v_atendimento_whatsapp") rows = atendimentoRows;
+    else if (table === "boarding_spot_prices") rows = locaisOutrosRows;
     else if (table === "reservation_drafts")
       rows = rascunhosRows.filter((r) => r.status === "pronta");
     else if (table === "bot_unanswered" && req.method() === "PATCH") {

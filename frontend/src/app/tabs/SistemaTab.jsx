@@ -56,6 +56,7 @@ import {
 } from "../tabShared.jsx";
 import BackupReservasDoDia from "./BackupReservasDoDia.jsx";
 import SistemaBot from "./SistemaBot.jsx";
+import SistemaLocaisOutros from "./SistemaLocaisOutros.jsx";
 import SistemaTrechos from "./SistemaTrechos.jsx";
 
 /* ============================= 8. SISTEMA ============================= */
@@ -1409,6 +1410,7 @@ export default function SistemaTab({
         <SistemaBairros />
 
         <SistemaTrechos />
+        <SistemaLocaisOutros />
 
         <SistemaBaldes />
 

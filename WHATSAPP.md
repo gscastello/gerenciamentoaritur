@@ -54,6 +54,10 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
 8. `database/72-rascunhos-de-reserva.sql` — reservas preparadas pela IA para a equipe lançar com um toque (ver §6e).
 9. `database/73-embarque-outros.sql` — na Ida só Buscar em Casa, Rodoviária, Retorno e **Outros**: BR, Posto Carone,
    aeroporto e qualquer outro local vão em Outros (código `outro`), com o local citado no detalhe. Outros não é "fora da área".
+10. `database/74-precos-locais-outros.sql` — locais de Outros com preço próprio (`boarding_spot_prices`, Sistema → Preços):
+   embarque **dentro do aeroporto** = R$ 70. **"Retorno do aeroporto" é o ponto Retorno**, não o aeroporto: a regra de preço
+   (`precoDoLocalDeOutros`, igual no bot e no app) ignora texto com "retorno", e o atendente/leitura de rascunhos pergunta
+   quando não dá para saber qual dos dois.
 
 ## 3b. Painel "Atendimento" (no app)
 
