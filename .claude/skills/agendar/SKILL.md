@@ -50,8 +50,10 @@ Leia a partir do pedido mais recente. Veja também as reservas atuais do cliente
   "Madrugada", "amanhã cedo" = ida da manhã. Data relativa ("amanhã", "segunda") pelo
   calendário de hoje em Fortaleza; se ambígua, pergunte.
 - **Ponto de embarque** (`route_points.code`, conferir no banco, `active`):
-  ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `postocarone`, `retorno`, `br`, `outro`;
-  volta `pirapemas`, `cantanhede`.
+  ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno` e `outro` (Outros); volta `pirapemas`,
+  `cantanhede`. **Qualquer outro local de embarque** (BR, Posto Carone, aeroporto, beira da estrada…) é
+  `outro`, com o local que o cliente citou em `p_pickup_detail` (ex.: "Aeroporto de São Luís", "BR — Maracanã").
+  Nunca lance aeroporto ou BR como busca em casa.
 - **Busca em casa:** bairro em `p_pickup_neighborhood` (nome igual ao de `neighborhood_pricing`),
   rua em `p_street`, referência em `p_reference_point`. Ponto com detalhe: `p_pickup_detail`.
 - **Desembarque:** texto em `p_dropoff_location` e área em `p_dropoff_area`
