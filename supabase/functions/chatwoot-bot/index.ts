@@ -24,6 +24,8 @@
 //   2) BOT — se for mensagem de cliente, roda o motor de reservas.
 //   3) RASCUNHO — quando quem atende é a equipe (modo manual/sombra ou conversa
 //      com humano), prepara a reserva para ela lançar com um toque (issue #254).
+//   4) AGENDADO ☑️ — a equipe confirmou na conversa com a marca combinada pelo
+//      dono: a reserva preparada é lançada (issue #257). Nunca no modo sombra.
 //
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
@@ -35,7 +37,8 @@ import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootP
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
-import { prepararRascunhoDeReserva } from "../_shared/rascunhoReserva.ts";
+import { ehMarcaDeAgendado } from "../_shared/rascunhoPuro.ts";
+import { lancarPeloAgendado, prepararRascunhoDeReserva } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -105,6 +108,26 @@ async function processar(body: any) {
       content: atividade.texto,
     });
     observou = true;
+  }
+
+  // a equipe confirmou com "Agendado ☑️": lança a reserva preparada (a marca é a confirmação manual)
+  if (
+    atividade?.autor === "equipe" &&
+    atividade.texto &&
+    atividade.mensagemId &&
+    conversaEspelhada &&
+    ehMarcaDeAgendado(atividade.texto)
+  ) {
+    if (modo === "sombra") {
+      evento("bot_agendado_lancado", { conversa: atividade.chatwootConversationId, lancadas: 0, pendentes: ["modo_sombra"] });
+    } else {
+      await lancarPeloAgendado({
+        conversationId: conversaEspelhada,
+        chatwootConversationId: atividade.chatwootConversationId,
+        mensagemId: atividade.mensagemId,
+        telefone: atividade.telefone,
+      });
+    }
   }
 
   const m = extrairMensagemDeCliente(body, INBOX_ID);

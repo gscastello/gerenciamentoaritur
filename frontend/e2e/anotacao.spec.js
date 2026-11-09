@@ -23,8 +23,8 @@ test("Agendar passagem: anotação escrita à mão vai pro pickup_detail", async
   await page.getByRole("button", { name: "Agendar passagem" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
-  // ponto que NÃO é "Buscar em Casa" (sem bairro) — BR, precisa só da anotação
-  await page.getByLabel("Categoria de embarque").selectOption({ label: "BR (Posto)" });
+  // ponto que NÃO é "Buscar em Casa" (sem bairro) — Outros, precisa só da anotação
+  await page.getByLabel("Categoria de embarque").selectOption({ label: "Outros" });
   await page.getByLabel("Nome (ou telefone)").fill("Cliente Anotação");
   await page.getByLabel("Telefone (ou nome)").fill("98999990000");
   await page.getByLabel(/Anotação/).fill("perto do posto, portão azul");
@@ -37,7 +37,9 @@ test("Agendar passagem: anotação escrita à mão vai pro pickup_detail", async
 });
 
 test("Agenda: editar reserva reescrevendo o endereço à mão", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
@@ -69,7 +71,10 @@ test("Agenda: editar reserva reescrevendo o endereço à mão", async ({ page })
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
   // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
   // reserva em vez de depender do default.

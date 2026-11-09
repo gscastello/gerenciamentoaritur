@@ -100,3 +100,35 @@ test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço 
   await expect(linha).not.toContainText(/Pirapemas/i);
   await expect(linha.getByRole("link", { name: /98981112222/ })).toBeVisible();
 });
+
+test("Agenda: em Outros a linha mostra só o local citado, sem repetir 'Outros' (issue #261)", async ({
+  page,
+}) => {
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      {
+        ...base,
+        id: "res-outros",
+        direcao: "ida",
+        pontoId: "outro",
+        localExato: "Aeroporto de São Luís",
+        nome: "Passageira do Aeroporto Teste",
+        telefone: "98991112222",
+      },
+    ],
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
+  await page.locator('input[type="date"]').first().fill(hoje);
+
+  // a seção se chama "Outros"; a linha mostra só o embarque citado pelo cliente
+  await expect(page.getByText("OUTROS", { exact: true })).toBeVisible();
+  const linha = page.locator("div.row-hover", { hasText: "Passageira do Aeroporto Teste" });
+  await expect(linha).toContainText("Aeroporto de São Luís");
+  await expect(linha).not.toContainText("Outros");
+});

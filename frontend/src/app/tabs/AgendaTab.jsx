@@ -55,6 +55,7 @@ import {
   validarValor,
 } from "../../domain/validacao.js";
 import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
+import { useLocaisOutros } from "../../hooks/useLocaisOutros.js";
 import { useTrips } from "../../hooks/useTrips.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
@@ -322,6 +323,7 @@ export default function AgendaTab({
   // ponto/horário é o da caixinha; entrega, item e o resto se completam
   // editando (database/42: nunca ocupa vaga, nunca ganha valor sozinha).
   const bairrosAnotacao = useBairros();
+  const locaisOutros = useLocaisOutros();
   const buscarClientePorTelefone = useCustomerLookup();
   const criarViaAnotacao = async (direcao, ponto, texto) => {
     const encomenda = parseAnotacaoEncomenda(texto);
@@ -362,7 +364,11 @@ export default function AgendaTab({
     const { bairro, detalhe } = ehBairro
       ? separarBairro(achado.local, bairrosAnotacao.nomes)
       : { bairro: "", detalhe: achado.local };
-    const precoAuto = ehBairro ? (bairrosAnotacao.preco(bairro) ?? 80) : (ponto.valor ?? 60);
+    // Outros: local com preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto"
+    const precoDoLocal = ponto.id === "outro" ? locaisOutros.preco(detalhe) : null;
+    const precoAuto = ehBairro
+      ? (bairrosAnotacao.preco(bairro) ?? 80)
+      : (precoDoLocal ?? ponto.valor ?? 60);
 
     try {
       // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
@@ -1961,6 +1967,7 @@ export function NovaReservaModal({
   const [ofereceEspera, setOfereceEspera] = useState(false);
   const [linha, setLinha] = useState("");
   const bairros = useBairros();
+  const locaisOutros = useLocaisOutros();
   const dropoff = useDropoff();
   // Telefone digitado de qualquer jeito: mostra de quem é o cadastro antes de agendar.
   const buscarCadastro = useCustomerLookup();
@@ -1992,7 +1999,10 @@ export function NovaReservaModal({
   const precoBairroAtual = campoDetalhe === "bairro" ? bairros.preco(f.bairro) : undefined;
   const bairroNaoReconhecido =
     campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
-  const precoAuto = campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
+  // Outros: local com preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto"
+  const precoDoLocal = ponto?.id === "outro" ? locaisOutros.preco(f.anotacao) : null;
+  const precoAuto =
+    campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (precoDoLocal ?? ponto?.valor ?? 60);
   const valorUnit = f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
   const qtd = Number.parseInt(f.quantidade, 10) || 1;
   // Reserva "leve" (issue #214): basta o nome OU o telefone; o resto se completa

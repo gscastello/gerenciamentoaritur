@@ -1,12 +1,11 @@
 // Regras de exibição da linha de reserva na Agenda.
 //
-// Nos pontos fixos (Rodoviária, Retorno, Posto Carone) e em toda a VOLTA
-// (Cantanhede, Pirapemas…) o título da seção já diz a cidade/ponto —
-// repeti-lo na linha do passageiro é redundância (issues #185 e #189). Nos
-// demais (Buscar em casa, BR, Outro) o endereço/bairro é a informação útil
-// pro motorista e continua aparecendo.
+// Nos pontos fixos (Rodoviária, Retorno) e em toda a VOLTA (Cantanhede,
+// Pirapemas…) o título da seção já diz a cidade/ponto — repeti-lo na linha do
+// passageiro é redundância (issues #185 e #189). Nos demais (Buscar em casa,
+// Outros) o endereço/bairro/local citado é a informação útil pro motorista.
 
-const PONTOS_SO_NOME = new Set(["rodoviaria", "retorno", "postocarone"]);
+const PONTOS_SO_NOME = new Set(["rodoviaria", "retorno"]);
 
 /** Reserva cujo ponto o título da seção já diz: a linha não repete o nome do ponto. */
 export function pontoSoNome(r) {
