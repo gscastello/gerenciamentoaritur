@@ -286,9 +286,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `bot_price_suggestions`, mas só entra na tabela com a aprovação do dono. O bot nunca decide preço.
 - **No ritmo do cliente** (issue #238): o bot não segue roteiro nem pede tudo de uma vez. Cumprimento recebe
   cumprimento, uma pergunta por mensagem, responde o que foi perguntado antes de retomar. O resumo com "Posso
-  confirmar?" antes de gravar continua obrigatório. **Andamento da viagem:** a equipe quase não marca a saída no app,
-  então a ferramenta `andamento_da_viagem` lê o que o atendente escreveu nas últimas 6 horas, em qualquer conversa,
-  sem expor nomes. Paradas, plataforma e chegada viram lições `operacao`.
+  confirmar?" antes de gravar continua obrigatório. **Andamento da viagem** (issue #244): só a ESTIMATIVA pelo
+  cronograma do dono (`andamento_da_viagem`, `CRONOGRAMA_PADRAO` ou `settings.trip_schedule`): confere a reserva, dá a
+  janela do lugar do cliente e diz pelo horário se já estamos em rota. Nunca diz onde a van está; se o cliente insistir,
+  envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
+  Paradas e plataforma viram lições `operacao`.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
