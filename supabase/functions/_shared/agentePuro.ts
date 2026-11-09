@@ -675,3 +675,30 @@ export function precoDoLocalDeOutros(texto: string | null | undefined, locais: L
   const preco = melhor ? Number(melhor.price) : Number.NaN;
   return Number.isFinite(preco) && preco > 0 ? preco : null;
 }
+
+/**
+ * Memória de endereços (issue #270): o condomínio/residencial que o cliente citou
+ * ("Residencial Colinas, bloco 3") e o bairro onde ele fica. Compara palavras
+ * inteiras, sem acento; o apelido mais longo vence. Confirmados vêm antes.
+ */
+export function bairroPorApelido(
+  texto: string | null | undefined,
+  apelidos: { apelido: string; bairro: string; confirmado?: boolean | null }[],
+): string | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  if (!t.trim()) return null;
+  let melhor: { bairro: string; tamanho: number; confirmado: boolean } | null = null;
+  for (const a of apelidos) {
+    const nome = normalizar(a.apelido);
+    if (!nome || !t.includes(` ${nome} `)) continue;
+    const confirmado = a.confirmado === true;
+    if (
+      !melhor ||
+      (confirmado && !melhor.confirmado) ||
+      (confirmado === melhor.confirmado && nome.length > melhor.tamanho)
+    ) {
+      melhor = { bairro: a.bairro, tamanho: nome.length, confirmado };
+    }
+  }
+  return melhor?.bairro ?? null;
+}

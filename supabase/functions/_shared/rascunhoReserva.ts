@@ -13,8 +13,10 @@
 // com o motivo. Melhor esforço: erro aqui nunca derruba o atendimento.
 
 import { acharPonto, valorDoPedido } from "./agenteFerramentas.ts";
+import { avisoDoBairro, resolverBairro } from "./bairroResolver.ts";
 import {
   areaDoDesembarque,
+  bairroDaTabela,
   calendarioParaOPrompt,
   converterMensagensDoChatwoot,
   converterObservacoes,
@@ -96,6 +98,7 @@ async function contexto() {
     listaPontos,
     desembarques,
     bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).join(", "),
+    bairrosTabela: (bairros ?? []) as { neighborhood: string }[],
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
   };
 }
@@ -210,6 +213,16 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
+    // busca em casa com condomínio/residencial fora da tabela: descobre o bairro (issue #270)
+    if (r.route_point_code === "busca" && !bairroDaTabela(r.pickup_neighborhood, ctx.bairrosTabela)) {
+      const original = [r.pickup_neighborhood, r.pickup_detail].filter(Boolean).join(", ");
+      const deduzido = await resolverBairro(original, entrada.chatwootConversationId);
+      if (deduzido) {
+        r.pickup_detail = original || null;
+        r.pickup_neighborhood = deduzido.bairro;
+        r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
+      }
+    }
     // marcando para outra pessoa: a reserva é do passageiro (issue #268)
     const outro = v.passageiro && !variantesTelefone(entrada.telefone).includes(v.passageiro.telefone) ? v.passageiro : null;
     const dono = outro ? await whatsappService.identifyCustomer(outro.telefone) : cliente;

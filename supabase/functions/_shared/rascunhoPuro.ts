@@ -283,7 +283,7 @@ ${quando}
 
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
-- Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
+- Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
