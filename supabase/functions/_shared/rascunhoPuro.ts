@@ -249,6 +249,8 @@ export function instrucoesDaLeitura(ctx: {
   desembarques: string;
   confirmadoPelaEquipe?: boolean;
   costume?: string;
+  /** bairros de São Luís (tabela da busca em casa): separam embarque de desembarque */
+  bairrosSaoLuis?: string;
 }): string {
   const quando = ctx.confirmadoPelaEquipe
     ? `A EQUIPE ACABOU DE CONFIRMAR o pedido desta conversa com "Agendado ☑️". Registre o(s) pedido(s) que a equipe confirmou agora (o mais recente), com o dia e o local combinados entre cliente e equipe. Se o cliente desistiu depois, não registre.`
@@ -263,6 +265,7 @@ ${quando}
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
+- Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, o endereço em Pirapemas/Cantanhede (rua, estrada, referência) é o embarque (endereco) e o que tem bairro de São Luís (lista BAIRROS DE SÃO LUÍS) é o desembarque. Na Ida é o contrário: bairro de São Luís é o embarque e o endereço no interior é o desembarque. Ex.: Volta "na estrada Matões, em frente à quadra, Cidade Operária rua 2 casa 16" → endereco "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16".
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.
 - Ida e volta no mesmo pedido = dois pedidos.
@@ -278,5 +281,7 @@ LOCAIS DE DESEMBARQUE:
 ${ctx.desembarques}${ctx.costume ? `
 
 ENDEREÇO DE COSTUME DESTE CLIENTE (onde ele sempre embarca/desce):
-${ctx.costume}` : ""}`;
+${ctx.costume}` : ""}${ctx.bairrosSaoLuis ? `
+
+BAIRROS DE SÃO LUÍS: ${ctx.bairrosSaoLuis}` : ""}`;
 }

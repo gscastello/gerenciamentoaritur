@@ -76,10 +76,11 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
 }
 
 async function contexto() {
-  const [ida, volta, { data: areas }] = await Promise.all([
+  const [ida, volta, { data: areas }, { data: bairros }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
     supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null),
+    supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood"),
   ]);
   const ativos = (l: Bloco[] | null) => (l ?? []).filter((p) => p.active !== false);
   const pontos = { ida: ativos(ida).map((p) => String(p.code)), volta: ativos(volta).map((p) => String(p.code)) };
@@ -94,6 +95,7 @@ async function contexto() {
     pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
     listaPontos,
     desembarques,
+    bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).join(", "),
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
   };
 }
@@ -189,6 +191,7 @@ async function lerEGravar(
     desembarques: ctx.desembarques,
     confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
     costume: costume ? textoDoCostume(costume) : undefined,
+    bairrosSaoLuis: ctx.bairrosSaoLuis,
   });
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 25, 200)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 30, 500)}`

@@ -266,3 +266,10 @@ Deno.test("embarque dito pelo cliente vence o costume; sem costume continua sem 
     { ok: false, motivo: "sem_endereco" },
   );
 });
+
+Deno.test("instruções: separar embarque e desembarque com a lista de bairros de São Luís (issue #266)", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", bairrosSaoLuis: "Anil, Cidade Operária, Cohatrac" });
+  assert(t.includes("BAIRROS DE SÃO LUÍS: Anil, Cidade Operária, Cohatrac"));
+  assert(t.includes("separe onde ele SOBE de onde ele DESCE"));
+  assert(!instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" }).includes("BAIRROS DE SÃO LUÍS:"));
+});
