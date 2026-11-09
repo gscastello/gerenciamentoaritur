@@ -248,8 +248,18 @@ prepara a reserva para ela lançar com um toque:
 6. Criar a reserva daquele cliente naquela viagem, por **qualquer** caminho (app, anotação, bot, Claude), fecha o
    rascunho sozinho (gatilho `trg_reservations_fecha_rascunho`).
 
-Nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos, gravados, motivos,
-tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
+Sem a marca abaixo, nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos,
+gravados, motivos, tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
+
+**"Agendado ☑️" lança sozinho (issue #257).** Quando a **equipe** escreve na conversa a marca combinada pelo dono
+(**"Agendado ☑️"**; vale também agendada/agendados, ☑ ✅ ✔, em qualquer posição, mas não pergunta nem nota privada), o
+bot lê a conversa na hora (sem espera nem filtro de data), prepara o rascunho do que a equipe acabou de confirmar e o
+**lança**: preço pela mesma regra do bot (`valorDoPedido`: trecho → ponto → bairro), vaga validada pelo banco, status
+`confirmada` (a marca da equipe é a confirmação manual), pagamento em dinheiro, autor Bot com
+`extra_data.origem = 'agendado_equipe'`. É idempotente pela mensagem da equipe. Encomenda é lançada **sem valor**. Se faltar
+algo (ponto não reconhecido, trecho sem preço, lotado, recusa do banco), a reserva **não** é criada e o rascunho fica em
+"Reservas prontas para lançar" com o motivo em "Conferir". Nunca roda no modo **sombra**. Log: `bot_agendado_lancado`
+(lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
 
 ## 7. Checklist de teste (em modo Sombra)
 
