@@ -89,14 +89,14 @@ const ROUTE_POINTS = [
     deleted_at: null,
   },
   {
-    id: "rp-br",
+    id: "rp-outro",
     direction: "ida",
-    code: "br",
-    name: "BR (Posto)",
-    base_time: "06:00:00",
+    code: "outro",
+    name: "Outros",
+    base_time: "06:30:00",
     price: 60,
     requires_detail: true,
-    detail_label: "Ponto na BR",
+    detail_label: "Local de embarque",
     boarding_window: null,
     is_core: true,
     display_order: 2,
@@ -288,6 +288,10 @@ export async function mockSupabase(page, opts = {}) {
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
   // painel de atendimento (database/52): fila espelhada do Chatwoot + perguntas sem resposta
   const atendimentoRows = (opts.atendimento ?? []).map((c) => ({ ...c }));
+  // locais de Outros com preço próprio (issue #263)
+  const locaisOutrosRows = opts.locaisOutros ?? [
+    { id: "lo-aeroporto", local: "Aeroporto", price: 70 },
+  ];
   // reservas preparadas pela IA (issue #254)
   let rascunhosRows = (opts.rascunhos ?? []).map((r) => ({ status: "pronta", ...r }));
   let botUnansweredRows = (opts.botUnanswered ?? []).map((q) => ({ resolved_at: null, ...q }));
@@ -739,6 +743,7 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
     else if (table === "v_atendimento_whatsapp") rows = atendimentoRows;
+    else if (table === "boarding_spot_prices") rows = locaisOutrosRows;
     else if (table === "reservation_drafts")
       rows = rascunhosRows.filter((r) => r.status === "pronta");
     else if (table === "bot_unanswered" && req.method() === "PATCH") {

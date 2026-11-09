@@ -653,3 +653,23 @@ export function cronogramaParaTexto(c: Cronograma, ajusteSegundaHoras = 0): stri
   }
   return partes.join("\n");
 }
+
+export type LocalDeOutros = { local: string; price: number | string };
+
+/**
+ * Preço próprio de um local da categoria Outros (issue #263): o embarque DENTRO do
+ * aeroporto custa diferente. Compara palavras inteiras, sem acento; o nome mais longo
+ * vence. Texto que fala em "retorno" NUNCA conta: "retorno do aeroporto" é o ponto
+ * Retorno, não o aeroporto (regra do dono). Sem correspondência, null (vale o preço do ponto).
+ */
+export function precoDoLocalDeOutros(texto: string | null | undefined, locais: LocalDeOutros[]): number | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  if (!t.trim() || t.includes(" retorno ")) return null;
+  let melhor: LocalDeOutros | null = null;
+  for (const l of locais) {
+    const nome = normalizar(l.local);
+    if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.local).length)) melhor = l;
+  }
+  const preco = melhor ? Number(melhor.price) : Number.NaN;
+  return Number.isFinite(preco) && preco > 0 ? preco : null;
+}

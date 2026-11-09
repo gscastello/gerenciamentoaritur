@@ -157,6 +157,20 @@ Deno.test("a ferramenta pede no máximo dois pedidos e as instruções levam o c
   assert(t.includes("Nunca o nome do perfil") || t.includes("Nunca invente"));
 });
 
+Deno.test("Outros (issue #261): ponto 'outro' precisa do local citado", () => {
+  const p = { ...pontos, ida: [...pontos.ida] };
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Aeroporto de São Luís" }, { ...ctx, pontos: p });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.rascunho.route_point_code, "outro");
+    assertEquals(r.rascunho.pickup_detail, "Aeroporto de São Luís");
+  }
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "outro" }, { ...ctx, pontos: p }), {
+    ok: false,
+    motivo: "sem_endereco",
+  });
+});
+
 Deno.test("marca da equipe: 'Agendado ☑️' e variações valem", () => {
   for (const t of [
     "Agendado ☑️",

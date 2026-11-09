@@ -9,8 +9,8 @@ import {
 } from "../agendaLinha.js";
 
 describe("pontoSoNome", () => {
-  it("Rodoviária, Retorno e Posto Carone não repetem o nome do ponto", () => {
-    for (const pontoId of ["rodoviaria", "retorno", "postocarone"]) {
+  it("Rodoviária e Retorno não repetem o nome do ponto", () => {
+    for (const pontoId of ["rodoviaria", "retorno"]) {
       expect(pontoSoNome({ direcao: "ida", pontoId })).toBe(true);
     }
   });

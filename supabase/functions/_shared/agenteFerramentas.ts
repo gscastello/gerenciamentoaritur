@@ -21,6 +21,7 @@ import {
   cronogramaValido,
   nomeDeveSerCompletado,
   type PedidoValidado,
+  precoDoLocalDeOutros,
   trechoDoPedido,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
@@ -244,11 +245,20 @@ export function acharPonto(pontos: Linha[], texto: unknown): Linha | null {
 const resumoDosPontos = (pontos: Linha[]) =>
   pontos.map((p) => ({ codigo: p.code, nome: p.name, horario: hhmm(p.base_time) }));
 
-/** Preço unitário de um ponto: tabela do ponto, ou do bairro na busca em casa. */
+/**
+ * Preço unitário de um ponto: tabela do ponto, ou do bairro na busca em casa. Em Outros, o
+ * local citado pode ter preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto".
+ */
 async function precoUnitario(
   ponto: Linha,
   bairro: string | null,
+  endereco: string | null = null,
 ): Promise<{ ok: true; preco: number } | { ok: false; erro: Record<string, unknown> }> {
+  if (ponto.code === "outro") {
+    const { data: locais } = await supabaseAdmin.from("boarding_spot_prices").select("local, price");
+    const proprio = precoDoLocalDeOutros(endereco, locais ?? []);
+    if (proprio != null) return { ok: true, preco: proprio };
+  }
   if (ponto.price != null && Number(ponto.price) > 0) return { ok: true, preco: Number(ponto.price) };
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
@@ -291,7 +301,7 @@ export async function valorDoPedido(
       },
     };
   }
-  return precoUnitario(ponto, pedido.bairro);
+  return precoUnitario(ponto, pedido.bairro, pedido.endereco);
 }
 
 async function consultarViagem(args: Linha) {
@@ -498,7 +508,8 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   }
 
   const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.enderecoEmbarque, pedido.bairro]);
-  const fora = !!cidadeFora || ponto.code === "outro";
+  // "Outros" reúne locais de São Luís (BR, Posto Carone, aeroporto…): só cidade fora da área deixa pendente (#261)
+  const fora = !!cidadeFora;
   const motivoPendente = fora
     ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
     : null;
