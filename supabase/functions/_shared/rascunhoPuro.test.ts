@@ -9,6 +9,7 @@ import {
   mensagensRecentesDoCliente,
   pareceTerPedido,
   validarPedidoExtraido,
+  viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 
 const pontos = { ida: ["busca", "rodoviaria", "postocarone", "retorno", "br", "outro"], volta: ["pirapemas", "cantanhede"] };
@@ -202,4 +203,66 @@ Deno.test("instruções no modo confirmado pela equipe", () => {
   const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
   assert(t.includes("ACABOU DE CONFIRMAR"));
   assert(!t.includes("Se a equipe já disse que reservou"));
+});
+
+Deno.test("viagem de hoje já saiu: Ida depois das 07:00, Volta depois das 14:00 (issue #266)", () => {
+  assertEquals(viagemDeHojeJaSaiu("ida", "06:59"), false);
+  assertEquals(viagemDeHojeJaSaiu("ida", "07:00"), true);
+  assertEquals(viagemDeHojeJaSaiu("volta", "13:30"), false);
+  assertEquals(viagemDeHojeJaSaiu("volta", "15:33"), true);
+  assertEquals(viagemDeHojeJaSaiu("volta", null), false);
+  assertEquals(viagemDeHojeJaSaiu("volta", "15h"), false);
+});
+
+Deno.test("pedido para hoje depois que a Volta saiu vira amanhã, com aviso", () => {
+  const r = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "volta", ponto: "pirapemas" },
+    { ...ctx, horaAgora: "15:33" },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.trip_date, "2026-11-10");
+  assert(r.rascunho.notes?.includes("considerei amanhã (10/11)"));
+});
+
+Deno.test("pedido para hoje antes da saída continua hoje", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-09", direcao: "volta", ponto: "pirapemas" }, { ...ctx, horaAgora: "10:00" });
+  assert(r.ok);
+  if (r.ok) assertEquals(r.rascunho.trip_date, "2026-11-09");
+});
+
+const COSTUME = {
+  ida: { route_point_code: "rodoviaria", route_point_name: "Rodoviária", neighborhood: null, detail: null, dropoff_location: "Cantanhede" },
+  volta: { route_point_code: "cantanhede", route_point_name: "Cantanhede", neighborhood: null, detail: "Praça da Cruz", dropoff_location: null },
+};
+
+Deno.test("sem embarque dito: usa o endereço de costume do sentido, com aviso (issue #266)", () => {
+  const ida = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume: COSTUME });
+  assert(ida.ok);
+  if (ida.ok) {
+    assertEquals(ida.rascunho.route_point_code, "rodoviaria");
+    assertEquals(ida.rascunho.dropoff_location, "Cantanhede");
+    assert(ida.rascunho.notes?.includes("endereço de costume"));
+  }
+  const volta = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta" }, { ...ctx, costume: COSTUME });
+  assert(volta.ok);
+  if (volta.ok) {
+    assertEquals(volta.rascunho.route_point_code, "cantanhede");
+    assertEquals(volta.rascunho.pickup_detail, "Praça da Cruz");
+  }
+});
+
+Deno.test("embarque dito pelo cliente vence o costume; sem costume continua sem endereço", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "retorno" }, { ...ctx, costume: COSTUME });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.rascunho.route_point_code, "retorno");
+    assertEquals(r.rascunho.notes, null);
+  }
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, ctx), { ok: false, motivo: "sem_endereco" });
+  // costume num ponto que não existe mais: não inventa
+  assertEquals(
+    validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume: { ida: { route_point_code: "ponto-extinto" } } }),
+    { ok: false, motivo: "sem_endereco" },
+  );
 });

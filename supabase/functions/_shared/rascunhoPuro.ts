@@ -90,6 +90,29 @@ export type Rascunho = {
 
 export type PontosPorSentido = { ida: string[]; volta: string[] };
 
+/**
+ * Depois deste horário (São Luís) a viagem do dia naquele sentido já saiu: a Ida
+ * termina de buscar na BR por volta das 06:30 e a Volta sai de Cantanhede/Campestre
+ * por volta das 13:00 (cronograma do dono). Pedido "à tarde" sem dia, feito depois
+ * disso, é para amanhã (issue #266).
+ */
+export const SAIDA_ENCERRADA = { ida: "07:00", volta: "14:00" } as const;
+
+export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string | null | undefined): boolean {
+  return !!horaAgora && /^\d{2}:\d{2}$/.test(horaAgora) && horaAgora >= SAIDA_ENCERRADA[direcao];
+}
+
+/** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
+export type CostumeDoSentido = {
+  route_point_code?: string | null;
+  route_point_name?: string | null;
+  neighborhood?: string | null;
+  detail?: string | null;
+  dropoff_location?: string | null;
+} | null;
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
 const texto = (v: unknown, max = 200): string | null => {
   const s = String(v ?? "")
     .replace(/\s+/g, " ")
@@ -104,10 +127,19 @@ const texto = (v: unknown, max = 200): string | null => {
  */
 export function validarPedidoExtraido(
   p: PedidoExtraido,
-  ctx: { hoje: string; pontos: PontosPorSentido; areaDoDesembarque?: (t: string, d: "ida" | "volta") => string | null },
+  ctx: {
+    hoje: string;
+    pontos: PontosPorSentido;
+    areaDoDesembarque?: (t: string, d: "ida" | "volta") => string | null;
+    /** "HH:MM" em São Luís: pedido para hoje depois que a viagem saiu vira amanhã */
+    horaAgora?: string | null;
+    /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
+    costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
+  },
 ): { ok: true; rascunho: Rascunho } | { ok: false; motivo: string } {
   const tipo = p.tipo === "encomenda" ? "encomenda" : "passagem";
-  const data = String(p.data ?? "");
+  let data = String(p.data ?? "");
+  const avisos: string[] = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return { ok: false, motivo: "sem_data" };
   if (data < ctx.hoje) return { ok: false, motivo: "data_passada" };
   if (data > somarDias(ctx.hoje, HORIZONTE_DIAS)) return { ok: false, motivo: "data_longe" };
@@ -120,9 +152,28 @@ export function validarPedidoExtraido(
   }
   if (!direcao) return { ok: false, motivo: "sem_sentido" };
 
-  const bairro = texto(p.bairro, 80);
-  const endereco = texto(p.endereco);
+  // "à tarde" sem dia, depois que a viagem de hoje já saiu: é a de amanhã
+  if (data === ctx.hoje && viagemDeHojeJaSaiu(direcao, ctx.horaAgora)) {
+    data = somarDias(ctx.hoje, 1);
+    avisos.push(`A viagem de hoje já tinha saído: considerei amanhã (${ddmm(data)}).`);
+  }
+
+  let bairro = texto(p.bairro, 80);
+  let endereco = texto(p.endereco);
   let ponto = pontoBruto && ctx.pontos[direcao].includes(pontoBruto) ? pontoBruto : null;
+  let desembarqueDoCostume: string | null = null;
+
+  // não disse de onde sai: usa o endereço de costume do cliente naquele sentido
+  const costume = ctx.costume?.[direcao] ?? null;
+  if (tipo === "passagem" && !ponto && !bairro && !endereco && costume?.route_point_code &&
+    ctx.pontos[direcao].includes(costume.route_point_code)) {
+    ponto = costume.route_point_code;
+    bairro = texto(costume.neighborhood, 80);
+    endereco = texto(costume.detail);
+    desembarqueDoCostume = texto(costume.dropoff_location, 120);
+    const onde = [costume.route_point_name ?? costume.route_point_code, bairro, endereco].filter(Boolean).join(", ");
+    avisos.push(`Embarque pelo endereço de costume (${onde}).`);
+  }
   // endereço de casa em São Luís sem ponto dito = busca em casa
   if (tipo === "passagem" && !ponto && direcao === "ida" && (bairro || endereco) && ctx.pontos.ida.includes("busca")) {
     ponto = "busca";
@@ -136,7 +187,7 @@ export function validarPedidoExtraido(
 
   const q = Number(p.quantidade);
   const quantidade = Number.isInteger(q) && q >= 1 && q <= 31 ? q : 1;
-  const desembarque = texto(p.desembarque, 120);
+  const desembarque = texto(p.desembarque, 120) ?? desembarqueDoCostume;
   const detalhe = tipo === "encomenda" ? [bairro, endereco].filter(Boolean).join(", ") || null : endereco;
 
   return {
@@ -153,7 +204,7 @@ export function validarPedidoExtraido(
       quantity: quantidade,
       customer_name: texto(p.nome_informado, 80),
       client_excerpt: texto(p.trecho_do_cliente, 300),
-      notes: texto(p.duvida, 200),
+      notes: texto([...avisos, texto(p.duvida, 200)].filter(Boolean).join(" "), 300),
     },
   };
 }
@@ -197,6 +248,7 @@ export function instrucoesDaLeitura(ctx: {
   pontos: string;
   desembarques: string;
   confirmadoPelaEquipe?: boolean;
+  costume?: string;
 }): string {
   const quando = ctx.confirmadoPelaEquipe
     ? `A EQUIPE ACABOU DE CONFIRMAR o pedido desta conversa com "Agendado ☑️". Registre o(s) pedido(s) que a equipe confirmou agora (o mais recente), com o dia e o local combinados entre cliente e equipe. Se o cliente desistiu depois, não registre.`
@@ -208,6 +260,9 @@ ${quando}
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
+- Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
+- Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
+- Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.
 - Ida e volta no mesmo pedido = dois pedidos.
@@ -220,5 +275,8 @@ PONTOS DE EMBARQUE (código = nome):
 ${ctx.pontos}
 
 LOCAIS DE DESEMBARQUE:
-${ctx.desembarques}`;
+${ctx.desembarques}${ctx.costume ? `
+
+ENDEREÇO DE COSTUME DESTE CLIENTE (onde ele sempre embarca/desce):
+${ctx.costume}` : ""}`;
 }

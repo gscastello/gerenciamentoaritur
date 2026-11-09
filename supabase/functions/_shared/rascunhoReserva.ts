@@ -25,6 +25,7 @@ import {
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
+  type CostumeDoSentido,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -58,7 +59,8 @@ type Entrada = {
 
 async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 2);
+    // 4 páginas: além do pedido atual, as conversas anteriores mostram onde o cliente costuma embarcar
+    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 4);
     return { mensagens: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch {
     const { data } = await supabaseAdmin
@@ -67,7 +69,7 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
       .eq("chatwoot_conversation_id", chatwootConversationId)
       .in("author", ["cliente", "equipe"])
       .order("created_at", { ascending: false })
-      .limit(40);
+      .limit(80);
     const mensagens = converterObservacoes(data ?? []);
     return { mensagens, cedeu: mensagens.some((m) => m.quem === "cliente" && (m.id ?? 0) > mensagemId) };
   }
@@ -121,6 +123,33 @@ async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: 
   return { pedidos: pedidos.slice(0, 2), uso };
 }
 
+const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Fortaleza",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+type CostumeDoCliente = { ida: CostumeDoSentido; volta: CostumeDoSentido };
+
+/** Endereço de costume (fixado pela equipe ou o mais frequente no histórico). Melhor esforço. */
+async function costumeDoCliente(customerId: string): Promise<CostumeDoCliente | null> {
+  const { data, error } = await supabaseAdmin.rpc("rpc_endereco_de_costume", { p_customer_id: customerId });
+  if (error || !data?.success) return null;
+  if (!data.ida && !data.volta) return null;
+  return { ida: data.ida ?? null, volta: data.volta ?? null };
+}
+
+function textoDoCostume(c: CostumeDoCliente): string {
+  const linha = (rotulo: string, s: CostumeDoSentido) =>
+    s?.route_point_code
+      ? `- ${rotulo}: ${[s.route_point_name ?? s.route_point_code, s.neighborhood, s.detail].filter(Boolean).join(", ")}${
+        s.dropoff_location ? ` → desce em ${s.dropoff_location}` : ""
+      }`
+      : "";
+  return [linha("Ida", c.ida), linha("Volta", c.volta)].filter(Boolean).join("\n");
+}
+
 /** Viagens (data|sentido) em que o cliente já tem reserva ativa. */
 async function viagensJaReservadas(customerId: string | null, hoje: string): Promise<Set<string>> {
   if (!customerId) return new Set();
@@ -145,24 +174,34 @@ async function lerEGravar(
 ) {
   const agora = new Date();
   const hoje = diaCivil(agora);
+  const horaAgora = fmtHoraSaoLuis.format(agora);
   const ctx = await contexto();
-  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= agora.getTime() - 72 * 3600 * 1000);
+  const limite = agora.getTime() - 72 * 3600 * 1000;
+  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= limite);
+  // conversas anteriores: só para saber onde o cliente costuma embarcar e descer (issue #266)
+  const anteriores = mensagens.filter((m) => new Date(m.em).getTime() < limite && m.quem !== "bot");
+
+  const cliente = await whatsappService.identifyCustomer(entrada.telefone);
+  const costume = cliente ? await costumeDoCliente(cliente.id) : null;
   const system = instrucoesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
     pontos: ctx.listaPontos,
     desembarques: ctx.desembarques,
     confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
+    costume: costume ? textoDoCostume(costume) : undefined,
   });
-  const { pedidos, uso } = await lerPedidos(system, formatarHistorico(recentes, 30, 500));
+  const conversa = anteriores.length
+    ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 25, 200)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 30, 500)}`
+    : formatarHistorico(recentes, 30, 500);
+  const { pedidos, uso } = await lerPedidos(system, conversa);
 
-  const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
 
   const gravados: string[] = [];
   const motivos: string[] = [];
   for (const p of pedidos) {
-    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe });
+    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe, horaAgora, costume });
     if (!v.ok) {
       motivos.push(v.motivo);
       continue;
