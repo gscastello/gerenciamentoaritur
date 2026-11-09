@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  digitosDeBusca,
   primeiroErro,
   validarData,
   validarHora,
@@ -8,6 +9,7 @@ import {
   validarQuantidade,
   validarTelefone,
   validarValor,
+  variantesTelefone,
 } from "../validacao.js";
 
 describe("validarTelefone", () => {
@@ -29,7 +31,28 @@ describe("validarTelefone", () => {
     expect(validarTelefone("9899123456789").ok).toBe(false);
   });
   it("recusa DDD inválido", () => {
-    expect(validarTelefone("0891234567").ok).toBe(false);
+    const r = validarTelefone("1091234567");
+    expect(r.ok).toBe(false);
+    expect(r.erro).toBe("DDD inválido.");
+  });
+  it("aceita espaço, parênteses e traço em qualquer lugar", () => {
+    expect(validarTelefone(" 98 9 8101 2388 ").valor).toBe("98981012388");
+    expect(validarTelefone("(98) 8101-2388").valor).toBe("9881012388");
+  });
+  it("tira o zero antes do DDD", () => {
+    expect(validarTelefone("098 98101-2388").valor).toBe("98981012388");
+    expect(validarTelefone("0 98 8101-2388").valor).toBe("9881012388");
+  });
+  it("número sem DDD assume o da operação", () => {
+    expect(validarTelefone("98101-2388")).toEqual({ ok: true, valor: "98981012388" });
+    expect(validarTelefone("8101-2388")).toEqual({ ok: true, valor: "9881012388" });
+    expect(validarTelefone("3222-1100").valor).toBe("9832221100");
+  });
+  it("sem DDD, recusa o que não pode ser telefone", () => {
+    expect(validarTelefone("1101-2388").ok).toBe(false);
+    expect(validarTelefone("88101-2388").ok).toBe(false);
+    expect(validarTelefone("1234567").ok).toBe(false);
+    expect(validarTelefone("65000-000").ok).toBe(false);
   });
   it("recusa celular de 11 sem o 9", () => {
     expect(validarTelefone("98891234567").ok).toBe(false);
@@ -37,6 +60,44 @@ describe("validarTelefone", () => {
   it("recusa vazio/nulo", () => {
     expect(validarTelefone("").ok).toBe(false);
     expect(validarTelefone(null).ok).toBe(false);
+  });
+});
+
+describe("variantesTelefone", () => {
+  it("com e sem o nono dígito, a forma digitada primeiro", () => {
+    expect(variantesTelefone("(98) 98101-2388")).toEqual(["98981012388", "9881012388"]);
+    expect(variantesTelefone("98 8101-2388")).toEqual(["9881012388", "98981012388"]);
+    expect(variantesTelefone("8101-2388")).toEqual(["9881012388", "98981012388"]);
+  });
+  it("fixo só tem uma forma", () => {
+    expect(variantesTelefone("98 3222-1100")).toEqual(["9832221100"]);
+  });
+  it("11 dígitos cujo número depois do 9 não é de celular só tem uma forma", () => {
+    expect(variantesTelefone("98 93222-1100")).toEqual(["98932221100"]);
+  });
+  it("inválido não tem forma nenhuma", () => {
+    expect(variantesTelefone("123")).toEqual([]);
+    expect(variantesTelefone(null)).toEqual([]);
+  });
+});
+
+describe("digitosDeBusca", () => {
+  it("com 8 dígitos ou mais, compara só os 8 finais", () => {
+    expect(digitosDeBusca("+55 (98) 98101-2388")).toBe("81012388");
+    expect(digitosDeBusca("9881012388")).toBe("81012388");
+    expect(digitosDeBusca("8101-2388")).toBe("81012388");
+  });
+  it("trecho curto de número busca os dígitos dele, sem máscara", () => {
+    expect(digitosDeBusca("81 01")).toBe("8101");
+    expect(digitosDeBusca("(98) 81")).toBe("9881");
+    expect(digitosDeBusca(" 1234567 ")).toBe("1234567");
+  });
+  it("nome ou número curto demais não é busca por telefone", () => {
+    expect(digitosDeBusca("Maria")).toBeNull();
+    expect(digitosDeBusca("Rua 7")).toBeNull();
+    expect(digitosDeBusca("981")).toBeNull();
+    expect(digitosDeBusca("")).toBeNull();
+    expect(digitosDeBusca(null)).toBeNull();
   });
 });
 

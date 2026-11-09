@@ -5,7 +5,8 @@
 // própria tela (sem I/O). O RLS decide o que cada papel enxerga —
 // motorista, por exemplo, lê customers mas não financial_entries.
 
-import { supabase, ServiceError, isRetryableError } from "../lib/supabaseClient";
+import { digitosDeBusca } from "../domain/validacao.js";
+import { ServiceError, isRetryableError, supabase } from "../lib/supabaseClient";
 
 // PostgREST monta o filtro `.or()` a partir de uma string — tiramos
 // vírgula/parênteses/curinga pra não abrir condições extras. Sobra texto
@@ -34,12 +35,17 @@ export const searchService = {
   async customers(termo) {
     const t = limpar(termo);
     if (t.length < 2) return [];
+    const fone = digitosDeBusca(termo);
     return run(
       supabase
         .from("customers")
         .select("id,name,phone,default_neighborhood")
         .is("deleted_at", null)
-        .or(`name.ilike.%${t}%,phone.ilike.%${t}%`)
+        .or(
+          fone
+            ? `phone.ilike.%${fone}%,phone_secondary.ilike.%${fone}%`
+            : `name.ilike.%${t}%,phone.ilike.%${t}%`,
+        )
         .order("name", { ascending: true })
         .limit(12),
       "searchCustomers",
@@ -49,14 +55,15 @@ export const searchService = {
   async reservations(termo) {
     const t = limpar(termo);
     if (t.length < 2) return [];
-    const filtros = [`nome.ilike.%${t}%`, `telefone.ilike.%${t}%`];
+    const fone = digitosDeBusca(termo);
+    const filtros = fone
+      ? [`telefone.ilike.%${fone}%`, `telefone2.ilike.%${fone}%`]
+      : [`nome.ilike.%${t}%`, `telefone.ilike.%${t}%`];
     if (UUID_RE.test(t)) filtros.push(`id.eq.${t}`);
     return run(
       supabase
         .from("v_reservations_flat")
-        .select(
-          "id,data,direcao,nome,telefone,status,tipo,quantidade,valorTotal,pontoId,bairro",
-        )
+        .select("id,data,direcao,nome,telefone,status,tipo,quantidade,valorTotal,pontoId,bairro")
         .or(filtros.join(","))
         .order("data", { ascending: false, nullsFirst: false })
         .limit(15),
