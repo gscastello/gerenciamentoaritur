@@ -16,6 +16,7 @@ import {
   andamentoPeloHorario,
   areaDoDesembarque,
   bairroDaTabela,
+  bairroParecido,
   calcularTotal,
   costumeParaFerramenta,
   cronogramaValido,
@@ -285,7 +286,7 @@ async function precoUnitario(
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
     const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
-    let achado = bairroDaTabela(bairro, data ?? []);
+    let achado = bairroDaTabela(bairro, data ?? []) ?? bairroParecido(bairro, data ?? [])?.bairro ?? null;
     if (!achado) {
       // condomínio/residencial fora da tabela: memória de endereços e internet (issue #270)
       const deduzido = await resolverBairro([bairro, endereco].filter(Boolean).join(" "));

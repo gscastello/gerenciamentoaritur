@@ -7,6 +7,7 @@
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
 import { type MensagemDaConversa, somarDias } from "./agentePuro.ts";
+import { normalizarTexto, palavraParecida, temDataNoTexto } from "./grafia.ts";
 
 /** Até quantos dias à frente um pedido vira rascunho. */
 export const HORIZONTE_DIAS = 60;
@@ -18,9 +19,6 @@ const semAcento = (s: string) =>
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
-
-const RE_DATA =
-  /\b(hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|dia\s+\d{1,2}|\d{1,2}\s*[/.-]\s*\d{1,2})\b/;
 
 /** O que o cliente escreveu nas últimas horas (mais antigas primeiro). */
 export function mensagensRecentesDoCliente(
@@ -39,8 +37,9 @@ export function mensagensRecentesDoCliente(
  * data ("amanhã", "sexta", "dia 12", "12/11")? Sem data não há rascunho.
  */
 export function pareceTerPedido(textosDoCliente: string[]): boolean {
-  const tudo = semAcento(textosDoCliente.join(" "));
-  return tudo.trim().length >= 6 && RE_DATA.test(tudo);
+  const tudo = textosDoCliente.join(" ");
+  // "hj", "amnh", "sesta", "sabdo" também contam (issue #276)
+  return tudo.trim().length >= 6 && temDataNoTexto(tudo);
 }
 
 const RE_CHECK = /[☑✅✔]/u; // ☑ ✅ ✔ (com ou sem o seletor de emoji)
@@ -82,8 +81,9 @@ export const CIDADES_DA_VOLTA = ["pirapemas", "cantanhede"] as const;
 
 /** "Cantanhede", "pirapemas", "PIRAPEMAS-MA" → código do ponto; senão null. */
 export function cidadeDaVolta(bruto: unknown): (typeof CIDADES_DA_VOLTA)[number] | null {
-  const t = String(bruto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const achadas = CIDADES_DA_VOLTA.filter((c) => t.includes(c));
+  // aceita erro de escrita: "Pirapema", "piraprmas", "Catanhede", "cantanedi" (issue #276)
+  const palavras = normalizarTexto(String(bruto ?? "")).split(" ").filter(Boolean);
+  const achadas = CIDADES_DA_VOLTA.filter((c) => palavras.some((p) => palavraParecida(p, c)));
   return achadas.length === 1 ? achadas[0] : null;
 }
 
@@ -316,6 +316,7 @@ export function instrucoesDaLeitura(ctx: {
 
 ${quando}
 
+- O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
@@ -356,7 +357,14 @@ export type LugarNasCidades = {
   /** o lugar que mais aparece junto dele nas reservas daquela cidade (rua primeiro) */
   junto_pirapemas?: string | null;
   junto_cantanhede?: string | null;
+  /** como o cliente escreveu, quando a base reconheceu o lugar com erro de escrita (issue #276) */
+  escrito?: string | null;
 };
+
+/** "Rua Deputado Lister Caldas (escrito "listre caldas")" quando veio com erro de escrita. */
+function nomeComGrafia(l: LugarNasCidades): string {
+  return l.escrito ? `${l.nome} (escrito "${l.escrito}")` : l.nome;
+}
 
 const NOME_DA_CIDADE: Record<string, string> = { pirapemas: "Pirapemas", cantanhede: "Cantanhede" };
 
@@ -391,7 +399,7 @@ export function avisoDosLugares(lugares: LugarNasCidades[], cidade: string | nul
     if (l.em_pirapemas && l.em_cantanhede) {
       const n = l.reservas_pirapemas + l.reservas_cantanhede;
       frases.push(
-        `${l.nome} existe em Pirapemas e em Cantanhede${n ? ` (${l.reservas_pirapemas} e ${l.reservas_cantanhede} reservas)` : ""}: confirme a cidade.`,
+        `${nomeComGrafia(l)} existe em Pirapemas e em Cantanhede${n ? ` (${l.reservas_pirapemas} e ${l.reservas_cantanhede} reservas)` : ""}: confirme a cidade.`,
       );
       continue;
     }
@@ -400,7 +408,9 @@ export function avisoDosLugares(lugares: LugarNasCidades[], cidade: string | nul
     const n = reservasEm(l, so);
     const junto = juntoEm(l, so);
     const onde = `${NOME_DA_CIDADE[so]}${junto ? `, junto da ${junto}` : ""}${n ? ` (${contagem(n)})` : ""}`;
-    frases.push(cidade ? `${l.nome} costuma ser ${onde}, não ${NOME_DA_CIDADE[cidade] ?? cidade}: confira.` : `${l.nome} é em ${onde}.`);
+    frases.push(
+      cidade ? `${nomeComGrafia(l)} costuma ser ${onde}, não ${NOME_DA_CIDADE[cidade] ?? cidade}: confira.` : `${nomeComGrafia(l)} é em ${onde}.`,
+    );
   }
   return frases.length ? frases.slice(0, 3).join(" ") : null;
 }

@@ -112,7 +112,7 @@ O contrato acima é validado por `npm run arch`
 
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
-`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`),
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -296,6 +296,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   nome da rua. A base `cidade_lugares` (ruas, pontos de referência, "casa de fulano", povoados; OpenStreetMap + toda
   reserva de Volta confirmada, aprendendo sozinha e cruzando os lugares citados juntos) só gera **aviso** e ajuda o
   atendente a **confirmar** com o cliente (`onde_fica`).
+- **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
+  interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
+  `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem
+  de ser igual, 4–8 aceitam 1 erro, 9+ aceitam 2, no máximo 2 no total; empate não chuta. A base de lugares guarda
+  as grafias erradas (`cidade_lugares_grafias`). Erro de escrita só ajuda a **reconhecer**: nunca decide preço, vaga
+  ou cidade sozinho.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`

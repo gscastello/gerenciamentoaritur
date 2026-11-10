@@ -17,6 +17,7 @@ import { avisoDoBairro, resolverBairro } from "./bairroResolver.ts";
 import {
   areaDoDesembarque,
   bairroDaTabela,
+  bairroParecido,
   calendarioParaOPrompt,
   converterMensagensDoChatwoot,
   converterObservacoes,
@@ -216,6 +217,15 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
+    // busca em casa com o bairro escrito errado ("cohatrc"): o da tabela, com aviso (issue #276)
+    const parecido = r.route_point_code === "busca" ? bairroParecido(r.pickup_neighborhood, ctx.bairrosTabela) : null;
+    if (parecido) {
+      r.notes = [r.notes, `Bairro entendido como ${parecido.bairro.neighborhood} (escrito "${parecido.escrito}"): confira.`]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 300);
+      r.pickup_neighborhood = parecido.bairro.neighborhood;
+    }
     // busca em casa com condomínio/residencial fora da tabela: descobre o bairro (issue #270)
     if (r.route_point_code === "busca" && !bairroDaTabela(r.pickup_neighborhood, ctx.bairrosTabela)) {
       const original = [r.pickup_neighborhood, r.pickup_detail].filter(Boolean).join(", ");

@@ -278,6 +278,12 @@ prepara a reserva para ela lançar com um toque:
    Rua Lister Caldas"). O atendente usa a ferramenta `onde_fica` para confirmar com o cliente ("É a choperia do Riba, na
    Lister Caldas, em Pirapemas?") e, se o lugar só é conhecido na outra cidade (mapa ou 2+ reservas), `criar_reserva`
    devolve `CIDADE_A_CONFIRMAR`. Só avisa e ajuda a confirmar: nunca decide a cidade.
+   **Erros de escrita (issue #276, migrações 78–79):** o filtro de data aceita "hj", "amnh", "sesta", "sabdo"
+   (`temDataNoTexto`); a cidade da Volta aceita "Pirapema", "Catanhede"; o bairro de São Luís escrito errado
+   ("cohatrc") vira o da tabela com aviso "Bairro entendido como…" (`bairroParecido`, também no preço). Na base de
+   lugares, "listre caldas" e "choparia do riba" são reconhecidos (`fn_lugar_parecido`; palavra solta só corrige
+   para o mesmo tipo, para "campo" não virar "Rua do Campo") e a grafia fica guardada em `cidade_lugares_grafias`;
+   o aviso mostra como o cliente escreveu. Regra única em `_shared/grafia.ts` = `fn_distancia_grafia`.
    Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).

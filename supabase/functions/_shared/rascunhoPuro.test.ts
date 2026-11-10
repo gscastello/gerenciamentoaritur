@@ -382,6 +382,11 @@ Deno.test("lugares das cidades: rua, referência e casa nas duas cidades ou só 
   // só a referência, sem cidade dita: diz onde fica e com o que anda junto
   assertEquals(avisoDosLugares([choperia], null), "Choperia do Riba é em Pirapemas, junto da Rua Deputado Lister Caldas (2 reservas).");
   assertEquals(avisoDosLugares([povoado], null), "Povoado Galvão é em Cantanhede.");
+  // reconhecido com erro de escrita: mostra como o cliente escreveu (issue #276)
+  assertEquals(
+    avisoDosLugares([{ ...choperia, escrito: "choparia do riba" }], null),
+    'Choperia do Riba (escrito "choparia do riba") é em Pirapemas, junto da Rua Deputado Lister Caldas (2 reservas).',
+  );
   assertEquals(avisoDosLugares([], "pirapemas"), null);
 
   // atendente: só barra com evidência (mapa ou 2+ reservas) na OUTRA cidade
