@@ -112,7 +112,7 @@ O contrato acima é validado por `npm run arch`
 
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
-`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`),
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -143,6 +143,20 @@ Nomes no AGENTS antigo → ferramenta real:
 
 Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 `npm run prepare`.
+
+**Skills do Claude em `.claude/skills/`** (issue #282) — carregadas sozinhas quando a tarefa pede:
+
+| Skill | Para quê | Fonte |
+|---|---|---|
+| `agendar` | lançar no app reservas combinadas no WhatsApp | deste repositório |
+| `vercel-react-best-practices` | desempenho em React (o app é Vite/SPA: regras `server-*` não valem) | vercel-labs/agent-skills (MIT) |
+| `supabase-postgres-best-practices` | consultas, índices, RLS, migrações | supabase/agent-skills (MIT) |
+| `systematic-debugging` | achar a causa antes de corrigir | obra/superpowers (MIT) |
+| `verification-before-completion` | rodar e ler a verificação antes de dizer que terminou | obra/superpowers (MIT) |
+
+Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda neste projeto). Este AGENTS.md
+vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
+instruções na internet a cada uso.
 
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
@@ -250,9 +264,17 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - Modo global em `settings.attendance_mode` (`ia` | `manual` | `sombra`),
   editável na aba Sistema e válido na hora para todos os sócios:
   - `ia` — o bot responde e confirma reservas sozinho;
-  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot;
-  - `sombra` — o bot roda tudo, mas a resposta vira **nota privada** e **nada é
-    gravado** no negócio. Todo bot novo ou mudança grande começa em `sombra`.
+  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot; só lê a conversa para reservar
+    quando a equipe escreve **"Agendado ☑️"** (não prepara reserva a cada mensagem — issue #278);
+  - `sombra` — o bot **só observa e aprende** (issue #278): não gera resposta nem reserva
+    preparada, que é o que custa. Registro de mensagem e comprovante continuam. Aprende com o atendente **e com os
+    clientes**: o que eles contam (lugares e referências, localidades, necessidades, épocas e motivos de viagem,
+    dúvidas e reclamações) vira lição `dito_pelo_cliente`, que serve para entender e confirmar e nunca vira preço,
+    valor, horário ou regra.
+  - **Teste sob demanda, em qualquer modo:** nota privada `#testar` no Chatwoot (com ou sem uma
+    pergunta depois) faz o bot escrever numa nota `🧪 [TESTE]` o que responderia; nada vai ao
+    cliente, nada é gravado e a nota não entra no histórico nem no aprendizado. Todo bot novo ou
+    mudança grande é testado assim antes de ligar o `ia`.
 - Por conversa: `whatsapp_conversations.attendance_mode` (`ia` | `humano`). O bot
   **continua ativo** quando a equipe responde pelo celular; só **cala** na
   transferência completa (`rpc_transfer_to_human` + status Aberta no Chatwoot).
@@ -291,7 +313,22 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   janela do lugar do cliente e diz pelo horário se já estamos em rota. Nunca diz onde a van está; se o cliente insistir,
   envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
   Paradas e plataforma viram lições `operacao`.
+- **Cidade da Volta e lugares das cidades** (issues #272 e #274): ruas e referências se repetem em Pirapemas e
+  Cantanhede, então a cidade de embarque da Volta só vale se o cliente disse (ou é o endereço de costume); nunca sai do
+  nome da rua. A base `cidade_lugares` (ruas, pontos de referência, "casa de fulano", povoados; OpenStreetMap + toda
+  reserva de Volta confirmada, aprendendo sozinha e cruzando os lugares citados juntos) só gera **aviso** e ajuda o
+  atendente a **confirmar** com o cliente (`onde_fica`).
+- **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
+  interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
+  `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem
+  de ser igual, 4–8 aceitam 1 erro, 9+ aceitam 2, no máximo 2 no total; empate não chuta. A base de lugares guarda
+  as grafias erradas (`cidade_lugares_grafias`). Erro de escrita só ajuda a **reconhecer**: nunca decide preço, vaga
+  ou cidade sozinho.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
+- **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
+  no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
+  com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de
+  nome do perfil do WhatsApp, nenhuma mensagem ao cliente sem o dono pedir.
 - **Reservas preparadas pela IA** (issue #254, `WHATSAPP.md §6e`): quando a equipe atende, o bot lê a conversa e, com
   **data + endereço ou ponto**, deixa um rascunho em `reservation_drafts`. A equipe lança com um toque (preço e vaga
   pelo app); criar a reserva por qualquer caminho fecha o rascunho. A IA nunca reserva nem decide preço por aqui,
@@ -301,7 +338,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
-  recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
+  recorrente. **Aprende com o atendente e com os clientes** (o que o próprio bot escreveu não entra;
+  o que o cliente conta vira `dito_pelo_cliente`, só para entender e confirmar — issue #278), em
   orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
   dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação/operação valem na hora com
   aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é

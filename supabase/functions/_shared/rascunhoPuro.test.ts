@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   type MensagemDaConversa,
 } from "./agentePuro.ts";
@@ -8,7 +8,12 @@ import {
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
   pareceTerPedido,
+  telefoneDoPassageiro,
   validarPedidoExtraido,
+  cidadeDaVolta,
+  avisoDosLugares,
+  lugarDeOutraCidade,
+  viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 
 const pontos = { ida: ["busca", "rodoviaria", "postocarone", "retorno", "br", "outro"], volta: ["pirapemas", "cantanhede"] };
@@ -85,10 +90,10 @@ Deno.test("sem endereço nem ponto: não vira rascunho", () => {
     ok: false,
     motivo: "sem_endereco",
   });
-  // volta sem ponto: o endereço de São Luís não diz de onde sai
+  // volta sem ponto nem cidade dita: a rua não diz de onde sai (issue #272)
   assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "volta", endereco: "Rua 3" }, ctx), {
     ok: false,
-    motivo: "sem_endereco",
+    motivo: "sem_cidade",
   });
 });
 
@@ -202,4 +207,192 @@ Deno.test("instruções no modo confirmado pela equipe", () => {
   const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
   assert(t.includes("ACABOU DE CONFIRMAR"));
   assert(!t.includes("Se a equipe já disse que reservou"));
+});
+
+Deno.test("viagem de hoje já saiu: Ida depois das 07:00, Volta depois das 14:00 (issue #266)", () => {
+  assertEquals(viagemDeHojeJaSaiu("ida", "06:59"), false);
+  assertEquals(viagemDeHojeJaSaiu("ida", "07:00"), true);
+  assertEquals(viagemDeHojeJaSaiu("volta", "13:30"), false);
+  assertEquals(viagemDeHojeJaSaiu("volta", "15:33"), true);
+  assertEquals(viagemDeHojeJaSaiu("volta", null), false);
+  assertEquals(viagemDeHojeJaSaiu("volta", "15h"), false);
+});
+
+Deno.test("pedido para hoje depois que a Volta saiu vira amanhã, com aviso", () => {
+  const r = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "volta", ponto: "pirapemas" },
+    { ...ctx, horaAgora: "15:33" },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.trip_date, "2026-11-10");
+  assert(r.rascunho.notes?.includes("considerei amanhã (10/11)"));
+});
+
+Deno.test("pedido para hoje antes da saída continua hoje", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-09", direcao: "volta", ponto: "pirapemas" }, { ...ctx, horaAgora: "10:00" });
+  assert(r.ok);
+  if (r.ok) assertEquals(r.rascunho.trip_date, "2026-11-09");
+});
+
+const COSTUME = {
+  ida: { route_point_code: "rodoviaria", route_point_name: "Rodoviária", neighborhood: null, detail: null, dropoff_location: "Cantanhede" },
+  volta: { route_point_code: "cantanhede", route_point_name: "Cantanhede", neighborhood: null, detail: "Praça da Cruz", dropoff_location: null },
+};
+
+Deno.test("sem embarque dito: usa o endereço de costume do sentido, com aviso (issue #266)", () => {
+  const ida = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume: COSTUME });
+  assert(ida.ok);
+  if (ida.ok) {
+    assertEquals(ida.rascunho.route_point_code, "rodoviaria");
+    assertEquals(ida.rascunho.dropoff_location, "Cantanhede");
+    assert(ida.rascunho.notes?.includes("endereço de costume"));
+  }
+  const volta = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta" }, { ...ctx, costume: COSTUME });
+  assert(volta.ok);
+  if (volta.ok) {
+    assertEquals(volta.rascunho.route_point_code, "cantanhede");
+    assertEquals(volta.rascunho.pickup_detail, "Praça da Cruz");
+  }
+});
+
+Deno.test("embarque dito pelo cliente vence o costume; sem costume continua sem endereço", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "retorno" }, { ...ctx, costume: COSTUME });
+  assert(r.ok);
+  if (r.ok) {
+    assertEquals(r.rascunho.route_point_code, "retorno");
+    assertEquals(r.rascunho.notes, null);
+  }
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, ctx), { ok: false, motivo: "sem_endereco" });
+  // costume num ponto que não existe mais: não inventa
+  assertEquals(
+    validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume: { ida: { route_point_code: "ponto-extinto" } } }),
+    { ok: false, motivo: "sem_endereco" },
+  );
+});
+
+Deno.test("instruções: separar embarque e desembarque com a lista de bairros de São Luís (issue #266)", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", bairrosSaoLuis: "Anil, Cidade Operária, Cohatrac" });
+  assert(t.includes("BAIRROS DE SÃO LUÍS: Anil, Cidade Operária, Cohatrac"));
+  assert(t.includes("separe onde ele SOBE de onde ele DESCE"));
+  assert(!instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" }).includes("BAIRROS DE SÃO LUÍS:"));
+});
+
+Deno.test("telefone do passageiro: só dígitos, sem 55, 10 ou 11 dígitos (issue #268)", () => {
+  assertEquals(telefoneDoPassageiro("+55 98 98888-7777"), "98988887777");
+  assertEquals(telefoneDoPassageiro("5598988887777"), "98988887777");
+  assertEquals(telefoneDoPassageiro("9888887777"), "9888887777");
+  assertEquals(telefoneDoPassageiro("123"), null);
+  assertEquals(telefoneDoPassageiro(null), null);
+});
+
+Deno.test("marcando para outra pessoa: o rascunho leva o passageiro (nome e telefone)", () => {
+  const r = validarPedidoExtraido(
+    {
+      data: "2026-11-10",
+      direcao: "volta",
+      ponto: "pirapemas",
+      endereco: "Estrada Matões, em frente à quadra",
+      desembarque: "Cidade Operária, rua 2, casa 16",
+      nome_informado: "Quem pediu",
+      passageiro_nome: "Dede Silva",
+      passageiro_telefone: "+55 98 98888-7777",
+    },
+    ctx,
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.passageiro, { nome: "Dede Silva", telefone: "98988887777" });
+  assertEquals(r.rascunho.customer_name, "Dede Silva");
+});
+
+Deno.test("passageiro com telefone inválido: sem passageiro e com aviso", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta", ponto: "pirapemas", passageiro_telefone: "123" }, ctx);
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.passageiro, null);
+  assert(r.rascunho.notes?.includes("Telefone do passageiro inválido"));
+});
+
+Deno.test("cidade da volta: Pirapemas ou Cantanhede pelo nome dito (issue #272)", () => {
+  assertEquals(cidadeDaVolta("Pirapemas"), "pirapemas");
+  assertEquals(cidadeDaVolta("aqui em CANTANHEDE-MA"), "cantanhede");
+  assertEquals(cidadeDaVolta("Rua Lister Caldas"), null);
+  assertEquals(cidadeDaVolta("Pirapemas ou Cantanhede"), null);
+  assertEquals(cidadeDaVolta(null), null);
+});
+
+Deno.test("volta: a cidade dita manda no ponto; sem ela, aviso e o Agendado não lança (issue #272)", () => {
+  const rua = { data: "2026-11-10", direcao: "volta", endereco: "Rua Lister Caldas, próximo à choperia" };
+  // modelo chutou Pirapemas pela rua, mas ninguém disse a cidade
+  const chute = validarPedidoExtraido({ ...rua, ponto: "pirapemas" }, ctx);
+  assert(chute.ok);
+  if (chute.ok) {
+    assertEquals(chute.cidadeIncerta, true);
+    assertStringIncludes(chute.rascunho.notes ?? "", "Pirapemas ou Cantanhede");
+  }
+  // cliente disse Cantanhede: vale a cidade dita, mesmo que o modelo tenha posto outro ponto
+  const dita = validarPedidoExtraido({ ...rua, ponto: "pirapemas", cidade_dita: "Cantanhede" }, ctx);
+  assert(dita.ok);
+  if (dita.ok) {
+    assertEquals(dita.rascunho.route_point_code, "cantanhede");
+    assertEquals(dita.cidadeIncerta, false);
+  }
+  // endereço de costume conta como cidade conhecida
+  const costume = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta" },
+    { ...ctx, costume: { volta: { route_point_code: "cantanhede", detail: "Praça da Cruz" } } },
+  );
+  assert(costume.ok);
+  if (costume.ok) assertEquals(costume.cidadeIncerta, false);
+  // ida não é afetada
+  const ida = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "rodoviaria" }, ctx);
+  assert(ida.ok);
+  if (ida.ok) assertEquals(ida.cidadeIncerta, false);
+});
+
+Deno.test("lugares das cidades: rua, referência e casa nas duas cidades ou só na outra (issue #274)", () => {
+  const lister = {
+    tipo: "rua",
+    nome: "Rua Deputado Lister Caldas",
+    em_pirapemas: true,
+    em_cantanhede: true,
+    reservas_pirapemas: 10,
+    reservas_cantanhede: 6,
+  };
+  const cruz = { tipo: "referencia", nome: "Praça da Cruz", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 4 };
+  const choperia = {
+    tipo: "referencia",
+    nome: "Choperia do Riba",
+    em_pirapemas: true,
+    em_cantanhede: false,
+    reservas_pirapemas: 2,
+    reservas_cantanhede: 0,
+    junto_pirapemas: "Rua Deputado Lister Caldas",
+  };
+  const posto = { tipo: "referencia", nome: "Posto Maria", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 1 };
+  const povoado = { tipo: "povoado", nome: "Povoado Galvão", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 0 };
+
+  assertEquals(
+    avisoDosLugares([lister], "pirapemas"),
+    "Rua Deputado Lister Caldas existe em Pirapemas e em Cantanhede (10 e 6 reservas): confirme a cidade.",
+  );
+  assertEquals(avisoDosLugares([cruz], "pirapemas"), "Praça da Cruz costuma ser Cantanhede (4 reservas), não Pirapemas: confira.");
+  assertEquals(avisoDosLugares([cruz], "cantanhede"), null);
+  // só a referência, sem cidade dita: diz onde fica e com o que anda junto
+  assertEquals(avisoDosLugares([choperia], null), "Choperia do Riba é em Pirapemas, junto da Rua Deputado Lister Caldas (2 reservas).");
+  assertEquals(avisoDosLugares([povoado], null), "Povoado Galvão é em Cantanhede.");
+  // reconhecido com erro de escrita: mostra como o cliente escreveu (issue #276)
+  assertEquals(
+    avisoDosLugares([{ ...choperia, escrito: "choparia do riba" }], null),
+    'Choperia do Riba (escrito "choparia do riba") é em Pirapemas, junto da Rua Deputado Lister Caldas (2 reservas).',
+  );
+  assertEquals(avisoDosLugares([], "pirapemas"), null);
+
+  // atendente: só barra com evidência (mapa ou 2+ reservas) na OUTRA cidade
+  assertEquals(lugarDeOutraCidade([cruz], "pirapemas"), { nome: "Praça da Cruz", cidade: "Cantanhede", junto: null });
+  assertEquals(lugarDeOutraCidade([povoado], "pirapemas")?.cidade, "Cantanhede");
+  assertEquals(lugarDeOutraCidade([posto], "pirapemas"), null);
+  assertEquals(lugarDeOutraCidade([cruz], "cantanhede"), null);
+  assertEquals(lugarDeOutraCidade([lister], "cantanhede"), null);
 });

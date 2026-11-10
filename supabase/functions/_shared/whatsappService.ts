@@ -19,6 +19,7 @@
 
 import { getBotContext } from "./botContext.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { acharOuCriar, type Resultado } from "./conversaPura.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin, getBotUserId } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
@@ -65,7 +66,7 @@ async function notaSombra(texto: string) {
   const ctx = getBotContext();
   if (!ctx) return;
   try {
-    await chatwootClient.postMessage(ctx.chatwootConversationId, `🤖 [SOMBRA] ${texto}`, { private: true });
+    await chatwootClient.postMessage(ctx.chatwootConversationId, `${ctx.teste ? "🧪 [TESTE]" : "🤖 [SOMBRA]"} ${texto}`, { private: true });
   } catch (err) {
     console.error("Falha ao registrar nota do modo sombra:", err);
   }
@@ -126,21 +127,20 @@ export const whatsappService = {
   // 1) recebimento / log de mensagens
   // =====================================================================
   async resolveConversation(phone: string) {
-    const { data: existing } = await supabaseAdmin
-      .from("whatsapp_conversations")
-      .select("*")
-      .eq("phone", phone)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (existing) return existing;
-
-    const { data: created, error } = await supabaseAdmin
-      .from("whatsapp_conversations")
-      .insert({ phone, state: { step: "idle" } })
-      .select()
-      .single();
-    if (error) throw new WhatsappServiceError(`Falha ao criar conversa: ${error.message}`);
-    return created;
+    // busca com erro não vira "não existe", e quem perde a corrida usa a conversa existente (issue #280)
+    try {
+      return await acharOuCriar(
+        // biome-ignore lint/suspicious/noExplicitAny: linha da tabela, usada solta pelo motor
+        async (): Promise<Resultado<any>> =>
+          await supabaseAdmin.from("whatsapp_conversations").select("*").eq("phone", phone).is("deleted_at", null).maybeSingle(),
+        // biome-ignore lint/suspicious/noExplicitAny: idem
+        async (): Promise<Resultado<any>> =>
+          await supabaseAdmin.from("whatsapp_conversations").insert({ phone, state: { step: "idle" } }).select().single(),
+        { avisar: (aviso, erro) => console.log(JSON.stringify({ evento: "bot_aviso", aviso, erro: erro.slice(0, 200) })) },
+      );
+    } catch (err) {
+      throw new WhatsappServiceError(String(err instanceof Error ? err.message : err));
+    }
   },
 
   async logMessage(conversationId: string, direction: "inbound" | "outbound", payload: {

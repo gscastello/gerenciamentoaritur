@@ -73,7 +73,7 @@ export async function interpretMessage(params: {
   conversationSummary?: string;        // ex.: "cliente já escolheu Ida, aguardando data"
 }): Promise<ExtractedIntent> {
   // Jeito de escrever dos clientes aprendido no modo sombra (só para ENTENDER).
-  const licoesDeLinguagem = await blocoDasLicoes(["linguagem_cliente"]);
+  const licoesDeLinguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
   const pointsList = params.validRoutePoints.map((p) => `${p.code} (${p.direction}: ${p.name})`).join(", ") || "nenhum";
 
   const systemPrompt = `Você é um extrator de dados para um bot de reservas de transporte (São Luís ⇄ Pirapemas/Cantanhede).

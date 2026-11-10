@@ -7,6 +7,7 @@ import {
   cronogramaValido,
   lugarNoCronograma,
   bairroDaTabela,
+  bairroPorApelido,
   trechoDoPedido,
   calcularTotal,
   calendarioParaOPrompt,
@@ -575,4 +576,21 @@ Deno.test("preço de Outros: o local mais específico vence", () => {
   const locais = [{ local: "Aeroporto", price: 70 }, { local: "Aeroporto Hangar", price: 90 }];
   assertEquals(precoDoLocalDeOutros("aeroporto hangar 2", locais), 90);
   assertEquals(precoDoLocalDeOutros("aeroporto", locais), 70);
+});
+
+Deno.test("bairroPorApelido: condomínio citado vira o bairro da memória (issue #270)", () => {
+  const memoria = [
+    { apelido: "Residencial Colinas", bairro: "Turu", confirmado: true },
+    { apelido: "Colinas", bairro: "Cohama", confirmado: false },
+    { apelido: "Vila Palmeira", bairro: "Vila Palmeira" },
+  ];
+  assertEquals(bairroPorApelido("residencial colinas, bloco 3 apto 201", memoria), "Turu");
+  assertEquals(bairroPorApelido("Residêncial Colinas", memoria), "Turu");
+  // confirmado vence o não confirmado, mesmo mais curto do lado não confirmado
+  assertEquals(bairroPorApelido("Colinas", [{ apelido: "Colinas", bairro: "Turu", confirmado: true }, ...memoria.slice(1)]), "Turu");
+  assertEquals(bairroPorApelido("perto do colinas", memoria), "Cohama");
+  // palavra inteira: "Colinasx" não é "Colinas"
+  assertEquals(bairroPorApelido("Colinasx", memoria), null);
+  assertEquals(bairroPorApelido("", memoria), null);
+  assertEquals(bairroPorApelido(null, memoria), null);
 });

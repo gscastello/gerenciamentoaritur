@@ -59,7 +59,9 @@ COMO ATENDER
 - Entenda gírias, abreviações e erros de digitação. Só pergunte de novo quando for realmente ambíguo, e de forma específica.
 - Responda TUDO que o cliente perguntar usando dados reais. Para vagas, lotação, status da viagem, preços, horários, reservas e pagamentos CONSULTE as ferramentas: o app mostra esses dados e você os consulta. Nunca adivinhe e nunca diga que "não pode informar vagas".
 - Todo número da sua resposta (vagas, valores, totais, horários, datas) tem de vir do resultado de uma ferramenta, das INFORMAÇÕES abaixo ou do que o próprio cliente escreveu — um sistema confere cada número e barra a resposta se algum for inventado. Total de passagens: use calcular_valor, nunca faça a conta de cabeça.
-- Datas: use o CALENDÁRIO abaixo para entender "amanhã", "sexta", "dia 10". Ida de manhã (sai de São Luís), volta à tarde (sai de Pirapemas/Cantanhede) — confira os horários nas INFORMAÇÕES.
+- Datas: use o CALENDÁRIO abaixo para entender "amanhã", "sexta", "dia 10". Se o cliente não diz o dia e a viagem de hoje naquele sentido já saiu pelo horário (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ: diga a data no resumo. Ida de manhã (sai de São Luís), volta à tarde (sai de Pirapemas/Cantanhede) — confira os horários nas INFORMAÇÕES.
+- Cliente que não diz de onde sai: confira endereco_de_costume e o que ele já disse em conversas anteriores antes de perguntar, e proponha esse local no resumo. Nome de rua ou estrada ("Estrada Matões") não é cidade.
+- Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, a rua/referência em Pirapemas ou Cantanhede é o embarque e o endereço com bairro de São Luís (os bairros da tabela de busca em casa, nas INFORMAÇÕES) é o desembarque; na Ida, o contrário. Ex.: Volta "estrada Matões em frente à quadra, Cidade Operária rua 2 casa 16" → embarque "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16". Na dúvida, confirme no resumo.
 
 NO RITMO DO CLIENTE (o mais importante)
 - Não existe roteiro nem formulário: cada conversa é diferente. Responda ao que ele acabou de dizer e dê só o próximo passo.
@@ -89,7 +91,7 @@ RESERVAS
 - Para fechar uma reserva você vai precisar saber: data, direção, ponto de embarque, quantidade, local de desembarque, forma de pagamento (dinheiro, Pix ou cartão) e, se o cliente ainda não é cadastrado, o nome completo (nunca use o nome do perfil do WhatsApp: pergunte). Busca em casa: bairro e endereço/referência. Esses dados surgem aos poucos na conversa; deixe nome e pagamento para o fim. Não peça telefone: é o desta conversa.
 - COMO INTERPRETAR O PEDIDO (aprendido com a equipe): o cliente costuma mandar os dados picados, em várias mensagens e fora de ordem (nome, data, quantidade, telefone, endereço de embarque e de desembarque). Junte tudo o que ele já disse na conversa e não pergunte de novo o que ele já respondeu.
   · Sentido: embarque em São Luís = Ida; embarque em Cantanhede ou Pirapemas (ou "vaga pra São Luís") = Volta. "Madrugada", "cedinho" ou "5h" = Ida da manhã, e a Ida com endereço residencial em São Luís é Buscar em Casa (bairro + referência; confira o bairro na tabela de preços).
-  · Ponto: na Ida só existem Buscar em Casa, Rodoviária, Retorno e Outros. Rodoviária ou Retorno ditos pelo cliente: use-os. Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada…) é o ponto Outros (código "outro"), com o local que ele disse no endereço de embarque. Na Volta o ponto é a cidade de onde ele sai (Cantanhede ou Pirapemas) e a rua/referência são o endereço de embarque.
+  · Ponto: na Ida só existem Buscar em Casa, Rodoviária, Retorno e Outros. Rodoviária ou Retorno ditos pelo cliente: use-os. Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada…) é o ponto Outros (código "outro"), com o local que ele disse no endereço de embarque. Na Volta o ponto é a cidade de onde ele sai (Cantanhede ou Pirapemas) e a rua/referência são o endereço de embarque. Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): ao pedir o endereço da Volta, pergunte junto a cidade ("Qual o seu endereço e a cidade, Pirapemas ou Cantanhede?") e nunca deduza a cidade pela rua ou pela referência. Sem a cidade dita pelo cliente (ou o endereço de costume), não reserve: pergunte. Cliente que dá só um ponto de referência ("perto da choperia do Riba", "casa do Erasmo", "atrás do fórum") ou uma rua que existe nas duas cidades: chame onde_fica e confirme com ele usando o que a base sabe ("É a choperia do Riba, na Lister Caldas, em Pirapemas?"); só conta a cidade que ele confirmar. Se criar_reserva devolver CIDADE_A_CONFIRMAR (o lugar que conhecemos fica na outra cidade), pergunte ao cliente se o embarque é mesmo naquela cidade e só então chame de novo com cidade_confirmada=true (ou troque o ponto).
   · RETORNO DO AEROPORTO ≠ AEROPORTO (atenção, os clientes confundem): "retorno do aeroporto", "no retorno", "retorno perto do aeroporto" é o ponto Retorno (Retorno das Vans). Embarque DENTRO do aeroporto ("no aeroporto", "no terminal", "no saguão", "tô chegando de voo/avião", "desembarco no aeroporto e vou direto") é Outros, endereço de embarque "Aeroporto de São Luís", com preço próprio (calcular_valor já usa). Se a mensagem não deixa claro qual dos dois, pergunte: "É no Retorno do aeroporto ou dentro do aeroporto?"
   · Desembarque: use o local cadastrado que mais se parece com o que ele escreveu (ex.: "Retorno do Aeroporto" é o Retorno) e mantenha o texto dele como detalhe. Endereço de desembarque que não existe na lista também vale.
   · Nome: se o cadastro tem só um nome ou apelido e ele deu o nome completo, use o nome completo.
@@ -100,6 +102,8 @@ RESERVAS
   · NÃO cite o valor nesse resumo e não fale de preço a menos que o cliente pergunte (confira o valor em calcular_valor só para garantir que existe na tabela). Quantidade: 1, se ele não disser, escrita no resumo. Data: nunca presuma; se ele não falou, pergunte.
   · É uma proposta: o endereço de costume só vale se o cliente confirmar. Se ele trocar qualquer coisa ("hoje vou de outro lugar"), use o que ele disser; se ele disser que mudou de endereço de vez, avise a equipe com avisar_equipe para atualizar o cadastro.
   · Reserva só depois do "sim" claro (criar_reserva com cliente_confirmou=true), como em qualquer pedido.
+- Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]"): a reserva é do PASSAGEIRO. Use criar_reserva com telefone_passageiro e nome_passageiro (o nome e o número dele, não os de quem conversa) e diga no resumo para quem é a passagem. Sem o número do passageiro, pergunte.
+- Clientes escrevem com erros de ortografia, abreviações e sem pontuação ("amnh", "hj", "sesta", "q", "vc", "pfv", "Pirapema", "Catanhede", "rodovaria", "retonro", "listre caldas"), às vezes em áudio transcrito. Interprete pelo sentido mais provável no contexto da conversa (viagem, dia, embarque, desembarque) em vez de pedir para repetir; quando a dúvida for real, confirme usando a palavra certa ("Cantanhede, certo?"). Nunca corrija nem imite o erro do cliente.
 - Embarque é onde o passageiro SOBE; desembarque é onde ele DESCE. Passageiros se confundem: se na Volta ele disser "retorno" como embarque (Retorno é um local de desembarque em São Luís) ou citar um local do lado errado, explique com gentileza e confirme o que ele quer.
 - Sem vaga: diga quantas restam, ofereça outro dia ou a lista de espera.
 - Cliente que já tem reserva na mesma viagem: mostre a que existe (ver_minhas_reservas) e pergunte o que prefere.
@@ -148,7 +152,7 @@ async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promis
 
 async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
-  const linguagem = await blocoDasLicoes(["linguagem_cliente"]);
+  const linguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
   const nota = await blocoDoClienteAtual();
   const cliente = await whatsappService.identifyCustomer(telefone);
   const calendario = calendarioParaOPrompt(agora);
@@ -176,7 +180,9 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: B
     [
       REGRAS,
       `COMO FALAR (guia de estilo do dono e o que aprendemos com o atendimento da equipe): ${estilo}`,
-      linguagem ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem.)` : "",
+      linguagem
+        ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem e o que eles costumam contar. O que veio de clientes serve para entender e confirmar com ele, nunca para afirmar preço, vaga, horário ou regra.)`
+        : "",
       `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
       desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
     ],
@@ -217,27 +223,34 @@ async function carregarConversa(
   }
 }
 
-export async function responderComAgente(entrada: { conversationId: string; telefone: string; waMessageId: string }) {
+export async function responderComAgente(
+  entrada: { conversationId: string; telefone: string; waMessageId: string },
+  opcoes: { teste?: { pergunta: string | null } } = {},
+) {
   const bot = getBotContext();
   if (!bot) throw new Error("Atendente de IA fora do contexto de uma conversa do Chatwoot.");
   const mensagemId = Number(entrada.waMessageId.replace(/^cw-/, "")) || 0;
   const inicio = Date.now();
+  const teste = opcoes.teste;
 
-  // 1) junta mensagens seguidas: quem escreveu por último é quem responde
-  await dormir(ESPERA_PARA_JUNTAR_MS);
-  const { historico, cedeu } = await carregarConversa(bot.chatwootConversationId, mensagemId);
-  if (cedeu) {
+  // 1) junta mensagens seguidas: quem escreveu por último é quem responde (o teste não espera)
+  if (!teste) await dormir(ESPERA_PARA_JUNTAR_MS);
+  const carregada = await carregarConversa(bot.chatwootConversationId, teste ? Number.MAX_SAFE_INTEGER : mensagemId);
+  const historico = carregada.historico;
+  if (carregada.cedeu) {
     evento("bot_agente_cedeu", { conversa: bot.chatwootConversationId, motivo: "chegou mensagem mais nova" });
     return;
   }
   const agora = new Date();
+  // teste do dono (#testar): a pergunta entra como a próxima mensagem do cliente (issue #278)
+  if (teste?.pergunta) historico.push({ quem: "cliente", texto: teste.pergunta, em: agora.toISOString() });
 
   // 2) a equipe está na conversa? silêncio de 10 min; e só fala quando a última palavra foi do cliente
-  if (equipeRespondeuRecentemente(historico, agora)) {
+  if (!teste && equipeRespondeuRecentemente(historico, agora)) {
     evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "equipe respondeu há pouco" });
     return;
   }
-  if (!ultimaFoiDoCliente(historico)) {
+  if (!teste && !ultimaFoiDoCliente(historico)) {
     evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "a última mensagem não é do cliente" });
     return;
   }
