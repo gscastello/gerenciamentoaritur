@@ -213,8 +213,8 @@ async function lerEGravar(
 
   const gravados: string[] = [];
   const motivos: string[] = [];
-  /** rascunhos da Volta sem a cidade de embarque dita (issue #272): o "Agendado ☑️" não lança */
-  const incertos = new Set<string>();
+  /** rascunhos que o "Agendado ☑️" não lança sozinho, com o motivo (issues #272 e #286) */
+  const incertos = new Map<string, { motivo: string; codigo: string }>();
   for (const p of pedidos) {
     // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
     if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
@@ -234,6 +234,7 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
+    let pendencia: { motivo: string; codigo: string } | null = null;
     // busca em casa com o bairro escrito errado ("cohatrc"): o da tabela, com aviso (issue #276)
     const parecido = r.route_point_code === "busca" ? bairroParecido(r.pickup_neighborhood, ctx.bairrosTabela) : null;
     if (parecido) {
@@ -273,7 +274,14 @@ async function lerEGravar(
         continue;
       }
       r.notes = [r.notes, "Já tem reserva no mesmo sentido na véspera: confira se não é repetida."].filter(Boolean).join(" ").slice(0, 300);
-      v.cidadeIncerta = true; // não lança sozinho
+      pendencia = { motivo: "o cliente já tem reserva no mesmo sentido na véspera (confira se não é repetida)", codigo: "vespera" };
+    }
+    // "ida e volta" sem o dia da volta: a volta no mesmo dia é só suposição; confirme com o cliente (dono, 10/11)
+    if (r.direction === "volta" && /volta no mesmo dia da ida/i.test(r.notes ?? "")) {
+      pendencia ??= { motivo: "a volta no mesmo dia foi suposta (o cliente não disse o dia da volta): confirme com o cliente", codigo: "volta_mesmo_dia" };
+    }
+    if (v.cidadeIncerta) {
+      pendencia ??= { motivo: "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa", codigo: "cidade" };
     }
     const linha = {
       ...r,
@@ -304,7 +312,7 @@ async function lerEGravar(
       evento("bot_aviso", { aviso: "rascunho_nao_gravado", conversa: entrada.chatwootConversationId, erro: error.message.slice(0, 200) });
     } else {
       gravados.push(salvo.id);
-      if (v.cidadeIncerta) incertos.add(salvo.id);
+      if (pendencia) incertos.set(salvo.id, pendencia);
     }
   }
   return { pedidos, gravados, motivos, incertos, uso, ctx, cliente, hoje };
@@ -373,9 +381,10 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       const encomenda = d.type === "encomenda";
       let ponto: Bloco | null = null;
       let preco = 0;
-      if (lido.incertos.has(d.id)) {
-        await anotarPendencia(d.id, "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa");
-        pendentes.push("cidade");
+      const pendencia = lido.incertos.get(d.id);
+      if (pendencia) {
+        await anotarPendencia(d.id, pendencia.motivo);
+        pendentes.push(pendencia.codigo);
         continue;
       }
       if (!encomenda) {

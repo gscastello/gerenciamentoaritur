@@ -437,5 +437,6 @@ Deno.test("instruções do Agendado: data pela mensagem, horário da equipe e o 
 
 Deno.test("ida e volta sem o dia da volta = volta no mesmo dia (dono, 10/11)", () => {
   const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
-  assertStringIncludes(t, "a Volta é no MESMO DIA da Ida");
+  assertStringIncludes(t, "registre a Volta no MESMO DIA da Ida");
+  assertStringIncludes(t, "Volta no mesmo dia da Ida: confirme com o cliente");
 });

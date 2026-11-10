@@ -318,7 +318,10 @@ o bot tenta de novo (`relerAgendadoPendente`, idempotente pela mensagem do Agend
 (3) sem dia dito pelo cliente, vale o horário que a equipe disse ("5 horas"/"amanhã cedo" = Ida; "12 horas"/"após
 às 12" = Volta; a próxima viagem desse sentido); (4) "hoje"/"amanhã" contam da data da MENSAGEM; quem já tem reserva
 no mesmo sentido na véspera não ganha rascunho novo (no Agendado, fica pendente com aviso); e todo dia às 00:15 o
-rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). Log: `bot_agendado_lancado`
+rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). **Ida e volta sem o dia da volta**
+(dono, 10/11): o normal é a volta no mesmo dia, mas é sempre confirmado com o cliente — o atendente pergunta ("A volta é
+no mesmo dia, à tarde?") e só reserva depois do sim; no Agendado a Ida é lançada e a Volta fica em "Reservas prontas"
+com o motivo "a volta no mesmo dia foi suposta: confirme com o cliente". Log: `bot_agendado_lancado`
 (lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
 
 ## 7. Checklist de teste (com `#testar`, em qualquer modo)
