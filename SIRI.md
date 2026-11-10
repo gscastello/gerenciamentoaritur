@@ -33,9 +33,11 @@ evite "Agenda", "Lembrete" ou "Mensagem"). Adicione, nesta ordem:
 3. **Obter Valor do Dicionário** — Chave: `fala` — do **Conteúdo do URL**.
 4. **Falar Texto** — o **Valor do Dicionário**.
 5. **Obter Valor do Dicionário** — Chave: `continuar` — do **Conteúdo do URL**.
-6. **Se** — Valor do Dicionário **tem qualquer valor** (o campo só vem quando é para ouvir de novo):
+6. **Texto** — dentro dele, a variável **Valor do Dicionário** da ação 5 (Selecionar Variável → toque
+   no bloco da ação 5). Sem isso o iPhone trata o valor como arquivo ("Tamanho do Arquivo") no "Se".
+7. **Se** — **Texto** **é** `sim`:
    - **Executar Atalho** — o próprio atalho (ele ouve de novo para o "sim" ou a sua resposta).
-7. (Fim do Se.)
+8. (Fim do Se.)
 
 Toque em **Concluído**. Teste no celular parado: "E aí Siri, Rota Van" → "quantas vagas tem na
 Volta de amanhã?".
@@ -51,7 +53,7 @@ em **Ajustes → Siri** deixe **Permitir Siri Bloqueado** ligado.
   guardada só como hash sha256 em `assistente_chaves` (migração 87); `rpc_criar_chave_assistente`
   e `rpc_revogar_chave_assistente`, só para a equipe.
 - Resposta sempre `200 { fala }`, com `continuar: "sim"` só quando é para ouvir de novo (o "Se" do atalho
-  usa "tem qualquer valor", que funciona com qualquer tipo de variável): a Siri lê até os erros.
+  compara o Texto com "sim"; sem o campo, o Texto fica vazio e o atalho termina): a Siri lê até os erros.
 - Conversa e proposta pendente em `assistente_voz_sessao` (10 min). `ehConfirmacao` /
   `ehRecusa` (módulo puro `assistentePuro.ts`) decidem o "sim" e o "não".
 - Usa o mesmo assistente da aba (`_shared/assistente.ts`) no **modo voz** (frases curtas, sem

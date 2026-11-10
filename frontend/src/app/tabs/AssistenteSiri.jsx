@@ -68,7 +68,8 @@ const PASSOS = [
   'Ação "Ditar Texto" (idioma Português, Brasil).',
   'Ação "Obter Conteúdo do URL": cole o ENDEREÇO acima; Método POST; Cabeçalho "Authorization" com o valor "Bearer " + a CHAVE; Corpo JSON com o campo "texto" = Texto Ditado.',
   'Ação "Obter Valor do Dicionário": chave "fala". Depois, ação "Falar Texto".',
-  'Ação "Obter Valor do Dicionário": chave "continuar" (do Conteúdo do URL). Ação "Se" esse valor "tem qualquer valor": dentro dele, "Executar Atalho" com o próprio atalho.',
+  'Ação "Obter Valor do Dicionário": chave "continuar" (do Conteúdo do URL). Depois, ação "Texto" com esse Valor do Dicionário dentro.',
+  'Ação "Se" o Texto "é" sim: dentro dele, "Executar Atalho" com o próprio atalho.',
   'Pronto: "E aí Siri, <nome do atalho>" e fale o pedido. Para gravar, responda "sim".',
 ];
 
