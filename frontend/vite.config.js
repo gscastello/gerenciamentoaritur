@@ -90,11 +90,10 @@ export default defineConfig({
     modulepreload: { polyfill: false },
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Recharts é pesado e só a view Dashboard usa — mantém fora do
-          // bundle inicial (a view é carregada com React.lazy).
-          recharts: ["recharts"],
-        },
+        // Recharts só a view Dashboard usa e ela já vem por React.lazy: o próprio
+        // Vite separa o pacote. Um manualChunks fixo ({ recharts: [...] }) puxava
+        // junto dependências compartilhadas e fazia o index PRÉ-CARREGAR o recharts
+        // (~150 kB gzip) em toda abertura do app (auditoria de 10/11/2026).
       },
     },
   },
