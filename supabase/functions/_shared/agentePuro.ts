@@ -6,6 +6,7 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
+import { nomeParecidoNoTexto } from "./grafia.ts";
 import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
@@ -701,4 +702,17 @@ export function bairroPorApelido(
     }
   }
   return melhor?.bairro ?? null;
+}
+
+/**
+ * Bairro da tabela citado com erro de escrita ("cohatrc", "bequimao", "turuu"), quando
+ * bairroDaTabela não acha o nome exato (issue #276). Dois bairros igualmente parecidos = null.
+ */
+export function bairroParecido<T extends { neighborhood: string }>(
+  texto: string | null | undefined,
+  tabela: T[],
+): { bairro: T; escrito: string } | null {
+  if (bairroDaTabela(texto, tabela)) return null;
+  const achado = nomeParecidoNoTexto(texto, tabela, (b) => b.neighborhood);
+  return achado && achado.erros > 0 ? { bairro: achado.item, escrito: achado.escrito } : null;
 }
