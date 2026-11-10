@@ -163,6 +163,7 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       };
     }
     case "ler_conversa": {
+      if (ctx.papel !== "admin") return { ok: false, erro: "Ler a conversa do WhatsApp é só para admin." };
       const { comDdi, semDdi } = telefonesDe(String(a.telefone ?? ""));
       if (!semDdi.length) return { ok: false, erro: "telefone inválido" };
       const { data: convs } = await ctx.db
@@ -374,14 +375,14 @@ async function chamarModelo(modelo: string, system: string, messages: Linha[]): 
   return await res.json();
 }
 
-export async function conversar(historico: MensagemDoChat[], ctx: Contexto) {
+export async function conversar(historico: MensagemDoChat[], ctx: Contexto, opcoes: { voz?: boolean } = {}) {
   const ultimo = historico[historico.length - 1]?.texto ?? "";
   const modelo = escolherModelo(ultimo, historico.length);
   const desembarques = (["ida", "volta"] as const).map((d) => `- ${d}: ${ctx.areas[d].map((x) => x.label).join(", ")}`).join("\n");
   const pontos = (["ida", "volta"] as const)
     .flatMap((d) => ctx.pontosCompletos[d].map((p) => `- ${d}: ${p.code} = ${p.name}`))
     .join("\n");
-  const system = instrucoesDoAssistente({ pontos, desembarques });
+  const system = instrucoesDoAssistente({ pontos, desembarques, voz: opcoes.voz });
   const messages: Linha[] = historico.map((m, i) => ({
     role: m.papel === "usuario" ? "user" : "assistant",
     content: i === historico.length - 1 ? `HOJE (São Luís):\n${calendarioParaOPrompt(new Date())}\n\nPEDIDO:\n${m.texto}` : m.texto,
