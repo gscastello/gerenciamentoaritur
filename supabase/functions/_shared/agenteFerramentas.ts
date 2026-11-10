@@ -27,7 +27,7 @@ import {
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
-import { type RuaNasCidades, ruaDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
+import { type LugarNasCidades, lugarDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
@@ -114,6 +114,16 @@ export const FERRAMENTAS: Ferramenta[] = [
     description:
       "Devolve o endereço de costume DESTE cliente por sentido (ponto de embarque, bairro, rua/referência e desembarque que ele sempre usa — fixado pela equipe ou visto no histórico) e o sentido provável da próxima viagem. Use quando um cliente quiser passagem (principalmente se já viajou antes) para propor o pedido pronto em vez de perguntar tudo de novo. Não traz valor.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "onde_fica",
+    description:
+      "Diz onde fica um lugar de Pirapemas ou Cantanhede que o cliente citou para embarcar na Volta (rua, ponto de referência como bar, padaria, hospital, posto, 'casa de fulano', povoado): em qual cidade aparece, em quantas reservas e a rua que costuma vir junto. Use quando ele der só uma referência ou uma rua que existe nas duas cidades, para confirmar com ele. Não decide a cidade.",
+    input_schema: {
+      type: "object",
+      properties: { lugar: { type: "string", description: "O endereço ou a referência como o cliente escreveu." } },
+      required: ["lugar"],
+    },
   },
   {
     name: "criar_reserva",
@@ -487,14 +497,15 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const ponto = acharPonto(pontos, pedido.ponto);
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
 
-  // Volta: a rua citada só é conhecida na outra cidade? confirma com o cliente (issue #274)
+  // Volta: o lugar citado (rua, referência, casa) só é conhecido na outra cidade? confirma com o cliente (issue #274)
   if (pedido.direcao === "volta" && pedido.enderecoEmbarque && args.cidade_confirmada !== true) {
-    const outra = ruaDeOutraCidade(await ruasNasCidades(pedido.enderecoEmbarque), String(ponto.code));
+    const outra = lugarDeOutraCidade(await lugaresNasCidades(pedido.enderecoEmbarque), String(ponto.code));
     if (outra) {
+      const junto = outra.junto ? ` (junto da ${outra.junto})` : "";
       return {
         ok: false,
         codigo: "CIDADE_A_CONFIRMAR",
-        erro: `A ${outra.nome} que conhecemos fica em ${outra.cidade}. Pergunte ao cliente se o embarque é mesmo em ${ponto.name}; se ele confirmar, chame de novo com cidade_confirmada=true (senão troque o ponto).`,
+        erro: `${outra.nome}, que conhecemos, fica em ${outra.cidade}${junto}. Pergunte ao cliente se o embarque é mesmo em ${ponto.name}; se ele confirmar, chame de novo com cidade_confirmada=true (senão troque o ponto).`,
       };
     }
   }
@@ -699,6 +710,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
         return await verMinhasReservas(ctx);
       case "endereco_de_costume":
         return await enderecoDeCostume(ctx);
+      case "onde_fica":
+        return await ondeFica(args);
       case "criar_reserva":
         return await criarReserva(args, ctx);
       case "remarcar_reserva":
@@ -733,14 +746,36 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
   }
 }
 
-/** Em que cidade(s) aparece cada rua citada (base que aprende com as reservas, issue #274). Melhor esforço. */
-export async function ruasNasCidades(texto: string | null | undefined): Promise<RuasNasCidadesLista> {
-  if (!texto || String(texto).trim().length < 4) return [];
-  const { data, error } = await supabaseAdmin.rpc("fn_ruas_no_texto", { p_texto: String(texto).slice(0, 300) });
+/**
+ * Em que cidade(s) aparece cada lugar citado (rua, ponto de referência, casa de alguém,
+ * povoado) e com o que ele anda junto. Base que aprende com as reservas (issue #274). Melhor esforço.
+ */
+export async function lugaresNasCidades(texto: string | null | undefined): Promise<LugarNasCidades[]> {
+  if (!texto || String(texto).trim().length < 3) return [];
+  const { data, error } = await supabaseAdmin.rpc("fn_lugares_no_texto", { p_texto: String(texto).slice(0, 300) });
   if (error) {
-    console.log(JSON.stringify({ evento: "bot_aviso", aviso: "ruas_nao_consultadas", erro: error.message.slice(0, 200) }));
+    console.log(JSON.stringify({ evento: "bot_aviso", aviso: "lugares_nao_consultados", erro: error.message.slice(0, 200) }));
     return [];
   }
-  return (data ?? []) as RuasNasCidadesLista;
+  return (data ?? []) as LugarNasCidades[];
 }
-type RuasNasCidadesLista = RuaNasCidades[];
+
+/** Ferramenta onde_fica: o que a base sabe sobre um lugar de Pirapemas/Cantanhede. */
+async function ondeFica(args: Linha) {
+  const lugares = await lugaresNasCidades(String(args.lugar ?? ""));
+  if (!lugares.length) {
+    return { ok: true, conhecido: false, dica: "Não conhecemos esse lugar: pergunte a cidade (Pirapemas ou Cantanhede) e a rua." };
+  }
+  return {
+    ok: true,
+    conhecido: true,
+    lugares: lugares.map((l) => ({
+      nome: l.nome,
+      tipo: l.tipo,
+      cidades: [l.em_pirapemas ? "Pirapemas" : null, l.em_cantanhede ? "Cantanhede" : null].filter(Boolean),
+      reservas: { pirapemas: l.reservas_pirapemas, cantanhede: l.reservas_cantanhede },
+      junto: { pirapemas: l.junto_pirapemas ?? null, cantanhede: l.junto_cantanhede ?? null },
+    })),
+    lembrete: "Use para CONFIRMAR com o cliente (ex.: 'É a choperia do Riba, na Lister Caldas, em Pirapemas?'); a cidade só vale quando ele confirmar.",
+  };
+}

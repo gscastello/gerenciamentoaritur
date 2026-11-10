@@ -11,8 +11,8 @@ import {
   telefoneDoPassageiro,
   validarPedidoExtraido,
   cidadeDaVolta,
-  avisoDasRuas,
-  ruaDeOutraCidade,
+  avisoDosLugares,
+  lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 
@@ -351,23 +351,43 @@ Deno.test("volta: a cidade dita manda no ponto; sem ela, aviso e o Agendado não
   if (ida.ok) assertEquals(ida.cidadeIncerta, false);
 });
 
-Deno.test("ruas das cidades: avisos de rua nas duas cidades ou só na outra (issue #274)", () => {
-  const lister = { nome: "Rua Deputado Lister Caldas", em_pirapemas: true, em_cantanhede: true, reservas_pirapemas: 10, reservas_cantanhede: 6 };
-  const cruz = { nome: "Praça da Cruz", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 4 };
-  const matoes = { nome: "Estrada Matoes", em_pirapemas: true, em_cantanhede: false, reservas_pirapemas: 7, reservas_cantanhede: 0 };
+Deno.test("lugares das cidades: rua, referência e casa nas duas cidades ou só na outra (issue #274)", () => {
+  const lister = {
+    tipo: "rua",
+    nome: "Rua Deputado Lister Caldas",
+    em_pirapemas: true,
+    em_cantanhede: true,
+    reservas_pirapemas: 10,
+    reservas_cantanhede: 6,
+  };
+  const cruz = { tipo: "referencia", nome: "Praça da Cruz", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 4 };
+  const choperia = {
+    tipo: "referencia",
+    nome: "Choperia do Riba",
+    em_pirapemas: true,
+    em_cantanhede: false,
+    reservas_pirapemas: 2,
+    reservas_cantanhede: 0,
+    junto_pirapemas: "Rua Deputado Lister Caldas",
+  };
+  const posto = { tipo: "referencia", nome: "Posto Maria", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 1 };
+  const povoado = { tipo: "povoado", nome: "Povoado Galvão", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 0 };
 
   assertEquals(
-    avisoDasRuas([lister], "pirapemas"),
+    avisoDosLugares([lister], "pirapemas"),
     "Rua Deputado Lister Caldas existe em Pirapemas e em Cantanhede (10 e 6 reservas): confirme a cidade.",
   );
-  assertEquals(avisoDasRuas([cruz], "pirapemas"), "Praça da Cruz costuma ser Cantanhede, não Pirapemas: confira.");
-  assertEquals(avisoDasRuas([cruz], "cantanhede"), null);
-  assertEquals(avisoDasRuas([matoes], null), "Estrada Matoes costuma ser Pirapemas.");
-  assertEquals(avisoDasRuas([], "pirapemas"), null);
-  assertEquals(avisoDasRuas([{ ...lister, reservas_pirapemas: 0, reservas_cantanhede: 0 }], null), "Rua Deputado Lister Caldas existe em Pirapemas e em Cantanhede: confirme a cidade.");
+  assertEquals(avisoDosLugares([cruz], "pirapemas"), "Praça da Cruz costuma ser Cantanhede (4 reservas), não Pirapemas: confira.");
+  assertEquals(avisoDosLugares([cruz], "cantanhede"), null);
+  // só a referência, sem cidade dita: diz onde fica e com o que anda junto
+  assertEquals(avisoDosLugares([choperia], null), "Choperia do Riba é em Pirapemas, junto da Rua Deputado Lister Caldas (2 reservas).");
+  assertEquals(avisoDosLugares([povoado], null), "Povoado Galvão é em Cantanhede.");
+  assertEquals(avisoDosLugares([], "pirapemas"), null);
 
-  // atendente: só barra quando a rua é conhecida apenas na OUTRA cidade
-  assertEquals(ruaDeOutraCidade([cruz], "pirapemas"), { nome: "Praça da Cruz", cidade: "Cantanhede" });
-  assertEquals(ruaDeOutraCidade([cruz], "cantanhede"), null);
-  assertEquals(ruaDeOutraCidade([lister], "cantanhede"), null);
+  // atendente: só barra com evidência (mapa ou 2+ reservas) na OUTRA cidade
+  assertEquals(lugarDeOutraCidade([cruz], "pirapemas"), { nome: "Praça da Cruz", cidade: "Cantanhede", junto: null });
+  assertEquals(lugarDeOutraCidade([povoado], "pirapemas")?.cidade, "Cantanhede");
+  assertEquals(lugarDeOutraCidade([posto], "pirapemas"), null);
+  assertEquals(lugarDeOutraCidade([cruz], "cantanhede"), null);
+  assertEquals(lugarDeOutraCidade([lister], "cantanhede"), null);
 });

@@ -56,9 +56,11 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
   "Madrugada", "amanhã cedo" = ida da manhã.
 - **Cidade da Volta:** o ponto é a cidade (`pirapemas` ou `cantanhede`) que o cliente **disse** ou o
   endereço de costume. Há ruas com o mesmo nome nas duas (ex.: Lister Caldas): **nunca** deduza a
-  cidade pela rua ou pela referência. Sem cidade dita, pergunte ao dono. Confira a rua na base de
-  ruas (aprende sozinha com as reservas): `select * from fn_ruas_no_texto('<endereço>');` — rua nas duas
-  cidades ou só na outra: avise o dono no relatório. Data relativa ("amanhã", "segunda") pelo
+  cidade pela rua ou pela referência. Sem cidade dita, pergunte ao dono. Confira o endereço na base
+  de lugares das cidades (ruas, referências, "casa de fulano", povoados; aprende sozinha com as
+  reservas): `select * from fn_lugares_no_texto('<endereço>');`. Lugar nas duas cidades ou só na
+  outra: avise o dono no relatório. Só referência ("perto da choperia do Riba"): a coluna `junto_*`
+  diz a rua que costuma vir junto; use para propor ao dono, nunca para decidir sozinho. Data relativa ("amanhã", "segunda") pelo
   calendário de hoje em Fortaleza; se ambígua, pergunte.
 - **Ponto de embarque** (`route_points.code`, conferir no banco, `active`):
   ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno` e `outro` (Outros); volta `pirapemas`,
