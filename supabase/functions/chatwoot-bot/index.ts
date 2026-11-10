@@ -26,6 +26,10 @@
 //      com humano), prepara a reserva para ela lançar com um toque (issue #254).
 //   4) AGENDADO ☑️ — a equipe confirmou na conversa com a marca combinada pelo
 //      dono: a reserva preparada é lançada (issue #257). Nunca no modo sombra.
+//   5) TESTE — nota privada "#testar [mensagem]" da equipe: o bot escreve, numa nota
+//      privada, a resposta que daria (issue #278). Qualquer modo; nada vai ao cliente.
+// Modo sombra (issue #278): só observa e aprende — não gera resposta nem reserva
+// preparada (é o que custa). Para ver o que o bot sabe, use o #testar.
 //
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
@@ -33,7 +37,8 @@
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
-import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
+import { extrairAtividade, extrairMensagemDeCliente, extrairPedidoDeTeste } from "../_shared/chatwootPayload.ts";
+import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
@@ -88,6 +93,12 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
 
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any) {
+  // teste do dono: nota privada "#testar …" (issue #278)
+  const teste = extrairPedidoDeTeste(body, INBOX_ID);
+  if (teste) {
+    await testarBot(teste);
+    return;
+  }
   // o que o Chatwoot entrega como anexo (card de contato, issue #268): tipos e campos, sem conteúdo
   if (body?.event === "message_created" && Array.isArray(body.attachments) && body.attachments.length) {
     evento("bot_anexo_recebido", {
@@ -179,8 +190,9 @@ async function processar(body: any) {
       }),
   );
 
-  // quem atende é a equipe: deixa a reserva preparada (nada é reservado aqui)
-  if (m.texto && (modo !== "ia" || conversation.attendance_mode === "humano")) {
+  // quem atende é a equipe: deixa a reserva preparada (nada é reservado aqui).
+  // No modo sombra não: ele só observa e aprende (issue #278).
+  if (m.texto && modo !== "sombra" && (modo !== "ia" || conversation.attendance_mode === "humano")) {
     await prepararRascunhoDeReserva({
       conversationId: conversation.id,
       chatwootConversationId: m.chatwootConversationId,
@@ -191,6 +203,29 @@ async function processar(body: any) {
 
   // depois de responder ao cliente, para o aprendizado não atrasar o atendimento
   if (observou) await aprenderSePreciso();
+}
+
+/**
+ * Teste do dono (issue #278): o atendente de IA lê a conversa e escreve numa nota
+ * privada o que responderia — com a pergunta da nota como próxima mensagem do
+ * cliente, se houver. Roda como sombra: nada é enviado, gravado ou aprendido.
+ */
+async function testarBot(t: NonNullable<ReturnType<typeof extrairPedidoDeTeste>>) {
+  const conversation = await whatsappService.resolveConversation(t.telefone);
+  evento("bot_teste_pedido", { conversa: t.chatwootConversationId, com_pergunta: !!t.pergunta });
+  await runWithBotContext(
+    { chatwootConversationId: t.chatwootConversationId, conversationId: conversation.id, shadow: true, teste: true },
+    () =>
+      responderComAgente(
+        { conversationId: conversation.id, telefone: t.telefone, waMessageId: "cw-0" },
+        { teste: { pergunta: t.pergunta } },
+      ),
+  ).catch(async (err) => {
+    evento("bot_erro", { onde: "teste", conversa: t.chatwootConversationId, erro: String(err).slice(0, 300) });
+    await chatwootClient
+      .postMessage(t.chatwootConversationId, `🧪 [TESTE] Não consegui responder: ${String(err).slice(0, 200)}`, { private: true })
+      .catch(() => {});
+  });
 }
 
 Deno.serve(async (req: Request) => {

@@ -65,7 +65,7 @@ async function notaSombra(texto: string) {
   const ctx = getBotContext();
   if (!ctx) return;
   try {
-    await chatwootClient.postMessage(ctx.chatwootConversationId, `🤖 [SOMBRA] ${texto}`, { private: true });
+    await chatwootClient.postMessage(ctx.chatwootConversationId, `${ctx.teste ? "🧪 [TESTE]" : "🤖 [SOMBRA]"} ${texto}`, { private: true });
   } catch (err) {
     console.error("Falha ao registrar nota do modo sombra:", err);
   }

@@ -1093,7 +1093,7 @@ function AppInner() {
                       style={{ color: R.error ? C.red : C.green }}
                     />
                     {R.error ? "Sem conexão…" : "Sincronizado"} ·{" "}
-                    {{ ia: "IA atendendo", sombra: "Bot em teste" }[modoAtendimento] ||
+                    {{ ia: "IA atendendo", sombra: "Bot aprendendo" }[modoAtendimento] ||
                       "Atend. manual"}
                   </div>
                 </div>

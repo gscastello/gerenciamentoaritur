@@ -3,6 +3,7 @@ import {
   contatosCompartilhados,
   extrairAtividade,
   extrairMensagemDeCliente,
+  extrairPedidoDeTeste,
   textoComContatos,
 } from "./chatwootPayload.ts";
 
@@ -190,4 +191,30 @@ Deno.test("card de contato entra no texto da mensagem do cliente e da atividade"
   assertEquals(m?.texto, "[contato compartilhado: Maria Silva — 5598988887777]");
   assertEquals(m?.anexo, undefined);
   assertEquals(extrairAtividade(body)?.texto, "[contato compartilhado: Maria Silva — 5598988887777]");
+});
+
+Deno.test("teste do dono: nota privada #testar da equipe (issue #278)", () => {
+  const nota = (content: string, extra: Record<string, unknown> = {}) => ({
+    event: "message_created",
+    message_type: "outgoing",
+    private: true,
+    content,
+    sender: { type: "user" },
+    conversation: { id: 77, inbox_id: 1, meta: { sender: { phone_number: "+5598988887777" } } },
+    ...extra,
+  });
+  assertEquals(extrairPedidoDeTeste(nota("#testar tem vaga amanhã pra Cantanhede?"), 1), {
+    chatwootConversationId: 77,
+    telefone: "5598988887777",
+    pergunta: "tem vaga amanhã pra Cantanhede?",
+  });
+  assertEquals(extrairPedidoDeTeste(nota("#TESTE"), 1)?.pergunta, null);
+  assertEquals(extrairPedidoDeTeste(nota("# testar: quanto custa?"), 1)?.pergunta, "quanto custa?");
+  // pública não conta (iria para o cliente); nota do próprio bot também não
+  assertEquals(extrairPedidoDeTeste(nota("#testar oi", { private: false }), 1), null);
+  assertEquals(extrairPedidoDeTeste(nota("#testar oi", { sender: { type: "agent_bot" } }), 1), null);
+  // só no começo da nota; outra caixa não conta
+  assertEquals(extrairPedidoDeTeste(nota("vou #testar depois"), 1), null);
+  assertEquals(extrairPedidoDeTeste(nota("#testar oi"), 2), null);
+  assertEquals(extrairPedidoDeTeste(nota("#testarei"), 1), null);
 });

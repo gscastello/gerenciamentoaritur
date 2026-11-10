@@ -12,6 +12,7 @@
 // decide o preço — só entende o que a pessoa quis dizer.
 
 import { responderComAgente } from "./agente.ts";
+import { getBotContext } from "./botContext.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { responderComBase } from "./botAnswer.ts";
@@ -74,6 +75,10 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
 
   const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
   if (mode !== "ia") return; // HUMANO: só loga, equipe responde direto pelo WhatsApp Business
+
+  // Modo sombra (issue #278): só observa e aprende. Não gera a resposta (nem a do roteiro):
+  // é o que custa. Para ver o que o bot responderia, a equipe escreve a nota "#testar".
+  if (getBotContext()?.shadow) return;
 
   // Atendente de IA conversacional (issue #224): lê a conversa inteira, consulta o app
   // e responde sem menu. A chave settings.bot_engine = 'roteiro' devolve o roteiro antigo.

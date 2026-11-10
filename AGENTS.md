@@ -251,8 +251,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   editável na aba Sistema e válido na hora para todos os sócios:
   - `ia` — o bot responde e confirma reservas sozinho;
   - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot;
-  - `sombra` — o bot roda tudo, mas a resposta vira **nota privada** e **nada é
-    gravado** no negócio. Todo bot novo ou mudança grande começa em `sombra`.
+  - `sombra` — o bot **só observa e aprende** (issue #278): não gera resposta nem reserva
+    preparada, que é o que custa. Registro de mensagem e comprovante continuam.
+  - **Teste sob demanda, em qualquer modo:** nota privada `#testar` no Chatwoot (com ou sem uma
+    pergunta depois) faz o bot escrever numa nota `🧪 [TESTE]` o que responderia; nada vai ao
+    cliente, nada é gravado e a nota não entra no histórico nem no aprendizado. Todo bot novo ou
+    mudança grande é testado assim antes de ligar o `ia`.
 - Por conversa: `whatsapp_conversations.attendance_mode` (`ia` | `humano`). O bot
   **continua ativo** quando a equipe responde pelo celular; só **cala** na
   transferência completa (`rpc_transfer_to_human` + status Aberta no Chatwoot).
