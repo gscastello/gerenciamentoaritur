@@ -2,8 +2,9 @@
 //
 // Assistente da equipe pela Siri (issue #290). O atalho do iPhone dita o pedido,
 // manda { texto } com a CHAVE PESSOAL da pessoa no cabeçalho Authorization e lê
-// em voz alta o campo "fala" da resposta. Se "continuar" vier "sim", o atalho
-// ouve de novo (pergunta do assistente ou "Confirma?").
+// em voz alta o campo "fala" da resposta. O campo "continuar" só vem quando é
+// para ouvir de novo (pergunta do assistente ou "Confirma?"): no atalho, o "Se"
+// usa "tem qualquer valor", que funciona com qualquer tipo de variável do iPhone.
 //
 // Mesmas regras do assistente do app: só propõe; "sim" grava a proposta
 // pendente (10 min), "não" descarta; preço pela tabela, vaga pelo banco,
@@ -23,7 +24,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
 
 /** O atalho sempre recebe 200 com uma "fala": assim a Siri lê até os erros. */
 function falar(fala: string, continuar = false) {
-  return new Response(JSON.stringify({ fala, continuar: continuar ? "sim" : "nao" }), {
+  return new Response(JSON.stringify(continuar ? { fala, continuar: "sim" } : { fala }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
