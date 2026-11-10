@@ -124,7 +124,7 @@ async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: 
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 800,
+      max_tokens: 2000, // até 4 pedidos com trecho e dúvida: 800 cortava (conversa com 2 passageiros)
       system,
       tools: [FERRAMENTA_PEDIDOS],
       tool_choice: { type: "tool", name: FERRAMENTA_PEDIDOS.name },
@@ -643,7 +643,7 @@ async function chamarFerramenta(system: string, conteudo: string, ferramenta: { 
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 600,
+      max_tokens: 1000,
       system,
       tools: [ferramenta],
       tool_choice: { type: "tool", name: ferramenta.name },
