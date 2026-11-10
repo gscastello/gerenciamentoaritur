@@ -44,10 +44,19 @@ order by o.created_at desc limit 40;
 Leia a partir do pedido mais recente. Veja também as reservas atuais do cliente
 (`reservations` + `trips`, `deleted_at is null`, `trip_date >= current_date`).
 
+**"Agende a última que eu confirmei":** a confirmação costuma ser o **"Agendado ☑️"** da equipe, que
+já faz o bot lançar sozinho em segundos. Antes de lançar, veja se já foi:
+`select status, reservation_id, notes from reservation_drafts where chatwoot_conversation_id = <cw> order by updated_at desc;`
+Se estiver `lancada`, **não lance de novo**: confira a reserva (ponto, cidade, valor) e conte ao dono que
+o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lançou: …", resolva o motivo e lance.
+
 ## 2. Interpretar
 
 - **Sentido:** embarque em São Luís = `ida`; saindo de Cantanhede/Pirapemas = `volta`.
-  "Madrugada", "amanhã cedo" = ida da manhã. Data relativa ("amanhã", "segunda") pelo
+  "Madrugada", "amanhã cedo" = ida da manhã.
+- **Cidade da Volta:** o ponto é a cidade (`pirapemas` ou `cantanhede`) que o cliente **disse** ou o
+  endereço de costume. Há ruas com o mesmo nome nas duas (ex.: Lister Caldas): **nunca** deduza a
+  cidade pela rua ou pela referência. Sem cidade dita, pergunte ao dono. Data relativa ("amanhã", "segunda") pelo
   calendário de hoje em Fortaleza; se ambígua, pergunte.
 - **Ponto de embarque** (`route_points.code`, conferir no banco, `active`):
   ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno` e `outro` (Outros); volta `pirapemas`,

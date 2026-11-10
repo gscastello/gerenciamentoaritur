@@ -73,7 +73,19 @@ export type PedidoExtraido = {
   /** marcando para OUTRA pessoa (issue #268): o passageiro de verdade */
   passageiro_nome?: string | null;
   passageiro_telefone?: string | null;
+  /** Volta: a cidade de embarque dita na conversa (issue #272). Há ruas com o mesmo nome nas duas. */
+  cidade_dita?: string | null;
 };
+
+/** Cidades de embarque da Volta: o ponto é a própria cidade. */
+export const CIDADES_DA_VOLTA = ["pirapemas", "cantanhede"] as const;
+
+/** "Cantanhede", "pirapemas", "PIRAPEMAS-MA" → código do ponto; senão null. */
+export function cidadeDaVolta(bruto: unknown): (typeof CIDADES_DA_VOLTA)[number] | null {
+  const t = String(bruto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const achadas = CIDADES_DA_VOLTA.filter((c) => t.includes(c));
+  return achadas.length === 1 ? achadas[0] : null;
+}
 
 export type Passageiro = { nome: string | null; telefone: string };
 
@@ -148,7 +160,9 @@ export function validarPedidoExtraido(
     /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
     costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
   },
-): { ok: true; rascunho: Rascunho; passageiro: Passageiro | null } | { ok: false; motivo: string } {
+):
+  | { ok: true; rascunho: Rascunho; passageiro: Passageiro | null; cidadeIncerta: boolean }
+  | { ok: false; motivo: string } {
   const tipo = p.tipo === "encomenda" ? "encomenda" : "passagem";
   let data = String(p.data ?? "");
   const avisos: string[] = [];
@@ -174,12 +188,14 @@ export function validarPedidoExtraido(
   let endereco = texto(p.endereco);
   let ponto = pontoBruto && ctx.pontos[direcao].includes(pontoBruto) ? pontoBruto : null;
   let desembarqueDoCostume: string | null = null;
+  let usouCostume = false;
 
   // não disse de onde sai: usa o endereço de costume do cliente naquele sentido
   const costume = ctx.costume?.[direcao] ?? null;
   if (tipo === "passagem" && !ponto && !bairro && !endereco && costume?.route_point_code &&
     ctx.pontos[direcao].includes(costume.route_point_code)) {
     ponto = costume.route_point_code;
+    usouCostume = true;
     bairro = texto(costume.neighborhood, 80);
     endereco = texto(costume.detail);
     desembarqueDoCostume = texto(costume.dropoff_location, 120);
@@ -191,6 +207,19 @@ export function validarPedidoExtraido(
     ponto = "busca";
   }
   if (tipo === "encomenda") ponto = null;
+
+  // Volta: a cidade de embarque tem de ter sido dita na conversa — ruas se repetem em
+  // Pirapemas e Cantanhede (ex.: Lister Caldas), então nunca sai do nome da rua (issue #272)
+  let cidadeIncerta = false;
+  const cidade = cidadeDaVolta(p.cidade_dita);
+  if (tipo === "passagem" && direcao === "volta" && !usouCostume) {
+    if (cidade && ctx.pontos.volta.includes(cidade)) ponto = cidade;
+    else if (!ponto || (CIDADES_DA_VOLTA as readonly string[]).includes(ponto)) {
+      if (!ponto) return { ok: false, motivo: "sem_cidade" };
+      cidadeIncerta = true;
+      avisos.push("Cidade de embarque não informada: confirme se é Pirapemas ou Cantanhede (há ruas com o mesmo nome nas duas).");
+    }
+  }
 
   // busca em casa precisa do bairro/rua; Outros precisa do local citado (BR, aeroporto…)
   const precisaDoLocal = ponto === "busca" || ponto === "outro";
@@ -209,6 +238,7 @@ export function validarPedidoExtraido(
   return {
     ok: true,
     passageiro,
+    cidadeIncerta,
     rascunho: {
       type: tipo,
       trip_date: data,
@@ -251,6 +281,11 @@ export const FERRAMENTA_PEDIDOS = {
             nome_informado: { type: "string", description: "Nome que o cliente ESCREVEU para a reserva. Nunca o nome do perfil." },
             trecho_do_cliente: { type: "string", description: "As palavras do cliente que mostram o pedido (até 200 caracteres)." },
             duvida: { type: "string", description: "O que ficou incerto, para a equipe conferir (curto)." },
+            cidade_dita: {
+              type: "string",
+              description:
+                "Só na Volta: a cidade de embarque (Pirapemas ou Cantanhede) que o cliente DISSE ou confirmou com a equipe nesta conversa. Vazio se ninguém disse; nunca deduza pelo nome da rua.",
+            },
             passageiro_nome: { type: "string", description: "Se marca para OUTRA pessoa: o nome do passageiro." },
             passageiro_telefone: {
               type: "string",
@@ -287,6 +322,7 @@ ${quando}
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
+- Volta: a cidade de embarque (Pirapemas ou Cantanhede) vai em cidade_dita SÓ se o cliente disse ou confirmou com a equipe ("de Pirapemas para São Luís", "aqui em Cantanhede"). Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): nunca deduza a cidade pela rua ou pela referência; sem cidade dita, deixe cidade_dita vazio e diga em duvida.
 - Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, o endereço em Pirapemas/Cantanhede (rua, estrada, referência) é o embarque (endereco) e o que tem bairro de São Luís (lista BAIRROS DE SÃO LUÍS) é o desembarque. Na Ida é o contrário: bairro de São Luís é o embarque e o endereço no interior é o desembarque. Ex.: Volta "na estrada Matões, em frente à quadra, Cidade Operária rua 2 casa 16" → endereco "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16".
 - Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]" ou outro número digitado): a reserva é do PASSAGEIRO. Preencha passageiro_nome e passageiro_telefone com os dados dele (o telefone do card), não os de quem está conversando.
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
