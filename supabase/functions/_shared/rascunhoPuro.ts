@@ -344,3 +344,80 @@ ${ctx.costume}` : ""}${ctx.bairrosSaoLuis ? `
 
 BAIRROS DE SÃO LUÍS: ${ctx.bairrosSaoLuis}` : ""}`;
 }
+
+/** Um lugar citado (rua, referência, casa de alguém, povoado) e onde ele aparece (fn_lugares_no_texto, issue #274). */
+export type LugarNasCidades = {
+  tipo: string;
+  nome: string;
+  em_pirapemas: boolean;
+  em_cantanhede: boolean;
+  reservas_pirapemas: number;
+  reservas_cantanhede: number;
+  /** o lugar que mais aparece junto dele nas reservas daquela cidade (rua primeiro) */
+  junto_pirapemas?: string | null;
+  junto_cantanhede?: string | null;
+};
+
+const NOME_DA_CIDADE: Record<string, string> = { pirapemas: "Pirapemas", cantanhede: "Cantanhede" };
+
+function cidadeUnica(l: LugarNasCidades): "pirapemas" | "cantanhede" | null {
+  if (l.em_pirapemas && !l.em_cantanhede) return "pirapemas";
+  if (l.em_cantanhede && !l.em_pirapemas) return "cantanhede";
+  return null;
+}
+
+/** Quantas reservas mostram o lugar naquela cidade (0 = só no mapa). */
+function reservasEm(l: LugarNasCidades, cidade: string): number {
+  return cidade === "pirapemas" ? l.reservas_pirapemas : l.reservas_cantanhede;
+}
+
+function juntoEm(l: LugarNasCidades, cidade: string): string | null {
+  return (cidade === "pirapemas" ? l.junto_pirapemas : l.junto_cantanhede) || null;
+}
+
+function contagem(n: number): string {
+  return n === 1 ? "1 reserva" : `${n} reservas`;
+}
+
+/**
+ * Aviso para o "Conferir" pelos lugares citados no embarque da Volta: lugar que existe
+ * nas duas cidades, que só conhecemos na outra, ou (sem cidade dita) onde ele fica e
+ * com o que anda junto ("Choperia do Riba é em Pirapemas, junto da Rua Lister Caldas").
+ * Só avisa: a cidade vem da conversa (#272).
+ */
+export function avisoDosLugares(lugares: LugarNasCidades[], cidade: string | null): string | null {
+  const frases: string[] = [];
+  for (const l of lugares) {
+    if (l.em_pirapemas && l.em_cantanhede) {
+      const n = l.reservas_pirapemas + l.reservas_cantanhede;
+      frases.push(
+        `${l.nome} existe em Pirapemas e em Cantanhede${n ? ` (${l.reservas_pirapemas} e ${l.reservas_cantanhede} reservas)` : ""}: confirme a cidade.`,
+      );
+      continue;
+    }
+    const so = cidadeUnica(l);
+    if (!so || so === cidade) continue;
+    const n = reservasEm(l, so);
+    const junto = juntoEm(l, so);
+    const onde = `${NOME_DA_CIDADE[so]}${junto ? `, junto da ${junto}` : ""}${n ? ` (${contagem(n)})` : ""}`;
+    frases.push(cidade ? `${l.nome} costuma ser ${onde}, não ${NOME_DA_CIDADE[cidade] ?? cidade}: confira.` : `${l.nome} é em ${onde}.`);
+  }
+  return frases.length ? frases.slice(0, 3).join(" ") : null;
+}
+
+/**
+ * Lugar citado que só conhecemos na OUTRA cidade, com evidência (no mapa ou em 2+ reservas):
+ * o atendente confirma a cidade com o cliente antes de reservar.
+ */
+export function lugarDeOutraCidade(
+  lugares: LugarNasCidades[],
+  cidade: string,
+): { nome: string; cidade: string; junto: string | null } | null {
+  for (const l of lugares) {
+    const so = cidadeUnica(l);
+    if (!so || so === cidade) continue;
+    if (reservasEm(l, so) === 1) continue; // uma reserva só pode ter sido lançada na cidade errada
+    return { nome: l.nome, cidade: NOME_DA_CIDADE[so], junto: juntoEm(l, so) };
+  }
+  return null;
+}

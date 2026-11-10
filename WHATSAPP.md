@@ -266,6 +266,18 @@ prepara a reserva para ela lançar com um toque:
    confirmou com a equipe (`cidade_dita`), ou a do endereço de costume. Ruas se repetem nas duas cidades (ex.: Lister
    Caldas), então a cidade **nunca** sai do nome da rua. Sem cidade dita, o rascunho vai com aviso em "Conferir" e o
    "Agendado ☑️" **não lança** (fica pendente com o motivo). O atendente pergunta o endereço e a cidade juntos.
+   **Lugares das cidades (issue #274, migrações 76–77):** `cidade_lugares` conhece Pirapemas e Cantanhede: **ruas**
+   (com ou sem "Rua": "Isidora Lopes"), **pontos de referência** (bar, padaria, hospital, posto, fórum, "Marajá",
+   "Provisória"…), **"casa de fulano"** ("casa do Erasmo", "mãe do Jackson") e **povoados**. Começou com o
+   OpenStreetMap e **aprende sozinha** com toda reserva de Volta confirmada/embarcada, por qualquer caminho (gatilho
+   `trg_reservations_aprende_lugares`; se a equipe corrige a cidade, o que a reserva ensinou é desfeito). Cada
+   endereço é quebrado em pedaços (`fn_pedacos_do_endereco`: "Lister caldas ao lado choperia do riba" → rua + referência)
+   e os lugares citados juntos ficam **cruzados**: `fn_lugares_no_texto(endereço)` diz em que cidade(s) cada lugar
+   aparece, em quantas reservas e a rua que costuma vir junto. No rascunho vira aviso em "Conferir" ("existe em
+   Pirapemas e em Cantanhede", "costuma ser Cantanhede, não Pirapemas", "Choperia do Riba é em Pirapemas, junto da
+   Rua Lister Caldas"). O atendente usa a ferramenta `onde_fica` para confirmar com o cliente ("É a choperia do Riba, na
+   Lister Caldas, em Pirapemas?") e, se o lugar só é conhecido na outra cidade (mapa ou 2+ reservas), `criar_reserva`
+   devolve `CIDADE_A_CONFIRMAR`. Só avisa e ajuda a confirmar: nunca decide a cidade.
    Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).

@@ -12,7 +12,7 @@
 // → bairro); vaga validada pelo banco. Se faltar algo, o rascunho fica na lista
 // com o motivo. Melhor esforço: erro aqui nunca derruba o atendimento.
 
-import { acharPonto, valorDoPedido } from "./agenteFerramentas.ts";
+import { acharPonto, lugaresNasCidades, valorDoPedido } from "./agenteFerramentas.ts";
 import { avisoDoBairro, resolverBairro } from "./bairroResolver.ts";
 import {
   areaDoDesembarque,
@@ -27,6 +27,7 @@ import {
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
+  avisoDosLugares,
   type CostumeDoSentido,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
@@ -224,6 +225,11 @@ async function lerEGravar(
         r.pickup_neighborhood = deduzido.bairro;
         r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
       }
+    }
+    // Volta: o lugar citado (rua, referência, casa) existe nas duas cidades, ou só na outra? avisa no "Conferir" (issue #274)
+    if (r.type === "passagem" && r.direction === "volta" && r.pickup_detail) {
+      const aviso = avisoDosLugares(await lugaresNasCidades(r.pickup_detail), v.cidadeIncerta ? null : r.route_point_code);
+      if (aviso) r.notes = [r.notes, aviso].filter(Boolean).join(" ").slice(0, 300);
     }
     // marcando para outra pessoa: a reserva é do passageiro (issue #268)
     const outro = v.passageiro && !variantesTelefone(entrada.telefone).includes(v.passageiro.telefone) ? v.passageiro : null;
