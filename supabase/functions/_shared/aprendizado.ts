@@ -12,7 +12,8 @@ export type TipoLicao =
   | "situacao"
   | "operacao"
   | "fato"
-  | "negocio";
+  | "negocio"
+  | "dito_pelo_cliente";
 export const TIPOS_DE_LICAO: TipoLicao[] = [
   "linguagem_cliente",
   "estilo_atendente",
@@ -21,6 +22,7 @@ export const TIPOS_DE_LICAO: TipoLicao[] = [
   "operacao",
   "fato",
   "negocio",
+  "dito_pelo_cliente",
 ];
 
 export type Observacao = {
@@ -128,6 +130,8 @@ export function validarLicoesNovas(
     if (content.length < 10 || content.length > 800) continue;
     const texto = `${title} ${content}`;
     if (/\[(telefone|email|link)\]/.test(texto) || RE_TELEFONE_RESTANTE.test(texto)) continue;
+    // o que o cliente diz nunca vira preço nem valor (issue #278)
+    if (kind === "dito_pelo_cliente" && /r\$|\breais\b|\bvalor\b|\bpre[cç]o\b/i.test(texto)) continue;
     const chave = `${kind}|${normalizarTitulo(title)}`;
     if (vistos.has(chave)) continue;
     vistos.add(chave);
@@ -186,6 +190,8 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
   operacao: "COMO A VIAGEM FUNCIONA NA PRÁTICA (dito pelo atendente: paradas, plataforma, horários de chegada e de passagem)",
   fato: "INFORMAÇÕES DITAS PELO ATENDENTE (aprovadas pelo dono)",
   negocio: "COMO A EMPRESA FUNCIONA (aprovado pelo dono)",
+  dito_pelo_cliente:
+    "O QUE OS CLIENTES CONTAM (dito por clientes: use para entender e confirmar com eles; nunca afirme como regra, preço, vaga ou horário da empresa)",
 };
 
 /**

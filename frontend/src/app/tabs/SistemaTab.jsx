@@ -1427,8 +1427,8 @@ export default function SistemaTab({
               {
                 v: "sombra",
                 icon: Eye,
-                label: "Sombra (teste)",
-                desc: "O bot escreve a resposta como nota privada no Chatwoot; nada é enviado ao cliente.",
+                label: "Sombra (só aprende)",
+                desc: "O bot só observa e aprende, sem gastar com respostas. Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).",
               },
               {
                 v: "manual",

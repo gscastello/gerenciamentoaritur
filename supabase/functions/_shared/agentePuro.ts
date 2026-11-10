@@ -6,6 +6,8 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
+import { nomeParecidoNoTexto } from "./grafia.ts";
+import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
   /** id da mensagem no Chatwoot, quando se sabe */
@@ -32,6 +34,9 @@ export type MensagemBruta = {
 /** No modo sombra o rascunho do bot fica numa nota privada com este começo. */
 export const PREFIXO_DO_RASCUNHO = "🤖 [SOMBRA] Resposta que o bot enviaria:";
 
+/** Teste do dono (nota "#testar", issue #278): a resposta fica numa nota com este começo e não entra no histórico. */
+export const PREFIXO_DO_TESTE = "🧪 [TESTE] Resposta que o bot daria:";
+
 /**
  * Chatwoot → conversa que o modelo lê. Ignora atividades e notas privadas, EXCETO
  * o rascunho do bot no modo sombra (vira fala do bot, para ele não se repetir).
@@ -40,7 +45,8 @@ export function converterMensagensDoChatwoot(brutas: MensagemBruta[]): MensagemD
   const saida: MensagemDaConversa[] = [];
   for (const b of brutas) {
     if (b.message_type !== 0 && b.message_type !== 1) continue;
-    const conteudo = String(b.content ?? "").trim();
+    // card de contato (issue #268) entra como texto: é o número do passageiro
+    const conteudo = textoComContatos(String(b.content ?? ""), b.attachments) ?? "";
     let quem: MensagemDaConversa["quem"];
     let texto = conteudo;
     if (b.private) {
@@ -672,4 +678,44 @@ export function precoDoLocalDeOutros(texto: string | null | undefined, locais: L
   }
   const preco = melhor ? Number(melhor.price) : Number.NaN;
   return Number.isFinite(preco) && preco > 0 ? preco : null;
+}
+
+/**
+ * Memória de endereços (issue #270): o condomínio/residencial que o cliente citou
+ * ("Residencial Colinas, bloco 3") e o bairro onde ele fica. Compara palavras
+ * inteiras, sem acento; o apelido mais longo vence. Confirmados vêm antes.
+ */
+export function bairroPorApelido(
+  texto: string | null | undefined,
+  apelidos: { apelido: string; bairro: string; confirmado?: boolean | null }[],
+): string | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  if (!t.trim()) return null;
+  let melhor: { bairro: string; tamanho: number; confirmado: boolean } | null = null;
+  for (const a of apelidos) {
+    const nome = normalizar(a.apelido);
+    if (!nome || !t.includes(` ${nome} `)) continue;
+    const confirmado = a.confirmado === true;
+    if (
+      !melhor ||
+      (confirmado && !melhor.confirmado) ||
+      (confirmado === melhor.confirmado && nome.length > melhor.tamanho)
+    ) {
+      melhor = { bairro: a.bairro, tamanho: nome.length, confirmado };
+    }
+  }
+  return melhor?.bairro ?? null;
+}
+
+/**
+ * Bairro da tabela citado com erro de escrita ("cohatrc", "bequimao", "turuu"), quando
+ * bairroDaTabela não acha o nome exato (issue #276). Dois bairros igualmente parecidos = null.
+ */
+export function bairroParecido<T extends { neighborhood: string }>(
+  texto: string | null | undefined,
+  tabela: T[],
+): { bairro: T; escrito: string } | null {
+  if (bairroDaTabela(texto, tabela)) return null;
+  const achado = nomeParecidoNoTexto(texto, tabela, (b) => b.neighborhood);
+  return achado && achado.erros > 0 ? { bairro: achado.item, escrito: achado.escrito } : null;
 }

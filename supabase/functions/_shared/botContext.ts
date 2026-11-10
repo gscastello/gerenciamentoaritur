@@ -15,6 +15,8 @@ export type BotContext = {
   conversationId: string;
   /** Modo sombra: respostas viram nota privada e nada é gravado no negócio. */
   shadow: boolean;
+  /** Teste do dono (nota "#testar", issue #278): resposta em nota privada de TESTE, fora do histórico e do aprendizado. */
+  teste?: boolean;
 };
 
 const storage = new AsyncLocalStorage<BotContext>();
