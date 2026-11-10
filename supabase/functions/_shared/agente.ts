@@ -152,7 +152,7 @@ async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promis
 
 async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
-  const linguagem = await blocoDasLicoes(["linguagem_cliente"]);
+  const linguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
   const nota = await blocoDoClienteAtual();
   const cliente = await whatsappService.identifyCustomer(telefone);
   const calendario = calendarioParaOPrompt(agora);
@@ -180,7 +180,9 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: B
     [
       REGRAS,
       `COMO FALAR (guia de estilo do dono e o que aprendemos com o atendimento da equipe): ${estilo}`,
-      linguagem ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem.)` : "",
+      linguagem
+        ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem e o que eles costumam contar. O que veio de clientes serve para entender e confirmar com ele, nunca para afirmar preço, vaga, horário ou regra.)`
+        : "",
       `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
       desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
     ],
@@ -221,27 +223,34 @@ async function carregarConversa(
   }
 }
 
-export async function responderComAgente(entrada: { conversationId: string; telefone: string; waMessageId: string }) {
+export async function responderComAgente(
+  entrada: { conversationId: string; telefone: string; waMessageId: string },
+  opcoes: { teste?: { pergunta: string | null } } = {},
+) {
   const bot = getBotContext();
   if (!bot) throw new Error("Atendente de IA fora do contexto de uma conversa do Chatwoot.");
   const mensagemId = Number(entrada.waMessageId.replace(/^cw-/, "")) || 0;
   const inicio = Date.now();
+  const teste = opcoes.teste;
 
-  // 1) junta mensagens seguidas: quem escreveu por último é quem responde
-  await dormir(ESPERA_PARA_JUNTAR_MS);
-  const { historico, cedeu } = await carregarConversa(bot.chatwootConversationId, mensagemId);
-  if (cedeu) {
+  // 1) junta mensagens seguidas: quem escreveu por último é quem responde (o teste não espera)
+  if (!teste) await dormir(ESPERA_PARA_JUNTAR_MS);
+  const carregada = await carregarConversa(bot.chatwootConversationId, teste ? Number.MAX_SAFE_INTEGER : mensagemId);
+  const historico = carregada.historico;
+  if (carregada.cedeu) {
     evento("bot_agente_cedeu", { conversa: bot.chatwootConversationId, motivo: "chegou mensagem mais nova" });
     return;
   }
   const agora = new Date();
+  // teste do dono (#testar): a pergunta entra como a próxima mensagem do cliente (issue #278)
+  if (teste?.pergunta) historico.push({ quem: "cliente", texto: teste.pergunta, em: agora.toISOString() });
 
   // 2) a equipe está na conversa? silêncio de 10 min; e só fala quando a última palavra foi do cliente
-  if (equipeRespondeuRecentemente(historico, agora)) {
+  if (!teste && equipeRespondeuRecentemente(historico, agora)) {
     evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "equipe respondeu há pouco" });
     return;
   }
-  if (!ultimaFoiDoCliente(historico)) {
+  if (!teste && !ultimaFoiDoCliente(historico)) {
     evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "a última mensagem não é do cliente" });
     return;
   }

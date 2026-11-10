@@ -185,3 +185,35 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     mensagemId,
   };
 }
+
+/** O dono/equipe pediu para testar o bot nesta conversa (nota privada "#testar …", issue #278). */
+export type PedidoDeTeste = {
+  chatwootConversationId: number;
+  /** E.164 sem "+" */
+  telefone: string;
+  /** o que vem depois de "#testar": a mensagem de cliente a simular (null = responder à conversa como está) */
+  pergunta: string | null;
+};
+
+const RE_TESTE = /^\s*#\s*test(ar|e)\b[\s:,-]*/i;
+
+/**
+ * Nota PRIVADA de alguém da equipe (não do bot) que começa com "#testar" ou "#teste".
+ * Mensagem pública com "#testar" não conta: isso iria para o cliente.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
+export function extrairPedidoDeTeste(body: any, inboxIdEsperado = 0): PedidoDeTeste | null {
+  if (body?.event !== "message_created" || body.private !== true) return null;
+  if (body.message_type !== "outgoing" && body.message_type !== 1) return null;
+  if (body.sender?.type === "agent_bot") return null;
+  const conteudo = typeof body.content === "string" ? body.content : "";
+  if (!RE_TESTE.test(conteudo)) return null;
+  const conv = body.conversation ?? {};
+  const chatwootConversationId = Number(conv.id);
+  if (!chatwootConversationId) return null;
+  if (inboxIdEsperado && Number(body.inbox?.id ?? conv.inbox_id) !== inboxIdEsperado) return null;
+  const telefone = String(conv.meta?.sender?.phone_number ?? "").replace(/\D/g, "");
+  if (!telefone) return null;
+  const pergunta = conteudo.replace(RE_TESTE, "").trim();
+  return { chatwootConversationId, telefone, pergunta: pergunta || null };
+}

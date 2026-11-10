@@ -34,6 +34,9 @@ export type MensagemBruta = {
 /** No modo sombra o rascunho do bot fica numa nota privada com este começo. */
 export const PREFIXO_DO_RASCUNHO = "🤖 [SOMBRA] Resposta que o bot enviaria:";
 
+/** Teste do dono (nota "#testar", issue #278): a resposta fica numa nota com este começo e não entra no histórico. */
+export const PREFIXO_DO_TESTE = "🧪 [TESTE] Resposta que o bot daria:";
+
 /**
  * Chatwoot → conversa que o modelo lê. Ignora atividades e notas privadas, EXCETO
  * o rascunho do bot no modo sombra (vira fala do bot, para ele não se repetir).
