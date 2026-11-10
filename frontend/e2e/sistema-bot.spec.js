@@ -76,7 +76,7 @@ test("Sistema > Bot: salva o guia de estilo e troca para o modo Sombra", async (
     .poll(() => gravacoes.find((g) => g?.key === "bot_style_guide")?.value?.text)
     .toBe("Trate por você, frases curtas, sem gírias.");
 
-  await page.getByRole("button", { name: /Sombra \(teste\)/ }).click();
+  await page.getByRole("button", { name: /Sombra \(só aprende\)/ }).click();
   await expect
     .poll(() => gravacoes.find((g) => g?.key === "attendance_mode")?.value?.mode)
     .toBe("sombra");
