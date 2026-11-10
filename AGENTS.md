@@ -381,9 +381,18 @@ customizados (`feature`, `critico`, `integracao`, `financeiro`,
 repositório.
 
 **WhatsApp:** número no Chatwoot por Coexistência desde 2026-10-15; bot e painel
-seguem o `WHATSAPP.md` (issue #163). Ações em produção (migrações, deploy de
-função, secrets, criar o Agent Bot) são **manuais e autorizadas pelo dono**, uma a
-uma; secrets nunca vão em chat, issue ou PR.
+seguem o `WHATSAPP.md` (issue #163).
+
+**Ações em produção:**
+- **Migrações** (`database/NN-*.sql`): desde 2026-11-09 o dono autorizou o agente a
+  aplicá-las sozinho, sem pedir a cada uma (issue #250). Antes de aplicar, confira no
+  banco o que a migração troca (trecho de função esperado, colunas, dados afetados) e
+  teste o que der sem gravar (`raise exception` para desfazer). Depois, verifique o
+  efeito e conte ao dono o que foi aplicado. A migração continua indo num PR com
+  `Closes #N`, como qualquer mudança.
+- **Deploy de Edge Function, secrets e criar o Agent Bot** continuam **manuais e
+  autorizados pelo dono**, um a um.
+- Secrets nunca vão em chat, issue ou PR.
 
 Ao pegar uma tarefa nova que não tem Issue: **crie a Issue primeiro**
 (template `Tarefa`), depois o branch `tipo/numero-slug`, depois o PR com
