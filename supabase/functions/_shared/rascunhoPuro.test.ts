@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   type MensagemDaConversa,
 } from "./agentePuro.ts";
@@ -10,6 +10,7 @@ import {
   pareceTerPedido,
   telefoneDoPassageiro,
   validarPedidoExtraido,
+  cidadeDaVolta,
   viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 
@@ -87,10 +88,10 @@ Deno.test("sem endereço nem ponto: não vira rascunho", () => {
     ok: false,
     motivo: "sem_endereco",
   });
-  // volta sem ponto: o endereço de São Luís não diz de onde sai
+  // volta sem ponto nem cidade dita: a rua não diz de onde sai (issue #272)
   assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "volta", endereco: "Rua 3" }, ctx), {
     ok: false,
-    motivo: "sem_endereco",
+    motivo: "sem_cidade",
   });
 });
 
@@ -309,4 +310,41 @@ Deno.test("passageiro com telefone inválido: sem passageiro e com aviso", () =>
   if (!r.ok) return;
   assertEquals(r.passageiro, null);
   assert(r.rascunho.notes?.includes("Telefone do passageiro inválido"));
+});
+
+Deno.test("cidade da volta: Pirapemas ou Cantanhede pelo nome dito (issue #272)", () => {
+  assertEquals(cidadeDaVolta("Pirapemas"), "pirapemas");
+  assertEquals(cidadeDaVolta("aqui em CANTANHEDE-MA"), "cantanhede");
+  assertEquals(cidadeDaVolta("Rua Lister Caldas"), null);
+  assertEquals(cidadeDaVolta("Pirapemas ou Cantanhede"), null);
+  assertEquals(cidadeDaVolta(null), null);
+});
+
+Deno.test("volta: a cidade dita manda no ponto; sem ela, aviso e o Agendado não lança (issue #272)", () => {
+  const rua = { data: "2026-11-10", direcao: "volta", endereco: "Rua Lister Caldas, próximo à choperia" };
+  // modelo chutou Pirapemas pela rua, mas ninguém disse a cidade
+  const chute = validarPedidoExtraido({ ...rua, ponto: "pirapemas" }, ctx);
+  assert(chute.ok);
+  if (chute.ok) {
+    assertEquals(chute.cidadeIncerta, true);
+    assertStringIncludes(chute.rascunho.notes ?? "", "Pirapemas ou Cantanhede");
+  }
+  // cliente disse Cantanhede: vale a cidade dita, mesmo que o modelo tenha posto outro ponto
+  const dita = validarPedidoExtraido({ ...rua, ponto: "pirapemas", cidade_dita: "Cantanhede" }, ctx);
+  assert(dita.ok);
+  if (dita.ok) {
+    assertEquals(dita.rascunho.route_point_code, "cantanhede");
+    assertEquals(dita.cidadeIncerta, false);
+  }
+  // endereço de costume conta como cidade conhecida
+  const costume = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta" },
+    { ...ctx, costume: { volta: { route_point_code: "cantanhede", detail: "Praça da Cruz" } } },
+  );
+  assert(costume.ok);
+  if (costume.ok) assertEquals(costume.cidadeIncerta, false);
+  // ida não é afetada
+  const ida = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "rodoviaria" }, ctx);
+  assert(ida.ok);
+  if (ida.ok) assertEquals(ida.cidadeIncerta, false);
 });

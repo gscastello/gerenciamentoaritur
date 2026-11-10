@@ -262,6 +262,10 @@ prepara a reserva para ela lançar com um toque:
    no endereço). O preço continua sendo o do bairro na tabela: nada aqui inventa valor. O mesmo vale para
    `calcular_valor`/`criar_reserva` do atendente. Bairro que a equipe confirmou na conversa ("Turu, certo?" → "sim") vale
    direto. Log: `bot_bairro_deduzido` (fonte, bairro) e `bot_aviso` com `bairro_nao_resolvido`.
+   **Cidade da Volta (issue #272):** o ponto da Volta é a cidade (Pirapemas ou Cantanhede) que o cliente **disse** ou
+   confirmou com a equipe (`cidade_dita`), ou a do endereço de costume. Ruas se repetem nas duas cidades (ex.: Lister
+   Caldas), então a cidade **nunca** sai do nome da rua. Sem cidade dita, o rascunho vai com aviso em "Conferir" e o
+   "Agendado ☑️" **não lança** (fica pendente com o motivo). O atendente pergunta o endereço e a cidade juntos.
    Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).

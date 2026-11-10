@@ -206,6 +206,8 @@ async function lerEGravar(
 
   const gravados: string[] = [];
   const motivos: string[] = [];
+  /** rascunhos da Volta sem a cidade de embarque dita (issue #272): o "Agendado ☑️" não lança */
+  const incertos = new Set<string>();
   for (const p of pedidos) {
     const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe, horaAgora, costume });
     if (!v.ok) {
@@ -258,9 +260,12 @@ async function lerEGravar(
     if (error) {
       motivos.push("erro_gravar");
       evento("bot_aviso", { aviso: "rascunho_nao_gravado", conversa: entrada.chatwootConversationId, erro: error.message.slice(0, 200) });
-    } else gravados.push(salvo.id);
+    } else {
+      gravados.push(salvo.id);
+      if (v.cidadeIncerta) incertos.add(salvo.id);
+    }
   }
-  return { pedidos, gravados, motivos, uso, ctx, cliente, hoje };
+  return { pedidos, gravados, motivos, incertos, uso, ctx, cliente, hoje };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -326,6 +331,11 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       const encomenda = d.type === "encomenda";
       let ponto: Bloco | null = null;
       let preco = 0;
+      if (lido.incertos.has(d.id)) {
+        await anotarPendencia(d.id, "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa");
+        pendentes.push("cidade");
+        continue;
+      }
       if (!encomenda) {
         ponto = acharPonto(lido.ctx.pontosCompletos[direcao], d.route_point_code);
         if (!ponto) {
