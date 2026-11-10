@@ -1510,7 +1510,7 @@ export default function SistemaTab({
                 v: "sombra",
                 icon: Eye,
                 label: "Sombra (só aprende)",
-                desc: "O bot só observa e aprende, sem gastar com respostas. Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).",
+                desc: 'O bot observa e aprende, sem gastar com respostas, e lança as reservas que a equipe marcar com "Agendado ☑️". Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).',
               },
               {
                 v: "manual",

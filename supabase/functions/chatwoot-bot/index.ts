@@ -25,11 +25,13 @@
 //   3) RASCUNHO — conversa transferida para a equipe no modo IA: prepara a reserva
 //      para ela lançar com um toque (issue #254). No manual, só o "Agendado ☑️" lê.
 //   4) AGENDADO ☑️ — a equipe confirmou na conversa com a marca combinada pelo
-//      dono: a reserva preparada é lançada (issue #257). Nunca no modo sombra.
+//      dono: a reserva preparada é lançada (issue #257). Vale em qualquer modo,
+//      inclusive no sombra (dono, 10/11): a marca da equipe é a confirmação.
 //   5) TESTE — nota privada "#testar [mensagem]" da equipe: o bot escreve, numa nota
 //      privada, a resposta que daria (issue #278). Qualquer modo; nada vai ao cliente.
-// Modo sombra (issue #278): só observa e aprende — não gera resposta nem reserva
-// preparada (é o que custa). Para ver o que o bot sabe, use o #testar.
+// Modo sombra (issue #278): observa e aprende — não gera resposta nem reserva
+// preparada (é o que custa), mas lança o que a equipe marcar com "Agendado ☑️"
+// (dono, 10/11). Para ver o que o bot sabe, use o #testar.
 //
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
@@ -43,7 +45,12 @@ import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
 import { ehMarcaDeAgendado } from "../_shared/rascunhoPuro.ts";
-import { lancarPeloAgendado, prepararRascunhoDeReserva } from "../_shared/rascunhoReserva.ts";
+import {
+  atualizarReservasAConfirmar,
+  lancarPeloAgendado,
+  prepararRascunhoDeReserva,
+  relerAgendadoPendente,
+} from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -138,16 +145,28 @@ async function processar(body: any) {
     conversaEspelhada &&
     ehMarcaDeAgendado(atividade.texto)
   ) {
-    if (modo === "sombra") {
-      evento("bot_agendado_lancado", { conversa: atividade.chatwootConversationId, lancadas: 0, pendentes: ["modo_sombra"] });
-    } else {
-      await lancarPeloAgendado({
-        conversationId: conversaEspelhada,
-        chatwootConversationId: atividade.chatwootConversationId,
-        mensagemId: atividade.mensagemId,
-        telefone: atividade.telefone,
-      });
-    }
+    // em qualquer modo, inclusive no sombra: a marca da equipe é a confirmação (dono, 10/11)
+    await lancarPeloAgendado({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      mensagemId: atividade.mensagemId,
+      telefone: atividade.telefone,
+    });
+  }
+
+  // o cliente completou depois do Agendado ☑️ (dia, quantidade…) e ele não tinha lançado: tenta de novo (issue #286)
+  if (atividade?.autor === "cliente" && atividade.texto && conversaEspelhada) {
+    await relerAgendadoPendente({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      telefone: atividade.telefone,
+    });
+    // reserva feita "como está" pelo Agendado e o cliente completou (outro dia da volta, endereço, cidade)
+    await atualizarReservasAConfirmar({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      telefone: atividade.telefone,
+    });
   }
 
   const m = extrairMensagemDeCliente(body, INBOX_ID);
@@ -191,7 +210,7 @@ async function processar(body: any) {
   );
 
   // Conversa transferida para a equipe no modo IA: deixa a reserva preparada (nada é reservado aqui).
-  // No manual o bot só lê a conversa quando a equipe escreve "Agendado ☑️"; no sombra só aprende (issue #278).
+  // No manual e no sombra o bot só lê a conversa quando a equipe escreve "Agendado ☑️" (issues #278 e #286).
   if (m.texto && modo === "ia" && conversation.attendance_mode === "humano") {
     await prepararRascunhoDeReserva({
       conversationId: conversation.id,
