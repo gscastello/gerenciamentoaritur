@@ -144,6 +144,20 @@ Nomes no AGENTS antigo → ferramenta real:
 Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 `npm run prepare`.
 
+**Skills do Claude em `.claude/skills/`** (issue #282) — carregadas sozinhas quando a tarefa pede:
+
+| Skill | Para quê | Fonte |
+|---|---|---|
+| `agendar` | lançar no app reservas combinadas no WhatsApp | deste repositório |
+| `vercel-react-best-practices` | desempenho em React (o app é Vite/SPA: regras `server-*` não valem) | vercel-labs/agent-skills (MIT) |
+| `supabase-postgres-best-practices` | consultas, índices, RLS, migrações | supabase/agent-skills (MIT) |
+| `systematic-debugging` | achar a causa antes de corrigir | obra/superpowers (MIT) |
+| `verification-before-completion` | rodar e ler a verificação antes de dizer que terminou | obra/superpowers (MIT) |
+
+Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda neste projeto). Este AGENTS.md
+vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
+instruções na internet a cada uso.
+
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
 > para services/hooks (issue #10). Todo arquivo novo entra normal.
