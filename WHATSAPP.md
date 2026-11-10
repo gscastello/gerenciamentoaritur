@@ -101,7 +101,7 @@ Nunca cole esses valores em chat, issue ou PR. URL da função:
 
 | Modo | O que acontece |
 |---|---|
-| **Sombra (só aprende)** | O bot **só observa e aprende** (issue #278): não gera resposta nem reserva preparada (é o que custa). Mensagem e comprovante continuam registrados. Nada vai ao cliente. |
+| **Sombra (só aprende)** | O bot **só observa e aprende** (issue #278): não gera resposta nem reserva preparada (é o que custa). Mensagem e comprovante continuam registrados e o "Agendado ☑️" da equipe lança a reserva normalmente. Nada vai ao cliente. |
 | **IA automática** | O bot responde ao cliente e confirma reservas sozinho. |
 | **Manual** | O bot não responde; a conversa aparece como Aberta pra equipe. |
 
@@ -309,7 +309,7 @@ bot lê a conversa na hora (sem espera nem filtro de data), prepara o rascunho d
 `confirmada` (a marca da equipe é a confirmação manual), pagamento em dinheiro, autor Bot com
 `extra_data.origem = 'agendado_equipe'`. É idempotente pela mensagem da equipe. Encomenda é lançada **sem valor**. Se faltar
 algo (ponto não reconhecido, trecho sem preço, lotado, recusa do banco), a reserva **não** é criada e o rascunho fica em
-"Reservas prontas para lançar" com o motivo em "Conferir". Nunca roda no modo **sombra**.
+"Reservas prontas para lançar" com o motivo em "Conferir". Vale em **qualquer modo**, inclusive no **sombra** (dono, 10/11).
 
 **Agendado mais esperto (issue #286):** (1) na Volta sem cidade dita, se o lugar citado só aparece numa cidade
 com evidência (no mapa ou em 3+ reservas, `cidadePelaBase`) e nenhum lugar aponta a outra, o Agendado lança nessa
@@ -336,8 +336,8 @@ falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:
   módulo puro `planejarAtualizacao`) e completa: outro dia da volta → muda o dia (`rpc_move_reservation`, vaga validada);
   confirmou o mesmo dia → tira a marca; disse onde embarca → preenche o endereço (bairro de São Luís vira busca em casa) e
   o valor pela tabela (mesma regra do bot); disse a cidade da Volta → troca o ponto. Se a equipe já preencheu no app, não
-  mexe. Log `bot_reserva_completada`; falhas em `bot_aviso` (`reserva_nao_movida`, `reserva_nao_completada`). Nunca no
-  modo **sombra**; preço continua decidido pela tabela e vaga pelo banco.
+  mexe. Log `bot_reserva_completada`; falhas em `bot_aviso` (`reserva_nao_movida`, `reserva_nao_completada`). Vale em
+  qualquer modo, inclusive no **sombra**; preço continua decidido pela tabela e vaga pelo banco.
 
 ## 7. Checklist de teste (com `#testar`, em qualquer modo)
 
