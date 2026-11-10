@@ -321,7 +321,9 @@ no mesmo sentido na véspera não ganha rascunho novo (no Agendado, fica pendent
 rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). **Ida e volta sem o dia da volta**
 (dono, 10/11): o normal é a volta no mesmo dia, mas é sempre confirmado com o cliente — o atendente pergunta ("A volta é
 no mesmo dia, à tarde?") e só reserva depois do sim. Log: `bot_agendado_lancado`
-(lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
+(lançadas, pendentes) e `bot_aviso` com `agendado_falhou`. **Aviso (dono, 10/11):** quando o Agendado não lança (ou
+lança só parte), abre uma pendência na aba **Pendências** (e no sino) com o motivo legível e o link da conversa
+(`avisoDoAgendado`, uma por marca; se a releitura lançar tudo depois, ela se resolve sozinha). Log `bot_agendado_avisado`.
 
 **Agendado = reservar como está (dono, 10/11).** A marca da equipe reserva a vaga **mesmo faltando informação**; o que
 falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:

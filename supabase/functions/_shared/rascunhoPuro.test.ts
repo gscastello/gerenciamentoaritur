@@ -17,6 +17,7 @@ import {
   lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
   A_CONFIRMAR,
+  avisoDoAgendado,
   comMarcaDoDia,
   pendenciasAtuais,
   planejarAtualizacao,
@@ -574,4 +575,26 @@ Deno.test("leitura (dono, 10/11): 'pra São Luís' é Volta e card só vira pass
   assertStringIncludes(t, "PARA São Luís é Volta");
   assertStringIncludes(t, "Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa");
   assertStringIncludes(t, "UM pedido por passageiro");
+});
+
+Deno.test("aviso do Agendado: lançou tudo ou já estava reservado não avisa", () => {
+  assertEquals(avisoDoAgendado({ lancadas: 2, pedidos: 2, motivos: [], pendentes: [] }), null);
+  assertEquals(avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: ["ja_reservado"], pendentes: [] }), null);
+});
+
+Deno.test("aviso do Agendado: erro, nada lido, motivo e pendência viram pendência legível", () => {
+  const e = avisoDoAgendado({ lancadas: 0, pedidos: 0, motivos: [], pendentes: [], erro: "Error: Leitura do pedido cortada (max_tokens)." });
+  assert(e);
+  assertStringIncludes(e.detalhe, "A leitura da conversa falhou");
+  const n = avisoDoAgendado({ lancadas: 0, pedidos: 0, motivos: [], pendentes: [] });
+  assert(n);
+  assertStringIncludes(n.detalhe, "não achou o pedido");
+  const m = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: ["sem_data", "ja_reservado"], pendentes: [] });
+  assert(m);
+  assertStringIncludes(m.detalhe, "o dia da viagem não aparece");
+  const p = avisoDoAgendado({ lancadas: 1, pedidos: 2, motivos: [], pendentes: ["cidade"] });
+  assert(p);
+  assertEquals(p.assunto, "Agendado ☑️ lançou só parte");
+  assertStringIncludes(p.detalhe, "1 reserva(s) lançada(s)");
+  assertStringIncludes(p.detalhe, "Pirapemas ou Cantanhede");
 });

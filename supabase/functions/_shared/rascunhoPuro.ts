@@ -661,3 +661,58 @@ export function planejarAtualizacao(
   plano.restante = [...restante];
   return plano;
 }
+
+// ---------------------------------------------------------------------------
+// Aviso de "Agendado ☑️" que não virou reserva (dono, 10/11)
+// ---------------------------------------------------------------------------
+
+const MOTIVO_LEGIVEL: Record<string, string> = {
+  sem_data: "o dia da viagem não aparece na conversa",
+  data_passada: "o dia lido já passou",
+  data_longe: "o dia lido está a mais de 60 dias",
+  sem_sentido: "não deu para saber se é Ida ou Volta",
+  sem_endereco: "falta o local de embarque",
+  sem_cidade: "falta a cidade da Volta (Pirapemas ou Cantanhede)",
+  ja_viajou_na_vespera: "o cliente já tem reserva no mesmo sentido na véspera",
+  erro_gravar: "erro ao gravar a reserva preparada",
+  vespera: "o cliente já tem reserva no mesmo sentido na véspera (confira se não é repetida)",
+  cidade: "a cidade da Volta não foi dita (escolha Pirapemas ou Cantanhede)",
+  ponto: "ponto de embarque não reconhecido",
+  LOTADO: "a viagem está lotada",
+  RESERVA_DUPLICADA: "o cliente já tem reserva nesse dia e sentido",
+};
+
+/**
+ * Texto da pendência quando o "Agendado ☑️" não lançou tudo. null = nada a avisar
+ * (lançou tudo, ou o que faltou é só "já estava reservado").
+ */
+export function avisoDoAgendado(r: {
+  lancadas: number;
+  pedidos: number;
+  motivos: string[];
+  pendentes: string[];
+  erro?: string | null;
+}): { assunto: string; detalhe: string } | null {
+  const legivel = (c: string) => MOTIVO_LEGIVEL[c] ?? c.replace(/_/g, " ");
+  const rodape = " Confira a conversa e lance pela Agenda (ou por Atendimento → Reservas prontas).";
+  if (r.erro) {
+    return {
+      assunto: "Agendado ☑️ não lançou",
+      detalhe: `A leitura da conversa falhou (${r.erro.slice(0, 120)}). Nenhuma reserva foi criada.${rodape}`,
+    };
+  }
+  if (r.pendentes.length) {
+    const lista = [...new Set(r.pendentes)].map(legivel).join("; ");
+    return {
+      assunto: r.lancadas ? "Agendado ☑️ lançou só parte" : "Agendado ☑️ não lançou",
+      detalhe: `${r.lancadas ? `${r.lancadas} reserva(s) lançada(s), mas ` : ""}ficou pendente: ${lista}.${rodape}`,
+    };
+  }
+  if (r.lancadas) return null;
+  const motivos = r.motivos.filter((m) => m !== "ja_reservado");
+  if (r.pedidos && !motivos.length) return null; // já estava tudo reservado
+  return {
+    assunto: "Agendado ☑️ não lançou",
+    detalhe: `${motivos.length ? `Motivo: ${[...new Set(motivos)].map(legivel).join("; ")}.` : "O bot não achou o pedido na conversa."}${rodape}`,
+  };
+}

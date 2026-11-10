@@ -36,6 +36,7 @@ import {
   pendenciasAtuais,
   planejarAtualizacao,
   avisoDaCidadePelaBase,
+  avisoDoAgendado,
   avisoDosLugares,
   cidadeDaVolta,
   cidadePelaBase,
@@ -386,9 +387,14 @@ export async function lancarPeloAgendado(entrada: Entrada) {
   const conversa = entrada.chatwootConversationId;
   const lancadas: string[] = [];
   const pendentes: string[] = [];
+  let lidos = 0;
+  let motivosLidos: string[] = [];
+  let erro: string | null = null;
   try {
     const { mensagens } = await lerConversa(conversa, Number.MAX_SAFE_INTEGER);
     const lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
+    lidos = lido.pedidos.length;
+    motivosLidos = lido.motivos;
 
     const { data: prontos } = await supabaseAdmin
       .from("reservation_drafts")
@@ -398,6 +404,7 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       .gte("trip_date", lido.hoje);
     if (!prontos?.length) {
       evento("bot_agendado_lancado", { conversa, lancadas: 0, pendentes: ["sem_rascunho"], motivos: lido.motivos });
+      await avisarAgendadoQueFalhou(entrada, avisoDoAgendado({ lancadas: 0, pedidos: lidos, motivos: motivosLidos, pendentes: [] }));
       return;
     }
 
@@ -482,7 +489,58 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       saida: lido.uso?.output_tokens ?? null,
     });
   } catch (err) {
-    evento("bot_aviso", { aviso: "agendado_falhou", conversa, erro: String(err).slice(0, 300) });
+    erro = String(err);
+    evento("bot_aviso", { aviso: "agendado_falhou", conversa, erro: erro.slice(0, 300) });
+  }
+  // não virou reserva (ou só parte): pendência na aba Pendências + sino, com o motivo (dono, 10/11)
+  await avisarAgendadoQueFalhou(
+    entrada,
+    avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
+  );
+}
+
+/**
+ * Abre UMA pendência por "Agendado ☑️" (a releitura não repete o aviso) e a resolve sozinha
+ * quando a releitura lança tudo. Melhor esforço.
+ */
+async function avisarAgendadoQueFalhou(entrada: Entrada, aviso: { assunto: string; detalhe: string } | null) {
+  try {
+    if (!aviso) {
+      // a releitura lançou tudo (o cliente completou depois): a pendência daquele Agendado se resolve sozinha
+      await supabaseAdmin
+        .from("support_tickets")
+        .update({ status: "resolvida", resolved_at: new Date().toISOString() })
+        .eq("status", "aberta")
+        .eq("meta->>agendado_mensagem_id", String(entrada.mensagemId));
+      return;
+    }
+    const { count } = await supabaseAdmin
+      .from("support_tickets")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "aberta")
+      .eq("meta->>agendado_mensagem_id", String(entrada.mensagemId));
+    if ((count ?? 0) > 0) return;
+    const { data: conv } = await supabaseAdmin
+      .from("whatsapp_conversations")
+      .select("phone, customer_id")
+      .eq("id", entrada.conversationId)
+      .maybeSingle();
+    const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
+      p_subject: aviso.assunto,
+      p_detail: aviso.detalhe,
+      p_phone: conv?.phone ?? entrada.telefone,
+      p_customer_id: conv?.customer_id ?? null,
+      p_source: "whatsapp",
+      p_meta: {
+        conversation_id: entrada.conversationId,
+        chatwoot_conversation_id: entrada.chatwootConversationId,
+        agendado_mensagem_id: String(entrada.mensagemId),
+      },
+    });
+    if (error) throw error;
+    evento("bot_agendado_avisado", { conversa: entrada.chatwootConversationId, assunto: aviso.assunto });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "agendado_nao_avisado", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
   }
 }
 
