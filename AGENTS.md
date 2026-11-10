@@ -112,7 +112,8 @@ O contrato acima é validado por `npm run arch`
 
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
-`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`),
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
+`assistentePuro`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -326,6 +327,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   as grafias erradas (`cidade_lugares_grafias`). Erro de escrita só ajuda a **reconhecer**: nunca decide preço, vaga
   ou cidade sozinho.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
+- **Assistente da equipe** (issue #288, aba **Assistente**, Edge Function `assistente`): a equipe pede como pede ao
+  Claude Code (agendar lendo a conversa, remarcar, cancelar, pendências, vagas, preço, números do financeiro) pela
+  chave da API, sem depender do plano do Claude. Age **com as permissões de quem está logado** (RLS e RPCs da Agenda;
+  autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
+  no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
+  `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
+  mensagem ao cliente.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
   com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de

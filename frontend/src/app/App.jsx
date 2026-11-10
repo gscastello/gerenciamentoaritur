@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  Sparkles,
   Users,
   Wallet,
   Wifi,
@@ -41,6 +42,7 @@ import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
 const BlocoDeNotasTab = React.lazy(() => import("./tabs/BlocoDeNotasTab.jsx"));
 const PendenciasTab = React.lazy(() => import("./tabs/PendenciasTab.jsx"));
+const AssistenteTab = React.lazy(() => import("./tabs/AssistenteTab.jsx"));
 const PassageirosTab = React.lazy(() => import("./tabs/PassageirosTab.jsx"));
 const ListaTab = React.lazy(() => import("./tabs/ListaTab.jsx"));
 const OperacaoTab = React.lazy(() => import("./tabs/OperacaoTab.jsx"));
@@ -733,6 +735,7 @@ const TAB_ROLES = {
   bloco: ["admin", "atendente", "motorista"],
   passageiros: ["admin", "atendente", "financeiro"],
   pendencias: ["admin", "atendente"],
+  assistente: ["admin", "atendente", "financeiro"],
   financeiro: ["admin"],
   gestao: ["admin"],
   operacao: ["admin"],
@@ -755,6 +758,7 @@ const NAV_ITENS = [
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
   { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   { id: "pendencias", label: "Pendências", icon: Inbox, grupo: "Atendimento" },
+  { id: "assistente", label: "Assistente", icon: Sparkles, grupo: "Atendimento" },
 ];
 const NAV_GRUPOS = [
   "Principal",
@@ -1012,13 +1016,16 @@ function AppInner() {
             >
               <GlobalStyles />
               <VideoBackdrop variant="app" />
-              <QuickActionsFab
-                onBuscar={() => setBuscaAberta(true)}
-                onAgendar={() => setAgendarAberto(true)}
-                onHoje={irParaHoje}
-                mostrarHoje={tabComData}
-                podeAgendar={podeAgendar}
-              />
+              {/* no Assistente o "+" cobriria o campo do pedido (issue #288) */}
+              {tab !== "assistente" && (
+                <QuickActionsFab
+                  onBuscar={() => setBuscaAberta(true)}
+                  onAgendar={() => setAgendarAberto(true)}
+                  onHoje={irParaHoje}
+                  mostrarHoje={tabComData}
+                  podeAgendar={podeAgendar}
+                />
+              )}
               {buscaAberta && (
                 <GlobalSearchOverlay
                   onClose={() => setBuscaAberta(false)}
@@ -1298,6 +1305,7 @@ function AppInner() {
                       )}
                       {tab === "bloco" && <BlocoDeNotasTab />}
                       {tab === "pendencias" && <PendenciasTab pend={pend} />}
+                      {tab === "assistente" && <AssistenteTab />}
                       {tab === "passageiros" && (
                         <PassageirosTab
                           trips={trips}
