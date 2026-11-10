@@ -160,8 +160,9 @@ Deno.test("desembarque vira área quando bate com a lista; textos são aparados"
   assertEquals(r.rascunho.client_excerpt?.length, 300);
 });
 
-Deno.test("a ferramenta pede no máximo dois pedidos e as instruções levam o calendário", () => {
-  assertEquals(FERRAMENTA_PEDIDOS.input_schema.properties.pedidos.maxItems, 2);
+Deno.test("a ferramenta pede até quatro pedidos e as instruções levam o calendário", () => {
+  // ida e volta de duas pessoas (a cliente e o contato que ela mandou)
+  assertEquals(FERRAMENTA_PEDIDOS.input_schema.properties.pedidos.maxItems, 4);
   const t = instrucoesDaLeitura({ calendario: "Amanhã: terça (2026-11-10)", pontos: "busca = Buscar em Casa", desembarques: "-" });
   assert(t.includes("2026-11-10"));
   assert(t.includes("NÃO decide preço"));
@@ -564,4 +565,13 @@ Deno.test("atualização: cidade dita na Volta troca o ponto", () => {
   assert(p);
   assertEquals(p.novoPonto, "cantanhede");
   assertEquals(p.pickupDetail, "Praça da Cruz");
+});
+
+Deno.test("leitura (dono, 10/11): 'pra São Luís' é Volta e card só vira passagem se pediram para ele", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" });
+  assertStringIncludes(t, '"pra São Luís"');
+  assertStringIncludes(t, "VOLTA");
+  assertStringIncludes(t, "PARA São Luís é Volta");
+  assertStringIncludes(t, "Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa");
+  assertStringIncludes(t, "UM pedido por passageiro");
 });

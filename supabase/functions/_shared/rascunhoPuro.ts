@@ -303,13 +303,17 @@ export const FERRAMENTA_PEDIDOS = {
     properties: {
       pedidos: {
         type: "array",
-        maxItems: 2,
+        maxItems: 4,
         items: {
           type: "object",
           properties: {
             tipo: { type: "string", enum: ["passagem", "encomenda"] },
             data: { type: "string", description: "AAAA-MM-DD, pelo calendário. Vazio se o cliente não disse o dia." },
-            direcao: { type: "string", enum: ["ida", "volta"], description: "ida = sai de São Luís; volta = sai de Pirapemas/Cantanhede." },
+            direcao: {
+              type: "string",
+              enum: ["ida", "volta"],
+              description: "ida = sai de São Luís (vai para Pirapemas/Cantanhede); volta = sai de Pirapemas/Cantanhede (vai PARA São Luís).",
+            },
             ponto: { type: "string", description: "Código do ponto de embarque da lista, se der para saber." },
             bairro: { type: "string", description: "Bairro de São Luís onde buscar (busca em casa)." },
             endereco: { type: "string", description: "Rua, número, referência ou local exato de embarque (ou onde buscar a encomenda)." },
@@ -358,6 +362,7 @@ ${quando}
 - O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
+- O DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
@@ -365,6 +370,8 @@ ${quando}
 - Volta: a cidade de embarque (Pirapemas ou Cantanhede) vai em cidade_dita SÓ se o cliente disse ou confirmou com a equipe ("de Pirapemas para São Luís", "aqui em Cantanhede"). Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): nunca deduza a cidade pela rua ou pela referência; sem cidade dita, deixe cidade_dita vazio e diga em duvida.
 - Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, o endereço em Pirapemas/Cantanhede (rua, estrada, referência) é o embarque (endereco) e o que tem bairro de São Luís (lista BAIRROS DE SÃO LUÍS) é o desembarque. Na Ida é o contrário: bairro de São Luís é o embarque e o endereço no interior é o desembarque. Ex.: Volta "na estrada Matões, em frente à quadra, Cidade Operária rua 2 casa 16" → endereco "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16".
 - Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]" ou outro número digitado): a reserva é do PASSAGEIRO. Preencha passageiro_nome e passageiro_telefone com os dados dele (o telefone do card), não os de quem está conversando.
+- Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa ("o outro passageiro é o Darlison" + card dele, "marca pra ela"). Card de quem vai RECEBER uma encomenda, ou mandado só para a equipe falar com alguém, NÃO é passageiro: na encomenda deixe passageiro_nome/passageiro_telefone vazios e ponha quem recebe (nome e telefone) em desembarque.
+- Passagens para MAIS de uma pessoa na mesma viagem com embarques ou contatos diferentes ("serão duas passagens: a Dona Bernarda, ao lado da padaria, e o Darlison, na Rua do Campinho"): registre UM pedido por passageiro, cada um com o seu nome, telefone (do card, se houver) e endereço. Passageiro sem telefone próprio fica com o de quem conversa (deixe passageiro_telefone vazio).
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
 - Cada mensagem vem com [dia/mês hora]. "Hoje", "amanhã", "sexta", "à tarde" contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA, não de hoje. Ex.: mensagem de 09/11 "pra amanhã" é 10/11, mesmo que você esteja lendo em 11/11. Pedido de um dia que já passou não é pedido novo: não registre.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.

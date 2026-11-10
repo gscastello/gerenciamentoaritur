@@ -312,14 +312,16 @@ async function lerEGravar(
         : r.notes,
       source_message_id: entrada.mensagemId,
     };
-    // um rascunho aberto por conversa e sentido: o cliente corrigiu a data? atualiza o mesmo
-    const { data: aberto } = await supabaseAdmin
+    // um rascunho aberto por conversa, sentido e passageiro: o cliente corrigiu a data? atualiza o mesmo.
+    // Duas pessoas na mesma viagem (a cliente e o contato que ela mandou) são dois rascunhos (dono, 10/11).
+    let busca = supabaseAdmin
       .from("reservation_drafts")
       .select("id")
       .eq("conversation_id", entrada.conversationId)
       .eq("direction", r.direction)
-      .eq("status", "pronta")
-      .maybeSingle();
+      .eq("status", "pronta");
+    busca = linha.phone ? busca.eq("phone", linha.phone) : busca.is("phone", null);
+    const { data: aberto } = await busca.order("updated_at", { ascending: false }).limit(1).maybeSingle();
     const { data: salvo, error } = aberto
       ? await supabaseAdmin.from("reservation_drafts").update(linha).eq("id", aberto.id).select("id").single()
       : await supabaseAdmin.from("reservation_drafts").insert(linha).select("id").single();
@@ -373,6 +375,13 @@ async function anotarPendencia(draftId: string, motivo: string) {
  * A equipe escreveu "Agendado ☑️": prepara na hora e lança as reservas
  * preparadas desta conversa. Idempotente pela mensagem da equipe.
  */
+/** Chave idempotente da reserva lançada pelo Agendado: a de quem conversa mantém o formato antigo. */
+function chaveDoAgendado(mensagemId: number, direcao: string, telefoneDoRascunho: string | null, telefoneDaConversa: string) {
+  const base = `cw-${mensagemId}-agendado-${direcao}`;
+  const fone = normalizarTelefone(telefoneDoRascunho ?? "");
+  return fone && !variantesTelefone(telefoneDaConversa).includes(fone) ? `${base}-${fone}` : base;
+}
+
 export async function lancarPeloAgendado(entrada: Entrada) {
   const conversa = entrada.chatwootConversationId;
   const lancadas: string[] = [];
@@ -451,7 +460,8 @@ export async function lancarPeloAgendado(entrada: Entrada) {
         p_dropoff_area: d.dropoff_area,
         p_status: "confirmada",
         p_extra_data: { origem: "agendado_equipe", rascunho_id: d.id, ...(falta.length ? { a_confirmar: falta } : {}) },
-        p_whatsapp_source_message_id: `cw-${entrada.mensagemId}-agendado-${direcao}`,
+        // idempotente pela mensagem do Agendado; o 2º passageiro da mesma viagem ganha a própria chave
+        p_whatsapp_source_message_id: chaveDoAgendado(entrada.mensagemId, direcao, d.phone, entrada.telefone),
         p_created_by: bot?.id ?? null,
       });
       if (error || !res?.success) {
