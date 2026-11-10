@@ -254,3 +254,13 @@ Deno.test("bloco de lições: operação entra com título próprio", () => {
   assertStringIncludes(bloco, "COMO A VIAGEM FUNCIONA NA PRÁTICA");
   assertStringIncludes(bloco, "- Plataforma: Primeira plataforma, ao lado do café.");
 });
+
+Deno.test("o que os clientes contam vira lição, mas nunca preço ou valor (issue #278)", () => {
+  const r = validarLicoesNovas([
+    { kind: "dito_pelo_cliente", title: "Choperia do Riba", content: "Clientes dizem que a choperia do Riba fica na Lister Caldas, em Pirapemas." },
+    { kind: "dito_pelo_cliente", title: "Bagagem grande no início do mês", content: "É comum o cliente avisar que leva bagagem grande no início do mês." },
+    { kind: "dito_pelo_cliente", title: "Preço que o cliente achou", content: "Cliente disse que a passagem é R$ 50 até Miranda." },
+    { kind: "dito_pelo_cliente", title: "Valor do frete", content: "Cliente acha que o valor do frete é menor." },
+  ]);
+  assertEquals(r.map((l) => l.title), ["Choperia do Riba", "Bagagem grande no início do mês"]);
+});

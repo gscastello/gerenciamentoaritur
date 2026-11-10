@@ -22,8 +22,8 @@
 //      do painel "Atendimento" do app (sem guardar token do Chatwoot no
 //      navegador).
 //   2) BOT — se for mensagem de cliente, roda o motor de reservas.
-//   3) RASCUNHO — quando quem atende é a equipe (modo manual/sombra ou conversa
-//      com humano), prepara a reserva para ela lançar com um toque (issue #254).
+//   3) RASCUNHO — conversa transferida para a equipe no modo IA: prepara a reserva
+//      para ela lançar com um toque (issue #254). No manual, só o "Agendado ☑️" lê.
 //   4) AGENDADO ☑️ — a equipe confirmou na conversa com a marca combinada pelo
 //      dono: a reserva preparada é lançada (issue #257). Nunca no modo sombra.
 //   5) TESTE — nota privada "#testar [mensagem]" da equipe: o bot escreve, numa nota
@@ -190,9 +190,9 @@ async function processar(body: any) {
       }),
   );
 
-  // quem atende é a equipe: deixa a reserva preparada (nada é reservado aqui).
-  // No modo sombra não: ele só observa e aprende (issue #278).
-  if (m.texto && modo !== "sombra" && (modo !== "ia" || conversation.attendance_mode === "humano")) {
+  // Conversa transferida para a equipe no modo IA: deixa a reserva preparada (nada é reservado aqui).
+  // No manual o bot só lê a conversa quando a equipe escreve "Agendado ☑️"; no sombra só aprende (issue #278).
+  if (m.texto && modo === "ia" && conversation.attendance_mode === "humano") {
     await prepararRascunhoDeReserva({
       conversationId: conversation.id,
       chatwootConversationId: m.chatwootConversationId,

@@ -130,9 +130,11 @@ Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolv
 (`bot_learnings`), acumulando: lição já conhecida só ganha evidência; texto melhor só substitui
 o antigo se o dono ainda não revisou.
 
-**Aprende só com o atendente (issue #232):** o que o bot enviou e os rascunhos ficam guardados, mas
-não entram nas conversas lidas pelo aprendizado; o cliente entra como contexto e para aprender como
-os clientes escrevem. O pedido ao modelo é de orientações gerais e casos isolados que ensinem o que
+**Aprende com o atendente e com os clientes (issues #232 e #278):** o que o bot enviou e os rascunhos ficam
+guardados, mas não entram nas conversas lidas pelo aprendizado. O cliente ensina como os clientes escrevem
+(`linguagem_cliente`) e o que eles contam (`dito_pelo_cliente`: lugares e referências, localidades, necessidades,
+épocas e motivos de viagem, dúvidas e reclamações que se repetem — migração 80). Essa lição vale na hora para
+entender e confirmar com o cliente; nunca vira preço, valor, horário ou regra (o filtro descarta). O pedido ao modelo é de orientações gerais e casos isolados que ensinem o que
 fazer, nunca roteiro, menu ou formulário fixo, nem relato sem orientação. Valor de trecho citado pelo
 atendente vira `fato` e só vale depois de aprovado. Lição arquivada ou recusada não volta sozinha.
 
@@ -238,7 +240,7 @@ vale o que ele disser. Sem costume (cliente novo ou sem repetição) o fluxo nor
 
 ## 6e. Reservas preparadas pela IA (issue #254)
 
-Quando quem atende é a equipe (modo **manual**, ou conversa transferida para humano; no **sombra** não, issue #278), o `chatwoot-bot`
+Quando a conversa foi transferida para a equipe no modo **IA** (no **manual** o bot só lê a conversa quando aparece o "Agendado ☑️"; no **sombra** só aprende — issue #278), o `chatwoot-bot`
 prepara a reserva para ela lançar com um toque:
 
 1. Depois de cada mensagem do cliente, espera ~20 s (`BOT_RASCUNHO_ESPERA_MS`) para ele terminar de escrever. Se

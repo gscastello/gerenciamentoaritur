@@ -152,7 +152,7 @@ async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promis
 
 async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
-  const linguagem = await blocoDasLicoes(["linguagem_cliente"]);
+  const linguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
   const nota = await blocoDoClienteAtual();
   const cliente = await whatsappService.identifyCustomer(telefone);
   const calendario = calendarioParaOPrompt(agora);
@@ -180,7 +180,9 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: B
     [
       REGRAS,
       `COMO FALAR (guia de estilo do dono e o que aprendemos com o atendimento da equipe): ${estilo}`,
-      linguagem ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem.)` : "",
+      linguagem
+        ? `${linguagem}\n(Isso ajuda a ENTENDER como os clientes escrevem e o que eles costumam contar. O que veio de clientes serve para entender e confirmar com ele, nunca para afirmar preço, vaga, horário ou regra.)`
+        : "",
       `INFORMAÇÕES DA EMPRESA (dados do sistema e regras cadastradas pelo dono):\n${fatos}`,
       desembarques ? `LOCAIS DE DESEMBARQUE CADASTRADOS (o cliente também pode dizer um endereço):\n${desembarques}` : "",
     ],

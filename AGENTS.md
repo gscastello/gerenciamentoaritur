@@ -250,9 +250,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - Modo global em `settings.attendance_mode` (`ia` | `manual` | `sombra`),
   editável na aba Sistema e válido na hora para todos os sócios:
   - `ia` — o bot responde e confirma reservas sozinho;
-  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot;
+  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot; só lê a conversa para reservar
+    quando a equipe escreve **"Agendado ☑️"** (não prepara reserva a cada mensagem — issue #278);
   - `sombra` — o bot **só observa e aprende** (issue #278): não gera resposta nem reserva
-    preparada, que é o que custa. Registro de mensagem e comprovante continuam.
+    preparada, que é o que custa. Registro de mensagem e comprovante continuam. Aprende com o atendente **e com os
+    clientes**: o que eles contam (lugares e referências, localidades, necessidades, épocas e motivos de viagem,
+    dúvidas e reclamações) vira lição `dito_pelo_cliente`, que serve para entender e confirmar e nunca vira preço,
+    valor, horário ou regra.
   - **Teste sob demanda, em qualquer modo:** nota privada `#testar` no Chatwoot (com ou sem uma
     pergunta depois) faz o bot escrever numa nota `🧪 [TESTE]` o que responderia; nada vai ao
     cliente, nada é gravado e a nota não entra no histórico nem no aprendizado. Todo bot novo ou
@@ -320,7 +324,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
-  recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
+  recorrente. **Aprende com o atendente e com os clientes** (o que o próprio bot escreveu não entra;
+  o que o cliente conta vira `dito_pelo_cliente`, só para entender e confirmar — issue #278), em
   orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
   dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação/operação valem na hora com
   aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é
