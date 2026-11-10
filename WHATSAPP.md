@@ -266,6 +266,12 @@ prepara a reserva para ela lançar com um toque:
    confirmou com a equipe (`cidade_dita`), ou a do endereço de costume. Ruas se repetem nas duas cidades (ex.: Lister
    Caldas), então a cidade **nunca** sai do nome da rua. Sem cidade dita, o rascunho vai com aviso em "Conferir" e o
    "Agendado ☑️" **não lança** (fica pendente com o motivo). O atendente pergunta o endereço e a cidade juntos.
+   **Ruas das cidades (issue #274, migração 76):** `cidade_ruas` conhece as ruas de Pirapemas e Cantanhede: começou
+   com o OpenStreetMap e **aprende sozinha** com toda reserva de Volta confirmada/embarcada, por qualquer caminho
+   (gatilho `trg_reservations_aprende_ruas`; se a equipe corrige a cidade, a associação errada é desfeita).
+   `fn_ruas_no_texto(endereço)` diz em que cidade(s) cada rua citada aparece. No rascunho vira aviso em "Conferir"
+   ("existe em Pirapemas e em Cantanhede", "costuma ser Cantanhede, não Pirapemas"); no atendente, rua conhecida só
+   na outra cidade devolve `CIDADE_A_CONFIRMAR` para ele confirmar com o cliente. Só avisa: nunca decide a cidade.
    Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
    cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
    (nunca o perfil do WhatsApp).

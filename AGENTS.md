@@ -291,6 +291,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   janela do lugar do cliente e diz pelo horário se já estamos em rota. Nunca diz onde a van está; se o cliente insistir,
   envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
   Paradas e plataforma viram lições `operacao`.
+- **Cidade da Volta e ruas das cidades** (issues #272 e #274): ruas se repetem em Pirapemas e Cantanhede, então a
+  cidade de embarque da Volta só vale se o cliente disse (ou é o endereço de costume); nunca sai do nome da rua. A
+  base `cidade_ruas` (OpenStreetMap + toda reserva de Volta confirmada, aprendendo sozinha) só gera **aviso**.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`

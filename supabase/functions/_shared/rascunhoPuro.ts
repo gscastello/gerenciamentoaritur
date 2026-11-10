@@ -344,3 +344,57 @@ ${ctx.costume}` : ""}${ctx.bairrosSaoLuis ? `
 
 BAIRROS DE SÃO LUÍS: ${ctx.bairrosSaoLuis}` : ""}`;
 }
+
+/** Uma rua citada e as cidades onde ela aparece (fn_ruas_no_texto, issue #274). */
+export type RuaNasCidades = {
+  nome: string;
+  em_pirapemas: boolean;
+  em_cantanhede: boolean;
+  reservas_pirapemas: number;
+  reservas_cantanhede: number;
+};
+
+const NOME_DA_CIDADE: Record<string, string> = { pirapemas: "Pirapemas", cantanhede: "Cantanhede" };
+
+function cidadeUnica(r: RuaNasCidades): string | null {
+  if (r.em_pirapemas && !r.em_cantanhede) return "pirapemas";
+  if (r.em_cantanhede && !r.em_pirapemas) return "cantanhede";
+  return null;
+}
+
+/**
+ * Aviso para o "Conferir" pelas ruas citadas no embarque da Volta: rua que existe nas
+ * duas cidades, ou que só conhecemos na outra. Só avisa: a cidade vem da conversa (#272).
+ */
+export function avisoDasRuas(ruas: RuaNasCidades[], cidade: string | null): string | null {
+  const frases: string[] = [];
+  for (const r of ruas) {
+    if (r.em_pirapemas && r.em_cantanhede) {
+      const n = r.reservas_pirapemas + r.reservas_cantanhede;
+      frases.push(
+        `${r.nome} existe em Pirapemas e em Cantanhede${n ? ` (${r.reservas_pirapemas} e ${r.reservas_cantanhede} reservas)` : ""}: confirme a cidade.`,
+      );
+      continue;
+    }
+    const so = cidadeUnica(r);
+    if (!so || so === cidade) continue;
+    frases.push(
+      cidade
+        ? `${r.nome} costuma ser ${NOME_DA_CIDADE[so]}, não ${NOME_DA_CIDADE[cidade] ?? cidade}: confira.`
+        : `${r.nome} costuma ser ${NOME_DA_CIDADE[so]}.`,
+    );
+  }
+  return frases.length ? frases.slice(0, 2).join(" ") : null;
+}
+
+/** Rua citada que só conhecemos na OUTRA cidade (o atendente confirma com o cliente). */
+export function ruaDeOutraCidade(
+  ruas: RuaNasCidades[],
+  cidade: string,
+): { nome: string; cidade: string } | null {
+  for (const r of ruas) {
+    const so = cidadeUnica(r);
+    if (so && so !== cidade) return { nome: r.nome, cidade: NOME_DA_CIDADE[so] };
+  }
+  return null;
+}

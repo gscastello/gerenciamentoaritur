@@ -27,7 +27,7 @@ import {
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
-import { telefoneDoPassageiro } from "./rascunhoPuro.ts";
+import { type RuaNasCidades, ruaDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
@@ -137,6 +137,10 @@ export const FERRAMENTAS: Ferramenta[] = [
           description: "Só se ele marca para OUTRA pessoa: o telefone do passageiro (do card '[contato compartilhado: …]' ou digitado).",
         },
         nome_passageiro: { type: "string", description: "Só se ele marca para OUTRA pessoa: o nome do passageiro." },
+        cidade_confirmada: {
+          type: "boolean",
+          description: "Só depois de um CIDADE_A_CONFIRMAR: true se o cliente confirmou a cidade de embarque da Volta.",
+        },
       },
       required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
     },
@@ -483,6 +487,18 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const ponto = acharPonto(pontos, pedido.ponto);
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
 
+  // Volta: a rua citada só é conhecida na outra cidade? confirma com o cliente (issue #274)
+  if (pedido.direcao === "volta" && pedido.enderecoEmbarque && args.cidade_confirmada !== true) {
+    const outra = ruaDeOutraCidade(await ruasNasCidades(pedido.enderecoEmbarque), String(ponto.code));
+    if (outra) {
+      return {
+        ok: false,
+        codigo: "CIDADE_A_CONFIRMAR",
+        erro: `A ${outra.nome} que conhecemos fica em ${outra.cidade}. Pergunte ao cliente se o embarque é mesmo em ${ponto.name}; se ele confirmar, chame de novo com cidade_confirmada=true (senão troque o ponto).`,
+      };
+    }
+  }
+
   // marcando para outra pessoa (issue #268): a reserva vai para o passageiro, não para quem conversa
   const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
   const outro = !!telPassageiro && !variantesTelefone(ctx.telefone).includes(telPassageiro);
@@ -716,3 +732,15 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
     return { ok: false, codigo: "ERRO_NO_SISTEMA", erro: "Falha ao consultar/gravar no sistema. Não invente: chame o atendente se for preciso." };
   }
 }
+
+/** Em que cidade(s) aparece cada rua citada (base que aprende com as reservas, issue #274). Melhor esforço. */
+export async function ruasNasCidades(texto: string | null | undefined): Promise<RuasNasCidadesLista> {
+  if (!texto || String(texto).trim().length < 4) return [];
+  const { data, error } = await supabaseAdmin.rpc("fn_ruas_no_texto", { p_texto: String(texto).slice(0, 300) });
+  if (error) {
+    console.log(JSON.stringify({ evento: "bot_aviso", aviso: "ruas_nao_consultadas", erro: error.message.slice(0, 200) }));
+    return [];
+  }
+  return (data ?? []) as RuasNasCidadesLista;
+}
+type RuasNasCidadesLista = RuaNasCidades[];
