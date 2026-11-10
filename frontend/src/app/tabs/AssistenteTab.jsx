@@ -5,6 +5,7 @@ import { mensagemAmigavel } from "../../lib/erros.js";
 import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
 import { FadeIn, ProgressBar, Spinner } from "../../ui/motion/index.js";
 import { C, ErrorBanner, Header } from "../tabShared.jsx";
+import { AssistenteSiri } from "./AssistenteSiri.jsx";
 
 /* ===================== ASSISTENTE DA EQUIPE (issue #288) =====================
    A equipe pede como pede ao Claude Code: "agende a passagem de 98…", "remarque a
@@ -147,6 +148,7 @@ export default function AssistenteTab() {
       />
 
       <div className="px-6 md:px-10 flex flex-col gap-3 max-w-3xl">
+        {mensagens.length === 0 && <AssistenteSiri />}
         {mensagens.length === 0 && (
           <FadeIn
             className="rounded-xl border p-4"

@@ -5,7 +5,7 @@
 // gravações. Gravar é outra chamada (`executar`), feita pelo toque em
 // "Confirmar" no cartão da proposta.
 
-import { ServiceError, supabase } from "../lib/supabaseClient";
+import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 async function chamar(body) {
   const { data, error } = await supabase.functions.invoke("assistente", { body });
@@ -35,6 +35,37 @@ export const assistenteService = {
   async conversar(mensagens) {
     const data = await chamar({ modo: "conversar", mensagens });
     return { texto: data.texto ?? "", acoes: data.acoes ?? [] };
+  },
+
+  /** Chaves pessoais do atalho da Siri (issue #290) de quem está logado. */
+  async listarChaves() {
+    const uid = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from("assistente_chaves")
+      .select("id, nome, final, created_at, last_used_at")
+      .eq("user_id", uid)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false });
+    if (error)
+      throw new ServiceError(`assistente.listarChaves: ${error.message}`, { cause: error });
+    return data ?? [];
+  },
+
+  /** Gera uma chave nova; o texto volta UMA vez (no banco fica só o hash). */
+  async gerarChave(nome) {
+    const { data, error } = await supabase.rpc("rpc_criar_chave_assistente", {
+      p_nome: nome || "iPhone",
+    });
+    if (error) throw new ServiceError(`assistente.gerarChave: ${error.message}`, { cause: error });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível gerar a chave.");
+    return data.chave;
+  },
+
+  async revogarChave(id) {
+    const { data, error } = await supabase.rpc("rpc_revogar_chave_assistente", { p_id: id });
+    if (error)
+      throw new ServiceError(`assistente.revogarChave: ${error.message}`, { cause: error });
+    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível apagar a chave.");
   },
 
   /** Grava uma proposta (criar, mudar ou cancelar) depois do "Confirmar". */

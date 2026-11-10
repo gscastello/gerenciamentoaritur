@@ -21,6 +21,9 @@ Deno.test("modelo: pedido simples vai no Haiku; números, explicação e convers
   assertEquals(escolherModelo("quanto faturei de passagens em outubro?", 1), MODELOS.capaz);
   assertEquals(escolherModelo("por que o agendado não lançou?", 1), MODELOS.capaz);
   assertEquals(escolherModelo("ok", 13), MODELOS.capaz);
+  assertEquals(escolherModelo("quantas vagas tem na volta de amanhã?", 1), MODELOS.rapido);
+  assertEquals(escolherModelo("me explica por que não lançou", 1), MODELOS.capaz);
+  assertEquals(escolherModelo("quanto gastei de diesel?", 1), MODELOS.capaz);
 });
 
 Deno.test("custo: soma entrada, saída e cache pelo preço do modelo", () => {
@@ -113,4 +116,27 @@ Deno.test("instruções e ferramentas: propõe sem gravar, preço da tabela, pra
   const nomes = FERRAMENTAS_DO_ASSISTENTE.map((f) => f.name);
   assert(nomes.includes("propor_reserva") && nomes.includes("propor_cancelamento"));
   assert(!nomes.some((n) => /^(criar|cancelar|gravar)/.test(n)));
+});
+
+Deno.test("voz: sim e não reconhecidos; frase longa não é confirmação", async () => {
+  const { ehConfirmacao, ehRecusa } = await import("./assistentePuro.ts");
+  for (const t of ["Sim", "sim.", "Confirma", "pode gravar", "Isso mesmo!", "ok"]) assert(ehConfirmacao(t), t);
+  for (const t of ["Não", "nao", "cancela", "deixa pra lá"]) assert(ehRecusa(t), t);
+  assert(!ehConfirmacao("não"));
+  assert(!ehConfirmacao("sim mas muda para sábado e coloca mais duas passagens"));
+  assert(!ehConfirmacao("muda a volta do Zequinha pra sexta"));
+  assert(!ehRecusa("na volta da Maria"));
+});
+
+Deno.test("voz: texto limpo para a Siri e sessão de 10 minutos", async () => {
+  const { paraVoz, sessaoValida, instrucoesDoAssistente } = await import("./assistentePuro.ts");
+  assertEquals(paraVoz("**Pronto** ✅\n- Volta sexta\n- Sessenta reais"), "Pronto. Volta sexta. Sessenta reais");
+  const agora = new Date("2026-11-10T15:00:00Z");
+  assert(sessaoValida("2026-11-10T14:55:00Z", agora));
+  assert(!sessaoValida("2026-11-10T14:40:00Z", agora));
+  assert(!sessaoValida(null, agora));
+  const t = instrucoesDoAssistente({ pontos: "-", desembarques: "-", voz: true });
+  assert(t.startsWith("MODO VOZ"));
+  assertStringIncludes(t, '"Confirma?"');
+  assert(!instrucoesDoAssistente({ pontos: "-", desembarques: "-" }).includes("MODO VOZ"));
 });

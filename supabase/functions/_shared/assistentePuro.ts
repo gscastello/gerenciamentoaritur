@@ -39,8 +39,10 @@ export function custoUsd(modelo: string, uso: Uso | null | undefined): number {
   return Math.round(usd * 100000) / 100000;
 }
 
+// prefixos ("explic" pega explica/explique; "fatur" pega faturei/faturamento). "Quantas vagas"
+// é consulta simples e fica no rápido: conta só pedido de número de dinheiro, análise ou explicação.
 const PEDE_RACIOCINIO =
-  /\b(relat[oó]rio|resumo|resum[ae]|quanto|quantos|quantas|por\s*qu[eê]|porque|explic|analis|compar|financeir|receita|despesa|lucro|faturament|gast|m[eé]dia|ocupa[cç][aã]o|semana|m[eê]s)\b/i;
+  /\b(relat[oó]ri|resum|por\s*qu[eê]|explic|analis|compar|financeir|receita|despesa|lucro|fatur|gast|m[eé]dia|ocupa[cç][aã]o|balan[cç]o|fechamento)/i;
 
 /**
  * Qual modelo atende o pedido. Pedido simples (lançar, mudar, cancelar, ver vagas)
@@ -217,9 +219,18 @@ export function descreverAcao(a: Acao, nomesDosPontos: Record<string, string> = 
   ].join("\n");
 }
 
+/** Pela Siri (issue #290): a resposta é LIDA em voz alta para quem está dirigindo. */
+const MODO_VOZ = `MODO VOZ: esta conversa é pela Siri e a sua resposta será LIDA EM VOZ ALTA para alguém que pode estar dirigindo.
+- No máximo duas frases curtas. Sem listas, tabelas, emojis, asteriscos, ids ou números de telefone.
+- Datas faladas ("sexta, dia 13"), valores falados ("sessenta reais").
+- Uma proposta por vez. Depois de propor, diga em uma frase o que vai fazer e termine com "Confirma?". A pessoa responde "sim" ou "não" por voz.
+- Faltou informação ou há mais de um cliente com o nome: faça UMA pergunta curta.
+
+`;
+
 /** Instruções do assistente. Fixas (cache); a data de hoje vai na mensagem do usuário. */
-export function instrucoesDoAssistente(ctx: { pontos: string; desembarques: string }): string {
-  return `Você é o assistente da equipe da AriTur, empresa de vans entre São Luís e Pirapemas/Cantanhede (MA). Quem fala com você é um SÓCIO ou ATENDENTE da empresa, dentro do app de gestão. Responda sempre em português do Brasil, curto e direto.
+export function instrucoesDoAssistente(ctx: { pontos: string; desembarques: string; voz?: boolean }): string {
+  return `${ctx.voz ? MODO_VOZ : ""}Você é o assistente da equipe da AriTur, empresa de vans entre São Luís e Pirapemas/Cantanhede (MA). Quem fala com você é um SÓCIO ou ATENDENTE da empresa, dentro do app de gestão. Responda sempre em português do Brasil, curto e direto.
 
 O QUE VOCÊ FAZ
 - Consulta o app pelas ferramentas: clientes, conversas do WhatsApp, reservas do dia, vagas, preços, pendências, lugares das cidades e números do financeiro.
@@ -357,3 +368,43 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
     input_schema: { type: "object", properties: { reserva_id: { type: "string" } }, required: ["reserva_id"] },
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Pela Siri (issue #290)
+// ---------------------------------------------------------------------------
+
+const semAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const limpa = (t: string) => semAcentos(t).replace(/[.!?,;]/g, " ").replace(/\s+/g, " ").trim();
+
+/** "Não", "cancela", "deixa", "esquece"… (resposta curta). */
+export function ehRecusa(texto: string): boolean {
+  const t = limpa(texto);
+  return t.split(" ").length <= 5 && /^(nao|n|negativo|cancela|cancelar|deixa|deixa pra la|esquece|para|pare|errado)(\s|$)/.test(t);
+}
+
+/** "Sim", "confirma", "pode gravar", "isso mesmo"… (resposta curta à pergunta "Confirma?"). */
+export function ehConfirmacao(texto: string): boolean {
+  const t = limpa(texto);
+  if (!t || t.split(" ").length > 5 || ehRecusa(texto)) return false;
+  return /^(sim|s|confirma|confirmo|confirmar|confirmado|pode|pode sim|pode gravar|pode confirmar|isso|isso mesmo|isso ai|ok|okay|beleza|certo|correto|manda|grava|fechado|positivo)(\s|$)/.test(t);
+}
+
+/** Texto bom para a Siri ler: sem markdown, listas, emojis nem quebras. */
+export function paraVoz(texto: string): string {
+  return String(texto ?? "")
+    .replace(/\*\*|__|`|#+\s/g, "")
+    .replace(/^\s*[-•*]\s+/gm, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
+    .replace(/\s*\n+\s*/g, ". ")
+    .replace(/\.\s*\./g, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 600);
+}
+
+/** A conversa por voz vale por 10 minutos; depois começa do zero. */
+export function sessaoValida(atualizadaEm: string | null | undefined, agora: Date, minutos = 10): boolean {
+  if (!atualizadaEm) return false;
+  const t = Date.parse(atualizadaEm);
+  return Number.isFinite(t) && agora.getTime() - t <= minutos * 60_000;
+}

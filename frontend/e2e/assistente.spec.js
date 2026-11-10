@@ -113,3 +113,60 @@ test("Assistente: erro do servidor aparece e Descartar não grava", async ({ pag
   await expect(page.getByText(/Descartada/)).toBeVisible();
   expect(chamadas).toBe(2);
 });
+
+test("Assistente pela Siri: gera a chave uma vez, mostra o endereço e apaga", async ({ page }) => {
+  await mockSupabase(page, { role: "admin" });
+  let chaves = [
+    {
+      id: "chave-1",
+      nome: "iPad",
+      final: "a1b2",
+      created_at: "2026-11-09T12:00:00Z",
+      last_used_at: null,
+    },
+  ];
+  await page.route("**/rest/v1/assistente_chaves**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(chaves) }),
+  );
+  await page.route("**/rest/v1/rpc/rpc_criar_chave_assistente", (route) => {
+    chaves = [
+      {
+        id: "chave-2",
+        nome: "iPhone",
+        final: "9f9f",
+        created_at: new Date().toISOString(),
+        last_used_at: null,
+      },
+      ...chaves,
+    ];
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, id: "chave-2", chave: `ari_${"9f".repeat(20)}` }),
+    });
+  });
+  await page.route("**/rest/v1/rpc/rpc_revogar_chave_assistente", (route) => {
+    chaves = chaves.filter((c) => c.id !== "chave-1");
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  await abrirAssistente(page);
+  await page.getByRole("button", { name: /Usar pela Siri/ }).click();
+  await expect(page.getByText(/iPad · …a1b2/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Gerar chave" }).click();
+  await expect(
+    page.getByText("Copie agora: ela não aparece de novo.", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText(`ari_${"9f".repeat(20)}`)).toBeVisible();
+  await expect(page.getByText(/functions\/v1\/assistente-voz/)).toBeVisible();
+  await page.getByRole("button", { name: "Já copiei" }).click();
+  await expect(page.getByText(`ari_${"9f".repeat(20)}`)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Apagar chave iPad" }).click();
+  await expect(page.getByText(/iPad · …a1b2/)).toHaveCount(0);
+});

@@ -333,7 +333,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
   no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
   `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
-  mensagem ao cliente.
+  mensagem ao cliente. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
+  chave pessoal (só o hash no banco; apagar desliga), respostas curtas para ler em voz alta e "sim" por voz para gravar.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
   com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de
