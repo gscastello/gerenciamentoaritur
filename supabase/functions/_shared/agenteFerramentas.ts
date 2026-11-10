@@ -16,6 +16,7 @@ import {
   andamentoPeloHorario,
   areaDoDesembarque,
   bairroDaTabela,
+  bairroParecido,
   calcularTotal,
   costumeParaFerramenta,
   cronogramaValido,
@@ -25,7 +26,10 @@ import {
   trechoDoPedido,
   validarPedidoDeReserva,
 } from "./agentePuro.ts";
+import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
+import { type LugarNasCidades, lugarDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
+import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 
@@ -113,6 +117,16 @@ export const FERRAMENTAS: Ferramenta[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "onde_fica",
+    description:
+      "Diz onde fica um lugar de Pirapemas ou Cantanhede que o cliente citou para embarcar na Volta (rua, ponto de referência como bar, padaria, hospital, posto, 'casa de fulano', povoado): em qual cidade aparece, em quantas reservas e a rua que costuma vir junto. Use quando ele der só uma referência ou uma rua que existe nas duas cidades, para confirmar com ele. Não decide a cidade.",
+    input_schema: {
+      type: "object",
+      properties: { lugar: { type: "string", description: "O endereço ou a referência como o cliente escreveu." } },
+      required: ["lugar"],
+    },
+  },
+  {
     name: "criar_reserva",
     description:
       "Cria a reserva do cliente no app. Só chame depois de: (1) ter todos os dados, (2) ter consultado a viagem (há vaga) e o valor, (3) ter mostrado o resumo ao cliente e ele ter dito sim (cliente_confirmou=true). O preço e a vaga são conferidos pelo sistema. Trajeto fora da área padrão vira 'pendente' para a equipe confirmar. Encomenda NÃO é criada aqui (use chamar_atendente).",
@@ -129,6 +143,15 @@ export const FERRAMENTAS: Ferramenta[] = [
         desembarque: { type: "string", description: "Onde o cliente vai ficar/descer." },
         forma_pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
         cliente_confirmou: { type: "boolean", description: "true só se o cliente confirmou o resumo com um sim claro nesta conversa." },
+        telefone_passageiro: {
+          type: "string",
+          description: "Só se ele marca para OUTRA pessoa: o telefone do passageiro (do card '[contato compartilhado: …]' ou digitado).",
+        },
+        nome_passageiro: { type: "string", description: "Só se ele marca para OUTRA pessoa: o nome do passageiro." },
+        cidade_confirmada: {
+          type: "boolean",
+          description: "Só depois de um CIDADE_A_CONFIRMAR: true se o cliente confirmou a cidade de embarque da Volta.",
+        },
       },
       required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
     },
@@ -263,7 +286,12 @@ async function precoUnitario(
   if (ponto.code === "busca") {
     if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
     const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
-    const achado = bairroDaTabela(bairro, data ?? []);
+    let achado = bairroDaTabela(bairro, data ?? []) ?? bairroParecido(bairro, data ?? [])?.bairro ?? null;
+    if (!achado) {
+      // condomínio/residencial fora da tabela: memória de endereços e internet (issue #270)
+      const deduzido = await resolverBairro([bairro, endereco].filter(Boolean).join(" "));
+      if (deduzido) achado = (data ?? []).find((b: Linha) => b.neighborhood === deduzido.bairro) ?? null;
+    }
     if (!achado) {
       return {
         ok: false,
@@ -470,9 +498,25 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const ponto = acharPonto(pontos, pedido.ponto);
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
 
-  const cliente = await clienteDaConversa(ctx);
-  const nome = cliente?.name ?? pedido.nomeCliente;
-  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo antes de reservar." };
+  // Volta: o lugar citado (rua, referência, casa) só é conhecido na outra cidade? confirma com o cliente (issue #274)
+  if (pedido.direcao === "volta" && pedido.enderecoEmbarque && args.cidade_confirmada !== true) {
+    const outra = lugarDeOutraCidade(await lugaresNasCidades(pedido.enderecoEmbarque), String(ponto.code));
+    if (outra) {
+      const junto = outra.junto ? ` (junto da ${outra.junto})` : "";
+      return {
+        ok: false,
+        codigo: "CIDADE_A_CONFIRMAR",
+        erro: `${outra.nome}, que conhecemos, fica em ${outra.cidade}${junto}. Pergunte ao cliente se o embarque é mesmo em ${ponto.name}; se ele confirmar, chame de novo com cidade_confirmada=true (senão troque o ponto).`,
+      };
+    }
+  }
+
+  // marcando para outra pessoa (issue #268): a reserva vai para o passageiro, não para quem conversa
+  const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
+  const outro = !!telPassageiro && !variantesTelefone(ctx.telefone).includes(telPassageiro);
+  const cliente = outro ? await whatsappService.identifyCustomer(telPassageiro as string) : await clienteDaConversa(ctx);
+  const nome = cliente?.name ?? (outro ? String(args.nome_passageiro ?? "").trim() || null : pedido.nomeCliente);
+  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Pergunte o nome completo do passageiro antes de reservar." };
 
   const preco = await valorDoPedido(ponto, {
     bairro: pedido.bairro,
@@ -494,7 +538,9 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
 
   // o bot é isento da checagem de duplicidade do banco (é idempotente por mensagem),
   // então a checagem do cliente com ele mesmo é feita aqui
-  const existentes = await reservasDoCliente(ctx, true);
+  const existentes = outro
+    ? (cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [])
+    : await reservasDoCliente(ctx, true);
   const duplicada = existentes.find(
     (r) => r.trip?.trip_date === pedido.data && r.trip?.direction === pedido.direcao && ["confirmada", "pendente"].includes(r.status),
   );
@@ -523,7 +569,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       tripDate: pedido.data,
       direction: pedido.direcao,
       customerName: nome,
-      customerPhone: ctx.telefone,
+      customerPhone: outro ? telPassageiro : ctx.telefone,
       routePointCode: ponto.code,
       quantity: pedido.quantidade,
       unitPrice: preco.preco,
@@ -539,7 +585,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     ctx.escrita.criou = true;
     ctx.reservasCache = undefined;
     // nome completo dado pelo cliente completa o cadastro que tinha só um nome/apelido
-    if (cliente && nomeDeveSerCompletado(cliente.name, pedido.nomeCliente)) {
+    if (!outro && cliente && nomeDeveSerCompletado(cliente.name, pedido.nomeCliente)) {
       await whatsappService
         .completarNomeDoCliente(r.reservation_id, cliente.id, pedido.nomeCliente as string)
         .catch((e) => console.error("Falha ao completar o nome do cliente:", String(e).slice(0, 200)));
@@ -665,6 +711,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
         return await verMinhasReservas(ctx);
       case "endereco_de_costume":
         return await enderecoDeCostume(ctx);
+      case "onde_fica":
+        return await ondeFica(args);
       case "criar_reserva":
         return await criarReserva(args, ctx);
       case "remarcar_reserva":
@@ -697,4 +745,38 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
     console.error(JSON.stringify({ evento: "bot_agente_ferramenta_erro", ferramenta: nome, erro: String(err).slice(0, 300) }));
     return { ok: false, codigo: "ERRO_NO_SISTEMA", erro: "Falha ao consultar/gravar no sistema. Não invente: chame o atendente se for preciso." };
   }
+}
+
+/**
+ * Em que cidade(s) aparece cada lugar citado (rua, ponto de referência, casa de alguém,
+ * povoado) e com o que ele anda junto. Base que aprende com as reservas (issue #274). Melhor esforço.
+ */
+export async function lugaresNasCidades(texto: string | null | undefined): Promise<LugarNasCidades[]> {
+  if (!texto || String(texto).trim().length < 3) return [];
+  const { data, error } = await supabaseAdmin.rpc("fn_lugares_no_texto", { p_texto: String(texto).slice(0, 300) });
+  if (error) {
+    console.log(JSON.stringify({ evento: "bot_aviso", aviso: "lugares_nao_consultados", erro: error.message.slice(0, 200) }));
+    return [];
+  }
+  return (data ?? []) as LugarNasCidades[];
+}
+
+/** Ferramenta onde_fica: o que a base sabe sobre um lugar de Pirapemas/Cantanhede. */
+async function ondeFica(args: Linha) {
+  const lugares = await lugaresNasCidades(String(args.lugar ?? ""));
+  if (!lugares.length) {
+    return { ok: true, conhecido: false, dica: "Não conhecemos esse lugar: pergunte a cidade (Pirapemas ou Cantanhede) e a rua." };
+  }
+  return {
+    ok: true,
+    conhecido: true,
+    lugares: lugares.map((l) => ({
+      nome: l.nome,
+      tipo: l.tipo,
+      cidades: [l.em_pirapemas ? "Pirapemas" : null, l.em_cantanhede ? "Cantanhede" : null].filter(Boolean),
+      reservas: { pirapemas: l.reservas_pirapemas, cantanhede: l.reservas_cantanhede },
+      junto: { pirapemas: l.junto_pirapemas ?? null, cantanhede: l.junto_cantanhede ?? null },
+    })),
+    lembrete: "Use para CONFIRMAR com o cliente (ex.: 'É a choperia do Riba, na Lister Caldas, em Pirapemas?'); a cidade só vale quando ele confirmar.",
+  };
 }
