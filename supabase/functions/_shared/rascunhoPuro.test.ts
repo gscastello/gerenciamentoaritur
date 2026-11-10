@@ -11,9 +11,17 @@ import {
   telefoneDoPassageiro,
   validarPedidoExtraido,
   cidadeDaVolta,
+  avisoDaCidadePelaBase,
   avisoDosLugares,
+  cidadePelaBase,
   lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
+  A_CONFIRMAR,
+  avisoDoAgendado,
+  comMarcaDoDia,
+  pendenciasAtuais,
+  planejarAtualizacao,
+  semMarcaDoDia,
 } from "./rascunhoPuro.ts";
 
 const pontos = { ida: ["busca", "rodoviaria", "postocarone", "retorno", "br", "outro"], volta: ["pirapemas", "cantanhede"] };
@@ -153,8 +161,9 @@ Deno.test("desembarque vira área quando bate com a lista; textos são aparados"
   assertEquals(r.rascunho.client_excerpt?.length, 300);
 });
 
-Deno.test("a ferramenta pede no máximo dois pedidos e as instruções levam o calendário", () => {
-  assertEquals(FERRAMENTA_PEDIDOS.input_schema.properties.pedidos.maxItems, 2);
+Deno.test("a ferramenta pede até quatro pedidos e as instruções levam o calendário", () => {
+  // ida e volta de duas pessoas (a cliente e o contato que ela mandou)
+  assertEquals(FERRAMENTA_PEDIDOS.input_schema.properties.pedidos.maxItems, 4);
   const t = instrucoesDaLeitura({ calendario: "Amanhã: terça (2026-11-10)", pontos: "busca = Buscar em Casa", desembarques: "-" });
   assert(t.includes("2026-11-10"));
   assert(t.includes("NÃO decide preço"));
@@ -395,4 +404,197 @@ Deno.test("lugares das cidades: rua, referência e casa nas duas cidades ou só 
   assertEquals(lugarDeOutraCidade([posto], "pirapemas"), null);
   assertEquals(lugarDeOutraCidade([cruz], "cantanhede"), null);
   assertEquals(lugarDeOutraCidade([lister], "cantanhede"), null);
+});
+
+Deno.test("cidade pela base de lugares no Agendado (issue #286): casos de 10/11", () => {
+  const L = (nome: string, p: number, c: number, emP = p > 0, emC = c > 0) => ({
+    tipo: "rua",
+    nome,
+    em_pirapemas: emP,
+    em_cantanhede: emC,
+    reservas_pirapemas: p,
+    reservas_cantanhede: c,
+  });
+  // conversa 1320: Av. João Castelo só em Pirapemas (9 reservas) → Pirapemas
+  assertEquals(cidadePelaBase([L("Avenida João Castelo", 9, 0)])?.cidade, "pirapemas");
+  // conversa 1322: Rua da Mônica no mapa e em 3 reservas de Pirapemas → Pirapemas
+  assertEquals(cidadePelaBase([L("Rua da Monica", 3, 0)])?.cidade, "pirapemas");
+  // só no mapa (0 reservas) também vale
+  assertEquals(cidadePelaBase([L("Povoado Galvão", 0, 0, false, true)])?.cidade, "cantanhede");
+  // conversa 1314: casa da Maria Padeiro em 1 reserva só → fraco, não decide
+  assertEquals(cidadePelaBase([L("Maria Padeiro", 1, 0)]), null);
+  // conversa 325: Lister Caldas nas duas + lugar fraco → não decide
+  assertEquals(cidadePelaBase([L("Rua Deputado Lister Caldas", 10, 6), L("Casa da Dona Daluz", 1, 0)]), null);
+  // lugar das duas cidades não atrapalha um forte; um lugar só da OUTRA cidade, sim
+  assertEquals(cidadePelaBase([L("Rua Deputado Lister Caldas", 10, 6), L("Praça da Cruz", 0, 4)])?.cidade, "cantanhede");
+  assertEquals(cidadePelaBase([L("Avenida João Castelo", 9, 0), L("Posto Maria", 0, 1)]), null);
+  assertEquals(cidadePelaBase([]), null);
+  assertStringIncludes(avisoDaCidadePelaBase({ cidade: "pirapemas", nome: "Avenida João Castelo", reservas: 9 }), "só aparece em Pirapemas (9 reservas)");
+});
+
+Deno.test("instruções do Agendado: data pela mensagem, horário da equipe e o que o cliente completou (issue #286)", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
+  assertStringIncludes(t, "contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA");
+  assertStringIncludes(t, "\"12 horas\", \"meio-dia\", \"após às 12\", \"à tarde\" = Volta");
+  assertStringIncludes(t, "logo DEPOIS do \"Agendado ☑️\"");
+  const semEquipe = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" });
+  assertStringIncludes(semEquipe, "contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA");
+  assert(!semEquipe.includes("HORÁRIO que a equipe disse"));
+});
+
+Deno.test("ida e volta sem o dia da volta = volta no mesmo dia (dono, 10/11)", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
+  assertStringIncludes(t, "registre a Volta no MESMO DIA da Ida");
+  assertStringIncludes(t, "Volta no mesmo dia da Ida: confirme com o cliente");
+});
+
+// ---------------------------------------------------------------------------
+// Agendado ☑️ = reservar como está (dono, 10/11)
+// ---------------------------------------------------------------------------
+const ag = { ...ctx, agendado: true };
+
+Deno.test("agendado: Ida sem endereço reserva só com o nome, em Outros, endereço a confirmar", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", nome_informado: "Maria" }, ag);
+  assert(r.ok);
+  assertEquals(r.rascunho.route_point_code, "outro");
+  assertEquals(r.rascunho.pickup_detail, A_CONFIRMAR.endereco);
+  assertEquals(r.aConfirmar, ["endereco"]);
+  assertStringIncludes(r.rascunho.notes ?? "", "sem valor");
+  // fora do Agendado continua sem rascunho
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, ctx), { ok: false, motivo: "sem_endereco" });
+});
+
+Deno.test("agendado: ponto fixo da Ida não precisa de endereço (valor do ponto)", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "rodoviaria" }, ag);
+  assert(r.ok);
+  assertEquals(r.aConfirmar, []);
+  assertEquals(r.rascunho.pickup_detail, null);
+});
+
+Deno.test("agendado: busca sem bairro fica com o bairro a confirmar", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto: "busca", endereco: "Rua 7" }, ag);
+  assert(r.ok);
+  assertEquals(r.rascunho.pickup_detail, "Rua 7 (bairro a confirmar)");
+  assertEquals(r.aConfirmar, ["endereco"]);
+});
+
+Deno.test("agendado: Volta com cidade e sem endereço reserva; sem cidade fica pendente", () => {
+  const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta", cidade_dita: "Cantanhede" }, ag);
+  assert(r.ok);
+  assertEquals(r.rascunho.route_point_code, "cantanhede");
+  assertEquals(r.cidadeIncerta, false);
+  assertEquals(r.aConfirmar, ["endereco"]);
+  const s = validarPedidoExtraido({ data: "2026-11-10", direcao: "volta" }, ag);
+  assert(s.ok);
+  assertEquals(s.cidadeIncerta, true);
+  assertEquals(s.rascunho.route_point_code, null);
+  assertEquals(validarPedidoExtraido({ data: "2026-11-10", direcao: "volta" }, ctx), { ok: false, motivo: "sem_cidade" });
+});
+
+Deno.test("agendado: volta no mesmo dia suposta vai marcada para confirmar", () => {
+  const r = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta", cidade_dita: "pirapemas", endereco: "Rua do Campo", duvida: "Volta no mesmo dia da Ida: confirme com o cliente" },
+    ag,
+  );
+  assert(r.ok);
+  assertEquals(r.aConfirmar, ["dia_da_volta"]);
+  assertEquals(r.rascunho.pickup_detail, comMarcaDoDia("Rua do Campo"));
+  assertEquals(semMarcaDoDia(r.rascunho.pickup_detail), "Rua do Campo");
+});
+
+Deno.test("pendências: o que a equipe já preencheu no app não conta mais", () => {
+  assertEquals(pendenciasAtuais(["endereco", "valor"], A_CONFIRMAR.endereco), ["endereco", "valor"]);
+  assertEquals(pendenciasAtuais(["endereco"], "Rua 7, Cohatrac"), []);
+  assertEquals(pendenciasAtuais(["dia_da_volta"], comMarcaDoDia("Rua 1")), ["dia_da_volta"]);
+  assertEquals(pendenciasAtuais(["dia_da_volta"], "Rua 1"), []);
+  assertEquals(pendenciasAtuais(null, "x"), []);
+});
+
+Deno.test("atualização: cliente diz outro dia da volta, a reserva muda de dia", () => {
+  const p = planejarAtualizacao(
+    { data: "2026-11-10", direcao: "volta", ponto: "pirapemas", pickupDetail: comMarcaDoDia("Rua 1"), pendentes: ["dia_da_volta"] },
+    { reserva: 1, nova_data: "2026-11-13" },
+    ctx,
+  );
+  assert(p);
+  assertEquals(p.novaData, "2026-11-13");
+  assertEquals(p.pickupDetail, "Rua 1");
+  assertEquals(p.restante, []);
+});
+
+Deno.test("atualização: confirmou o mesmo dia só tira a marca", () => {
+  const p = planejarAtualizacao(
+    { data: "2026-11-10", direcao: "volta", ponto: "pirapemas", pickupDetail: comMarcaDoDia(null), pendentes: ["dia_da_volta"] },
+    { reserva: 1, mesmo_dia_confirmado: true },
+    ctx,
+  );
+  assert(p);
+  assertEquals(p.novaData, undefined);
+  assertEquals(p.pickupDetail, A_CONFIRMAR.endereco);
+});
+
+Deno.test("atualização: endereço informado vira busca em casa e recalcula o valor", () => {
+  const p = planejarAtualizacao(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", pickupDetail: A_CONFIRMAR.endereco, pendentes: ["endereco", "valor"] },
+    { reserva: 1, endereco: "Rua 7, casa 12", bairro: "Cohatrac" },
+    ctx,
+  );
+  assert(p);
+  assertEquals(p.novoPonto, "busca");
+  assertEquals(p.pickupNeighborhood, "Cohatrac");
+  assertEquals(p.pickupDetail, "Rua 7, casa 12");
+  assertEquals(p.recalcularValor, true);
+  assertEquals(p.restante, []);
+});
+
+Deno.test("atualização: nada novo, data passada ou longe demais não mexe", () => {
+  const res = { data: "2026-11-10", direcao: "volta" as const, ponto: "pirapemas", pickupDetail: comMarcaDoDia("Rua 1"), pendentes: ["dia_da_volta" as const] };
+  assertEquals(planejarAtualizacao(res, { reserva: 1 }, ctx), null);
+  assertEquals(planejarAtualizacao(res, { reserva: 1, nova_data: "2026-11-01" }, ctx), null);
+  assertEquals(planejarAtualizacao(res, { reserva: 1, nova_data: "2027-06-01" }, ctx), null);
+  assertEquals(planejarAtualizacao(res, { reserva: 1, nova_data: "2026-11-10" }, ctx), null);
+  // endereço só mexe se estava faltando
+  assertEquals(planejarAtualizacao(res, { reserva: 1, endereco: "Outra rua" }, ctx), null);
+});
+
+Deno.test("atualização: cidade dita na Volta troca o ponto", () => {
+  const p = planejarAtualizacao(
+    { data: "2026-11-10", direcao: "volta", ponto: "pirapemas", pickupDetail: A_CONFIRMAR.endereco, pendentes: ["endereco"] },
+    { reserva: 1, cidade: "cantanhede", endereco: "Praça da Cruz" },
+    ctx,
+  );
+  assert(p);
+  assertEquals(p.novoPonto, "cantanhede");
+  assertEquals(p.pickupDetail, "Praça da Cruz");
+});
+
+Deno.test("leitura (dono, 10/11): 'pra São Luís' é Volta e card só vira passagem se pediram para ele", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" });
+  assertStringIncludes(t, '"pra São Luís"');
+  assertStringIncludes(t, "VOLTA");
+  assertStringIncludes(t, "PARA São Luís é Volta");
+  assertStringIncludes(t, "Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa");
+  assertStringIncludes(t, "UM pedido por passageiro");
+});
+
+Deno.test("aviso do Agendado: lançou tudo ou já estava reservado não avisa", () => {
+  assertEquals(avisoDoAgendado({ lancadas: 2, pedidos: 2, motivos: [], pendentes: [] }), null);
+  assertEquals(avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: ["ja_reservado"], pendentes: [] }), null);
+});
+
+Deno.test("aviso do Agendado: erro, nada lido, motivo e pendência viram pendência legível", () => {
+  const e = avisoDoAgendado({ lancadas: 0, pedidos: 0, motivos: [], pendentes: [], erro: "Error: Leitura do pedido cortada (max_tokens)." });
+  assert(e);
+  assertStringIncludes(e.detalhe, "A leitura da conversa falhou");
+  const n = avisoDoAgendado({ lancadas: 0, pedidos: 0, motivos: [], pendentes: [] });
+  assert(n);
+  assertStringIncludes(n.detalhe, "não achou o pedido");
+  const m = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: ["sem_data", "ja_reservado"], pendentes: [] });
+  assert(m);
+  assertStringIncludes(m.detalhe, "o dia da viagem não aparece");
+  const p = avisoDoAgendado({ lancadas: 1, pedidos: 2, motivos: [], pendentes: ["cidade"] });
+  assert(p);
+  assertEquals(p.assunto, "Agendado ☑️ lançou só parte");
+  assertStringIncludes(p.detalhe, "1 reserva(s) lançada(s)");
+  assertStringIncludes(p.detalhe, "Pirapemas ou Cantanhede");
 });
