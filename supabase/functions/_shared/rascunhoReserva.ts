@@ -29,6 +29,12 @@ import {
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
+  type AtualizacaoLida,
+  FERRAMENTA_ATUALIZACAO,
+  instrucoesDaAtualizacao,
+  type ItemAConfirmar,
+  pendenciasAtuais,
+  planejarAtualizacao,
   avisoDaCidadePelaBase,
   avisoDosLugares,
   cidadeDaVolta,
@@ -215,6 +221,8 @@ async function lerEGravar(
   const motivos: string[] = [];
   /** rascunhos que o "Agendado ☑️" não lança sozinho, com o motivo (issues #272 e #286) */
   const incertos = new Map<string, { motivo: string; codigo: string }>();
+  /** o que fica faltando confirmar em cada rascunho lançado pelo Agendado (vai para a reserva) */
+  const aConfirmar = new Map<string, ItemAConfirmar[]>();
   for (const p of pedidos) {
     // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
     if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
@@ -225,10 +233,22 @@ async function lerEGravar(
           p.cidade_dita = pelaBase.cidade;
           p.direcao = "volta";
           p.duvida = [p.duvida, avisoDaCidadePelaBase(pelaBase)].filter(Boolean).join(" ");
+        } else if (costume?.volta?.route_point_code && ctx.pontos.volta.includes(costume.volta.route_point_code)) {
+          // senão, a cidade onde o cliente costuma embarcar (dono, 10/11)
+          p.cidade_dita = costume.volta.route_point_code;
+          p.direcao = "volta";
+          p.duvida = [p.duvida, `Cidade pelo endereço de costume (${costume.volta.route_point_name ?? costume.volta.route_point_code}); o cliente não disse a cidade. Confira.`].filter(Boolean).join(" ");
         }
       }
     }
-    const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe, horaAgora, costume });
+    const v = validarPedidoExtraido(p, {
+      hoje,
+      pontos: ctx.pontos,
+      areaDoDesembarque: ctx.areaDe,
+      horaAgora,
+      costume,
+      agendado: opcoes.confirmadoPelaEquipe,
+    });
     if (!v.ok) {
       motivos.push(v.motivo);
       continue;
@@ -276,10 +296,6 @@ async function lerEGravar(
       r.notes = [r.notes, "Já tem reserva no mesmo sentido na véspera: confira se não é repetida."].filter(Boolean).join(" ").slice(0, 300);
       pendencia = { motivo: "o cliente já tem reserva no mesmo sentido na véspera (confira se não é repetida)", codigo: "vespera" };
     }
-    // "ida e volta" sem o dia da volta: a volta no mesmo dia é só suposição; confirme com o cliente (dono, 10/11)
-    if (r.direction === "volta" && /volta no mesmo dia da ida/i.test(r.notes ?? "")) {
-      pendencia ??= { motivo: "a volta no mesmo dia foi suposta (o cliente não disse o dia da volta): confirme com o cliente", codigo: "volta_mesmo_dia" };
-    }
     if (v.cidadeIncerta) {
       pendencia ??= { motivo: "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa", codigo: "cidade" };
     }
@@ -313,9 +329,10 @@ async function lerEGravar(
     } else {
       gravados.push(salvo.id);
       if (pendencia) incertos.set(salvo.id, pendencia);
+      if (v.aConfirmar.length) aConfirmar.set(salvo.id, [...v.aConfirmar]);
     }
   }
-  return { pedidos, gravados, motivos, incertos, uso, ctx, cliente, hoje };
+  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -382,6 +399,7 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       let ponto: Bloco | null = null;
       let preco = 0;
       const pendencia = lido.incertos.get(d.id);
+      const falta: ItemAConfirmar[] = [...(lido.aConfirmar.get(d.id) ?? pendenciasAtuais(["endereco", "dia_da_volta"], d.pickup_detail))];
       if (pendencia) {
         await anotarPendencia(d.id, pendencia.motivo);
         pendentes.push(pendencia.codigo);
@@ -394,17 +412,24 @@ export async function lancarPeloAgendado(entrada: Entrada) {
           pendentes.push("ponto");
           continue;
         }
-        const valor = await valorDoPedido(ponto, {
-          bairro: d.pickup_neighborhood,
-          endereco: d.pickup_detail,
-          desembarque: d.dropoff_location ?? "",
-        });
-        if (!valor.ok) {
-          await anotarPendencia(d.id, String(valor.erro?.erro ?? "sem preço na tabela"));
-          pendentes.push(String(valor.erro?.codigo ?? "preco"));
-          continue;
+        if (falta.includes("endereco") && direcao === "ida") {
+          // Ida sem endereço não tem valor (busca em casa/Outros dependem do local): entra quando o
+          // cliente confirmar onde embarca (dono, 10/11). Na Volta o valor é o da cidade.
+          preco = 0;
+        } else {
+          const valor = await valorDoPedido(ponto, {
+            bairro: d.pickup_neighborhood,
+            endereco: d.pickup_detail,
+            desembarque: d.dropoff_location ?? "",
+          });
+          if (valor.ok) {
+            preco = valor.preco;
+          } else {
+            // o Agendado reserva como está: sem preço na tabela, entra sem valor e fica a confirmar
+            preco = 0;
+            falta.push("valor");
+          }
         }
-        preco = valor.preco;
       }
 
       // dono da reserva: o do rascunho (o passageiro, se marcaram para outra pessoa — issue #268);
@@ -425,7 +450,7 @@ export async function lancarPeloAgendado(entrada: Entrada) {
         p_dropoff_location: d.dropoff_location,
         p_dropoff_area: d.dropoff_area,
         p_status: "confirmada",
-        p_extra_data: { origem: "agendado_equipe", rascunho_id: d.id },
+        p_extra_data: { origem: "agendado_equipe", rascunho_id: d.id, ...(falta.length ? { a_confirmar: falta } : {}) },
         p_whatsapp_source_message_id: `cw-${entrada.mensagemId}-agendado-${direcao}`,
         p_created_by: bot?.id ?? null,
       });
@@ -488,4 +513,136 @@ export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">
   } catch (err) {
     evento("bot_aviso", { aviso: "agendado_nao_relido", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
   }
+}
+
+/**
+ * Reserva feita "como está" pelo Agendado ☑️ e o cliente completou depois — o dia da
+ * volta (se não for no mesmo dia), o endereço ou a cidade (dono, 10/11). Lê o que ele
+ * escreveu depois da reserva e atualiza: muda o dia/ponto, preenche o endereço e o valor
+ * (pela tabela, mesma regra do bot). Melhor esforço; nunca derruba o atendimento.
+ */
+export async function atualizarReservasAConfirmar(entrada: Omit<Entrada, "mensagemId">) {
+  const conversa = entrada.chatwootConversationId;
+  try {
+    const cliente = await whatsappService.identifyCustomer(entrada.telefone);
+    if (!cliente) return;
+    const hoje = diaCivil(new Date());
+    const { data } = await supabaseAdmin
+      .from("reservations")
+      .select("id, quantity, pickup_detail, pickup_neighborhood, dropoff_location, extra_data, created_at, route_points(code, name), trips!inner(trip_date, direction)")
+      .eq("customer_id", cliente.id)
+      .is("deleted_at", null)
+      .in("status", ["confirmada", "pendente"])
+      .gte("trips.trip_date", hoje);
+    const abertas: Bloco[] = ((data ?? []) as Bloco[])
+      .map((r) => ({ ...r, pendentes: pendenciasAtuais(r.extra_data?.a_confirmar, r.pickup_detail) }))
+      .filter((r) => r.pendentes.length && !(r.pendentes.length === 1 && r.pendentes[0] === "valor"));
+    if (!abertas.length) return;
+
+    const desde = Math.min(...abertas.map((r) => Date.parse(r.created_at)));
+    const { mensagens } = await lerConversa(conversa, Number.MAX_SAFE_INTEGER);
+    const depois = mensagens.filter((m) => Date.parse(m.em) > desde);
+    if (!depois.some((m) => m.quem === "cliente")) return;
+
+    const rotulo: Record<string, string> = { endereco: "o endereço de embarque", dia_da_volta: "se a volta é mesmo no mesmo dia da ida", valor: "o valor" };
+    const lista = abertas
+      .map((r, i) => {
+        const t = r.trips as Bloco;
+        const dia = String(t.trip_date).split("-").reverse().slice(0, 2).join("/");
+        return `${i + 1}) ${t.direction === "ida" ? "Ida" : "Volta"} ${dia}, ${r.route_points?.name ?? "local a confirmar"}, embarque: ${r.pickup_detail ?? "-"} — falta confirmar: ${r.pendentes.map((p: string) => rotulo[p] ?? p).join(", ")}`;
+      })
+      .join("\n");
+    const system = instrucoesDaAtualizacao(calendarioParaOPrompt(new Date()), lista);
+    const corpo = await chamarFerramenta(system, `CONVERSA DEPOIS DA RESERVA (mais recentes por último):\n${formatarHistorico(depois, 30, 400)}`, FERRAMENTA_ATUALIZACAO);
+    const atualizacoes = Array.isArray(corpo?.atualizacoes) ? (corpo.atualizacoes as AtualizacaoLida[]) : [];
+    if (!atualizacoes.length) return;
+
+    const ctx = await contexto();
+    const { data: bot } = await supabaseAdmin.from("users").select("id").eq("name", "Bot WhatsApp").maybeSingle();
+    const feitas: string[] = [];
+    for (const a of atualizacoes) {
+      const r = abertas[Number(a.reserva) - 1];
+      if (!r) continue;
+      const t = r.trips as Bloco;
+      const direcao = t.direction as "ida" | "volta";
+      const plano = planejarAtualizacao(
+        { data: t.trip_date, direcao, ponto: r.route_points?.code ?? null, pickupDetail: r.pickup_detail, pendentes: r.pendentes },
+        a,
+        { hoje, pontos: ctx.pontos },
+      );
+      if (!plano) continue;
+      const pontoFinal = plano.novoPonto ?? r.route_points?.code ?? null;
+      if (plano.novaData || plano.novoPonto) {
+        const { data: mv, error } = await supabaseAdmin.rpc("rpc_move_reservation", {
+          p_reservation_id: r.id,
+          p_new_trip_date: plano.novaData ?? t.trip_date,
+          p_new_direction: direcao,
+          p_new_route_point_code: pontoFinal,
+          p_actor: bot?.id ?? null,
+        });
+        if (error || mv?.success === false) {
+          evento("bot_aviso", { aviso: "reserva_nao_movida", conversa, erro: String(error?.message ?? mv?.message).slice(0, 200) });
+          continue;
+        }
+      }
+      const detalhes: Record<string, unknown> = {};
+      if (plano.pickupDetail !== undefined) detalhes.pickup_detail = plano.pickupDetail;
+      if (plano.pickupNeighborhood !== undefined) detalhes.pickup_neighborhood = plano.pickupNeighborhood;
+      if (plano.recalcularValor && pontoFinal) {
+        const ponto = acharPonto(ctx.pontosCompletos[direcao], pontoFinal);
+        const valor = ponto
+          ? await valorDoPedido(ponto, {
+            bairro: plano.pickupNeighborhood ?? r.pickup_neighborhood,
+            endereco: plano.pickupDetail ?? r.pickup_detail,
+            desembarque: r.dropoff_location ?? "",
+          })
+          : null;
+        if (valor?.ok) detalhes.unit_price = valor.preco;
+        else plano.restante.push("valor");
+      }
+      const { error: erroEdicao } = await supabaseAdmin.rpc("rpc_edit_reservation", {
+        p_reservation_id: r.id,
+        p_details: Object.keys(detalhes).length ? detalhes : null,
+        p_quantity: null,
+        p_contact: null,
+        p_move: null,
+        p_paid: null,
+        p_proof: null,
+        p_extra_data: { a_confirmar: [...new Set(plano.restante)] },
+        p_status: null,
+        p_actor: bot?.id ?? null,
+      });
+      if (erroEdicao) {
+        evento("bot_aviso", { aviso: "reserva_nao_completada", conversa, erro: erroEdicao.message.slice(0, 200) });
+        continue;
+      }
+      feitas.push(plano.novaData ? "dia" : plano.recalcularValor ? "endereco" : "confirmacao");
+    }
+    if (feitas.length) evento("bot_reserva_completada", { conversa, feitas });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "reserva_a_confirmar_falhou", conversa, erro: String(err).slice(0, 200) });
+  }
+}
+
+/** Chama o modelo pequeno obrigando a usar uma ferramenta; devolve o input dela. */
+async function chamarFerramenta(system: string, conteudo: string, ferramenta: { name: string }): Promise<Bloco | null> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODELO,
+      max_tokens: 600,
+      system,
+      tools: [ferramenta],
+      tool_choice: { type: "tool", name: ferramenta.name },
+      messages: [{ role: "user", content: conteudo }],
+    }),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!res.ok) throw new Error(`Falha na leitura: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const corpo = await res.json();
+  const bloco = (corpo.content ?? []).find((b: Bloco) => b.type === "tool_use" && b.name === ferramenta.name);
+  return bloco?.input ?? null;
 }

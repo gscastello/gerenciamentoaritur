@@ -43,7 +43,12 @@ import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
 import { ehMarcaDeAgendado } from "../_shared/rascunhoPuro.ts";
-import { lancarPeloAgendado, prepararRascunhoDeReserva, relerAgendadoPendente } from "../_shared/rascunhoReserva.ts";
+import {
+  atualizarReservasAConfirmar,
+  lancarPeloAgendado,
+  prepararRascunhoDeReserva,
+  relerAgendadoPendente,
+} from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -153,6 +158,12 @@ async function processar(body: any) {
   // o cliente completou depois do Agendado ☑️ (dia, quantidade…) e ele não tinha lançado: tenta de novo (issue #286)
   if (atividade?.autor === "cliente" && atividade.texto && conversaEspelhada && modo !== "sombra") {
     await relerAgendadoPendente({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      telefone: atividade.telefone,
+    });
+    // reserva feita "como está" pelo Agendado e o cliente completou (outro dia da volta, endereço, cidade)
+    await atualizarReservasAConfirmar({
       conversationId: conversaEspelhada,
       chatwootConversationId: atividade.chatwootConversationId,
       telefone: atividade.telefone,

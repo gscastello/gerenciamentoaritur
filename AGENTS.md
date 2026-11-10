@@ -334,7 +334,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pelo app); criar a reserva por qualquer caminho fecha o rascunho. A IA nunca reserva nem decide preço por aqui,
   **exceto** quando a equipe escreve **"Agendado ☑️"** na conversa (issue #257): a marca é a confirmação manual e a
   reserva preparada é lançada com o preço da tabela (mesma regra do bot) e a vaga validada pelo banco; se faltar algo,
-  fica na lista com o motivo. Nunca no modo sombra.
+  fica na lista com o motivo. Nunca no modo sombra. O Agendado **reserva como está** (dono, 10/11): sem endereço a
+  vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
+  costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. Quando
+  o cliente informa depois (outro dia, endereço, cidade), o bot completa a reserva (`extra_data.a_confirmar`).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente

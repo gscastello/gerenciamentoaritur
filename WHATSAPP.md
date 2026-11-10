@@ -320,9 +320,24 @@ o bot tenta de novo (`relerAgendadoPendente`, idempotente pela mensagem do Agend
 no mesmo sentido na véspera não ganha rascunho novo (no Agendado, fica pendente com aviso); e todo dia às 00:15 o
 rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). **Ida e volta sem o dia da volta**
 (dono, 10/11): o normal é a volta no mesmo dia, mas é sempre confirmado com o cliente — o atendente pergunta ("A volta é
-no mesmo dia, à tarde?") e só reserva depois do sim; no Agendado a Ida é lançada e a Volta fica em "Reservas prontas"
-com o motivo "a volta no mesmo dia foi suposta: confirme com o cliente". Log: `bot_agendado_lancado`
+no mesmo dia, à tarde?") e só reserva depois do sim. Log: `bot_agendado_lancado`
 (lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
+
+**Agendado = reservar como está (dono, 10/11).** A marca da equipe reserva a vaga **mesmo faltando informação**; o que
+falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:
+- **Sem endereço:** a Ida entra em Outros com "Endereço a confirmar" e **sem valor** (R$ 0); busca em casa sem bairro
+  fica "(bairro a confirmar)". Ponto fixo (rodoviária, retorno…) não precisa de endereço. A Volta com cidade entra com
+  o valor da cidade e "Endereço a confirmar".
+- **Volta sem cidade dita:** a base de lugares (acima) → senão a cidade do endereço de costume (aviso em "Conferir") →
+  senão fica **pendente** em "Reservas prontas" para a equipe escolher. A cidade nunca é chutada.
+- **Ida e volta sem o dia da volta:** a Volta é lançada no **mesmo dia** com "confirmar com o cliente se a volta é no
+  mesmo dia" no embarque.
+- **Depois, sozinho:** quando o cliente escreve, o bot lê o que ele disse desde a reserva (`atualizarReservasAConfirmar`,
+  módulo puro `planejarAtualizacao`) e completa: outro dia da volta → muda o dia (`rpc_move_reservation`, vaga validada);
+  confirmou o mesmo dia → tira a marca; disse onde embarca → preenche o endereço (bairro de São Luís vira busca em casa) e
+  o valor pela tabela (mesma regra do bot); disse a cidade da Volta → troca o ponto. Se a equipe já preencheu no app, não
+  mexe. Log `bot_reserva_completada`; falhas em `bot_aviso` (`reserva_nao_movida`, `reserva_nao_completada`). Nunca no
+  modo **sombra**; preço continua decidido pela tabela e vaga pelo banco.
 
 ## 7. Checklist de teste (com `#testar`, em qualquer modo)
 
