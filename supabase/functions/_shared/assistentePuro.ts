@@ -39,8 +39,10 @@ export function custoUsd(modelo: string, uso: Uso | null | undefined): number {
   return Math.round(usd * 100000) / 100000;
 }
 
+// prefixos ("explic" pega explica/explique; "fatur" pega faturei/faturamento). "Quantas vagas"
+// é consulta simples e fica no rápido: conta só pedido de número de dinheiro, análise ou explicação.
 const PEDE_RACIOCINIO =
-  /\b(relat[oó]rio|resumo|resum[ae]|quanto|quantos|quantas|por\s*qu[eê]|porque|explic|analis|compar|financeir|receita|despesa|lucro|faturament|gast|m[eé]dia|ocupa[cç][aã]o|semana|m[eê]s)\b/i;
+  /\b(relat[oó]ri|resum|por\s*qu[eê]|explic|analis|compar|financeir|receita|despesa|lucro|fatur|gast|m[eé]dia|ocupa[cç][aã]o|balan[cç]o|fechamento)/i;
 
 /**
  * Qual modelo atende o pedido. Pedido simples (lançar, mudar, cancelar, ver vagas)

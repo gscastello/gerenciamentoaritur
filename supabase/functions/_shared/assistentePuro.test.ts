@@ -21,6 +21,9 @@ Deno.test("modelo: pedido simples vai no Haiku; números, explicação e convers
   assertEquals(escolherModelo("quanto faturei de passagens em outubro?", 1), MODELOS.capaz);
   assertEquals(escolherModelo("por que o agendado não lançou?", 1), MODELOS.capaz);
   assertEquals(escolherModelo("ok", 13), MODELOS.capaz);
+  assertEquals(escolherModelo("quantas vagas tem na volta de amanhã?", 1), MODELOS.rapido);
+  assertEquals(escolherModelo("me explica por que não lançou", 1), MODELOS.capaz);
+  assertEquals(escolherModelo("quanto gastei de diesel?", 1), MODELOS.capaz);
 });
 
 Deno.test("custo: soma entrada, saída e cache pelo preço do modelo", () => {
