@@ -268,7 +268,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot; só lê a conversa para reservar
     quando a equipe escreve **"Agendado ☑️"** (não prepara reserva a cada mensagem — issue #278);
   - `sombra` — o bot **só observa e aprende** (issue #278): não gera resposta nem reserva
-    preparada, que é o que custa. Registro de mensagem e comprovante continuam. Aprende com o atendente **e com os
+    preparada, que é o que custa. Registro de mensagem e comprovante continuam, e o **"Agendado ☑️" da equipe lança a
+    reserva normalmente** (dono, 10/11). Aprende com o atendente **e com os
     clientes**: o que eles contam (lugares e referências, localidades, necessidades, épocas e motivos de viagem,
     dúvidas e reclamações) vira lição `dito_pelo_cliente`, que serve para entender e confirmar e nunca vira preço,
     valor, horário ou regra.
@@ -342,7 +343,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pelo app); criar a reserva por qualquer caminho fecha o rascunho. A IA nunca reserva nem decide preço por aqui,
   **exceto** quando a equipe escreve **"Agendado ☑️"** na conversa (issue #257): a marca é a confirmação manual e a
   reserva preparada é lançada com o preço da tabela (mesma regra do bot) e a vaga validada pelo banco; se faltar algo,
-  fica na lista com o motivo. Nunca no modo sombra.
+  fica na lista com o motivo. Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
+  vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
+  costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. Quando
+  o cliente informa depois (outro dia, endereço, cidade), o bot completa a reserva (`extra_data.a_confirmar`).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
@@ -385,9 +389,18 @@ customizados (`feature`, `critico`, `integracao`, `financeiro`,
 repositório.
 
 **WhatsApp:** número no Chatwoot por Coexistência desde 2026-10-15; bot e painel
-seguem o `WHATSAPP.md` (issue #163). Ações em produção (migrações, deploy de
-função, secrets, criar o Agent Bot) são **manuais e autorizadas pelo dono**, uma a
-uma; secrets nunca vão em chat, issue ou PR.
+seguem o `WHATSAPP.md` (issue #163).
+
+**Ações em produção:**
+- **Migrações** (`database/NN-*.sql`): desde 2026-11-09 o dono autorizou o agente a
+  aplicá-las sozinho, sem pedir a cada uma (issue #250). Antes de aplicar, confira no
+  banco o que a migração troca (trecho de função esperado, colunas, dados afetados) e
+  teste o que der sem gravar (`raise exception` para desfazer). Depois, verifique o
+  efeito e conte ao dono o que foi aplicado. A migração continua indo num PR com
+  `Closes #N`, como qualquer mudança.
+- **Deploy de Edge Function, secrets e criar o Agent Bot** continuam **manuais e
+  autorizados pelo dono**, um a um.
+- Secrets nunca vão em chat, issue ou PR.
 
 Ao pegar uma tarefa nova que não tem Issue: **crie a Issue primeiro**
 (template `Tarefa`), depois o branch `tipo/numero-slug`, depois o PR com
