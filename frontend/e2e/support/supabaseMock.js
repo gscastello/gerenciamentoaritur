@@ -872,7 +872,13 @@ export async function mockSupabase(page, opts = {}) {
         .filter((n) => !limpadas.has(n.id))
         .map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
-    else if (table === "app_error_log" && req.method() === "PATCH") {
+    else if (table === "app_error_log" && req.method() === "PATCH" && !url.searchParams.get("id")) {
+      // "Limpar todos" (issue #264): resolve todos os abertos
+      const body = req.postDataJSON?.() ?? {};
+      const abertos = errorLogRows.filter((e) => !e.resolved_at).map((e) => e.id);
+      errorLogRows = errorLogRows.map((e) => (abertos.includes(e.id) ? { ...e, ...body } : e));
+      return route.fulfill(json(abertos.map((id) => ({ id }))));
+    } else if (table === "app_error_log" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
       errorLogRows = errorLogRows.map((e) => (e.id === id ? { ...e, ...body } : e));
