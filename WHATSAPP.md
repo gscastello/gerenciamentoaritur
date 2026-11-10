@@ -309,7 +309,16 @@ bot lê a conversa na hora (sem espera nem filtro de data), prepara o rascunho d
 `confirmada` (a marca da equipe é a confirmação manual), pagamento em dinheiro, autor Bot com
 `extra_data.origem = 'agendado_equipe'`. É idempotente pela mensagem da equipe. Encomenda é lançada **sem valor**. Se faltar
 algo (ponto não reconhecido, trecho sem preço, lotado, recusa do banco), a reserva **não** é criada e o rascunho fica em
-"Reservas prontas para lançar" com o motivo em "Conferir". Nunca roda no modo **sombra**. Log: `bot_agendado_lancado`
+"Reservas prontas para lançar" com o motivo em "Conferir". Nunca roda no modo **sombra**.
+
+**Agendado mais esperto (issue #286):** (1) na Volta sem cidade dita, se o lugar citado só aparece numa cidade
+com evidência (no mapa ou em 3+ reservas, `cidadePelaBase`) e nenhum lugar aponta a outra, o Agendado lança nessa
+cidade e avisa em "Conferir"; (2) se o Agendado não lançou e o cliente completa em até 30 min (o dia, a quantidade),
+o bot tenta de novo (`relerAgendadoPendente`, idempotente pela mensagem do Agendado; log `bot_agendado_relido`);
+(3) sem dia dito pelo cliente, vale o horário que a equipe disse ("5 horas"/"amanhã cedo" = Ida; "12 horas"/"após
+às 12" = Volta; a próxima viagem desse sentido); (4) "hoje"/"amanhã" contam da data da MENSAGEM; quem já tem reserva
+no mesmo sentido na véspera não ganha rascunho novo (no Agendado, fica pendente com aviso); e todo dia às 00:15 o
+rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). Log: `bot_agendado_lancado`
 (lançadas, pendentes) e `bot_aviso` com `agendado_falhou`.
 
 ## 7. Checklist de teste (com `#testar`, em qualquer modo)

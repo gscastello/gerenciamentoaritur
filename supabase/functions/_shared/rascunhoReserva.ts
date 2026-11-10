@@ -23,13 +23,18 @@ import {
   converterObservacoes,
   diaCivil,
   existeTextoNovoDoCliente,
+  somarDias,
   formatarHistorico,
   type MensagemDaConversa,
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
+  avisoDaCidadePelaBase,
   avisoDosLugares,
+  cidadeDaVolta,
+  cidadePelaBase,
   type CostumeDoSentido,
+  ehMarcaDeAgendado,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -211,6 +216,18 @@ async function lerEGravar(
   /** rascunhos da Volta sem a cidade de embarque dita (issue #272): o "Agendado ☑️" não lança */
   const incertos = new Set<string>();
   for (const p of pedidos) {
+    // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
+    if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
+      const direcaoProvavel = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
+      if (direcaoProvavel) {
+        const pelaBase = cidadePelaBase(await lugaresNasCidades(p.endereco));
+        if (pelaBase) {
+          p.cidade_dita = pelaBase.cidade;
+          p.direcao = "volta";
+          p.duvida = [p.duvida, avisoDaCidadePelaBase(pelaBase)].filter(Boolean).join(" ");
+        }
+      }
+    }
     const v = validarPedidoExtraido(p, { hoje, pontos: ctx.pontos, areaDoDesembarque: ctx.areaDe, horaAgora, costume });
     if (!v.ok) {
       motivos.push(v.motivo);
@@ -248,6 +265,15 @@ async function lerEGravar(
     if (reservadasDoDono.has(`${r.trip_date}|${r.direction}`)) {
       motivos.push("ja_reservado");
       continue;
+    }
+    // já tem reserva no mesmo sentido na véspera: quase sempre é o "amanhã" de ontem relido hoje (issue #286)
+    if (reservadasDoDono.has(`${somarDias(r.trip_date, -1)}|${r.direction}`)) {
+      if (!opcoes.confirmadoPelaEquipe) {
+        motivos.push("ja_viajou_na_vespera");
+        continue;
+      }
+      r.notes = [r.notes, "Já tem reserva no mesmo sentido na véspera: confira se não é repetida."].filter(Boolean).join(" ").slice(0, 300);
+      v.cidadeIncerta = true; // não lança sozinho
     }
     const linha = {
       ...r,
@@ -413,5 +439,44 @@ export async function lancarPeloAgendado(entrada: Entrada) {
     });
   } catch (err) {
     evento("bot_aviso", { aviso: "agendado_falhou", conversa, erro: String(err).slice(0, 300) });
+  }
+}
+
+/**
+ * O cliente completou o pedido logo depois do "Agendado ☑️" (o dia, a quantidade…) e o
+ * Agendado não tinha conseguido lançar: tenta de novo (issue #286). Idempotente pela
+ * mensagem do Agendado (a reserva nasce com cw-<mensagem>-agendado-<sentido>).
+ */
+export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">, minutos = 30) {
+  try {
+    const desde = new Date(Date.now() - minutos * 60 * 1000).toISOString();
+    const { data: daEquipe } = await supabaseAdmin
+      .from("bot_observations")
+      .select("chatwoot_message_id, content, created_at")
+      .eq("chatwoot_conversation_id", entrada.chatwootConversationId)
+      .eq("author", "equipe")
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(15);
+    const marca = (daEquipe ?? []).find((o: Bloco) => o.chatwoot_message_id && ehMarcaDeAgendado(o.content));
+    if (!marca) return;
+    const mid = Number(marca.chatwoot_message_id);
+    const [{ count: lancadas }, { count: pendentes }] = await Promise.all([
+      supabaseAdmin
+        .from("reservations")
+        .select("id", { count: "exact", head: true })
+        .like("whatsapp_source_message_id", `cw-${mid}-agendado-%`),
+      supabaseAdmin
+        .from("reservation_drafts")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", entrada.conversationId)
+        .eq("status", "pronta"),
+    ]);
+    // já lançou e não sobrou nada pendente: nada a fazer
+    if ((lancadas ?? 0) > 0 && (pendentes ?? 0) === 0) return;
+    evento("bot_agendado_relido", { conversa: entrada.chatwootConversationId, lancadas_antes: lancadas ?? 0, pendentes: pendentes ?? 0 });
+    await lancarPeloAgendado({ ...entrada, mensagemId: mid });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "agendado_nao_relido", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
   }
 }

@@ -11,7 +11,9 @@ import {
   telefoneDoPassageiro,
   validarPedidoExtraido,
   cidadeDaVolta,
+  avisoDaCidadePelaBase,
   avisoDosLugares,
+  cidadePelaBase,
   lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
@@ -395,4 +397,40 @@ Deno.test("lugares das cidades: rua, referência e casa nas duas cidades ou só 
   assertEquals(lugarDeOutraCidade([posto], "pirapemas"), null);
   assertEquals(lugarDeOutraCidade([cruz], "cantanhede"), null);
   assertEquals(lugarDeOutraCidade([lister], "cantanhede"), null);
+});
+
+Deno.test("cidade pela base de lugares no Agendado (issue #286): casos de 10/11", () => {
+  const L = (nome: string, p: number, c: number, emP = p > 0, emC = c > 0) => ({
+    tipo: "rua",
+    nome,
+    em_pirapemas: emP,
+    em_cantanhede: emC,
+    reservas_pirapemas: p,
+    reservas_cantanhede: c,
+  });
+  // conversa 1320: Av. João Castelo só em Pirapemas (9 reservas) → Pirapemas
+  assertEquals(cidadePelaBase([L("Avenida João Castelo", 9, 0)])?.cidade, "pirapemas");
+  // conversa 1322: Rua da Mônica no mapa e em 3 reservas de Pirapemas → Pirapemas
+  assertEquals(cidadePelaBase([L("Rua da Monica", 3, 0)])?.cidade, "pirapemas");
+  // só no mapa (0 reservas) também vale
+  assertEquals(cidadePelaBase([L("Povoado Galvão", 0, 0, false, true)])?.cidade, "cantanhede");
+  // conversa 1314: casa da Maria Padeiro em 1 reserva só → fraco, não decide
+  assertEquals(cidadePelaBase([L("Maria Padeiro", 1, 0)]), null);
+  // conversa 325: Lister Caldas nas duas + lugar fraco → não decide
+  assertEquals(cidadePelaBase([L("Rua Deputado Lister Caldas", 10, 6), L("Casa da Dona Daluz", 1, 0)]), null);
+  // lugar das duas cidades não atrapalha um forte; um lugar só da OUTRA cidade, sim
+  assertEquals(cidadePelaBase([L("Rua Deputado Lister Caldas", 10, 6), L("Praça da Cruz", 0, 4)])?.cidade, "cantanhede");
+  assertEquals(cidadePelaBase([L("Avenida João Castelo", 9, 0), L("Posto Maria", 0, 1)]), null);
+  assertEquals(cidadePelaBase([]), null);
+  assertStringIncludes(avisoDaCidadePelaBase({ cidade: "pirapemas", nome: "Avenida João Castelo", reservas: 9 }), "só aparece em Pirapemas (9 reservas)");
+});
+
+Deno.test("instruções do Agendado: data pela mensagem, horário da equipe e o que o cliente completou (issue #286)", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-", confirmadoPelaEquipe: true });
+  assertStringIncludes(t, "contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA");
+  assertStringIncludes(t, "\"12 horas\", \"meio-dia\", \"após às 12\", \"à tarde\" = Volta");
+  assertStringIncludes(t, "logo DEPOIS do \"Agendado ☑️\"");
+  const semEquipe = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" });
+  assertStringIncludes(semEquipe, "contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA");
+  assert(!semEquipe.includes("HORÁRIO que a equipe disse"));
 });
