@@ -641,3 +641,43 @@ Deno.test("#301: o leitor é orientado a ler tudo e interpretar, sem confundir n
   assertStringIncludes(t, "Beco do Hospital");
   assertStringIncludes(t, "NOMES de lugares");
 });
+
+Deno.test("#307: 'hoje, indo pra Miranda' às 9h é a Volta de hoje, não a Ida de amanhã", () => {
+  const areaDoDesembarque = (t: string, _d: "ida" | "volta") => (/miranda/i.test(t) ? "miranda" : null);
+  const r = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "ida", ponto: "busca", desembarque: "Miranda do Norte", cidade_dita: "pirapemas" },
+    { ...ctx, horaAgora: "09:51", hojeDito: true, areaDoDesembarque },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.trip_date, "2026-11-09");
+  assertEquals(r.rascunho.direction, "volta");
+  assertEquals(r.rascunho.route_point_code, "pirapemas");
+  assertEquals(r.rascunho.dropoff_area, "miranda");
+  assert(r.rascunho.notes?.includes("Volta de hoje"));
+  // sem a cidade dita, o Agendado não chuta Pirapemas ou Cantanhede: fica para confirmar
+  const semCidade = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "ida", ponto: "busca", desembarque: "Miranda do Norte" },
+    { ...ctx, horaAgora: "09:51", hojeDito: true, areaDoDesembarque, agendado: true },
+  );
+  assert(semCidade.ok && semCidade.cidadeIncerta && semCidade.rascunho.trip_date === "2026-11-09");
+});
+
+Deno.test("#307: disse hoje, a Ida saiu e a Volta não serve: fica para a equipe, nunca amanhã calado", () => {
+  const areaDoDesembarque = (t: string, d: "ida" | "volta") => (d === "ida" && /pirapemas/i.test(t) ? "pirapemas" : null);
+  const semDestinoNaVolta = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "ida", desembarque: "Pirapemas" },
+    { ...ctx, horaAgora: "09:51", hojeDito: true, areaDoDesembarque },
+  );
+  assertEquals(semDestinoNaVolta, { ok: false, motivo: "hoje_ja_saiu" });
+  const embarcaEmSaoLuis = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "ida", ponto: "busca", bairro: "Turu", desembarque: "Miranda" },
+    { ...ctx, horaAgora: "09:51", hojeDito: true, areaDoDesembarque: () => "miranda" },
+  );
+  assertEquals(embarcaEmSaoLuis, { ok: false, motivo: "hoje_ja_saiu" });
+  const asDuasSairam = validarPedidoExtraido(
+    { data: "2026-11-09", direcao: "volta", desembarque: "Miranda" },
+    { ...ctx, horaAgora: "15:00", hojeDito: true, areaDoDesembarque: () => "miranda" },
+  );
+  assertEquals(asDuasSairam, { ok: false, motivo: "hoje_ja_saiu" });
+});
