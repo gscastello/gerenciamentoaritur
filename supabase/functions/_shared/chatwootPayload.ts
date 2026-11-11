@@ -24,6 +24,46 @@ export function tipoDoAnexo(a: any): TipoAnexo {
   return "document";
 }
 
+export type ContatoCompartilhado = { nome: string | null; telefone: string };
+
+/**
+ * Card de contato do WhatsApp (issue #268): o Chatwoot entrega como anexo
+ * `file_type: "contact"`, com o telefone em `fallback_title` e o nome em `meta`
+ * (firstName/lastName). É como o cliente manda o número do passageiro quando
+ * marca para outra pessoa.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function contatosCompartilhados(attachments: any): ContatoCompartilhado[] {
+  if (!Array.isArray(attachments)) return [];
+  const saida: ContatoCompartilhado[] = [];
+  for (const a of attachments) {
+    if (a?.file_type !== "contact") continue;
+    const telefone = String(a.fallback_title ?? a.meta?.phone ?? "").replace(/\D/g, "");
+    if (telefone.length < 10) continue;
+    const meta = a.meta ?? {};
+    const nome = [meta.firstName ?? meta.first_name, meta.lastName ?? meta.last_name]
+      .filter((x: unknown) => typeof x === "string" && x.trim())
+      .join(" ")
+      .trim();
+    saida.push({ nome: nome || null, telefone });
+  }
+  return saida;
+}
+
+/** "[contato compartilhado: Maria Silva — 5598988887777]": entra no texto que o bot lê. */
+export function textoDosContatos(contatos: ContatoCompartilhado[]): string | undefined {
+  if (contatos.length === 0) return undefined;
+  return contatos.map((c) => `[contato compartilhado: ${c.nome ? `${c.nome} — ` : ""}${c.telefone}]`).join(" ");
+}
+
+/** Texto da mensagem com o card de contato junto (se houver). */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function textoComContatos(conteudo: string | undefined, attachments: any): string | undefined {
+  const contatos = textoDosContatos(contatosCompartilhados(attachments));
+  const t = (conteudo ?? "").trim();
+  return [t, contatos].filter(Boolean).join(" ") || undefined;
+}
+
 export type MensagemDeCliente = {
   chatwootMessageId: number;
   chatwootConversationId: number;
@@ -51,7 +91,7 @@ export function extrairMensagemDeCliente(body: any, inboxIdEsperado = 0): Mensag
   if (!telefone) return null;
 
   const a = body.attachments?.[0];
-  const anexo = a?.data_url
+  const anexo = a?.data_url && a.file_type !== "contact"
     ? {
         url: String(a.data_url),
         tipo: tipoDoAnexo(a),
@@ -63,7 +103,7 @@ export function extrairMensagemDeCliente(body: any, inboxIdEsperado = 0): Mensag
     chatwootConversationId,
     statusConversa: typeof conv.status === "string" ? conv.status : null,
     telefone,
-    texto: typeof body.content === "string" && body.content.trim() ? body.content : undefined,
+    texto: textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments),
     anexo,
   };
 }
@@ -117,7 +157,7 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     else return null;
     const a = body.attachments?.[0];
     const anexo = a ? tipoDoAnexo(a) : null;
-    const conteudo = typeof body.content === "string" ? body.content.trim() : "";
+    const conteudo = textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments) ?? "";
     const rotulo = { audio: "[áudio]", image: "[imagem]", sticker: "[figurinha]", document: "[arquivo]" };
     previa = (conteudo || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
     texto = conteudo || undefined;
@@ -144,4 +184,36 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     texto,
     mensagemId,
   };
+}
+
+/** O dono/equipe pediu para testar o bot nesta conversa (nota privada "#testar …", issue #278). */
+export type PedidoDeTeste = {
+  chatwootConversationId: number;
+  /** E.164 sem "+" */
+  telefone: string;
+  /** o que vem depois de "#testar": a mensagem de cliente a simular (null = responder à conversa como está) */
+  pergunta: string | null;
+};
+
+const RE_TESTE = /^\s*#\s*test(ar|e)\b[\s:,-]*/i;
+
+/**
+ * Nota PRIVADA de alguém da equipe (não do bot) que começa com "#testar" ou "#teste".
+ * Mensagem pública com "#testar" não conta: isso iria para o cliente.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
+export function extrairPedidoDeTeste(body: any, inboxIdEsperado = 0): PedidoDeTeste | null {
+  if (body?.event !== "message_created" || body.private !== true) return null;
+  if (body.message_type !== "outgoing" && body.message_type !== 1) return null;
+  if (body.sender?.type === "agent_bot") return null;
+  const conteudo = typeof body.content === "string" ? body.content : "";
+  if (!RE_TESTE.test(conteudo)) return null;
+  const conv = body.conversation ?? {};
+  const chatwootConversationId = Number(conv.id);
+  if (!chatwootConversationId) return null;
+  if (inboxIdEsperado && Number(body.inbox?.id ?? conv.inbox_id) !== inboxIdEsperado) return null;
+  const telefone = String(conv.meta?.sender?.phone_number ?? "").replace(/\D/g, "");
+  if (!telefone) return null;
+  const pergunta = conteudo.replace(RE_TESTE, "").trim();
+  return { chatwootConversationId, telefone, pergunta: pergunta || null };
 }

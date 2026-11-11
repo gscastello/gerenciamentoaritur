@@ -41,6 +41,7 @@ import {
   separarBairro,
 } from "../../domain/anotacaoRapida.js";
 import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../domain/buscaEmCasa.js";
+import { ditadoParaAnotacao } from "../../domain/ditado.js";
 import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { mensagemDeCancelamento } from "../../domain/lixeira.js";
 import { ehExtra } from "../../domain/vagas.js";
@@ -54,10 +55,12 @@ import {
   validarValor,
 } from "../../domain/validacao.js";
 import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
+import { useLocaisOutros } from "../../hooks/useLocaisOutros.js";
 import { useTrips } from "../../hooks/useTrips.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
-import { FadeIn, Presence } from "../../ui/motion/index.js";
+import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
+import { FadeIn, Presence, useReducedMotion } from "../../ui/motion/index.js";
 import {
   BUSCA_MODOS,
   BotaoAgendar,
@@ -320,6 +323,7 @@ export default function AgendaTab({
   // ponto/horário é o da caixinha; entrega, item e o resto se completam
   // editando (database/42: nunca ocupa vaga, nunca ganha valor sozinha).
   const bairrosAnotacao = useBairros();
+  const locaisOutros = useLocaisOutros();
   const buscarClientePorTelefone = useCustomerLookup();
   const criarViaAnotacao = async (direcao, ponto, texto) => {
     const encomenda = parseAnotacaoEncomenda(texto);
@@ -360,7 +364,11 @@ export default function AgendaTab({
     const { bairro, detalhe } = ehBairro
       ? separarBairro(achado.local, bairrosAnotacao.nomes)
       : { bairro: "", detalhe: achado.local };
-    const precoAuto = ehBairro ? (bairrosAnotacao.preco(bairro) ?? 80) : (ponto.valor ?? 60);
+    // Outros: local com preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto"
+    const precoDoLocal = ponto.id === "outro" ? locaisOutros.preco(detalhe) : null;
+    const precoAuto = ehBairro
+      ? (bairrosAnotacao.preco(bairro) ?? 80)
+      : (precoDoLocal ?? ponto.valor ?? 60);
 
     try {
       // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
@@ -523,6 +531,7 @@ export default function AgendaTab({
             </div>
           </div>
         </div>
+        <AtalhosDosPontos trips={trips} doDia={doDia} />
         {segunda && (
           <div
             className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
@@ -1136,6 +1145,19 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
           className="text-xs py-1.5"
           readOnly={salvando}
         />
+        <BotaoDitado
+          rotulo={`Ditar reserva — ${nomePonto}`}
+          cores={{ ativo: C.amber, ativoTexto: C.onBrand, fundo: C.panel2, texto: C.inkSoft }}
+          onErro={setErro}
+          onTexto={(fala) => {
+            const nova = ditadoParaAnotacao(fala);
+            // fala que começa com "NP"/"E" é uma anotação inteira; senão completa o que já foi digitado
+            setTexto((atual) =>
+              /^(\d+P|E)\b/.test(nova) || !atual.trim() ? nova : `${atual.trim()} ${nova}`,
+            );
+            setErro("");
+          }}
+        />
         <button
           type="button"
           onClick={salvar}
@@ -1159,6 +1181,85 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
     </div>
   );
 }
+// Pontos na ordem em que aparecem na Agenda (os fora da lista vão para o fim).
+function ordenarPontos(pontos, direcao) {
+  const ordem = direcao === "ida" ? IDA_ORDEM_SECOES : VOLTA_ORDEM;
+  const pos = (id) => (ordem.indexOf(id) === -1 ? 99 : ordem.indexOf(id));
+  return [...pontos].sort((a, b) => pos(a.id) - pos(b.id));
+}
+
+// Atalhos no topo da Agenda (issue #258): um botão por ponto de embarque, Ida e
+// Volta, com as passagens do dia. O toque rola até o ponto.
+function AtalhosDosPontos({ trips, doDia }) {
+  const reduzido = useReducedMotion();
+  const ir = (direcao, id) =>
+    document
+      .getElementById(`ponto-${direcao}-${id}`)
+      ?.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "start" });
+  return (
+    <nav
+      aria-label="Ir para o ponto de embarque"
+      className="space-y-1.5"
+      data-testid="atalhos-pontos"
+    >
+      {["ida", "volta"].map((direcao) => {
+        const viagem = trips[direcao];
+        if (!viagem?.pontos?.length) return null;
+        const cor = direcao === "ida" ? C.brand : C.blue;
+        const rotulo = direcao === "ida" ? "Ida" : "Volta";
+        return (
+          <div key={direcao} className="flex items-center gap-1.5 overflow-x-auto pb-0.5 min-w-0">
+            <span
+              className="text-[10px] font-bold uppercase tracking-wide shrink-0 w-11"
+              style={{ color: cor }}
+            >
+              {rotulo}
+            </span>
+            {ordenarPontos(viagem.pontos, direcao).map((p) => {
+              const qtd = doDia
+                .filter(
+                  (r) =>
+                    r.direcao === direcao &&
+                    r.pontoId === p.id &&
+                    r.status !== "cancelada" &&
+                    r.status !== "espera" &&
+                    !ehExtra(r),
+                )
+                .reduce((s, r) => s + r.quantidade, 0);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => ir(direcao, p.id)}
+                  aria-label={`Ir para ${p.nome} (${rotulo}) — ${qtd} passagem(ns)`}
+                  className="btn-press shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium"
+                  style={{
+                    background: C.panel2,
+                    color: C.ink,
+                    border: `1px solid ${C.border}`,
+                    borderLeft: `3px solid ${cor}`,
+                  }}
+                >
+                  {p.nome}
+                  <span
+                    className="text-[11px]"
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: qtd > 0 ? cor : C.inkFaint,
+                    }}
+                  >
+                    {qtd}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 // "3 passagem(ns) · 1 encomenda(s)" no cabeçalho do ponto.
 function resumoDoPonto(itens, encomendas) {
   const partes = [];
@@ -1221,13 +1322,8 @@ function ViagemOperacional({
       : viagem.pontos.map((p) => p.horaBase).join(" / ");
   const Icon = direcao === "ida" ? ArrowRight : ArrowLeft;
 
-  const idOrdem = direcao === "ida" ? IDA_ORDEM_SECOES : VOLTA_ORDEM;
-  // já contém todos os pontos (os que não estão em idOrdem vão para o fim).
-  const pontosOrdenados = [...viagem.pontos].sort(
-    (a, b) =>
-      (idOrdem.indexOf(a.id) === -1 ? 99 : idOrdem.indexOf(a.id)) -
-      (idOrdem.indexOf(b.id) === -1 ? 99 : idOrdem.indexOf(b.id)),
-  );
+  // já contém todos os pontos (os que não estão na ordem fixa vão para o fim).
+  const pontosOrdenados = ordenarPontos(viagem.pontos, direcao);
 
   const trip = T?.byDirection?.[direcao] || null;
   const viagemAtiva = trip?.status === "em_andamento" ? trip : null;
@@ -1362,7 +1458,8 @@ function ViagemOperacional({
           return (
             <div key={p.id}>
               <div
-                className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
+                id={`ponto-${direcao}-${p.id}`}
+                className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 scroll-mt-24"
                 style={{
                   background: `${C.brand}1F`,
                   borderLeft: `4px solid ${C.brand}`,
@@ -1856,7 +1953,7 @@ export function NovaReservaModal({
     pontoId: inicial?.pontoId || primeiroPonto(inicial?.direcao || direcaoInicial),
     bairro: inicial?.bairro || "",
     anotacao: inicial?.anotacao || "",
-    quantidade: "1",
+    quantidade: String(inicial?.quantidade || 1),
     pagamento: inicial?.pagamento || "dinheiro",
     valorManual: "",
     desembarque: inicial?.desembarque || "",
@@ -1870,6 +1967,7 @@ export function NovaReservaModal({
   const [ofereceEspera, setOfereceEspera] = useState(false);
   const [linha, setLinha] = useState("");
   const bairros = useBairros();
+  const locaisOutros = useLocaisOutros();
   const dropoff = useDropoff();
   // Telefone digitado de qualquer jeito: mostra de quem é o cadastro antes de agendar.
   const buscarCadastro = useCustomerLookup();
@@ -1901,7 +1999,10 @@ export function NovaReservaModal({
   const precoBairroAtual = campoDetalhe === "bairro" ? bairros.preco(f.bairro) : undefined;
   const bairroNaoReconhecido =
     campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
-  const precoAuto = campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (ponto?.valor ?? 60);
+  // Outros: local com preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto"
+  const precoDoLocal = ponto?.id === "outro" ? locaisOutros.preco(f.anotacao) : null;
+  const precoAuto =
+    campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (precoDoLocal ?? ponto?.valor ?? 60);
   const valorUnit = f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
   const qtd = Number.parseInt(f.quantidade, 10) || 1;
   // Reserva "leve" (issue #214): basta o nome OU o telefone; o resto se completa

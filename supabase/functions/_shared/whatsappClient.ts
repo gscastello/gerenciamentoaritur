@@ -19,6 +19,7 @@ import { chatwootClient } from "./chatwootClient.ts";
 import { registrarObservacao } from "./observacoes.ts";
 import { formatarOpcoes, type Opcao } from "./opcoes.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { PREFIXO_DO_TESTE } from "./agentePuro.ts";
 
 async function enviar(texto: string, opcoes: Opcao[] | null) {
   const ctx = getBotContext();
@@ -30,6 +31,10 @@ async function enviar(texto: string, opcoes: Opcao[] | null) {
     .eq("id", ctx.conversationId);
   if (error) console.error("Falha ao guardar as opções oferecidas:", error.message);
 
+  if (ctx.teste) {
+    // teste do dono (#testar): só a nota; não entra no histórico do bot nem no aprendizado
+    return chatwootClient.postMessage(ctx.chatwootConversationId, `${PREFIXO_DO_TESTE}\n\n${texto}`, { private: true });
+  }
   if (ctx.shadow) {
     // o rascunho também é observado: o aprendizado compara com o que o atendente respondeu
     await registrarObservacao({

@@ -12,6 +12,7 @@
 // decide o preço — só entende o que a pessoa quis dizer.
 
 import { responderComAgente } from "./agente.ts";
+import { getBotContext } from "./botContext.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { responderComBase } from "./botAnswer.ts";
@@ -74,6 +75,10 @@ export async function handleIncomingMessage(msg: IncomingMessage) {
 
   const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
   if (mode !== "ia") return; // HUMANO: só loga, equipe responde direto pelo WhatsApp Business
+
+  // Modo sombra (issue #278): só observa e aprende. Não gera a resposta (nem a do roteiro):
+  // é o que custa. Para ver o que o bot responderia, a equipe escreve a nota "#testar".
+  if (getBotContext()?.shadow) return;
 
   // Atendente de IA conversacional (issue #224): lê a conversa inteira, consulta o app
   // e responde sem menu. A chave settings.bot_engine = 'roteiro' devolve o roteiro antigo.
@@ -321,11 +326,11 @@ async function finalizeReservation(conversation: any, state: any, to: string) {
   try {
     // issue #6: embarque/desembarque menciona cidade fora de São Luís /
     // Cantanhede / Pirapemas? A reserva nasce pendente (não ocupa vaga) e a
-    // equipe é avisada; o ponto de embarque "outro" também cai aqui.
+    // equipe é avisada. O ponto "outro" (Outros) reúne locais de São Luís e não conta (#261).
     const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([
       state.dropoffLocation, state.pickupDetail, state.pickupNeighborhood,
     ]);
-    const fora = !!cidadeFora || state.routePointCode === "outro";
+    const fora = !!cidadeFora;
     const pendingReason = fora
       ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
       : null;
