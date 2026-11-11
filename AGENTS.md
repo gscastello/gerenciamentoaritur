@@ -113,7 +113,7 @@ O contrato acima é validado por `npm run arch`
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
 `opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
-`assistentePuro`),
+`assistentePuro`, `pedidoDoCliente`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -329,7 +329,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   posição viram "perto de" ("descida/subida da…"; perto/atrás/em frente o separador já trata), valendo o lugar inteiro
   E o de perto. Travas (`raise exception`) nas migrações 91–92 impedem a volta. A cidade da Volta que o cliente escreveu
   em **qualquer** mensagem do pedido vale como dita; se o Agendado ia ficar pendente por falta de leitura (cidade,
-  endereço, dia, sentido), o bot **relê com o modelo capaz** antes de desistir.
+  endereço, dia, sentido), o bot **relê com o modelo capaz** antes de desistir. **Tudo o que a reserva precisa é
+  conferido no que o cliente escreveu** (issue #303, `pedidoDoCliente.ts`): sentido, dia (contando do dia de cada
+  mensagem), quantidade, ponto, bairro e cidade. Vazio que o cliente escreveu → completa com aviso; o que contradiz →
+  aviso para conferir (nunca troca sozinho) e, no Agendado, relê com o modelo capaz e, se ainda não bater, fica
+  pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem

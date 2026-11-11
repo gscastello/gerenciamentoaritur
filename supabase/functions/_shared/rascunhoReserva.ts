@@ -52,6 +52,7 @@ import {
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
 } from "./rascunhoPuro.ts";
+import { conferirPeloCliente } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -79,7 +80,8 @@ type Entrada = {
 async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
     // 4 páginas: além do pedido atual, as conversas anteriores mostram onde o cliente costuma embarcar
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 4);
+    // 6 páginas: o pedido atual inteiro e as conversas anteriores (onde o cliente costuma embarcar) — issue #303
+    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 6);
     return { mensagens: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch {
     const { data } = await supabaseAdmin
@@ -224,11 +226,13 @@ async function lerEGravar(
     bairrosSaoLuis: ctx.bairrosSaoLuis,
   });
   const conversa = anteriores.length
-    ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 25, 200)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 30, 500)}`
-    : formatarHistorico(recentes, 30, 500);
+    ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
+    : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
   const { pedidos, uso } = await lerPedidos(system, conversa, opcoes.modelo);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
-  const textosDoCliente = recentes.filter((m) => m.quem === "cliente").map((m) => m.texto);
+  const doCliente = recentes.filter((m) => m.quem === "cliente");
+  const textosDoCliente = doCliente.map((m) => m.texto);
+  const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
 
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
@@ -240,6 +244,23 @@ async function lerEGravar(
   /** o que fica faltando confirmar em cada rascunho lançado pelo Agendado (vai para a reserva) */
   const aConfirmar = new Map<string, ItemAConfirmar[]>();
   for (const p of pedidos) {
+    // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
+    // avisa o que não bate (issue #303)
+    const conferido = conferirPeloCliente(p, mensagensDoCliente, {
+      hoje,
+      pontosIda: ctx.pontos.ida,
+      bairros: ctx.bairrosTabela,
+      pedidosLidos: pedidos.length,
+    });
+    Object.assign(p, conferido.pedido);
+    const avisosDoCliente = conferido.avisos;
+    if (conferido.completados.length || avisosDoCliente.length) {
+      evento("bot_pedido_conferido", {
+        conversa: entrada.chatwootConversationId,
+        completados: conferido.completados.length,
+        avisos: avisosDoCliente.length,
+      });
+    }
     // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
     // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
     if ((p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita)) {
@@ -336,6 +357,10 @@ async function lerEGravar(
     }
     if (v.cidadeIncerta) {
       pendencia ??= { motivo: "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa", codigo: "cidade" };
+    }
+    // o que foi lido contradiz o que o cliente escreveu: o Agendado não lança errado (issue #303)
+    if (opcoes.confirmadoPelaEquipe && avisosDoCliente.length) {
+      pendencia ??= { motivo: `o que foi lido não bate com o que o cliente escreveu: ${avisosDoCliente.join("; ")}`, codigo: "conferir" };
     }
     const linha = {
       ...r,
