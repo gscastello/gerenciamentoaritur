@@ -106,10 +106,23 @@ export type AcaoMudar = {
   bairro: string | null;
   desembarque: string | null;
   quantidade: number | null;
+  /** nome e telefone do cliente (mudam o cadastro, como na Agenda) */
+  nome: string | null;
+  telefone: string | null;
+  /** valor por passagem dito pelo SÓCIO (vence o da tabela) */
+  valor_dito: number | null;
+  pagamento: "dinheiro" | "pix" | "cartao" | null;
+  /** marcar pago (true) ou não pago (false) */
+  pago: boolean | null;
   valor_unitario: number | null;
 };
 export type AcaoCancelar = { tipo: "cancelar"; reserva_id: string; resumo_atual: string };
-export type Acao = (AcaoCriar | AcaoMudar | AcaoCancelar) & { id: string };
+/** Lançar ou descartar uma reserva pronta (rascunho), resolver uma pendência (issue #295). */
+export type AcaoRascunho =
+  | { tipo: "lancar_rascunho"; rascunho_id: string; resumo_atual: string }
+  | { tipo: "descartar_rascunho"; rascunho_id: string; resumo_atual: string };
+export type AcaoPendencia = { tipo: "resolver_pendencia"; pendencia_id: string; resumo_atual: string };
+export type Acao = (AcaoCriar | AcaoMudar | AcaoCancelar | AcaoRascunho | AcaoPendencia) & { id: string };
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const txt = (v: unknown, max = 200): string | null => {
@@ -173,6 +186,10 @@ export function validarMudanca(
   if (novaData && (!DATA.test(novaData) || novaData < ctx.hoje)) return { ok: false, erro: "Nova data inválida ou já passou." };
   const q = a.quantidade == null ? null : Number(a.quantidade);
   if (q != null && !(Number.isInteger(q) && q >= 1 && q <= 31)) return { ok: false, erro: "Quantidade inválida." };
+  const telefone = a.telefone == null ? null : String(a.telefone).replace(/\D/g, "");
+  if (telefone != null && telefone.length < 10) return { ok: false, erro: "Telefone novo inválido (com DDD)." };
+  const v = a.valor_dito == null ? null : Number(a.valor_dito);
+  if (v != null && !(Number.isFinite(v) && v >= 0 && v < 1000)) return { ok: false, erro: "Valor inválido." };
   const mudancas = {
     nova_data: novaData,
     novo_sentido: sentido(a.novo_sentido),
@@ -181,7 +198,12 @@ export function validarMudanca(
     bairro: txt(a.bairro, 80),
     desembarque: txt(a.desembarque, 120),
     quantidade: q,
-  };
+    nome: txt(a.nome, 80),
+    telefone: telefone || null,
+    valor_dito: v,
+    pagamento: a.pagamento === "dinheiro" || a.pagamento === "pix" || a.pagamento === "cartao" ? a.pagamento : null,
+    pago: typeof a.pago === "boolean" ? a.pago : null,
+  } as const;
   if (Object.values(mudancas).every((v) => v == null)) return { ok: false, erro: "Diga o que mudar na reserva." };
   return { ok: true, mudancas };
 }
@@ -192,6 +214,9 @@ const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 /** Texto do cartão de confirmação no app. */
 export function descreverAcao(a: Acao, nomesDosPontos: Record<string, string> = {}): string {
   if (a.tipo === "cancelar") return `Cancelar: ${a.resumo_atual}`;
+  if (a.tipo === "lancar_rascunho") return `Lançar a reserva pronta: ${a.resumo_atual}`;
+  if (a.tipo === "descartar_rascunho") return `Descartar a reserva pronta: ${a.resumo_atual}`;
+  if (a.tipo === "resolver_pendencia") return `Resolver a pendência: ${a.resumo_atual}`;
   if (a.tipo === "mudar") {
     const partes = [
       a.nova_data && `dia ${fmtDia(a.nova_data)}`,
@@ -201,6 +226,11 @@ export function descreverAcao(a: Acao, nomesDosPontos: Record<string, string> = 
       a.embarque && `embarque "${a.embarque}"`,
       a.desembarque && `desembarque "${a.desembarque}"`,
       a.quantidade && `${a.quantidade} passagem(ns)`,
+      a.nome && `nome "${a.nome}"`,
+      a.telefone && `telefone ${a.telefone}`,
+      a.pagamento && `pagamento ${a.pagamento}`,
+      a.pago === true && "marcar PAGO",
+      a.pago === false && "marcar NÃO pago",
       a.valor_unitario != null && `valor ${brl(a.valor_unitario)}`,
     ].filter(Boolean);
     return `Mudar ${a.resumo_atual} → ${partes.join(", ")}`;
@@ -231,7 +261,17 @@ const MODO_VOZ = `MODO VOZ: esta conversa é pela Siri e a sua resposta será LI
 `;
 
 /** Instruções do assistente. Fixas (cache); a data de hoje vai na mensagem do usuário. */
-export function instrucoesDoAssistente(ctx: { pontos: string; desembarques: string; voz?: boolean }): string {
+export function instrucoesDoAssistente(ctx: {
+  pontos: string;
+  desembarques: string;
+  voz?: boolean;
+  /** dados do sistema (pontos, horários, preços, bairros, base de conhecimento da aba Sistema) */
+  fatos?: string;
+  /** lições já aprovadas do aprendizado do bot */
+  licoes?: string;
+  /** cronograma do trajeto e contato do motorista */
+  cronograma?: string;
+}): string {
   return `${ctx.voz ? MODO_VOZ : ""}Você é o assistente da equipe da AriTur, empresa de vans entre São Luís e Pirapemas/Cantanhede (MA). Quem fala com você é um SÓCIO ou ATENDENTE da empresa, dentro do app de gestão. Responda sempre em português do Brasil, curto e direto.
 
 O QUE VOCÊ FAZ
@@ -261,8 +301,45 @@ PONTOS DE EMBARQUE (código = nome):
 ${ctx.pontos}
 
 LOCAIS DE DESEMBARQUE:
-${ctx.desembarques}`;
+${ctx.desembarques}
+
+${CONHECIMENTO_DA_OPERACAO}${ctx.fatos ? `\n\nDADOS DO SISTEMA (valem sobre qualquer lembrança):\n${ctx.fatos}` : ""}${
+    ctx.cronograma ? `\n\n${ctx.cronograma}` : ""
+  }${ctx.licoes ? `\n\nO QUE A EQUIPE JÁ ENSINOU (lições aprovadas):\n${ctx.licoes}` : ""}`;
 }
+
+/**
+ * O que o Claude Code aprendeu com o dono nos agendamentos (skill /agendar e as
+ * conversas de 09–11/11/2026), para o assistente agir igual (issue #295).
+ */
+export const CONHECIMENTO_DA_OPERACAO = `CONHECIMENTO DA OPERAÇÃO (combinado com o dono)
+Sentidos e horários
+- Ida sai de São Luís de madrugada (termina por volta de 06:30) para Pirapemas/Cantanhede. Volta sai de Pirapemas/Cantanhede até por volta das 13:00 para São Luís. Na segunda a Ida sai mais cedo.
+- "Pra São Luís" é Volta (também encomenda); "pra Pirapemas/Cantanhede" é Ida. "Madrugada", "amanhã cedo", "5 horas" = Ida; "meio-dia", "à tarde", "após as 12" = Volta.
+- Se a viagem de hoje naquele sentido já saiu, "a próxima" é a de amanhã. Data relativa de uma mensagem conta do dia em que ela foi escrita.
+Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto certo)
+- Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, outro (Outros: BR, Posto Carone, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
+- "Retorno do aeroporto" / "no retorno" é o ponto retorno. Dentro do aeroporto (terminal, chegando de voo) é outro com "Aeroporto de São Luís", que tem preço próprio. Na dúvida, pergunte qual.
+- Busca em casa precisa do bairro (nome da tabela). Bairro da tabela escrito no endereço ("…, Estrada da Maioba") é o bairro. Condomínio ou rua sem bairro: use onde_fica (São Luís aprende rua/condomínio → bairro com as reservas); sem certeza, pergunte, ou use "(bairro a confirmar)" e sem valor.
+- Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade só vale se foi dita ou é o endereço de costume; onde_fica só ajuda a confirmar.
+- Preço compara embarque e desembarque na tabela de trechos (ex.: Pirapemas até Miranda). Cidade intermediária sem trecho cadastrado: não invente; fica sem valor e avise.
+- Valor dito pelo SÓCIO neste chat vale (valor_dito). Valor dito só pelo cliente, não.
+Clientes e passageiros
+- Nome: o do cadastro; senão o que o cliente escreveu; nunca o nome do perfil do WhatsApp. Sem nome, pode ir vazio.
+- Contato compartilhado (card) só é passageiro se pediram passagem para ele; duas pessoas são duas reservas. Passageiro sem telefone próprio fica no telefone de quem pediu.
+- Cliente recorrente: endereco_de_costume dá o embarque e o desembarque de sempre (proponha, não decida sozinho).
+- Mudar nome ou telefone muda o cadastro do cliente (vale para as outras reservas dele).
+Encomendas
+- Nunca têm valor. O dono da encomenda é quem ENVIA; quem recebe (nome e telefone) vai no desembarque. Encomenda para São Luís é Volta.
+"Agendado ☑️" (a marca da equipe no WhatsApp)
+- Quando a equipe escreve "Agendado ☑️", o bot lança sozinho a reserva como está (sem endereço: só o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade fica pendente). Vale em qualquer modo, inclusive no sombra.
+- Antes de lançar algo "que eu confirmei", use conferir_agendados: se já lançou, só confira e conte; nunca duplique.
+- O que não lançou fica em "Reservas prontas" (rascunhos, ferramenta pendencias) com o motivo e vira pendência. Para lançar uma pronta, propor_lancar_rascunho.
+- "Ida e volta" sem o dia da volta: volta no mesmo dia, marcada para confirmar com o cliente.
+Conversas do WhatsApp
+- ler_conversa só traz texto. Áudio e ligação não aparecem: pergunte ao sócio o que foi combinado.
+Nunca
+- Apagar reserva (cancelar é mudar o status). Mandar mensagem ao cliente. Inventar preço, vaga ou horário. Mexer numa reserva sem ter certeza de qual é: com duas parecidas, pergunte.`;
 
 /** Ferramentas do assistente (formato da API). */
 export const FERRAMENTAS_DO_ASSISTENTE = [
@@ -328,7 +405,8 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
   },
   {
     name: "onde_fica",
-    description: "Procura um endereço ou referência na base de lugares de Pirapemas e Cantanhede (só ajuda a confirmar; não decide a cidade).",
+    description:
+      "Procura um endereço, condomínio ou referência na base de lugares: em Pirapemas/Cantanhede (qual cidade) e em São Luís (qual bairro). Só ajuda a confirmar.",
     input_schema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] },
   },
   {
@@ -376,9 +454,40 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
         bairro: { type: "string" },
         desembarque: { type: "string" },
         quantidade: { type: "integer" },
+        nome: { type: "string", description: "Nome certo do cliente (muda o cadastro)." },
+        telefone: { type: "string", description: "Telefone certo do cliente, com DDD (muda o cadastro)." },
+        valor_dito: { type: "number", description: "Valor por passagem que o SÓCIO disse neste chat." },
+        pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
+        pago: { type: "boolean", description: "true = marcar pago; false = marcar não pago." },
       },
       required: ["reserva_id"],
     },
+  },
+  {
+    name: "conferir_agendados",
+    description:
+      "Os 'Agendado ☑️' que a equipe escreveu no WhatsApp nas últimas horas e se cada um virou reserva (e qual), ficou pronto para lançar ou falhou. Só admin.",
+    input_schema: { type: "object", properties: { horas: { type: "integer", description: "Quantas horas para trás (padrão 30)." } } },
+  },
+  {
+    name: "endereco_de_costume",
+    description: "Embarque e desembarque de costume de um cliente (pelo telefone), por sentido.",
+    input_schema: { type: "object", properties: { telefone: { type: "string" } }, required: ["telefone"] },
+  },
+  {
+    name: "propor_lancar_rascunho",
+    description: "Propõe lançar uma reserva pronta (rascunho de pendencias). O valor sai da tabela.",
+    input_schema: { type: "object", properties: { rascunho_id: { type: "string" } }, required: ["rascunho_id"] },
+  },
+  {
+    name: "propor_descartar_rascunho",
+    description: "Propõe descartar uma reserva pronta que não vale (repetida, desistiu…).",
+    input_schema: { type: "object", properties: { rascunho_id: { type: "string" } }, required: ["rascunho_id"] },
+  },
+  {
+    name: "propor_resolver_pendencia",
+    description: "Propõe marcar uma pendência da aba Pendências como resolvida.",
+    input_schema: { type: "object", properties: { pendencia_id: { type: "string" } }, required: ["pendencia_id"] },
   },
   {
     name: "propor_cancelamento",

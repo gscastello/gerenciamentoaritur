@@ -319,7 +319,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Cantanhede, então a cidade de embarque da Volta só vale se o cliente disse (ou é o endereço de costume); nunca sai do
   nome da rua. A base `cidade_lugares` (ruas, pontos de referência, "casa de fulano", povoados; OpenStreetMap + toda
   reserva de Volta confirmada, aprendendo sozinha e cruzando os lugares citados juntos) só gera **aviso** e ajuda o
-  atendente a **confirmar** com o cliente (`onde_fica`).
+  atendente a **confirmar** com o cliente (`onde_fica`). **Em São Luís** (issue #297) o mesmo mapeamento leva ao
+  **bairro**: `sao_luis_lugares` aprende rua/condomínio/referência → bairro com cada busca em casa confirmada
+  (`fn_bairro_pelo_endereco`). Ordem para achar o bairro: bairro da tabela escrito no endereço → memória confirmada
+  (`bairro_aliases`) → lugares de São Luís → internet. Bairro escrito no endereço vence o chute do leitor (nome de duas
+  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela.
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem
@@ -333,7 +337,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
   no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
   `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
-  mensagem ao cliente. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
+  mensagem ao cliente. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
+  conhecimento (`montarFatos`), as lições aprovadas, o cronograma e `CONHECIMENTO_DA_OPERACAO` (as regras do `/agendar`);
+  e faz, sempre como proposta, o que o dono pede aqui: confere os "Agendado ☑️", lança/descarta reservas prontas,
+  resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
+  operação combinada com o dono entra também em `CONHECIMENTO_DA_OPERACAO`. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
   chave pessoal (só o hash no banco; apagar desliga), respostas curtas para ler em voz alta e "sim" por voz para gravar.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`

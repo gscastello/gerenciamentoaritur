@@ -26,6 +26,7 @@ import {
   somarDias,
   formatarHistorico,
   type MensagemDaConversa,
+  bairroEscritoNoEndereco,
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
@@ -264,6 +265,17 @@ async function lerEGravar(
         .join(" ")
         .slice(0, 300);
       r.pickup_neighborhood = parecido.bairro.neighborhood;
+    }
+    // o endereço do cliente cita outro bairro da tabela que o leitor não usou: vale o escrito (issue #297)
+    if (r.route_point_code === "busca") {
+      const escrito = bairroEscritoNoEndereco(r.pickup_neighborhood, r.pickup_detail, r.client_excerpt, ctx.bairrosTabela);
+      if (escrito) {
+        r.notes = [r.notes, `Bairro pelo endereço escrito: ${escrito.neighborhood}${r.pickup_neighborhood ? ` (no lugar de ${r.pickup_neighborhood})` : ""}.`]
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 300);
+        r.pickup_neighborhood = escrito.neighborhood;
+      }
     }
     // busca em casa com condomínio/residencial fora da tabela: descobre o bairro (issue #270)
     if (r.route_point_code === "busca" && !bairroDaTabela(r.pickup_neighborhood, ctx.bairrosTabela)) {

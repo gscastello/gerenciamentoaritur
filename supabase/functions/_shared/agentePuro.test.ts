@@ -594,3 +594,35 @@ Deno.test("bairroPorApelido: condomínio citado vira o bairro da memória (issue
   assertEquals(bairroPorApelido("", memoria), null);
   assertEquals(bairroPorApelido(null, memoria), null);
 });
+
+Deno.test("#297: bairro pelos lugares de São Luís — confirmado vence, dúvida não chuta", async () => {
+  const { bairroPelosLugares } = await import("./agentePuro.ts");
+  const l = (bairro: string, ocorrencias: number, confirmado = false) =>
+    ({ bairro, lugar: `Lugar ${bairro}`, tipo: "referencia", ocorrencias, confirmado, fonte: "reservas" });
+  assertEquals(bairroPelosLugares([]), null);
+  assertEquals(bairroPelosLugares([l("Estrada da Maioba", 1)])?.bairro, "Estrada da Maioba");
+  assertEquals(bairroPelosLugares([l("Turu", 3), l("Cohatrac", 1)])?.bairro, "Turu");
+  assertEquals(bairroPelosLugares([l("Turu", 2), l("Cohatrac", 2)]), null);
+  assertEquals(bairroPelosLugares([l("Turu", 1, true), l("Cohatrac", 5)])?.bairro, "Turu");
+  assertEquals(bairroPelosLugares([l("Turu", 1, true), l("Cohatrac", 1, true)]), null);
+  assertEquals(bairroPelosLugares([l("Turu", 0)]), null);
+});
+
+Deno.test("#297 regressão: 'Estrada da Maioba' escrita no endereço vence o bairro chutado", async () => {
+  const { bairroEscritoNoEndereco } = await import("./agentePuro.ts");
+  const tabela = [{ neighborhood: "Alto do Turu" }, { neighborhood: "Estrada da Maioba" }, { neighborhood: "Turu" }, { neighborhood: "Cohatrac" }];
+  const endereco = "Condomínio Belleville Residence, Estrada da Maioba, bloco C3 apartamento 12";
+  // o leitor chutou Alto do Turu; o cliente escreveu Estrada da Maioba
+  assertEquals(bairroEscritoNoEndereco("Alto do Turu", endereco, "moro no cond belleville na estrada da maioba", tabela)?.neighborhood, "Estrada da Maioba");
+  // sem bairro nenhum: o escrito
+  assertEquals(bairroEscritoNoEndereco(null, "Cond. Jardim di Napoli, Estrada da Maioba", "", tabela)?.neighborhood, "Estrada da Maioba");
+  // o cliente disse o bairro: fica o dele
+  assertEquals(bairroEscritoNoEndereco("Cohatrac", "Rua do Turu, 12", "sou do cohatrac, rua do turu", tabela), null);
+  // já é o mesmo
+  assertEquals(bairroEscritoNoEndereco("Estrada da Maioba", endereco, "", tabela), null);
+  // "Rua do Turu" não troca o bairro escolhido (nome de uma palavra só)
+  assertEquals(bairroEscritoNoEndereco("Cohatrac", "Rua do Turu, 12", "", tabela), null);
+  assertEquals(bairroEscritoNoEndereco(null, "Rua 5, Turu", "", tabela)?.neighborhood, "Turu");
+  // endereço sem bairro da tabela
+  assertEquals(bairroEscritoNoEndereco("Turu", "Residencial Colinas, rua 7", "", tabela), null);
+});

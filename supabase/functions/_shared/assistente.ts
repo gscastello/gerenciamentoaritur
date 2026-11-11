@@ -9,7 +9,16 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { acharPonto, lugaresNasCidades, valorDoPedido } from "./agenteFerramentas.ts";
-import { areaDoDesembarque, calendarioParaOPrompt, diaCivil, somarDias } from "./agentePuro.ts";
+import {
+  areaDoDesembarque,
+  calendarioParaOPrompt,
+  cronogramaParaTexto,
+  cronogramaValido,
+  diaCivil,
+  somarDias,
+} from "./agentePuro.ts";
+import { montarFatos } from "./botAnswer.ts";
+import { blocoDasLicoes } from "./botLicoes.ts";
 import {
   type Acao,
   type AcaoCriar,
@@ -45,18 +54,41 @@ export type Contexto = {
   areas: { ida: { code: string; label: string }[]; volta: { code: string; label: string }[] };
   nomesDosPontos: Record<string, string>;
   acoes: Acao[];
+  /** lido como servidor (Siri): as RPCs não veem auth.uid(), a autoria vai em p_actor/p_created_by */
+  servidor: boolean;
+  /** o que o assistente sabe da empresa (issue #295) */
+  conhecimento: { fatos: string; licoes: string; cronograma: string };
 };
+
+/** Dados do sistema, lições aprovadas e cronograma — o mesmo que o bot do WhatsApp sabe. Nunca derruba o assistente. */
+async function carregarConhecimento(): Promise<Contexto["conhecimento"]> {
+  const [fatos, licoes, cfg] = await Promise.all([
+    montarFatos().then((f) => f.fatos).catch(() => ""),
+    blocoDasLicoes(["operacao", "fato", "negocio", "fluxo_agendamento", "situacao"], { max: 30, maxChars: 5000 }).catch(() => ""),
+    supabaseAdmin.from("settings").select("key, value").in("key", ["trip_schedule", "monday_adjustment", "driver_contact"]),
+  ]);
+  const valor = (k: string) => (cfg.data ?? []).find((c: Linha) => c.key === k)?.value;
+  const segunda = valor("monday_adjustment");
+  const motorista = valor("driver_contact");
+  const contato = motorista?.phone || motorista?.telefone || (typeof motorista === "string" ? motorista : "");
+  const cronograma = [
+    cronogramaParaTexto(cronogramaValido(valor("trip_schedule")), segunda?.active ? Number(segunda.hours) || 0 : 0),
+    contato ? `Contato do motorista (para passar ao cliente que insistir em saber onde a van está): ${motorista?.name ?? ""} ${contato}`.trim() : "",
+  ].filter(Boolean).join("\n");
+  return { fatos, licoes, cronograma };
+}
 
 function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
 }
 
 export async function montarContexto(db: SupabaseClient, userId: string, papel: string): Promise<Contexto> {
-  const [ida, volta, areasIda, areasVolta] = await Promise.all([
+  const [ida, volta, areasIda, areasVolta, conhecimento] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
     whatsappService.listDropoffAreas("ida"),
     whatsappService.listDropoffAreas("volta"),
+    carregarConhecimento(),
   ]);
   const ativos = (l: Linha[] | null) => (l ?? []).filter((p) => p.active !== false);
   const nomes: Record<string, string> = {};
@@ -74,6 +106,8 @@ export async function montarContexto(db: SupabaseClient, userId: string, papel: 
     },
     nomesDosPontos: nomes,
     acoes: [],
+    servidor: db === supabaseAdmin,
+    conhecimento,
   };
 }
 
@@ -111,6 +145,7 @@ async function precoDaCriacao(ctx: Contexto, a: Omit<AcaoCriar, "valor_unitario"
 /** Novo valor de uma mudança que mexe no embarque/desembarque (null = mantém o atual). */
 async function precoDaMudanca(ctx: Contexto, atual: Linha, m: Omit<AcaoMudar, "tipo" | "reserva_id" | "resumo_atual" | "valor_unitario">) {
   if (atual.tipo === "encomenda") return null;
+  if (m.valor_dito != null) return m.valor_dito;
   if (!(m.novo_ponto || m.bairro || m.embarque || m.desembarque || m.novo_sentido)) return null;
   const sentido = (m.novo_sentido ?? atual.direcao) as "ida" | "volta";
   const ponto = acharPonto(ctx.pontosCompletos[sentido], m.novo_ponto ?? atual.pontoId);
@@ -277,8 +312,8 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
     }
     case "pendencias": {
       const [pend, prontas, pendentes] = await Promise.all([
-        ctx.db.from("v_pendencias_atendimento").select("assunto, detail, phone, cliente, created_at").eq("status", "aberta").order("created_at", { ascending: false }).limit(20),
-        ctx.db.from("reservation_drafts").select("trip_date, direction, customer_name, phone, notes").eq("status", "pronta").gte("trip_date", ctx.hoje).limit(20),
+        ctx.db.from("v_pendencias_atendimento").select("id, assunto, detail, phone, cliente, created_at").eq("status", "aberta").order("created_at", { ascending: false }).limit(20),
+        ctx.db.from("reservation_drafts").select("id, trip_date, direction, customer_name, phone, route_point_code, pickup_neighborhood, pickup_detail, quantity, type, notes").eq("status", "pronta").gte("trip_date", ctx.hoje).limit(20),
         ctx.db.from("v_reservations_flat").select(CAMPOS_RESERVA).eq("status", "pendente").gte("data", ctx.hoje).limit(20),
       ]);
       return {
@@ -288,8 +323,19 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         reservas_pendentes: (pendentes.data ?? []).map((r: Linha) => ({ id: r.id, resumo: resumoDaReserva(r, ctx.nomesDosPontos) })),
       };
     }
-    case "onde_fica":
-      return { ok: true, lugares: await lugaresNasCidades(String(a.texto ?? "")) };
+    case "onde_fica": {
+      const texto = String(a.texto ?? "");
+      const [cidades, saoLuis] = await Promise.all([
+        lugaresNasCidades(texto),
+        supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: texto }),
+      ]);
+      return {
+        ok: true,
+        pirapemas_e_cantanhede: cidades,
+        sao_luis_bairros: (saoLuis.data ?? []).slice(0, 8),
+        nota: "São Luís: lugar → bairro aprendido das buscas em casa confirmadas (confirmado = equipe). Só ajuda a confirmar.",
+      };
+    }
     case "financeiro": {
       if (!["admin", "financeiro"].includes(ctx.papel)) return { ok: false, erro: "Números do financeiro são só para admin/financeiro." };
       const de = String(a.de ?? "");
@@ -370,6 +416,97 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       ctx.acoes.push(acao);
       return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
     }
+    case "conferir_agendados": {
+      if (ctx.papel !== "admin") return { ok: false, erro: "Conferir os Agendado do WhatsApp é só para admin." };
+      const horas = Math.min(Math.max(Number(a.horas) || 30, 1), 96);
+      const desde = new Date(Date.now() - horas * 3600_000).toISOString();
+      const { data: marcas, error } = await ctx.db
+        .from("bot_observations")
+        .select("chatwoot_conversation_id, chatwoot_message_id, conversation_id, content, created_at")
+        .eq("author", "equipe")
+        .gte("created_at", desde)
+        .ilike("content", "%agendad%")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      if (error) return { ok: false, erro: error.message };
+      const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const itens = await Promise.all(
+        (marcas ?? []).map(async (m: Linha) => {
+          const [{ data: lancadas }, { data: conv }, { data: rascunhos }] = await Promise.all([
+            ctx.db.from("reservations").select("id, status, trip_id").like("whatsapp_source_message_id", `cw-${m.chatwoot_message_id}-agendado-%`),
+            ctx.db.from("whatsapp_conversations").select("phone").eq("id", m.conversation_id).maybeSingle(),
+            ctx.db.from("reservation_drafts").select("id, status, trip_date, direction, notes").eq("conversation_id", m.conversation_id).gte("updated_at", desde).limit(5),
+          ]);
+          const telefone = conv?.phone ? String(conv.phone).replace(/^55/, "") : null;
+          const { data: proximas } = telefone
+            ? await ctx.db.from("v_reservations_flat").select(CAMPOS_RESERVA).in("telefone", telefonesDe(telefone).semDdi).gte("data", ctx.hoje).neq("status", "cancelada").limit(6)
+            : { data: [] };
+          return {
+            quando: fmt.format(new Date(m.created_at)),
+            telefone,
+            lancou_pelo_agendado: (lancadas ?? []).length,
+            reservas_do_cliente: (proximas ?? []).map((r: Linha) => ({ id: r.id, resumo: resumoDaReserva(r, ctx.nomesDosPontos), status: r.status })),
+            rascunhos: (rascunhos ?? []).map((d: Linha) => ({ id: d.id, status: d.status, dia: d.trip_date, sentido: d.direction, motivo: String(d.notes ?? "").slice(0, 160) })),
+          };
+        }),
+      );
+      return {
+        ok: true,
+        agendados: itens,
+        nota: "Sem reserva lançada pelo Agendado, mas com reserva do cliente no dia: pode ter sido lançada de outro jeito ou o cliente desistiu/cancelou.",
+      };
+    }
+    case "endereco_de_costume": {
+      const { semDdi } = telefonesDe(String(a.telefone ?? ""));
+      if (!semDdi.length) return { ok: false, erro: "telefone inválido" };
+      const { data: cliente } = await ctx.db
+        .from("customers")
+        .select("id, name")
+        .or(`phone.in.(${semDdi.join(",")}),phone_secondary.in.(${semDdi.join(",")})`)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (!cliente) return { ok: true, costume: null, nota: "Cliente não cadastrado." };
+      const { data, error } = await ctx.db.rpc("rpc_endereco_de_costume", { p_customer_id: cliente.id });
+      if (error) return { ok: false, erro: error.message };
+      return { ok: true, cliente: cliente.name, costume: data };
+    }
+    case "propor_lancar_rascunho":
+    case "propor_descartar_rascunho": {
+      const { data: d } = await ctx.db
+        .from("reservation_drafts")
+        .select("id, trip_date, direction, customer_name, phone, route_point_code, pickup_detail, quantity, type, status")
+        .eq("id", String(a.rascunho_id ?? ""))
+        .maybeSingle();
+      if (!d || d.status !== "pronta") return { ok: false, erro: "Reserva pronta não encontrada (use o id de pendencias)." };
+      const resumo = `${d.direction === "ida" ? "Ida" : "Volta"} ${String(d.trip_date).split("-").reverse().slice(0, 2).join("/")} · ${
+        d.customer_name || "(sem nome)"
+      } · ${ctx.nomesDosPontos[d.route_point_code] ?? d.route_point_code ?? "encomenda"}${d.pickup_detail ? `, ${d.pickup_detail}` : ""}`;
+      const acao: Acao = {
+        tipo: nome === "propor_lancar_rascunho" ? "lancar_rascunho" : "descartar_rascunho",
+        rascunho_id: d.id,
+        resumo_atual: resumo,
+        id: crypto.randomUUID(),
+      };
+      ctx.acoes.push(acao);
+      return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
+    }
+    case "propor_resolver_pendencia": {
+      const { data: p } = await ctx.db
+        .from("v_pendencias_atendimento")
+        .select("id, assunto, cliente, status")
+        .eq("id", String(a.pendencia_id ?? ""))
+        .maybeSingle();
+      if (!p || p.status !== "aberta") return { ok: false, erro: "Pendência não encontrada ou já resolvida." };
+      const acao: Acao = {
+        tipo: "resolver_pendencia",
+        pendencia_id: p.id,
+        resumo_atual: `${p.assunto}${p.cliente ? ` (${p.cliente})` : ""}`,
+        id: crypto.randomUUID(),
+      };
+      ctx.acoes.push(acao);
+      return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
+    }
     case "propor_cancelamento": {
       const atual = await buscarReserva(ctx, String(a.reserva_id ?? ""));
       if (!atual || atual.status === "cancelada") return { ok: false, erro: "Reserva não encontrada ou já cancelada." };
@@ -423,7 +560,7 @@ export async function conversar(historico: MensagemDoChat[], ctx: Contexto, opco
   const pontos = (["ida", "volta"] as const)
     .flatMap((d) => ctx.pontosCompletos[d].map((p) => `- ${d}: ${p.code} = ${p.name}`))
     .join("\n");
-  const system = instrucoesDoAssistente({ pontos, desembarques, voz: opcoes.voz });
+  const system = instrucoesDoAssistente({ pontos, desembarques, voz: opcoes.voz, ...ctx.conhecimento });
   const messages: Linha[] = historico.map((m, i) => ({
     role: m.papel === "usuario" ? "user" : "assistant",
     content: i === historico.length - 1 ? `HOJE (São Luís):\n${calendarioParaOPrompt(new Date())}\n\nPEDIDO:\n${m.texto}` : m.texto,
@@ -470,7 +607,67 @@ export async function conversar(historico: MensagemDoChat[], ctx: Contexto, opco
 
 export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: boolean; mensagem: string }> {
   const tipo = bruta?.tipo;
-  if (tipo === "criar") {
+  if (tipo === "criar") return await criarReserva(bruta, ctx, `assistente-${String(bruta.id ?? crypto.randomUUID()).slice(0, 40)}`);
+
+  if (tipo === "lancar_rascunho" || tipo === "descartar_rascunho") {
+    const { data: d } = await ctx.db.from("reservation_drafts").select("*").eq("id", String(bruta.rascunho_id ?? "")).maybeSingle();
+    if (!d || d.status !== "pronta") return { ok: false, mensagem: "Essa reserva pronta já foi lançada ou descartada." };
+    if (tipo === "descartar_rascunho") {
+      const r = ctx.servidor
+        ? await ctx.db.from("reservation_drafts").update({ status: "descartada", resolved_by: ctx.userId, resolved_at: new Date().toISOString() }).eq("id", d.id).eq("status", "pronta")
+        : await ctx.db.rpc("rpc_descartar_rascunho_de_reserva", { p_draft_id: d.id });
+      // biome-ignore lint/suspicious/noExplicitAny: resposta da RPC ou do update
+      const falhou = r.error || (r.data as any)?.success === false;
+      // biome-ignore lint/suspicious/noExplicitAny: idem
+      if (falhou) return { ok: false, mensagem: String(r.error?.message ?? (r.data as any)?.message ?? "Não descartou.") };
+      evento("assistente_acao", { tipo, ok: true });
+      return { ok: true, mensagem: "Reserva pronta descartada." };
+    }
+    // o gatilho do banco fecha o rascunho quando a reserva nasce
+    return await criarReserva(
+      {
+        data: d.trip_date,
+        sentido: d.direction,
+        tipo_reserva: d.type,
+        nome: d.customer_name ?? "",
+        telefone: d.phone ?? "",
+        ponto: d.route_point_code,
+        quantidade: d.quantity ?? 1,
+        bairro: d.pickup_neighborhood,
+        embarque: d.pickup_detail,
+        desembarque: d.dropoff_location,
+        pagamento: "dinheiro",
+      },
+      ctx,
+      `assistente-rascunho-${d.id}`,
+    );
+  }
+
+  if (tipo === "resolver_pendencia") {
+    const { data, error } = await ctx.db.rpc("rpc_resolve_support_ticket", { p_id: String(bruta.pendencia_id ?? "") });
+    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não resolveu.") };
+    if (ctx.servidor) await ctx.db.from("support_tickets").update({ resolved_by: ctx.userId }).eq("id", String(bruta.pendencia_id));
+    evento("assistente_acao", { tipo, ok: true });
+    return { ok: true, mensagem: "Pendência resolvida." };
+  }
+
+  const atual = await buscarReserva(ctx, String(bruta?.reserva_id ?? ""));
+  if (!atual || atual.status === "cancelada") return { ok: false, mensagem: "Reserva não encontrada ou já cancelada." };
+
+  if (tipo === "cancelar") {
+    const { data, error } = await ctx.db.rpc("rpc_cancel_reservation", { p_reservation_id: atual.id, p_actor: ctx.userId });
+    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não cancelou.") };
+    evento("assistente_acao", { tipo, ok: true });
+    return { ok: true, mensagem: "Reserva cancelada (fica no histórico)." };
+  }
+
+  if (tipo === "mudar") return await mudarReserva(bruta, atual, ctx);
+  return { ok: false, mensagem: "Ação desconhecida." };
+}
+
+/** Cria a reserva pela mesma RPC da Agenda, com o preço recalculado aqui. Idempotente pela chave. */
+async function criarReserva(bruta: Linha, ctx: Contexto, chave: string): Promise<{ ok: boolean; mensagem: string }> {
+  {
     const v = validarCriacao(bruta, { hoje: ctx.hoje, pontos: ctx.pontos });
     if (!v.ok) return { ok: false, mensagem: v.erro };
     const a = v.acao;
@@ -493,25 +690,18 @@ export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: b
       p_status: "confirmada",
       p_extra_data: { origem: "assistente", ...(semEndereco ? { a_confirmar: ["endereco"] } : {}) },
       // idempotente: dois toques em "Confirmar" não duplicam
-      p_whatsapp_source_message_id: `assistente-${String(bruta.id ?? crypto.randomUUID()).slice(0, 40)}`,
+      p_whatsapp_source_message_id: chave,
       p_created_by: ctx.userId,
     });
     if (error || !data?.success) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "A reserva foi recusada.") };
-    evento("assistente_acao", { tipo, ok: true });
+    evento("assistente_acao", { tipo: "criar", ok: true });
     return { ok: true, mensagem: data.message === "created" || data.status ? "Reserva lançada na Agenda." : "Reserva já estava lançada." };
   }
+}
 
-  const atual = await buscarReserva(ctx, String(bruta?.reserva_id ?? ""));
-  if (!atual || atual.status === "cancelada") return { ok: false, mensagem: "Reserva não encontrada ou já cancelada." };
-
-  if (tipo === "cancelar") {
-    const { data, error } = await ctx.db.rpc("rpc_cancel_reservation", { p_reservation_id: atual.id, p_actor: ctx.userId });
-    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não cancelou.") };
-    evento("assistente_acao", { tipo, ok: true });
-    return { ok: true, mensagem: "Reserva cancelada (fica no histórico)." };
-  }
-
-  if (tipo === "mudar") {
+/** Muda dia/sentido/ponto (move) e embarque, contato, valor, pagamento e pago (edição), como na Agenda. */
+async function mudarReserva(bruta: Linha, atual: Linha, ctx: Contexto): Promise<{ ok: boolean; mensagem: string }> {
+  {
     const v = validarMudanca(bruta, { hoje: ctx.hoje });
     if (!v.ok) return { ok: false, mensagem: v.erro };
     const m = v.mudancas;
@@ -529,16 +719,24 @@ export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: b
     if (m.embarque) detalhes.pickup_detail = m.embarque;
     if (m.bairro) detalhes.pickup_neighborhood = m.bairro;
     if (m.desembarque) detalhes.dropoff_location = m.desembarque;
+    if (m.pagamento) detalhes.payment_method = m.pagamento;
     const preco = await precoDaMudanca(ctx, atual, m);
     if (preco != null) detalhes.unit_price = preco;
-    if (Object.keys(detalhes).length || m.quantidade) {
+    const contato: Record<string, string> = {};
+    if (m.nome) contato.name = m.nome;
+    if (m.telefone) contato.phone = m.telefone;
+    const pago =
+      m.pago == null
+        ? null
+        : { paid: m.pago, method: m.pagamento ?? undefined, amount: Number(atual.valorTotal ?? 0) || Number(atual.valorUnit ?? 0) * Number(atual.quantidade ?? 1) };
+    if (Object.keys(detalhes).length || m.quantidade || Object.keys(contato).length || pago) {
       const { error } = await ctx.db.rpc("rpc_edit_reservation", {
         p_reservation_id: atual.id,
         p_details: Object.keys(detalhes).length ? detalhes : null,
         p_quantity: m.quantidade,
-        p_contact: null,
+        p_contact: Object.keys(contato).length ? contato : null,
         p_move: null,
-        p_paid: null,
+        p_paid: pago,
         p_proof: null,
         p_extra_data: null,
         p_status: null,
@@ -546,10 +744,9 @@ export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: b
       });
       if (error) return { ok: false, mensagem: error.message };
     }
-    evento("assistente_acao", { tipo, ok: true });
+    evento("assistente_acao", { tipo: "mudar", ok: true });
     return { ok: true, mensagem: "Reserva atualizada." };
   }
-  return { ok: false, mensagem: "Ação desconhecida." };
 }
 
 // ---------------------------------------------------------------------------

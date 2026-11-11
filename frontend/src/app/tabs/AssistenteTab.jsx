@@ -19,6 +19,15 @@ const EXEMPLOS = [
   "Remarque a volta do Zequinha para sexta",
 ];
 
+const TITULO_DA_ACAO = {
+  criar: "Nova reserva",
+  mudar: "Mudar reserva",
+  cancelar: "Cancelar reserva",
+  lancar_rascunho: "Lançar reserva pronta",
+  descartar_rascunho: "Descartar reserva pronta",
+  resolver_pendencia: "Resolver pendência",
+};
+
 const ROTULO_ESTADO = {
   gravando: "Gravando…",
   feita: "Feito",
@@ -28,12 +37,7 @@ const ROTULO_ESTADO = {
 
 function CartaoDeAcao({ acao, onConfirmar, onDescartar }) {
   const aberta = acao.estado === "proposta" || acao.estado === "erro";
-  const titulo =
-    acao.tipo === "criar"
-      ? "Nova reserva"
-      : acao.tipo === "mudar"
-        ? "Mudar reserva"
-        : "Cancelar reserva";
+  const titulo = TITULO_DA_ACAO[acao.tipo] ?? "Ação";
   return (
     <FadeIn
       variant="pop"
