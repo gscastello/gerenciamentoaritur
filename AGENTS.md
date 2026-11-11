@@ -283,9 +283,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Devolver ao bot = status Pendente no Chatwoot.
 - O botão/pedido "falar com atendente" funciona em qualquer modo e **sempre**
   transfere e abre uma pendência (aba Pendências) com o link da conversa.
-- Reservas fora da área padrão (São Luís, Cantanhede, Pirapemas) entram
-  como `pendente` e exigem confirmação manual — nunca vão sozinhas para a
-  Agenda.
+- **Cidades intermediárias são válidas** (issue #326, dono 11/11): Campestre, Matões, Miranda, Entroncamento,
+  Colombo, Santa Rita e Bacabeira valem como embarque e desembarque. Trecho de **R$ 50 ou mais** (São Luís–Matões,
+  Pirapemas–Bacabeira) é reserva normal; **abaixo de R$ 50** só fica `pendente` em dia cheio (sobram menos de 10
+  vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
+  `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
+  Cantanhede com a cidade no embarque e o valor do trecho; Campestre tem o valor de Pirapemas/Cantanhede. Trecho sem
+  valor na tabela continua indo para a equipe; cidade fora da rota também.
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e

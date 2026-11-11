@@ -384,6 +384,7 @@ ${quando}
 - O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - A resposta do cliente vale para o que a equipe PERGUNTOU: depois de "Te buscamos aonde?", "Onde te pegamos?", "De onde você sai?", o que ele responde (rua, alojamento, referência, "100 metros da pista") é EMBARQUE, mesmo que pareça destino. Desembarque só quando a pergunta foi onde ele desce ou ele disse "desço", "me deixa em".
+- Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque VÁLIDOS. Volta com embarque nelas: ponto "cantanhede" e a cidade em endereco. Ida com embarque nelas: ponto "outro" e a cidade em endereco. Desembarque nelas: a cidade em desembarque.
 - Sugestão da equipe ("Na usina, certo?") só vale se o cliente confirmou. Se ele disse "não", ignore a sugestão e use o que ele disse depois.
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - O DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
@@ -816,7 +817,29 @@ export function perguntaAoCliente(
  */
 export const EMBARQUES_INTERMEDIARIOS_DA_VOLTA: Record<string, { ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string }> = {
   campestre: { ponto: "cantanhede", nome: "Campestre" },
+  // todas as cidades do caminho são embarque válido (dono, 11/11 — issue #326); no cronograma da Volta
+  // todas vêm depois de Cantanhede, então o ponto é Cantanhede e o valor é o do trecho
+  matoes: { ponto: "cantanhede", nome: "Matões do Norte" },
+  miranda: { ponto: "cantanhede", nome: "Miranda do Norte" },
+  entroncamento: { ponto: "cantanhede", nome: "Entroncamento" },
+  colombo: { ponto: "cantanhede", nome: "Colombo" },
+  "santa rita": { ponto: "cantanhede", nome: "Santa Rita" },
+  bacabeira: { ponto: "cantanhede", nome: "Bacabeira" },
 };
+
+/** A cidade do caminho citada no texto ("no campestri", "em Santa Rita"), com o ponto da Volta. */
+export function cidadeDoCaminhoNoTexto(
+  texto: string | null | undefined,
+): { chave: string; ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string } | null {
+  const n = normalizarTexto(String(texto ?? ""));
+  if (!n) return null;
+  const palavras = n.split(" ").filter(Boolean);
+  for (const [chave, c] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {
+    const achou = chave.includes(" ") ? ` ${n} `.includes(` ${chave} `) : palavras.some((w) => palavraParecida(w, chave));
+    if (achou) return { chave, ...c };
+  }
+  return null;
+}
 
 /**
  * A cidade da Volta cruzando TODAS as pistas que o sistema tem (issue #324), quando o
@@ -834,14 +857,15 @@ export function cidadeDaVoltaPelasPistas(p: {
   /** o que o cliente escreveu em todas as conversas, também as antigas */
   textosAntigos: (string | null | undefined)[];
 }): { cidade: (typeof CIDADES_DA_VOLTA)[number]; aviso: string } | null {
-  const palavras = normalizarTexto(String(p.textoDoEmbarque ?? "")).split(" ").filter(Boolean);
-  for (const [chave, intermediaria] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {
-    if (palavras.some((w) => palavraParecida(w, chave))) {
-      return {
-        cidade: intermediaria.ponto,
-        aviso: `${intermediaria.nome} fica entre Pirapemas e Cantanhede: embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, mesmo valor.`,
-      };
-    }
+  const intermediaria = cidadeDoCaminhoNoTexto(p.textoDoEmbarque);
+  if (intermediaria) {
+    const mesmoValor = intermediaria.chave === "campestre";
+    return {
+      cidade: intermediaria.ponto,
+      aviso: mesmoValor
+        ? `${intermediaria.nome} fica entre Pirapemas e Cantanhede: embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, mesmo valor.`
+        : `${intermediaria.nome} fica no caminho da Volta (depois de Cantanhede): embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, valor do trecho.`,
+    };
   }
   const pistas: { cidade: string; motivo: string }[] = [];
   const unicos = [...new Set(p.lugares.map(cidadeUnica).filter((c): c is "pirapemas" | "cantanhede" => !!c))];

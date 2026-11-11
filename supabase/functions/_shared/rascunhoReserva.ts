@@ -55,6 +55,7 @@ import {
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
   cidadeDaVoltaPelasPistas,
+  cidadeDoCaminhoNoTexto,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
@@ -647,7 +648,8 @@ export async function lancarPeloAgendado(entrada: Entrada) {
           const valor = await valorDoPedido(ponto, {
             bairro: d.pickup_neighborhood,
             endereco: d.pickup_detail,
-            desembarque: d.dropoff_location ?? "",
+            // Volta sem desembarque vai para São Luís: embarque numa cidade do caminho pega o trecho (issue #326)
+            desembarque: d.dropoff_location ?? (direcao === "volta" && cidadeDoCaminhoNoTexto(d.pickup_detail) ? "São Luís" : ""),
           });
           if (valor.ok) {
             preco = valor.preco;

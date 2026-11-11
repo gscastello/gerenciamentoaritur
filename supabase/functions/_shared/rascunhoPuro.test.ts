@@ -736,3 +736,17 @@ Deno.test("#324: cidade da Volta cruzando as pistas (Campestre, base, histórico
   assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Lister Caldas", lugares: [lugar("Lister Caldas", true, true, 3, 3)] }), null);
   assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "" }), null);
 });
+
+Deno.test("#326: toda cidade do caminho é embarque válido da Volta (ponto Cantanhede)", async () => {
+  const { cidadeDaVoltaPelasPistas, cidadeDoCaminhoNoTexto } = await import("./rascunhoPuro.ts");
+  const vazio = { lugares: [], historico: [], textosAntigos: [] };
+  for (const [texto, nome] of [["Matões", "Matões do Norte"], ["em miranda", "Miranda do Norte"], ["Santa Rita, perto do posto", "Santa Rita"], ["bacabeira", "Bacabeira"]]) {
+    const r = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: texto });
+    assertEquals(r?.cidade, "cantanhede", texto);
+    assertStringIncludes(r?.aviso ?? "", nome);
+    assertStringIncludes(r?.aviso ?? "", "valor do trecho");
+  }
+  assertStringIncludes(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre" })?.aviso ?? "", "mesmo valor");
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Santa Rita de Cássia"), { chave: "santa rita", ponto: "cantanhede", nome: "Santa Rita" });
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Grande"), null);
+});
