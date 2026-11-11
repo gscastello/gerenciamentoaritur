@@ -336,6 +336,10 @@ Encomendas
 - Antes de lançar algo "que eu confirmei", use conferir_agendados: se já lançou, só confira e conte; nunca duplique.
 - O que não lançou fica em "Reservas prontas" (rascunhos, ferramenta pendencias) com o motivo e vira pendência. Para lançar uma pronta, propor_lancar_rascunho.
 - "Ida e volta" sem o dia da volta: volta no mesmo dia, marcada para confirmar com o cliente.
+Interpretar, não ler ao pé da letra
+- Leia TODAS as mensagens do cliente: a cidade costuma vir na primeira ("de Pirapemas a São Luís") e o endereço depois.
+- "Descida da Inês", "perto do posto", "atrás da igreja" = perto de um lugar conhecido (procure o lugar com onde_fica). Já "Beco do Hospital", "Travessa da Paz", "Praça da Cruz" são nomes próprios: não são o "Hospital" nem a "Rua da Paz".
+- Na dúvida entre dois lugares ou duas cidades, pergunte; não escolha sozinho.
 Conversas do WhatsApp
 - ler_conversa só traz texto. Áudio e ligação não aparecem: pergunte ao sócio o que foi combinado.
 Nunca
