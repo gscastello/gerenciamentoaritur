@@ -367,7 +367,8 @@ ${quando}
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
-- Volta: a cidade de embarque (Pirapemas ou Cantanhede) vai em cidade_dita SÓ se o cliente disse ou confirmou com a equipe ("de Pirapemas para São Luís", "aqui em Cantanhede"). Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): nunca deduza a cidade pela rua ou pela referência; sem cidade dita, deixe cidade_dita vazio e diga em duvida.
+- Volta: a cidade de embarque (Pirapemas ou Cantanhede) vai em cidade_dita SÓ se o cliente disse ou confirmou com a equipe ("de Pirapemas para São Luís", "aqui em Cantanhede", "saindo de Cantanhede"). LEIA TODAS AS MENSAGENS DO CLIENTE: a cidade costuma vir na primeira ("duas passagens de Pirapemas a São Luís") e o endereço depois. Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): nunca deduza a cidade pela rua ou pela referência; sem cidade dita, deixe cidade_dita vazio e diga em duvida.
+- Interprete o que o cliente quis dizer, não só as palavras: "descida da Inês", "perto do posto", "atrás da igreja", "depois da ponte" dizem que ele fica PERTO de um lugar conhecido — ponha a frase inteira em endereco, como ele escreveu. Já "Beco do Hospital", "Travessa da Paz", "Praça da Cruz", "Entrada da Cidade" são NOMES de lugares (beco, travessa, praça são tipos de rua): não confunda com "Hospital" ou "Rua da Paz".
 - Dois endereços na mesma mensagem: separe onde ele SOBE de onde ele DESCE. Na Volta, o endereço em Pirapemas/Cantanhede (rua, estrada, referência) é o embarque (endereco) e o que tem bairro de São Luís (lista BAIRROS DE SÃO LUÍS) é o desembarque. Na Ida é o contrário: bairro de São Luís é o embarque e o endereço no interior é o desembarque. Ex.: Volta "na estrada Matões, em frente à quadra, Cidade Operária rua 2 casa 16" → endereco "Estrada Matões, em frente à quadra"; desembarque "Cidade Operária, rua 2, casa 16".
 - Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]" ou outro número digitado): a reserva é do PASSAGEIRO. Preencha passageiro_nome e passageiro_telefone com os dados dele (o telefone do card), não os de quem está conversando.
 - Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa ("o outro passageiro é o Darlison" + card dele, "marca pra ela"). Card de quem vai RECEBER uma encomenda, ou mandado só para a equipe falar com alguém, NÃO é passageiro: na encomenda deixe passageiro_nome/passageiro_telefone vazios e ponha quem recebe (nome e telefone) em desembarque.
@@ -715,4 +716,28 @@ export function avisoDoAgendado(r: {
     assunto: "Agendado ☑️ não lançou",
     detalhe: `${motivos.length ? `Motivo: ${[...new Set(motivos)].map(legivel).join("; ")}.` : "O bot não achou o pedido na conversa."}${rodape}`,
   };
+}
+
+/**
+ * A cidade da Volta que o CLIENTE escreveu nas mensagens do pedido (issue #301): o
+ * leitor às vezes não marca, e o trecho que ele copia pode não ter a cidade. Lê todas
+ * as mensagens do cliente; uma cidade só em todas = essa; as duas cidades = null.
+ */
+export function cidadeEscritaPeloCliente(textos: (string | null | undefined)[]): (typeof CIDADES_DA_VOLTA)[number] | null {
+  const achadas = new Set<string>();
+  for (const t of textos) {
+    const palavras = normalizarTexto(String(t ?? "")).split(" ").filter(Boolean);
+    for (const c of CIDADES_DA_VOLTA) if (palavras.some((p) => palavraParecida(p, c))) achadas.add(c);
+  }
+  return achadas.size === 1 ? ([...achadas][0] as (typeof CIDADES_DA_VOLTA)[number]) : null;
+}
+
+/**
+ * O "Agendado ☑️" ia ficar pendente por falta de leitura (cidade, endereço, dia, sentido
+ * ou nenhum pedido)? Então vale reler com o modelo mais capaz antes de desistir (issue #301).
+ */
+export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; codigosPendentes: string[] }): boolean {
+  if (r.pedidos === 0) return true;
+  if (r.codigosPendentes.includes("cidade")) return true;
+  return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
 }
