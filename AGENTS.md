@@ -346,6 +346,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   é bairro de São Luís → pendente `qual_viagem`. Dúvida que só o cliente resolve (`qual_viagem`, `cidade`) o bot
   **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
   Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
+  **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
+  depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
+  ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem

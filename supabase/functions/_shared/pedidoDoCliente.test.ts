@@ -147,3 +147,44 @@ Deno.test("#309 conferência final: ida e volta em dias diferentes passam", asyn
   assertEquals(conferenciaFinal({ trip_date: "2026-11-15", direction: "volta" }, msgs, ctx), []);
   assertEquals(conferenciaFinal({ trip_date: "2026-11-14", direction: "volta" }, msgs, ctx).length, 1);
 });
+
+Deno.test("#320: resposta à pergunta de embarque é embarque; 'não' para a sugestão da equipe tira a sugestão", async () => {
+  const { desembarqueEraEmbarque, sugestoesRecusadas, semSugestoesRecusadas, assuntoDaResposta } = await import("./pedidoDoCliente.ts");
+  const em = (min: number) => `2026-11-11T14:${String(min).padStart(2, "0")}:00Z`;
+  const conversa = [
+    { quem: "cliente", texto: "Tem vaga hoje", em: em(12) },
+    { quem: "cliente", texto: "Cantanhede a São luis", em: em(12) },
+    { quem: "equipe", texto: "Temos sim", em: em(27) },
+    { quem: "equipe", texto: "Te buscamos aonde?", em: em(27) },
+    { quem: "cliente", texto: "Cantanhede", em: em(29) },
+    { quem: "cliente", texto: "Depois do portal sentido matoes", em: em(30) },
+    { quem: "equipe", texto: "Na usina certo?", em: em(31) },
+    { quem: "cliente", texto: "São 2 vaga", em: em(31) },
+    { quem: "cliente", texto: "Nao", em: em(31) },
+    { quem: "cliente", texto: "Alojamento da 100 metros da pista", em: em(32) },
+    { quem: "equipe", texto: "Agendado ☑️", em: em(33) },
+  ];
+  assertEquals(assuntoDaResposta(conversa, 9), "embarque");
+  assertEquals(desembarqueEraEmbarque("Alojamento a 100 metros da pista", conversa), true);
+  assertEquals(sugestoesRecusadas(conversa), ["usina"]);
+  assertEquals(semSugestoesRecusadas("Depois do portal sentido Matões, na usina", ["usina"]), {
+    texto: "Depois do portal sentido Matões",
+    tirou: ["na usina"],
+  });
+
+  // o cliente falou em descer, ou a pergunta era do desembarque: continua desembarque
+  const desce = [
+    { quem: "equipe", texto: "Te buscamos aonde?", em: em(10) },
+    { quem: "cliente", texto: "Rua Grande, e desço no Cohatrac", em: em(11) },
+  ];
+  assertEquals(desembarqueEraEmbarque("Cohatrac", desce), false);
+  const ondeDesce = [
+    { quem: "equipe", texto: "Vai descer onde?", em: em(10) },
+    { quem: "cliente", texto: "Alojamento perto da pista", em: em(11) },
+  ];
+  assertEquals(desembarqueEraEmbarque("Alojamento perto da pista", ondeDesce), false);
+  // "sim" confirma a sugestão; desembarque que não veio de resposta não muda
+  assertEquals(sugestoesRecusadas([{ quem: "equipe", texto: "Na usina, certo?", em: em(1) }, { quem: "cliente", texto: "Sim", em: em(2) }]), []);
+  assertEquals(desembarqueEraEmbarque("Rodoviária", conversa), false);
+  assertEquals(desembarqueEraEmbarque("", conversa), false);
+});

@@ -56,7 +56,14 @@ import {
   viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
-import { conferenciaFinal, conferirPeloCliente, datasEscritas } from "./pedidoDoCliente.ts";
+import {
+  conferenciaFinal,
+  conferirPeloCliente,
+  datasEscritas,
+  desembarqueEraEmbarque,
+  semSugestoesRecusadas,
+  sugestoesRecusadas,
+} from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -237,6 +244,11 @@ async function lerEGravar(
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
+  // cliente e equipe na ordem: a resposta do cliente vale para o que a equipe perguntou (issue #320)
+  const falasDoPedido = recentes
+    .filter((m) => m.quem === "cliente" || m.quem === "equipe")
+    .map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
+  const recusadas = sugestoesRecusadas(falasDoPedido);
 
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
@@ -260,6 +272,21 @@ async function lerEGravar(
     });
     Object.assign(p, conferido.pedido);
     const avisosDoCliente = conferido.avisos;
+    // "Na usina, certo?" → "Não": a sugestão da equipe sai do embarque (issue #320)
+    if (p.endereco && recusadas.length) {
+      const limpo = semSugestoesRecusadas(p.endereco, recusadas);
+      if (limpo.tirou.length) {
+        p.endereco = limpo.texto || null;
+        p.duvida = [p.duvida, `O cliente disse não para "${limpo.tirou.join(", ")}": tirei do embarque.`].filter(Boolean).join(" ");
+      }
+    }
+    // o "desembarque" lido era a resposta à pergunta "te buscamos aonde?": é embarque (issue #320)
+    if (p.desembarque && desembarqueEraEmbarque(p.desembarque, falasDoPedido)) {
+      p.duvida = [p.duvida, `"${p.desembarque}" respondia onde buscar: é embarque, não desembarque.`].filter(Boolean).join(" ");
+      p.endereco = [p.endereco, p.desembarque].filter(Boolean).join(" — ");
+      p.desembarque = null;
+      evento("bot_resposta_era_embarque", { conversa: entrada.chatwootConversationId });
+    }
     if (conferido.completados.length || avisosDoCliente.length) {
       evento("bot_pedido_conferido", {
         conversa: entrada.chatwootConversationId,
