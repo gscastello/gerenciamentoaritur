@@ -21,6 +21,8 @@ import {
   instrucoesDoAssistente,
   MODELOS,
   type MensagemDoChat,
+  palavrasDaBusca,
+  reservasParecidas,
   type Uso,
   validarCriacao,
   validarMudanca,
@@ -134,7 +136,14 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         if (!semDdi.length) return { ok: false, erro: "telefone inválido" };
         q = q.or(`phone.in.(${semDdi.join(",")}),phone_secondary.in.(${semDdi.join(",")})`);
       } else if (a.nome) {
-        q = q.ilike("name", `%${String(a.nome).replace(/[%_,()]/g, " ").trim()}%`);
+        // o nome inteiro; se não achar, cada palavra ("Iara Santo Antônio" acha a Iara)
+        const palavras = palavrasDaBusca(String(a.nome));
+        const filtro = [String(a.nome), ...palavras]
+          .map((p) => p.replace(/[%_,()]/g, " ").trim())
+          .filter(Boolean)
+          .map((p) => `name.ilike.%${p}%`)
+          .join(",");
+        q = q.or(filtro);
       } else return { ok: false, erro: "informe telefone ou nome" };
       const { data: clientes, error } = await q;
       if (error) return { ok: false, erro: error.message };
@@ -190,6 +199,35 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         nota: /áudio|audio|liga/i.test(String(ultima ?? ""))
           ? "A última mensagem foi áudio ou ligação: o conteúdo não aparece aqui. Pergunte ao sócio o que foi combinado."
           : null,
+      };
+    }
+    case "procurar_reserva": {
+      const desde = /^\d{4}-\d{2}-\d{2}$/.test(String(a.data ?? "")) ? String(a.data) : ctx.hoje;
+      let q = ctx.db
+        .from("v_reservations_flat")
+        .select(CAMPOS_RESERVA)
+        .gte("data", desde)
+        .lte("data", somarDias(desde, a.data ? 0 : 21))
+        .neq("status", "cancelada")
+        .order("data")
+        .limit(800);
+      if (a.sentido === "ida" || a.sentido === "volta") q = q.eq("direcao", a.sentido);
+      const { data: rs, error } = await q;
+      if (error) return { ok: false, erro: error.message };
+      const achadas = reservasParecidas(String(a.texto ?? ""), (rs ?? []) as Linha[], (r) => ({
+        nome: r.nome,
+        outros: [r.localExato, r.bairro, r.desembarque, ctx.nomesDosPontos[r.pontoId] ?? r.pontoId],
+      }));
+      if (!achadas.length) return { ok: true, reservas: [], nota: "Nada parecido nas reservas de hoje em diante." };
+      return {
+        ok: true,
+        reservas: achadas.map(({ reserva: r, pontos }) => ({
+          id: r.id,
+          resumo: resumoDaReserva(r, ctx.nomesDosPontos),
+          telefone: r.telefone,
+          status: r.status,
+          pontos,
+        })),
       };
     }
     case "reservas_do_dia": {
