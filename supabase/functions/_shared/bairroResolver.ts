@@ -2,16 +2,19 @@
 //
 // Em que bairro fica um endereço que não está na tabela de preços (issue #270)?
 // O cliente costuma citar o condomínio/residencial ("Residencial Colinas") em
-// vez do bairro, e a busca em casa é cobrada pelo bairro. Ordem:
+// vez do bairro, e a busca em casa é cobrada pelo bairro. Ordem (issue #297):
+//   0) um bairro da tabela escrito no próprio endereço ("…, Estrada da Maioba");
 //   1) a memória de endereços (bairro_aliases: confirmados pela equipe/dono ou já
 //      descobertos antes) — sem custo;
+//   1b) a base de lugares de São Luís (sao_luis_lugares: aprende com cada busca em
+//      casa confirmada, como cidade_lugares em Pirapemas/Cantanhede) — sem custo;
 //   2) pesquisa na internet com a ferramenta web_search da API do Claude, que só
 //      pode responder um bairro da tabela de preços. O achado vai para a memória
 //      como fonte 'internet', a conferir.
 // Nada aqui inventa preço: o valor continua sendo o do bairro na tabela.
 // Melhor esforço: falha aqui nunca derruba o atendimento.
 
-import { bairroDaTabela, bairroPorApelido } from "./agentePuro.ts";
+import { bairroDaTabela, bairroPelosLugares, bairroPorApelido, type LugarDeSaoLuis } from "./agentePuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 
 const MODELO = Deno.env.get("BOT_BAIRRO_MODELO") ?? "claude-sonnet-5-5";
@@ -20,7 +23,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
 }
 
-export type BairroDeduzido = { bairro: string; fonte: "memoria" | "internet"; evidencia: string | null };
+export type BairroDeduzido = { bairro: string; fonte: "texto" | "memoria" | "lugares" | "internet"; evidencia: string | null };
 
 // biome-ignore lint/suspicious/noExplicitAny: resposta externa da API
 type Bloco = Record<string, any>;
@@ -105,12 +108,26 @@ export async function resolverBairro(texto: string | null | undefined, conversa?
       supabaseAdmin.from("bairro_aliases").select("apelido, bairro, confirmado"),
     ]);
     const bairros = (tabela ?? []).map((b: Bloco) => String(b.neighborhood));
-    if (bairroDaTabela(t, tabela ?? [])) return null; // já é um bairro da tabela: quem chamou resolve
+    // o próprio endereço cita um bairro da tabela (o mais longo): é ele
+    const escrito = bairroDaTabela(t, tabela ?? []);
+    if (escrito) return { bairro: String(escrito.neighborhood), fonte: "texto", evidencia: null };
 
     const daMemoria = bairroPorApelido(t, apelidos ?? []);
     if (daMemoria && bairros.includes(daMemoria)) {
       evento("bot_bairro_deduzido", { conversa: conversa ?? null, fonte: "memoria", bairro: daMemoria });
       return { bairro: daMemoria, fonte: "memoria", evidencia: null };
+    }
+
+    // os lugares de São Luís que a operação já conhece (issue #297)
+    const { data: lugares } = await supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: t });
+    const pelosLugares = bairroPelosLugares((lugares ?? []) as LugarDeSaoLuis[]);
+    if (pelosLugares && bairros.includes(pelosLugares.bairro)) {
+      evento("bot_bairro_deduzido", { conversa: conversa ?? null, fonte: "lugares", bairro: pelosLugares.bairro });
+      return {
+        bairro: pelosLugares.bairro,
+        fonte: "lugares",
+        evidencia: `${pelosLugares.lugar} (${pelosLugares.confirmado ? "confirmado pela equipe" : `${pelosLugares.vezes} reserva(s)`})`,
+      };
     }
 
     const achado = await pesquisarNaInternet(t, bairros);
@@ -138,7 +155,8 @@ export async function resolverBairro(texto: string | null | undefined, conversa?
 
 /** Texto do aviso que vai para o "Conferir" do rascunho. */
 export function avisoDoBairro(original: string, d: BairroDeduzido): string {
-  return d.fonte === "memoria"
-    ? `Bairro pela memória de endereços: ${original} fica no ${d.bairro}.`
-    : `Bairro deduzido pela internet: ${original} fica no ${d.bairro}. Confira.`;
+  if (d.fonte === "texto") return `Bairro escrito no endereço: ${d.bairro}.`;
+  if (d.fonte === "memoria") return `Bairro pela memória de endereços: ${original} fica no ${d.bairro}.`;
+  if (d.fonte === "lugares") return `Bairro pelos lugares de São Luís: ${d.evidencia} fica no ${d.bairro}. Confira.`;
+  return `Bairro deduzido pela internet: ${original} fica no ${d.bairro}. Confira.`;
 }

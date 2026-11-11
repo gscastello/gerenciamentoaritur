@@ -320,7 +320,7 @@ Sentidos e horários
 Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto certo)
 - Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, outro (Outros: BR, Posto Carone, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
 - "Retorno do aeroporto" / "no retorno" é o ponto retorno. Dentro do aeroporto (terminal, chegando de voo) é outro com "Aeroporto de São Luís", que tem preço próprio. Na dúvida, pergunte qual.
-- Busca em casa precisa do bairro (nome da tabela). Condomínio sem bairro: pergunte, ou use "(bairro a confirmar)" e sem valor.
+- Busca em casa precisa do bairro (nome da tabela). Bairro da tabela escrito no endereço ("…, Estrada da Maioba") é o bairro. Condomínio ou rua sem bairro: use onde_fica (São Luís aprende rua/condomínio → bairro com as reservas); sem certeza, pergunte, ou use "(bairro a confirmar)" e sem valor.
 - Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade só vale se foi dita ou é o endereço de costume; onde_fica só ajuda a confirmar.
 - Preço compara embarque e desembarque na tabela de trechos (ex.: Pirapemas até Miranda). Cidade intermediária sem trecho cadastrado: não invente; fica sem valor e avise.
 - Valor dito pelo SÓCIO neste chat vale (valor_dito). Valor dito só pelo cliente, não.
@@ -405,7 +405,8 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
   },
   {
     name: "onde_fica",
-    description: "Procura um endereço ou referência na base de lugares de Pirapemas e Cantanhede (só ajuda a confirmar; não decide a cidade).",
+    description:
+      "Procura um endereço, condomínio ou referência na base de lugares: em Pirapemas/Cantanhede (qual cidade) e em São Luís (qual bairro). Só ajuda a confirmar.",
     input_schema: { type: "object", properties: { texto: { type: "string" } }, required: ["texto"] },
   },
   {
