@@ -26,6 +26,9 @@ const TITULO_DA_ACAO = {
   lancar_rascunho: "Lançar reserva pronta",
   descartar_rascunho: "Descartar reserva pronta",
   resolver_pendencia: "Resolver pendência",
+  // o que o sócio informa ou corrige vira aprendizado do bot (issue #318)
+  ensinar: "Ensinar ao bot",
+  ensinar_lugar: "Ensinar lugar ao bot",
 };
 
 const ROTULO_ESTADO = {
