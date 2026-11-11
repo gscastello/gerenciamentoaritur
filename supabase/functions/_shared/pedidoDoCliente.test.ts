@@ -196,3 +196,33 @@ Deno.test("#333: 'parada das vans' é o ponto Retorno", async () => {
   assertEquals(pontoEscrito(["no ponto da van"], pontos), "retorno");
   assertEquals(pontoEscrito(["na rodoviária"], pontos), "rodoviaria");
 });
+
+Deno.test("#335: data confirmada à pergunta da equipe vale; dia pedido sem pedido lido aparece", async () => {
+  const { datasConfirmadas, datasSemPedido, conferenciaFinal, datasEscritas } = await import("./pedidoDoCliente.ts");
+  const em = (h: string) => `2026-11-11T${h}:00Z`; // quarta
+  const falas = [
+    { quem: "cliente", texto: "Quero uma passagem para pirapemas, irei aguardar na rodoviária. E de volta no domingo, rua do Sol.", em: em("17:02") },
+    { quem: "equipe", texto: "A ida será no sábado certo?", em: em("17:03") },
+    { quem: "cliente", texto: "Isso", em: em("17:04") },
+    { quem: "equipe", texto: "Agendado ☑️", em: em("17:04") },
+  ];
+  assertEquals(datasConfirmadas(falas), ["2026-11-14"]);
+  const msgs = falas.filter((f) => f.quem === "cliente").map((f) => ({ texto: f.texto, em: f.em }));
+  const ctx = { hoje: "2026-11-11", pedidosLidos: 2, datasConfirmadas: datasConfirmadas(falas) };
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-14", direction: "ida" }, msgs, ctx), []);
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-14", direction: "ida" }, msgs, { ...ctx, datasConfirmadas: [] }).length, 1);
+  // "não" não confirma
+  assertEquals(datasConfirmadas([{ quem: "equipe", texto: "É pra sexta?", em: em("10:00") }, { quem: "cliente", texto: "Não, sábado", em: em("10:01") }]), []);
+
+  // Ida de sábado e Volta de domingo pedidas; a leitura só achou a Volta
+  const pedido = [
+    { texto: "Marca um passagem para o dia 14 no sábado de Pedrinhas", em: em("20:01") },
+    { texto: "De Pirapemas a São Luís na Rua do Sol outra passagem por dia 15", em: em("20:02") },
+  ];
+  const datas = datasEscritas(pedido);
+  assertEquals(datasSemPedido(datas, ["2026-11-15"], [], "2026-11-11"), ["2026-11-14"]);
+  assertEquals(datasSemPedido(datas, ["2026-11-15", "2026-11-14"], [], "2026-11-11"), []);
+  // dia que já tem reserva, ou que já passou, não conta
+  assertEquals(datasSemPedido(datas, ["2026-11-15"], ["2026-11-14"], "2026-11-11"), []);
+  assertEquals(datasSemPedido(["2026-11-10"], [], [], "2026-11-11"), []);
+});

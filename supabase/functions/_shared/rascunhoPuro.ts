@@ -725,6 +725,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   sem_data: "o dia da viagem não aparece na conversa",
   data_passada: "o dia lido já passou",
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
+  pedido_faltando: "o cliente pediu também outro dia que a leitura da conversa não trouxe (confira e lance pela Agenda)",
   qual_viagem: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede: Volta de hoje ou Ida de amanhã?",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
@@ -793,8 +794,15 @@ export function cidadeEscritaPeloCliente(textos: (string | null | undefined)[]):
  * O "Agendado ☑️" ia ficar pendente por falta de leitura (cidade, endereço, dia, sentido
  * ou nenhum pedido)? Então vale reler com o modelo mais capaz antes de desistir (issue #301).
  */
-export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; codigosPendentes: string[] }): boolean {
+export function agendadoPrecisaReler(r: {
+  pedidos: number;
+  motivos: string[];
+  codigosPendentes: string[];
+  /** dias que o cliente pediu e a leitura não trouxe (issue #335) */
+  diasSemPedido?: string[];
+}): boolean {
   if (r.pedidos === 0) return true;
+  if (r.diasSemPedido?.length) return true;
   if (r.codigosPendentes.includes("cidade") || r.codigosPendentes.includes("conferir")) return true;
   return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
 }
