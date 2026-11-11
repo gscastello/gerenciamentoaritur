@@ -592,3 +592,24 @@ export function reservasParecidas<T>(
     .sort((a, b) => b.pontos - a.pontos)
     .slice(0, max);
 }
+
+/** Aviso que vai junto da fala quando há proposta esperando o "sim" (issue #305). */
+export function avisoDaPropostaPendente(pendentes: { descricao?: string }[]): string {
+  const lista = pendentes.map((p) => String(p.descricao ?? "").replace(/\n/g, "; ")).filter(Boolean);
+  return lista.length
+    ? `PROPOSTA AGUARDANDO O "SIM" (já está pronta; não proponha de novo, só pergunte "Confirma?"; pela Siri não existe cartão nem botão): ${lista.join(" | ")}`
+    : "";
+}
+
+/**
+ * Fala final da Siri: sem "cartão"/"toque em Confirmar" (pela voz não há tela) e, com
+ * proposta esperando, sempre termina em "Confirma?" para o atalho voltar a ouvir.
+ */
+export function falaDaSiri(texto: string, aguardandoSim: boolean): string {
+  let fala = paraVoz(texto)
+    .replace(/[^.?!]*(cart[aã]o|toque em confirmar|tocar em confirmar|abra o app)[^.?!]*[.?!]?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (aguardandoSim && !/\?\s*$/.test(fala)) fala = `${fala ? `${fala} ` : ""}Confirma?`;
+  return fala || (aguardandoSim ? "Confirma?" : "Pode repetir?");
+}
