@@ -121,16 +121,16 @@ jobs:
         run: |
           sudo grep -rlE 'dl\.google\.com|packages\.microsoft\.com' \
             /etc/apt/sources.list.d/ 2>/dev/null | sudo xargs -r rm -f || true
-          # o espelho do apt do runner às vezes não baixa os índices (exit 100, issue #322):
-          # tenta de novo antes de desistir
-          echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
-          for tentativa in 1 2 3; do
-            if npx playwright install-deps chromium; then exit 0; fi
-            echo "install-deps falhou (tentativa $tentativa); tentando de novo em 20 s"
-            sleep 20
-            sudo apt-get update || true
+          # o apt do runner às vezes nem resolve o DNS do espelho (exit 100, issue #322).
+          # O runner já traz o Google Chrome e, com ele, as libs que o Chromium usa: se
+          # o install-deps falhar duas vezes, seguimos — lib que faltar aparece no teste.
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
+          for tentativa in 1 2; do
+            if timeout 300 npx playwright install-deps chromium; then exit 0; fi
+            echo "install-deps falhou (tentativa $tentativa)"
+            sleep 15
           done
-          exit 1
+          echo "::warning::install-deps do Playwright falhou (apt do runner); seguindo com as libs do runner"
       - run: npx playwright install chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v7
