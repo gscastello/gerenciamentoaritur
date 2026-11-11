@@ -52,7 +52,7 @@ import {
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
 } from "./rascunhoPuro.ts";
-import { conferirPeloCliente } from "./pedidoDoCliente.ts";
+import { conferirPeloCliente, datasEscritas } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -294,6 +294,8 @@ async function lerEGravar(
       pontos: ctx.pontos,
       areaDoDesembarque: ctx.areaDe,
       horaAgora,
+      // o cliente escreveu o dia de hoje: não vira amanhã calado (issue #307)
+      hojeDito: datasEscritas(mensagensDoCliente).includes(hoje),
       costume,
       agendado: opcoes.confirmadoPelaEquipe,
     });
