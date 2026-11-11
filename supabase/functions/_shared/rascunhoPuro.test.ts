@@ -701,3 +701,38 @@ Deno.test("#314: lugar de Cantanhede depois que a Ida saiu é a Volta de hoje; n
   assertEquals(perguntaAoCliente(["cidade"], ["cidade"], "Ana"), null);
   assertEquals(perguntaAoCliente(["conferir", "vespera"], [], "Ana"), null);
 });
+
+Deno.test("#324: cidade da Volta cruzando as pistas (Campestre, base, histórico, conversas antigas)", async () => {
+  const { cidadeDaVoltaPelasPistas } = await import("./rascunhoPuro.ts");
+  const lugar = (nome: string, p: boolean, c: boolean, rp = 0, rc = 0) => ({
+    tipo: "rua", nome, em_pirapemas: p, em_cantanhede: c, reservas_pirapemas: rp, reservas_cantanhede: rc,
+  });
+  const vazio = { lugares: [], historico: [], textosAntigos: [] };
+  // Campestre: cidade do caminho, ponto Cantanhede, mesmo valor
+  const campestre = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre", lugares: [lugar("Campestre", true, true, 2, 2)] });
+  assertEquals(campestre?.cidade, "cantanhede");
+  assertStringIncludes(campestre?.aviso ?? "", "entre Pirapemas e Cantanhede");
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "no campestri" })?.cidade, "cantanhede");
+  // Rua 1º de Maio: só em Cantanhede, com 2 reservas (antes exigia 3)
+  const maio = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Rua 1° de maio", lugares: [lugar("1 de Maio", false, true, 0, 2)] });
+  assertEquals(maio?.cidade, "cantanhede");
+  // atrás da igreja: a igreja só em Pirapemas e, nas conversas antigas, ele só cita Pirapemas
+  const igreja = cidadeDaVoltaPelasPistas({
+    textoDoEmbarque: "Aqui atrás da igreja",
+    lugares: [lugar("Igreja", true, false, 1, 0)],
+    historico: [],
+    textosAntigos: ["Tem passagem para Pirapemas no domingo?", "Não vou conseguir ir para São Luís"],
+  });
+  assertEquals(igreja?.cidade, "pirapemas");
+  assertStringIncludes(igreja?.aviso ?? "", "nas conversas o cliente só cita Pirapemas");
+  // só o histórico de reservas também vale
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "em casa", historico: ["pirapemas", "pirapemas"] })?.cidade, "pirapemas");
+  // pistas que discordam: pergunta ao cliente
+  assertEquals(
+    cidadeDaVoltaPelasPistas({ textoDoEmbarque: "Rua A", lugares: [lugar("Rua A", false, true, 0, 1)], historico: ["pirapemas"], textosAntigos: [] }),
+    null,
+  );
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "x", historico: ["pirapemas", "cantanhede"] }), null);
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Lister Caldas", lugares: [lugar("Lister Caldas", true, true, 3, 3)] }), null);
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "" }), null);
+});

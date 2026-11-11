@@ -346,6 +346,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   é bairro de São Luís → pendente `qual_viagem`. Dúvida que só o cliente resolve (`qual_viagem`, `cidade`) o bot
   **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
   Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
+  **Cidade da Volta pelas pistas** (issue #324, `cidadeDaVoltaPelasPistas`): sem cidade dita, o Agendado cruza tudo o
+  que o sistema sabe — Campestre (cidade do caminho, entre Pirapemas e Cantanhede: ponto Cantanhede, mesmo valor, sem
+  revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
+  cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
+  Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
   **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
   depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
   ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).

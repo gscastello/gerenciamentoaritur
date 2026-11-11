@@ -808,3 +808,62 @@ export function perguntaAoCliente(
   const saudacao = primeiro && primeiro.length >= 2 ? `${primeiro}, só` : "Só";
   return { codigo, texto: `${saudacao} pra confirmar sua vaga: ${PERGUNTAS_AO_CLIENTE[codigo]} 😊` };
 }
+
+/**
+ * Cidades do caminho que são embarque da Volta, com o ponto do app (issue #324, dono 11/11):
+ * Campestre fica entre Pirapemas e Cantanhede, sai junto com Cantanhede no cronograma e tem
+ * o mesmo valor — não precisa de revisão.
+ */
+export const EMBARQUES_INTERMEDIARIOS_DA_VOLTA: Record<string, { ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string }> = {
+  campestre: { ponto: "cantanhede", nome: "Campestre" },
+};
+
+/**
+ * A cidade da Volta cruzando TODAS as pistas que o sistema tem (issue #324), quando o
+ * cliente não disse: (1) embarque numa cidade do caminho (Campestre → ponto Cantanhede);
+ * (2) lugar citado que só existe numa das cidades na base (qualquer número de reservas);
+ * (3) cidades das reservas anteriores do cliente; (4) cidade que ele cita nas conversas
+ * antigas. As pistas 2–4 têm de apontar a mesma cidade; se discordam, null (pergunta ao
+ * cliente). Nunca decide preço.
+ */
+export function cidadeDaVoltaPelasPistas(p: {
+  textoDoEmbarque: string | null | undefined;
+  lugares: LugarNasCidades[];
+  /** cidade de cada reserva anterior do cliente (Volta: o ponto; Ida: o destino) */
+  historico: string[];
+  /** o que o cliente escreveu em todas as conversas, também as antigas */
+  textosAntigos: (string | null | undefined)[];
+}): { cidade: (typeof CIDADES_DA_VOLTA)[number]; aviso: string } | null {
+  const palavras = normalizarTexto(String(p.textoDoEmbarque ?? "")).split(" ").filter(Boolean);
+  for (const [chave, intermediaria] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {
+    if (palavras.some((w) => palavraParecida(w, chave))) {
+      return {
+        cidade: intermediaria.ponto,
+        aviso: `${intermediaria.nome} fica entre Pirapemas e Cantanhede: embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, mesmo valor.`,
+      };
+    }
+  }
+  const pistas: { cidade: string; motivo: string }[] = [];
+  const unicos = [...new Set(p.lugares.map(cidadeUnica).filter((c): c is "pirapemas" | "cantanhede" => !!c))];
+  if (unicos.length === 1) {
+    const l = p.lugares.find((x) => cidadeUnica(x) === unicos[0]);
+    pistas.push({ cidade: unicos[0], motivo: `${l?.nome ?? "o lugar"} só existe em ${NOME_DA_CIDADE[unicos[0]]} na base de lugares` });
+  } else if (unicos.length > 1) {
+    return null;
+  }
+  const doHistorico = [...new Set(p.historico.filter((c) => (CIDADES_DA_VOLTA as readonly string[]).includes(c)))];
+  if (doHistorico.length === 1) {
+    pistas.push({ cidade: doHistorico[0], motivo: `as reservas anteriores do cliente são de ${NOME_DA_CIDADE[doHistorico[0]]}` });
+  } else if (doHistorico.length > 1) {
+    return null;
+  }
+  const citada = cidadeEscritaPeloCliente(p.textosAntigos);
+  if (citada) pistas.push({ cidade: citada, motivo: `nas conversas o cliente só cita ${NOME_DA_CIDADE[citada]}` });
+  const cidades = [...new Set(pistas.map((x) => x.cidade))];
+  if (cidades.length !== 1) return null;
+  const cidade = cidades[0] as (typeof CIDADES_DA_VOLTA)[number];
+  return {
+    cidade,
+    aviso: `Cidade ${NOME_DA_CIDADE[cidade]} pelas pistas (${pistas.map((x) => x.motivo).join("; ")}); o cliente não disse a cidade nesta conversa.`,
+  };
+}
