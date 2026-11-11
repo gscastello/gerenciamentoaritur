@@ -383,6 +383,8 @@ ${quando}
 
 - O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
+- A resposta do cliente vale para o que a equipe PERGUNTOU: depois de "Te buscamos aonde?", "Onde te pegamos?", "De onde você sai?", o que ele responde (rua, alojamento, referência, "100 metros da pista") é EMBARQUE, mesmo que pareça destino. Desembarque só quando a pergunta foi onde ele desce ou ele disse "desço", "me deixa em".
+- Sugestão da equipe ("Na usina, certo?") só vale se o cliente confirmou. Se ele disse "não", ignore a sugestão e use o que ele disse depois.
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - O DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
@@ -694,6 +696,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   sem_data: "o dia da viagem não aparece na conversa",
   data_passada: "o dia lido já passou",
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
+  qual_viagem: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede: Volta de hoje ou Ida de amanhã?",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
   sem_endereco: "falta o local de embarque",
@@ -765,4 +768,43 @@ export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; co
   if (r.pedidos === 0) return true;
   if (r.codigosPendentes.includes("cidade") || r.codigosPendentes.includes("conferir")) return true;
   return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
+}
+
+/**
+ * A Ida de hoje já saiu e a Volta ainda sai (issue #314): o embarque que o cliente disse é
+ * um lugar conhecido de Pirapemas/Cantanhede? Então o pedido é a Volta de hoje. Se o mesmo
+ * nome também é bairro de São Luís (ex.: Santa Bárbara), só o cliente sabe: "qual_viagem"
+ * (a não ser que ele costume voltar). Lugar desconhecido = null (vale a regra de sempre).
+ */
+export function proximaViagemPeloLugar(p: {
+  lugares: LugarNasCidades[];
+  bairroDeSaoLuis: boolean;
+  costumeVolta: boolean;
+}): "volta" | "qual_viagem" | null {
+  const daRota = p.lugares.filter((l) => l.em_pirapemas || l.em_cantanhede);
+  if (!daRota.length) return null;
+  if (p.bairroDeSaoLuis && !p.costumeVolta) return "qual_viagem";
+  return "volta";
+}
+
+/** Dúvidas do Agendado que só o CLIENTE resolve: o bot pergunta a ele (issue #314). */
+export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
+  qual_viagem: "é a Volta de hoje (saindo daí para São Luís) ou a Ida de amanhã (saindo de São Luís)?",
+  cidade: "você embarca em Pirapemas ou em Cantanhede?",
+};
+
+/**
+ * A pergunta ao cliente para as dúvidas pendentes ainda não perguntadas (uma por vez,
+ * na ordem: qual viagem antes da cidade). null = nada a perguntar.
+ */
+export function perguntaAoCliente(
+  pendentes: string[],
+  jaPerguntadas: string[],
+  nome?: string | null,
+): { codigo: string; texto: string } | null {
+  const codigo = Object.keys(PERGUNTAS_AO_CLIENTE).find((c) => pendentes.includes(c) && !jaPerguntadas.includes(c));
+  if (!codigo) return null;
+  const primeiro = String(nome ?? "").trim().split(/\s+/)[0];
+  const saudacao = primeiro && primeiro.length >= 2 ? `${primeiro}, só` : "Só";
+  return { codigo, texto: `${saudacao} pra confirmar sua vaga: ${PERGUNTAS_AO_CLIENTE[codigo]} 😊` };
 }

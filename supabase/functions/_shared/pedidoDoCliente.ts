@@ -255,3 +255,145 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
   if (notas) pedido.duvida = [pedido.duvida, notas].filter(Boolean).join(" ").slice(0, 400);
   return { pedido, completados, avisos };
 }
+
+// ---------------------------------------------------------------------------
+// Conferência final (issue #309)
+// ---------------------------------------------------------------------------
+
+const ddmm = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
+
+/**
+ * A ÚLTIMA trava, com a reserva PRONTA (depois de todas as regras que mexem nela:
+ * troca de dia, bairro, cidade, costume): ainda bate com o que o cliente escreveu?
+ * Devolve o que não bate; vazio = pode gravar. Pega o erro de qualquer regra,
+ * inclusive das que ainda vão ser criadas. Só compara o que o cliente escreveu de
+ * forma clara; o que ele não escreveu não conta contra.
+ */
+export function conferenciaFinal(
+  r: { type?: string | null; trip_date: string; direction: string; quantity?: number | null; route_point_code?: string | null },
+  mensagens: MensagemDoCliente[],
+  ctx: { hoje: string; pedidosLidos: number; cidadeEscrita?: string | null },
+): string[] {
+  if (r.type === "encomenda") return [];
+  const textos = mensagens.map((m) => m.texto);
+  const naoBate: string[] = [];
+
+  const datas = datasEscritas(mensagens).filter((d) => d >= ctx.hoje);
+  if (datas.length && !datas.includes(r.trip_date)) {
+    naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
+  }
+
+  const sentido = sentidoEscrito(textos);
+  if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
+    naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
+  }
+
+  const q = quantidadeEscrita(textos);
+  if (q != null && ctx.pedidosLidos === 1 && (r.quantity ?? 1) !== q) {
+    naoBate.push(`o cliente escreveu ${q} passagem(ns) e a reserva ficou com ${r.quantity ?? 1}`);
+  }
+
+  if (r.direction === "volta" && ctx.cidadeEscrita && r.route_point_code && r.route_point_code !== ctx.cidadeEscrita) {
+    naoBate.push(`o cliente escreveu ${ctx.cidadeEscrita} e a Volta ficou saindo de ${r.route_point_code}`);
+  }
+  return naoBate;
+}
+
+// ---------------------------------------------------------------------------
+// Pergunta da equipe → resposta do cliente (issue #320)
+// ---------------------------------------------------------------------------
+
+/** Mensagem do pedido com quem escreveu (cliente ou equipe). */
+export type FalaDoPedido = { quem: string; texto: string; em: string };
+
+const com = (t: string) => ` ${normalizarTexto(t)} `;
+const PERGUNTA_DE_EMBARQUE =
+  / (busc\w*|peg\w*|embarc\w*|aonde|onde (voce|vc|tu|a senhora|o senhor) (esta|ta|fica|mora|vai estar)|de onde) /;
+const PERGUNTA_DE_DESEMBARQUE = / (desc\w*|desembarc\w*|deix\w*|destino|pra onde|para onde) /;
+const FALA_DE_DESEMBARQUE = / (desco|desce|descer|deixa|deixar|me deixe|destino|vou pra|vou para) /;
+const SEM_SENTIDO = new Set(["a", "o", "as", "os", "da", "de", "do", "das", "dos", "na", "no", "nas", "nos", "em", "e", "pra", "para"]);
+const nucleoDe = (t: string) =>
+  normalizarTexto(t)
+    .split(" ")
+    .filter((p) => p && !SEM_SENTIDO.has(p))
+    .join(" ");
+
+/**
+ * Sobre o que era a última pergunta da equipe antes da mensagem `i` do cliente:
+ * embarque ("Te buscamos aonde?") ou desembarque ("Desce onde?"). Olha até 3 mensagens
+ * da equipe em 30 min; confirmação sem assunto ("Na usina certo?") passa para a anterior.
+ */
+export function assuntoDaResposta(conversa: FalaDoPedido[], i: number): "embarque" | "desembarque" | null {
+  let vistas = 0;
+  const quando = Date.parse(conversa[i]?.em ?? "");
+  for (let j = i - 1; j >= 0 && vistas < 3; j--) {
+    const m = conversa[j];
+    if (m.quem !== "equipe") continue;
+    vistas++;
+    if (Number.isFinite(quando) && quando - Date.parse(m.em) > 30 * 60 * 1000) break;
+    if (!m.texto.includes("?")) continue;
+    const t = com(m.texto);
+    if (PERGUNTA_DE_DESEMBARQUE.test(t)) return "desembarque";
+    if (PERGUNTA_DE_EMBARQUE.test(t)) return "embarque";
+  }
+  return null;
+}
+
+/**
+ * O desembarque que o leitor gravou saiu de uma resposta do cliente a uma pergunta
+ * sobre o EMBARQUE (e ele não falou em descer)? Então é embarque (issue #320).
+ */
+export function desembarqueEraEmbarque(desembarque: string | null | undefined, conversa: FalaDoPedido[]): boolean {
+  const palavras = nucleoDe(String(desembarque ?? "")).split(" ").filter((p) => p.length >= 3);
+  if (!palavras.length) return false;
+  for (let i = conversa.length - 1; i >= 0; i--) {
+    const m = conversa[i];
+    if (m.quem !== "cliente") continue;
+    const ditas = new Set(normalizarTexto(m.texto).split(" "));
+    const iguais = palavras.filter((p) => ditas.has(p)).length;
+    if (iguais / palavras.length < 0.6) continue;
+    if (FALA_DE_DESEMBARQUE.test(com(m.texto))) return false;
+    return assuntoDaResposta(conversa, i) === "embarque";
+  }
+  return false;
+}
+
+/**
+ * Sugestões da equipe que o cliente recusou: "Na usina, certo?" → "Não". Devolve o
+ * núcleo da sugestão ("usina"). "Sim"/"isso" confirma e não entra.
+ */
+export function sugestoesRecusadas(conversa: FalaDoPedido[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < conversa.length; i++) {
+    const m = conversa[i];
+    if (m.quem !== "equipe") continue;
+    const s = m.texto.trim().match(/^(.{3,60}?)[,\s]*(certo|né|ne|correto|confere|isso|ok|é isso)\s*\?+\s*$/i);
+    if (!s) continue;
+    const nucleo = nucleoDe(s[1]);
+    if (nucleo.length < 3) continue;
+    for (let k = i + 1; k < conversa.length && k <= i + 4; k++) {
+      const r = conversa[k];
+      if (r.quem === "equipe") break;
+      if (r.quem !== "cliente") continue;
+      const t = normalizarTexto(r.texto);
+      if (/^(sim|isso|certo|exato|correto|e sim|isso mesmo|ok)\b/.test(t)) break;
+      if (/^(nao|n)\b/.test(t)) {
+        out.push(nucleo);
+        break;
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** Tira do embarque os trechos (separados por vírgula) que são uma sugestão recusada. */
+export function semSugestoesRecusadas(endereco: string, recusadas: string[]): { texto: string; tirou: string[] } {
+  const tirou: string[] = [];
+  const partes = endereco.split(/\s*,\s*/).filter((p) => {
+    const n = nucleoDe(p);
+    const recusada = recusadas.find((r) => n === r);
+    if (recusada) tirou.push(p.trim());
+    return !recusada;
+  });
+  return { texto: partes.join(", ").trim(), tirou };
+}
