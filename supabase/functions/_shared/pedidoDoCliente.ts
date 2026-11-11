@@ -138,7 +138,8 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
   for (const t of textos) {
     const n = ` ${normalizarTexto(t)} `;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
-    if (/ retorno /.test(n)) achados.push("retorno");
+    // "parada das vans" é o Retorno das Vans, não a rodoviária (dono, 11/11 — issue #333)
+    if (/ retorno | (parada|ponto) das? vans? /.test(n)) achados.push("retorno");
     else if (/ (aeroporto|posto carone|carone|br) /.test(n)) achados.push("outro");
     // "estou em casa" no meio da conversa não é pedido de busca: só com buscar/pegar ou numa resposta curta
     const curta = n.trim().split(" ").length <= 5;
