@@ -128,6 +128,8 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
 export type CostumeDoSentido = {
+  /** "manual" = fixado pela equipe; senão veio do histórico */
+  fonte?: string | null;
   route_point_code?: string | null;
   route_point_name?: string | null;
   neighborhood?: string | null;
@@ -229,6 +231,11 @@ export function validarPedidoExtraido(
     desembarqueDoCostume = texto(costume.dropoff_location, 120);
     const onde = [costume.route_point_name ?? costume.route_point_code, bairro, endereco].filter(Boolean).join(", ");
     avisos.push(`Embarque pelo endereço de costume (${onde}).`);
+  }
+  // desembarque de costume fixado pela equipe vale mesmo com o embarque dito ou "embarque varia" (issue #328)
+  if (tipo === "passagem" && !desembarqueDoCostume && !texto(p.desembarque) && costume?.fonte === "manual" && texto(costume.dropoff_location)) {
+    desembarqueDoCostume = texto(costume.dropoff_location, 120);
+    avisos.push(`Desembarque pelo endereço de costume (${desembarqueDoCostume}).`);
   }
   // endereço de casa em São Luís sem ponto dito = busca em casa
   if (tipo === "passagem" && !ponto && direcao === "ida" && (bairro || endereco) && ctx.pontos.ida.includes("busca")) {
@@ -369,6 +376,8 @@ export function instrucoesDaLeitura(ctx: {
   desembarques: string;
   confirmadoPelaEquipe?: boolean;
   costume?: string;
+  /** o que a equipe ensinou sobre este passageiro (customers.bot_instructions, issue #328) */
+  instrucoesDoCliente?: string;
   /** bairros de São Luís (tabela da busca em casa): separam embarque de desembarque */
   bairrosSaoLuis?: string;
 }): string {
@@ -384,6 +393,7 @@ ${quando}
 - O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - A resposta do cliente vale para o que a equipe PERGUNTOU: depois de "Te buscamos aonde?", "Onde te pegamos?", "De onde você sai?", o que ele responde (rua, alojamento, referência, "100 metros da pista") é EMBARQUE, mesmo que pareça destino. Desembarque só quando a pergunta foi onde ele desce ou ele disse "desço", "me deixa em".
+- Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque VÁLIDOS. Volta com embarque nelas: ponto "cantanhede" e a cidade em endereco. Ida com embarque nelas: ponto "outro" e a cidade em endereco. Desembarque nelas: a cidade em desembarque.
 - Sugestão da equipe ("Na usina, certo?") só vale se o cliente confirmou. Se ele disse "não", ignore a sugestão e use o que ele disse depois.
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - O DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
@@ -414,7 +424,10 @@ LOCAIS DE DESEMBARQUE:
 ${ctx.desembarques}${ctx.costume ? `
 
 ENDEREÇO DE COSTUME DESTE CLIENTE (onde ele sempre embarca/desce):
-${ctx.costume}` : ""}${ctx.bairrosSaoLuis ? `
+${ctx.costume}` : ""}${ctx.instrucoesDoCliente ? `
+
+INSTRUÇÕES DA EQUIPE SOBRE ESTE PASSAGEIRO (valem sobre o histórico; siga sempre):
+${ctx.instrucoesDoCliente}` : ""}${ctx.bairrosSaoLuis ? `
 
 BAIRROS DE SÃO LUÍS: ${ctx.bairrosSaoLuis}` : ""}`;
 }
@@ -807,4 +820,86 @@ export function perguntaAoCliente(
   const primeiro = String(nome ?? "").trim().split(/\s+/)[0];
   const saudacao = primeiro && primeiro.length >= 2 ? `${primeiro}, só` : "Só";
   return { codigo, texto: `${saudacao} pra confirmar sua vaga: ${PERGUNTAS_AO_CLIENTE[codigo]} 😊` };
+}
+
+/**
+ * Cidades do caminho que são embarque da Volta, com o ponto do app (issue #324, dono 11/11):
+ * Campestre fica entre Pirapemas e Cantanhede e é lançado no ponto Pirapemas (dono, 11/11), com
+ * o mesmo valor — não precisa de revisão.
+ */
+export const EMBARQUES_INTERMEDIARIOS_DA_VOLTA: Record<string, { ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string }> = {
+  campestre: { ponto: "pirapemas", nome: "Campestre" },
+  // todas as cidades do caminho são embarque válido (dono, 11/11 — issue #326); no cronograma da Volta
+  // todas vêm depois de Cantanhede, então o ponto é Cantanhede e o valor é o do trecho
+  matoes: { ponto: "cantanhede", nome: "Matões do Norte" },
+  miranda: { ponto: "cantanhede", nome: "Miranda do Norte" },
+  entroncamento: { ponto: "cantanhede", nome: "Entroncamento" },
+  colombo: { ponto: "cantanhede", nome: "Colombo" },
+  "santa rita": { ponto: "cantanhede", nome: "Santa Rita" },
+  bacabeira: { ponto: "cantanhede", nome: "Bacabeira" },
+};
+
+/** A cidade do caminho citada no texto ("no campestri", "em Santa Rita"), com o ponto da Volta. */
+export function cidadeDoCaminhoNoTexto(
+  texto: string | null | undefined,
+): { chave: string; ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string } | null {
+  const n = normalizarTexto(String(texto ?? ""));
+  if (!n) return null;
+  const palavras = n.split(" ").filter(Boolean);
+  for (const [chave, c] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {
+    const achou = chave.includes(" ") ? ` ${n} `.includes(` ${chave} `) : palavras.some((w) => palavraParecida(w, chave));
+    if (achou) return { chave, ...c };
+  }
+  return null;
+}
+
+/**
+ * A cidade da Volta cruzando TODAS as pistas que o sistema tem (issue #324), quando o
+ * cliente não disse: (1) embarque numa cidade do caminho (Campestre → ponto Cantanhede);
+ * (2) lugar citado que só existe numa das cidades na base (qualquer número de reservas);
+ * (3) cidades das reservas anteriores do cliente; (4) cidade que ele cita nas conversas
+ * antigas. As pistas 2–4 têm de apontar a mesma cidade; se discordam, null (pergunta ao
+ * cliente). Nunca decide preço.
+ */
+export function cidadeDaVoltaPelasPistas(p: {
+  textoDoEmbarque: string | null | undefined;
+  lugares: LugarNasCidades[];
+  /** cidade de cada reserva anterior do cliente (Volta: o ponto; Ida: o destino) */
+  historico: string[];
+  /** o que o cliente escreveu em todas as conversas, também as antigas */
+  textosAntigos: (string | null | undefined)[];
+}): { cidade: (typeof CIDADES_DA_VOLTA)[number]; aviso: string } | null {
+  const intermediaria = cidadeDoCaminhoNoTexto(p.textoDoEmbarque);
+  if (intermediaria) {
+    const mesmoValor = intermediaria.chave === "campestre";
+    return {
+      cidade: intermediaria.ponto,
+      aviso: mesmoValor
+        ? `${intermediaria.nome} fica entre Pirapemas e Cantanhede: embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, mesmo valor.`
+        : `${intermediaria.nome} fica no caminho da Volta (depois de Cantanhede): embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, valor do trecho.`,
+    };
+  }
+  const pistas: { cidade: string; motivo: string }[] = [];
+  const unicos = [...new Set(p.lugares.map(cidadeUnica).filter((c): c is "pirapemas" | "cantanhede" => !!c))];
+  if (unicos.length === 1) {
+    const l = p.lugares.find((x) => cidadeUnica(x) === unicos[0]);
+    pistas.push({ cidade: unicos[0], motivo: `${l?.nome ?? "o lugar"} só existe em ${NOME_DA_CIDADE[unicos[0]]} na base de lugares` });
+  } else if (unicos.length > 1) {
+    return null;
+  }
+  const doHistorico = [...new Set(p.historico.filter((c) => (CIDADES_DA_VOLTA as readonly string[]).includes(c)))];
+  if (doHistorico.length === 1) {
+    pistas.push({ cidade: doHistorico[0], motivo: `as reservas anteriores do cliente são de ${NOME_DA_CIDADE[doHistorico[0]]}` });
+  } else if (doHistorico.length > 1) {
+    return null;
+  }
+  const citada = cidadeEscritaPeloCliente(p.textosAntigos);
+  if (citada) pistas.push({ cidade: citada, motivo: `nas conversas o cliente só cita ${NOME_DA_CIDADE[citada]}` });
+  const cidades = [...new Set(pistas.map((x) => x.cidade))];
+  if (cidades.length !== 1) return null;
+  const cidade = cidades[0] as (typeof CIDADES_DA_VOLTA)[number];
+  return {
+    cidade,
+    aviso: `Cidade ${NOME_DA_CIDADE[cidade]} pelas pistas (${pistas.map((x) => x.motivo).join("; ")}); o cliente não disse a cidade nesta conversa.`,
+  };
 }

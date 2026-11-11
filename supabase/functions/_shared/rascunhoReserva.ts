@@ -54,6 +54,8 @@ import {
   perguntaAoCliente,
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
+  cidadeDaVoltaPelasPistas,
+  cidadeDoCaminhoNoTexto,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
@@ -191,6 +193,9 @@ function textoDoCostume(c: CostumeDoCliente): string {
       ? `- ${rotulo}: ${[s.route_point_name ?? s.route_point_code, s.neighborhood, s.detail].filter(Boolean).join(", ")}${
         s.dropoff_location ? ` → desce em ${s.dropoff_location}` : ""
       }`
+      : s?.dropoff_location
+      // "embarque varia" (issue #328): não presuma o embarque; o desembarque é o de sempre
+      ? `- ${rotulo}: embarque varia (use o que ele disser; não presuma) → desce em ${s.dropoff_location}`
       : "";
   return [linha("Ida", c.ida), linha("Volta", c.volta)].filter(Boolean).join("\n");
 }
@@ -206,6 +211,42 @@ async function viagensJaReservadas(customerId: string | null, hoje: string): Pro
     .neq("status", "cancelada")
     .gte("trips.trip_date", hoje);
   return new Set((data ?? []).map((r: Bloco) => `${r.trips.trip_date}|${r.trips.direction}`));
+}
+
+/** O que a equipe ensinou sobre o passageiro (customers.bot_instructions, issue #328). */
+async function instrucoesDaEquipe(customerId: string): Promise<string> {
+  const { data } = await supabaseAdmin.from("customers").select("bot_instructions").eq("id", customerId).maybeSingle();
+  return String(data?.bot_instructions ?? "").trim();
+}
+
+/** Cidade de cada reserva anterior do cliente: Volta pelo ponto, Ida pelo destino (issue #324). */
+async function cidadesDoHistorico(customerId: string | null): Promise<string[]> {
+  if (!customerId) return [];
+  const { data } = await supabaseAdmin
+    .from("reservations")
+    .select("dropoff_area, route_points(code), trips!inner(direction)")
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(60);
+  const out: string[] = [];
+  for (const r of (data ?? []) as Bloco[]) {
+    const cidade = r.trips?.direction === "volta" ? r.route_points?.code : r.dropoff_area;
+    if (cidade === "pirapemas" || cidade === "cantanhede") out.push(cidade);
+  }
+  return out;
+}
+
+/** O que o cliente escreveu em TODAS as conversas guardadas (não só as 72 h do pedido) — issue #324. */
+async function textosAntigosDoCliente(conversationId: string): Promise<string[]> {
+  const { data } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("content")
+    .eq("conversation_id", conversationId)
+    .eq("direction", "inbound")
+    .order("created_at", { ascending: false })
+    .limit(300);
+  return ((data ?? []) as Bloco[]).map((m) => String(m.content?.content ?? "")).filter(Boolean);
 }
 
 /**
@@ -228,12 +269,14 @@ async function lerEGravar(
 
   const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const costume = cliente ? await costumeDoCliente(cliente.id) : null;
+  const instrucoesDoCliente = cliente ? await instrucoesDaEquipe(cliente.id) : "";
   const system = instrucoesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
     pontos: ctx.listaPontos,
     desembarques: ctx.desembarques,
     confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
     costume: costume ? textoDoCostume(costume) : undefined,
+    instrucoesDoCliente: instrucoesDoCliente || undefined,
     bairrosSaoLuis: ctx.bairrosSaoLuis,
   });
   const conversa = anteriores.length
@@ -336,14 +379,30 @@ async function lerEGravar(
       }
     }
     // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
-    if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
+    if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita)) {
       const direcaoProvavel = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
       if (direcaoProvavel) {
-        const pelaBase = cidadePelaBase(await lugaresNasCidades(p.endereco));
+        const embarque = [p.endereco, p.trecho_do_cliente].filter(Boolean).join(", ");
+        const lugares = p.endereco ? await lugaresNasCidades(p.endereco) : [];
+        const pelaBase = cidadePelaBase(lugares);
+        // senão, TODAS as pistas que o sistema tem: Campestre, base de lugares, reservas e conversas antigas (issue #324)
+        const pistas = pelaBase
+          ? null
+          : cidadeDaVoltaPelasPistas({
+            textoDoEmbarque: embarque,
+            lugares,
+            historico: await cidadesDoHistorico(cliente?.id ?? null),
+            textosAntigos: await textosAntigosDoCliente(entrada.conversationId),
+          });
         if (pelaBase) {
           p.cidade_dita = pelaBase.cidade;
           p.direcao = "volta";
           p.duvida = [p.duvida, avisoDaCidadePelaBase(pelaBase)].filter(Boolean).join(" ");
+        } else if (pistas) {
+          p.cidade_dita = pistas.cidade;
+          p.direcao = "volta";
+          p.duvida = [p.duvida, pistas.aviso].filter(Boolean).join(" ");
+          evento("bot_cidade_pelas_pistas", { conversa: entrada.chatwootConversationId, cidade: pistas.cidade });
         } else if (costume?.volta?.route_point_code && ctx.pontos.volta.includes(costume.volta.route_point_code)) {
           // senão, a cidade onde o cliente costuma embarcar (dono, 10/11)
           p.cidade_dita = costume.volta.route_point_code;
@@ -600,7 +659,8 @@ export async function lancarPeloAgendado(entrada: Entrada) {
           const valor = await valorDoPedido(ponto, {
             bairro: d.pickup_neighborhood,
             endereco: d.pickup_detail,
-            desembarque: d.dropoff_location ?? "",
+            // Volta sem desembarque vai para São Luís: embarque numa cidade do caminho pega o trecho (issue #326)
+            desembarque: d.dropoff_location ?? (direcao === "volta" && cidadeDoCaminhoNoTexto(d.pickup_detail) ? "São Luís" : ""),
           });
           if (valor.ok) {
             preco = valor.preco;

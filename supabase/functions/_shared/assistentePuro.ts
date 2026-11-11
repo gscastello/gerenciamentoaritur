@@ -122,7 +122,141 @@ export type AcaoRascunho =
   | { tipo: "lancar_rascunho"; rascunho_id: string; resumo_atual: string }
   | { tipo: "descartar_rascunho"; rascunho_id: string; resumo_atual: string };
 export type AcaoPendencia = { tipo: "resolver_pendencia"; pendencia_id: string; resumo_atual: string };
-export type Acao = (AcaoCriar | AcaoMudar | AcaoCancelar | AcaoRascunho | AcaoPendencia) & { id: string };
+/** Ensinar o bot (issue #318): uma lição ou um lugar, gravados só no "Confirmar". */
+export type AcaoEnsinar = { tipo: "ensinar"; licao_tipo: TipoDeLicao; titulo: string; conteudo: string };
+export type AcaoEnsinarLugar = { tipo: "ensinar_lugar"; cidade: CidadeDoLugar; nome: string; bairro: string | null };
+/** Hábito de um passageiro (issue #328): endereço de costume (ponto vazio = embarque varia) e instrução da equipe. */
+export type AcaoCostume = {
+  tipo: "costume";
+  cliente_id: string;
+  cliente_nome: string;
+  sentido: "ida" | "volta";
+  ponto: string | null;
+  bairro: string | null;
+  embarque: string | null;
+  desembarque: string | null;
+};
+export type AcaoInstruirCliente = { tipo: "instruir_cliente"; cliente_id: string; cliente_nome: string; texto: string };
+export type Acao = (
+  | AcaoCriar
+  | AcaoMudar
+  | AcaoCancelar
+  | AcaoRascunho
+  | AcaoPendencia
+  | AcaoEnsinar
+  | AcaoEnsinarLugar
+  | AcaoCostume
+  | AcaoInstruirCliente
+) & {
+  id: string;
+};
+
+/** Tipos de lição que a equipe ensina pelo assistente (os mesmos do aprendizado, menos o "dito pelo cliente"). */
+export const TIPOS_DE_LICAO_ENSINADA = [
+  "operacao",
+  "fato",
+  "negocio",
+  "fluxo_agendamento",
+  "situacao",
+  "linguagem_cliente",
+  "estilo_atendente",
+] as const;
+export type TipoDeLicao = (typeof TIPOS_DE_LICAO_ENSINADA)[number];
+export type CidadeDoLugar = "pirapemas" | "cantanhede" | "sao_luis";
+const NOME_DO_TIPO: Record<TipoDeLicao, string> = {
+  operacao: "operação",
+  fato: "informação",
+  negocio: "regra da empresa",
+  fluxo_agendamento: "como agendar",
+  situacao: "situação",
+  linguagem_cliente: "jeito de o cliente falar",
+  estilo_atendente: "jeito de atender",
+};
+const NOME_DA_CIDADE_DO_LUGAR: Record<CidadeDoLugar, string> = {
+  pirapemas: "Pirapemas",
+  cantanhede: "Cantanhede",
+  sao_luis: "São Luís",
+};
+
+/**
+ * Confere a lição que o assistente propõe ensinar ao bot. Preço não entra (o bot usa a
+ * tabela) e telefone/documento também não — as mesmas travas de rpc_ensinar_ao_bot.
+ */
+export function validarLicao(a: Record<string, unknown>): { ok: true; acao: AcaoEnsinar } | { ok: false; erro: string } {
+  const tipo = String(a.tipo ?? "") as TipoDeLicao;
+  if (!TIPOS_DE_LICAO_ENSINADA.includes(tipo)) {
+    return { ok: false, erro: `Tipo de lição inválido. Use: ${TIPOS_DE_LICAO_ENSINADA.join(", ")}.` };
+  }
+  const titulo = txt(a.titulo, 120);
+  const conteudo = txt(a.conteudo, 800);
+  if (!titulo || titulo.length < 3) return { ok: false, erro: "Dê um título curto à lição." };
+  if (!conteudo || conteudo.length < 10) return { ok: false, erro: "Escreva a lição numa frase completa." };
+  const tudo = `${titulo} ${conteudo}`;
+  if (/r\$|\breais\b/i.test(tudo)) {
+    return { ok: false, erro: "Preço não vai em lição: o bot usa a tabela (Sistema → Bairros / Trechos / Locais). Diga isso ao sócio." };
+  }
+  if (/\d{8,}/.test(tudo.replace(/\D/g, ""))) return { ok: false, erro: "Lição não guarda telefone nem documento." };
+  return { ok: true, acao: { tipo: "ensinar", licao_tipo: tipo, titulo, conteudo } };
+}
+
+/**
+ * Confere o endereço de costume proposto. Ponto vazio = "embarque varia" e aí o
+ * desembarque é obrigatório (é o que fica fixo).
+ */
+export function validarCostume(
+  a: Record<string, unknown>,
+  pontos: { ida: string[]; volta: string[] },
+): { ok: true; acao: Omit<AcaoCostume, "cliente_nome"> } | { ok: false; erro: string } {
+  const clienteId = txt(a.cliente_id, 60);
+  if (!clienteId) return { ok: false, erro: "Use buscar_cliente e passe o cliente_id." };
+  const s = sentido(a.sentido);
+  if (!s) return { ok: false, erro: "Informe o sentido: ida ou volta." };
+  const ponto = txt(a.ponto, 40)?.toLowerCase() ?? null;
+  if (ponto && !pontos[s].includes(ponto)) return { ok: false, erro: `Ponto "${ponto}" não existe na ${s}. Pontos: ${pontos[s].join(", ")}.` };
+  const desembarque = txt(a.desembarque, 120);
+  if (!ponto && !desembarque) return { ok: false, erro: "Embarque varia? Então diga o desembarque de costume." };
+  if (ponto === "busca" && !txt(a.bairro, 80)) return { ok: false, erro: "Buscar em casa precisa do bairro." };
+  return {
+    ok: true,
+    acao: {
+      tipo: "costume",
+      cliente_id: clienteId,
+      sentido: s,
+      ponto,
+      bairro: ponto === "busca" ? txt(a.bairro, 80) : null,
+      embarque: ponto ? txt(a.embarque) : null,
+      desembarque,
+    },
+  };
+}
+
+/** Confere a instrução sobre um passageiro: frase curta, sem telefone. */
+export function validarInstrucaoDoCliente(
+  a: Record<string, unknown>,
+): { ok: true; acao: Omit<AcaoInstruirCliente, "cliente_nome"> } | { ok: false; erro: string } {
+  const clienteId = txt(a.cliente_id, 60);
+  if (!clienteId) return { ok: false, erro: "Use buscar_cliente e passe o cliente_id." };
+  const texto = txt(a.texto, 500);
+  if (!texto || texto.length < 5) return { ok: false, erro: "Escreva a instrução numa frase." };
+  if (/\d{8,}/.test(texto.replace(/\D/g, ""))) return { ok: false, erro: "A instrução não guarda telefone nem documento." };
+  return { ok: true, acao: { tipo: "instruir_cliente", cliente_id: clienteId, texto } };
+}
+
+/** Confere o lugar que o assistente propõe ensinar: cidade da rota, ou São Luís com o bairro. */
+export function validarLugar(a: Record<string, unknown>): { ok: true; acao: AcaoEnsinarLugar } | { ok: false; erro: string } {
+  const cidade = String(a.cidade ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_") as CidadeDoLugar;
+  if (!(cidade in NOME_DA_CIDADE_DO_LUGAR)) return { ok: false, erro: "Cidade: pirapemas, cantanhede ou sao_luis." };
+  const nome = txt(a.nome, 120);
+  if (!nome || nome.length < 3) return { ok: false, erro: "Diga o nome do lugar (rua, referência, condomínio, povoado)." };
+  const bairro = txt(a.bairro, 80);
+  if (cidade === "sao_luis" && !bairro) return { ok: false, erro: "Em São Luís, diga o bairro (nome da tabela)." };
+  return { ok: true, acao: { tipo: "ensinar_lugar", cidade, nome, bairro: cidade === "sao_luis" ? bairro : null } };
+}
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const txt = (v: unknown, max = 200): string | null => {
@@ -213,6 +347,19 @@ const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
 /** Texto do cartão de confirmação no app. */
 export function descreverAcao(a: Acao, nomesDosPontos: Record<string, string> = {}): string {
+  if (a.tipo === "ensinar") return `Ensinar ao bot (${NOME_DO_TIPO[a.licao_tipo]}): ${a.titulo} — ${a.conteudo}`;
+  if (a.tipo === "instruir_cliente") return `Guardar sobre ${a.cliente_nome}: ${a.texto}`;
+  if (a.tipo === "costume") {
+    const sobe = a.ponto
+      ? [nomesDosPontos[a.ponto] ?? a.ponto, a.bairro, a.embarque].filter(Boolean).join(", ")
+      : "embarque varia";
+    return `Costume de ${a.cliente_nome} na ${a.sentido === "ida" ? "Ida" : "Volta"}: ${sobe}${a.desembarque ? ` → desce em ${a.desembarque}` : ""}`;
+  }
+  if (a.tipo === "ensinar_lugar") {
+    return a.cidade === "sao_luis"
+      ? `Ensinar ao bot: ${a.nome} fica no bairro ${a.bairro} (São Luís)`
+      : `Ensinar ao bot: ${a.nome} fica em ${NOME_DA_CIDADE_DO_LUGAR[a.cidade]}`;
+  }
   if (a.tipo === "cancelar") return `Cancelar: ${a.resumo_atual}`;
   if (a.tipo === "lancar_rascunho") return `Lançar a reserva pronta: ${a.resumo_atual}`;
   if (a.tipo === "descartar_rascunho") return `Descartar a reserva pronta: ${a.resumo_atual}`;
@@ -277,6 +424,15 @@ export function instrucoesDoAssistente(ctx: {
 O QUE VOCÊ FAZ
 - Consulta o app pelas ferramentas: clientes, conversas do WhatsApp, reservas do dia, vagas, preços, pendências, lugares das cidades e números do financeiro.
 - PROPÕE reservas novas, mudanças e cancelamentos com propor_reserva, propor_mudanca e propor_cancelamento. Você NUNCA grava nada: a proposta vira um cartão e quem grava é a pessoa, tocando em "Confirmar". Depois de propor, diga em uma linha o que propôs e peça para conferir o cartão. Não diga que reservou.
+- ENSINA O BOT do WhatsApp com propor_licao e propor_lugar (também só depois do "Confirmar"): veja ENSINAR O BOT.
+
+ENSINAR O BOT (o que o sócio informa ou corrige vira aprendizado)
+- O sócio contou algo que o bot deveria saber (como a operação funciona, uma regra da empresa, uma situação e o que fazer, um jeito de o cliente falar)? Proponha propor_licao com uma frase geral, sem nome nem telefone de cliente.
+- Disse onde fica um lugar ("a descida da Inês é em Pirapemas", "o Condomínio X fica no Turu")? Proponha propor_lugar: Pirapemas/Cantanhede guardam a cidade do lugar; São Luís guarda o bairro (nome da tabela).
+- Corrigiu um erro de uma reserva lançada pelo bot (dia, sentido, cidade, bairro)? Depois de propor a correção, pergunte se quer ensinar ao bot a causa, e proponha a lição ou o lugar se ele disser que sim.
+- Preço NUNCA vira lição: o bot usa a tabela. Se o sócio disser um preço, diga que ele muda na aba Sistema (Bairros, Trechos ou Locais).
+- Não proponha ensinar o que já está nos dados do sistema ou nas lições aprovadas.
+- Hábito de UM passageiro ("o embarque dela na Ida varia entre X e Y", "ela sempre desce no Z", "na Volta ele sai sempre de W") NÃO é lição geral: use buscar_cliente e proponha propor_costume (por sentido; embarque que varia = sem ponto, só o desembarque) e, para o que não cabe no costume (o que varia, preferências, o que perguntar), propor_instrucao_cliente. Uma proposta por sentido e uma para a instrução.
 
 REGRAS DE RESERVA (as mesmas do app)
 - Ida = sai de São Luís. Volta = sai de Pirapemas/Cantanhede e vai PARA São Luís ("pra São Luís" é Volta, inclusive encomenda).
@@ -316,12 +472,14 @@ export const CONHECIMENTO_DA_OPERACAO = `CONHECIMENTO DA OPERAÇÃO (combinado c
 Sentidos e horários
 - Ida sai de São Luís de madrugada (termina por volta de 06:30) para Pirapemas/Cantanhede. Volta sai de Pirapemas/Cantanhede até por volta das 13:00 para São Luís. Na segunda a Ida sai mais cedo.
 - "Pra São Luís" é Volta (também encomenda); "pra Pirapemas/Cantanhede" é Ida. "Madrugada", "amanhã cedo", "5 horas" = Ida; "meio-dia", "à tarde", "após as 12" = Volta.
-- Se a viagem de hoje naquele sentido já saiu, "a próxima" é a de amanhã. Data relativa de uma mensagem conta do dia em que ela foi escrita.
+- Pedido para HOJE depois que a Ida saiu (a Volta ainda sai) é a Volta de hoje quando o destino ou o embarque é do caminho (Miranda, Pirapemas, Cantanhede…); "hoje" nunca vira amanhã sem perguntar. Sem dia e as duas viagens de hoje já saíram: é amanhã. Data relativa de uma mensagem conta do dia em que ela foi escrita.
 Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto certo)
 - Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, outro (Outros: BR, Posto Carone, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
 - "Retorno do aeroporto" / "no retorno" é o ponto retorno. Dentro do aeroporto (terminal, chegando de voo) é outro com "Aeroporto de São Luís", que tem preço próprio. Na dúvida, pergunte qual.
 - Busca em casa precisa do bairro (nome da tabela). Bairro da tabela escrito no endereço ("…, Estrada da Maioba") é o bairro. Condomínio ou rua sem bairro: use onde_fica (São Luís aprende rua/condomínio → bairro com as reservas); sem certeza, pergunte, ou use "(bairro a confirmar)" e sem valor.
-- Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade só vale se foi dita ou é o endereço de costume; onde_fica só ajuda a confirmar.
+- Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade vale se foi dita, é o endereço de costume, ou TODAS as pistas apontam a mesma (lugar que só existe numa cidade em onde_fica, reservas anteriores do cliente, cidade que ele cita nas conversas antigas). Pistas que discordam: pergunte.
+- Campestre fica entre Pirapemas e Cantanhede e é embarque válido da Volta: ponto pirapemas com "Campestre" no embarque, mesmo valor, sem revisão.
+- TODAS as cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque válidos. Volta com embarque nelas: ponto cantanhede com a cidade no embarque (Campestre: ponto pirapemas); Ida com embarque nelas: ponto outro com a cidade no embarque. O valor é o do trecho (calcular_valor). Trecho de R$ 50 ou mais é reserva normal; abaixo de R$ 50, em dia cheio (poucas vagas), avise o sócio que pode faltar lugar para quem vai até São Luís — com bastante vaga, reserve normal.
 - Preço compara embarque e desembarque na tabela de trechos (ex.: Pirapemas até Miranda). Cidade intermediária sem trecho cadastrado: não invente; fica sem valor e avise.
 - Valor dito pelo SÓCIO neste chat vale (valor_dito). Valor dito só pelo cliente, não.
 Clientes e passageiros
@@ -497,6 +655,64 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
     name: "propor_cancelamento",
     description: "Propõe cancelar uma reserva (fica no histórico; nada é apagado).",
     input_schema: { type: "object", properties: { reserva_id: { type: "string" } }, required: ["reserva_id"] },
+  },
+  {
+    name: "propor_licao",
+    description:
+      "Propõe ensinar ao bot do WhatsApp algo que o sócio informou ou corrigiu (vira lição do aprendizado). Frase geral, sem nome/telefone de cliente, sem preço.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tipo: { type: "string", enum: [...TIPOS_DE_LICAO_ENSINADA] },
+        titulo: { type: "string", description: "título curto (até 120 letras)" },
+        conteudo: { type: "string", description: "a lição numa ou duas frases (até 800 letras)" },
+      },
+      required: ["tipo", "titulo", "conteudo"],
+    },
+  },
+  {
+    name: "propor_costume",
+    description:
+      "Propõe fixar o endereço de costume de um passageiro num sentido (ida ou volta). Sem ponto = o embarque varia e só o desembarque fica fixo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente_id: { type: "string", description: "id do buscar_cliente" },
+        sentido: { type: "string", enum: ["ida", "volta"] },
+        ponto: { type: "string", description: "código do ponto de embarque; deixe vazio se o embarque varia" },
+        bairro: { type: "string", description: "busca em casa: bairro da tabela" },
+        embarque: { type: "string", description: "rua, referência ou local do embarque" },
+        desembarque: { type: "string", description: "onde desce de costume" },
+      },
+      required: ["cliente_id", "sentido"],
+    },
+  },
+  {
+    name: "propor_instrucao_cliente",
+    description:
+      "Propõe guardar uma instrução da equipe sobre um passageiro (o que varia, o que perguntar, preferências). O bot e o assistente seguem nos próximos agendamentos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente_id: { type: "string", description: "id do buscar_cliente" },
+        texto: { type: "string", description: "a instrução numa frase (até 500 letras, sem telefone)" },
+      },
+      required: ["cliente_id", "texto"],
+    },
+  },
+  {
+    name: "propor_lugar",
+    description:
+      "Propõe ensinar ao bot onde fica um lugar: rua/referência/povoado de Pirapemas ou Cantanhede, ou rua/condomínio de São Luís com o bairro da tabela.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cidade: { type: "string", enum: ["pirapemas", "cantanhede", "sao_luis"] },
+        nome: { type: "string", description: "como o lugar é chamado (ex.: Descida da Inês, Condomínio Jardim di Napoli)" },
+        bairro: { type: "string", description: "só em São Luís: o bairro da tabela" },
+      },
+      required: ["cidade", "nome"],
+    },
   },
 ];
 

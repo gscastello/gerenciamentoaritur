@@ -780,3 +780,40 @@ export function bairroEscritoNoEndereco<T extends { neighborhood: string }>(
   if (escolhido && disse.includes(` ${normalizar(escolhido)} `)) return null;
   return citado;
 }
+
+/**
+ * Trecho com cidade intermediária (issue #326, dono 11/11): R$ 50 ou mais é reserva normal;
+ * abaixo disso só pede confirmação em dia cheio — para não faltar lugar a quem vai até São
+ * Luís (R$ 60). "Dia cheio" = sobram menos de `vagasMinimas` depois desta reserva.
+ */
+export const REGRA_DO_TRECHO_PADRAO = { valorMinimo: 50, vagasMinimas: 10 };
+
+export function trechoPrecisaDeConfirmacao(p: {
+  preco: number | null | undefined;
+  vagasDepois: number | null | undefined;
+  valorMinimo?: number;
+  vagasMinimas?: number;
+}): { pendente: boolean; motivo: string | null } {
+  const valorMinimo = p.valorMinimo ?? REGRA_DO_TRECHO_PADRAO.valorMinimo;
+  const vagasMinimas = p.vagasMinimas ?? REGRA_DO_TRECHO_PADRAO.vagasMinimas;
+  if (p.preco == null || !Number.isFinite(Number(p.preco))) {
+    return { pendente: true, motivo: "Trecho de cidade intermediária sem valor na tabela — a equipe confirma." };
+  }
+  if (Number(p.preco) >= valorMinimo) return { pendente: false, motivo: null };
+  if (p.vagasDepois != null && p.vagasDepois >= vagasMinimas) return { pendente: false, motivo: null };
+  const sobram = p.vagasDepois == null ? "vagas não conferidas" : `${Math.max(0, p.vagasDepois)} vaga(s) sobrando`;
+  return {
+    pendente: true,
+    motivo: `Trecho curto (R$ ${Number(p.preco)}, abaixo de R$ ${valorMinimo}) em dia cheio (${sobram}): a equipe confirma para não faltar lugar a quem vai até São Luís.`,
+  };
+}
+
+/** Lê settings.intermediate_review ({ valor_minimo, vagas_minimas }); faltando, a regra padrão. */
+export function regraDoTrecho(valor: unknown): { valorMinimo: number; vagasMinimas: number } {
+  const v = (valor ?? {}) as Record<string, unknown>;
+  const num = (x: unknown, padrao: number) => (Number.isFinite(Number(x)) && Number(x) >= 0 ? Number(x) : padrao);
+  return {
+    valorMinimo: num(v.valor_minimo, REGRA_DO_TRECHO_PADRAO.valorMinimo),
+    vagasMinimas: num(v.vagas_minimas, REGRA_DO_TRECHO_PADRAO.vagasMinimas),
+  };
+}

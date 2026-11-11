@@ -25,6 +25,8 @@ import {
   precoDoLocalDeOutros,
   trechoDoPedido,
   validarPedidoDeReserva,
+  regraDoTrecho,
+  trechoPrecisaDeConfirmacao,
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
@@ -314,6 +316,8 @@ async function precoUnitario(
   };
 }
 
+const semAcentoMinusculo = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
 /** O valor por passagem deste pedido: compara onde sobe e onde desce e só então cai na tabela do ponto/bairro. */
 export async function valorDoPedido(
   ponto: Linha,
@@ -324,7 +328,8 @@ export async function valorDoPedido(
   if (trecho) return { ok: true, preco: Number(trecho.price), trecho: `${trecho.origem} a ${trecho.destino}` };
 
   const cidade = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.endereco, pedido.bairro]);
-  if (cidade) {
+  // Campestre tem o mesmo valor de Pirapemas/Cantanhede (dono, 11/11): vale o preço do ponto
+  if (cidade && semAcentoMinusculo(cidade) !== "campestre") {
     return {
       ok: false,
       erro: {
@@ -558,11 +563,21 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   }
 
   const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.enderecoEmbarque, pedido.bairro]);
-  // "Outros" reúne locais de São Luís (BR, Posto Carone, aeroporto…): só cidade fora da área deixa pendente (#261)
-  const fora = !!cidadeFora;
-  const motivoPendente = fora
-    ? `Trajeto fora da área padrão${cidadeFora ? ` (menciona "${cidadeFora}")` : ""} — aguardando confirmação manual.`
-    : null;
+  // cidade intermediária é válida (issue #326): R$ 50+ é normal; abaixo, só pede confirmação em dia cheio.
+  // "Outros" reúne locais de São Luís (BR, Posto Carone, aeroporto…) e não conta como cidade (#261)
+  let fora = false;
+  let motivoPendente: string | null = null;
+  if (cidadeFora && semAcentoMinusculo(cidadeFora) !== "campestre") {
+    const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "intermediate_review").maybeSingle();
+    const regra = regraDoTrecho(cfg?.value);
+    const conferido = trechoPrecisaDeConfirmacao({
+      preco: preco.preco,
+      vagasDepois: disp.available == null ? null : disp.available - pedido.quantidade,
+      ...regra,
+    });
+    fora = conferido.pendente;
+    motivoPendente = conferido.motivo ? `${conferido.motivo} (menciona "${cidadeFora}")` : null;
+  }
 
   // o texto do desembarque que bate com um local cadastrado também vai como "área" (rota do motorista)
   const areas = await whatsappService.listDropoffAreas(pedido.direcao).catch(() => []);

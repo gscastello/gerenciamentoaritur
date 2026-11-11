@@ -197,3 +197,29 @@ describe("dataDeAgendamentoValida", () => {
     expect(dataDeAgendamentoValida("2026-11-04x", "2026-11-04")).toBe(false);
   });
 });
+
+describe("embarque varia (#328)", () => {
+  const costume = {
+    fonte: "manual",
+    route_point_code: null,
+    route_point_name: null,
+    neighborhood: null,
+    detail: null,
+    dropoff_location: "Beco do Hospital",
+  };
+  it("resume como 'embarque varia' com o desembarque fixo", () => {
+    expect(resumoDoCostume(costume, PONTOS_IDA)).toBe("embarque varia → Beco do Hospital");
+  });
+  it("o agendamento pede o ponto e já traz o desembarque", () => {
+    const ini = inicialDoAgendamento({
+      cliente: { nome: "Ana", telefone: "98999990000" },
+      direcao: "ida",
+      costume,
+      trips: { ida: { pontos: PONTOS_IDA } },
+      data: "2026-11-12",
+    });
+    expect(ini.pontoId).toBe("");
+    expect(ini.desembarque).toBe("Beco do Hospital");
+    expect(ini.aviso).toMatch(/embarque deste cliente varia/);
+  });
+});

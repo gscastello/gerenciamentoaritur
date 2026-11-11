@@ -283,9 +283,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Devolver ao bot = status Pendente no Chatwoot.
 - O botão/pedido "falar com atendente" funciona em qualquer modo e **sempre**
   transfere e abre uma pendência (aba Pendências) com o link da conversa.
-- Reservas fora da área padrão (São Luís, Cantanhede, Pirapemas) entram
-  como `pendente` e exigem confirmação manual — nunca vão sozinhas para a
-  Agenda.
+- **Cidades intermediárias são válidas** (issue #326, dono 11/11): Campestre, Matões, Miranda, Entroncamento,
+  Colombo, Santa Rita e Bacabeira valem como embarque e desembarque. Trecho de **R$ 50 ou mais** (São Luís–Matões,
+  Pirapemas–Bacabeira) é reserva normal; **abaixo de R$ 50** só fica `pendente` em dia cheio (sobram menos de 10
+  vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
+  `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
+  Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
+  valor na tabela continua indo para a equipe; cidade fora da rota também.
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e
@@ -346,6 +350,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   é bairro de São Luís → pendente `qual_viagem`. Dúvida que só o cliente resolve (`qual_viagem`, `cidade`) o bot
   **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
   Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
+  **Cidade da Volta pelas pistas** (issue #324, `cidadeDaVoltaPelasPistas`): sem cidade dita, o Agendado cruza tudo o
+  que o sistema sabe — Campestre (cidade do caminho, entre Pirapemas e Cantanhede: ponto Pirapemas, mesmo valor, sem
+  revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
+  cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
+  Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
   **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
   depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
   ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).
@@ -368,6 +377,17 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
   operação combinada com o dono entra também em `CONHECIMENTO_DA_OPERACAO`. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
   chave pessoal (só o hash no banco; apagar desliga), respostas curtas para ler em voz alta e "sim" por voz para gravar.
+  **Ensina o bot** (issue #318, `database/94`): o que o sócio informa ou corrige vira aprendizado, também só depois
+  do "Confirmar"/"sim" — `propor_licao` → `rpc_ensinar_ao_bot` (lição em `bot_learnings`; admin = já aprovada) e
+  `propor_lugar` → `rpc_ensinar_lugar` (lugar de Pirapemas/Cantanhede em `cidade_lugares`, fonte dono/equipe, vale
+  como mapa; lugar de São Luís → bairro em `bairro_aliases` confirmado + `sao_luis_lugares`). Preço e telefone nunca
+  entram em lição (o banco recusa). Correção de reserva pelo assistente já conta no Acerto do bot e ensina as bases
+  de lugares pelos gatilhos das reservas.
+  **Hábito de cada passageiro** (issue #328, `database/95`): `propor_costume` fixa o endereço de costume por sentido
+  (ponto vazio = **embarque varia**: o bot não chuta o embarque, mas usa o desembarque de costume fixado) e
+  `propor_instrucao_cliente` guarda em `customers.bot_instructions` o que a equipe ensinou sobre o passageiro (o que
+  varia, o que perguntar). O aprendizado não mexe nas instruções (a anotação automática segue em `bot_customer_notes`);
+  o leitor do Agendado, o atendimento automático e o assistente leem e seguem, valendo sobre o histórico.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
   com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de

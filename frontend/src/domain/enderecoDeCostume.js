@@ -12,11 +12,12 @@ const SENTIDOS = ["ida", "volta"];
 /** "Posto Carone · Prime Calhau, Bloco 3 → Pirapemas" (as partes que existirem). */
 export function resumoDoCostume(costume, pontos = []) {
   if (!costume) return "";
-  const ponto =
-    pontos.find((p) => p.id === costume.route_point_code)?.nome ||
-    costume.route_point_name ||
-    costume.route_point_code ||
-    "";
+  // sem ponto = "embarque varia" (issue #328): só o desembarque fica fixo
+  const ponto = !costume.route_point_code
+    ? "embarque varia"
+    : pontos.find((p) => p.id === costume.route_point_code)?.nome ||
+      costume.route_point_name ||
+      costume.route_point_code;
   const local = [costume.neighborhood, costume.detail].filter(Boolean).join(", ");
   const origem = [ponto, local].filter(Boolean).join(" · ");
   return costume.dropoff_location ? `${origem} → ${costume.dropoff_location}` : origem;
@@ -62,7 +63,9 @@ export function inicialDoAgendamento({ cliente, direcao, costume, trips, data })
     pagamento: cliente?.pagamento_padrao || "dinheiro",
     aviso: ponto
       ? `Endereço de costume (${origemDoCostume(costume)}): ${resumoDoCostume(costume, pontos)}`
-      : "O ponto de costume deste cliente não existe mais — escolha o ponto de embarque.",
+      : costume && !costume.route_point_code
+        ? `O embarque deste cliente varia — escolha o ponto. ${resumoDoCostume(costume, pontos)}`
+        : "O ponto de costume deste cliente não existe mais — escolha o ponto de embarque.",
   };
 }
 

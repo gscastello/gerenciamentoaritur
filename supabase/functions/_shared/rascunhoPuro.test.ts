@@ -701,3 +701,79 @@ Deno.test("#314: lugar de Cantanhede depois que a Ida saiu é a Volta de hoje; n
   assertEquals(perguntaAoCliente(["cidade"], ["cidade"], "Ana"), null);
   assertEquals(perguntaAoCliente(["conferir", "vespera"], [], "Ana"), null);
 });
+
+Deno.test("#324: cidade da Volta cruzando as pistas (Campestre, base, histórico, conversas antigas)", async () => {
+  const { cidadeDaVoltaPelasPistas } = await import("./rascunhoPuro.ts");
+  const lugar = (nome: string, p: boolean, c: boolean, rp = 0, rc = 0) => ({
+    tipo: "rua", nome, em_pirapemas: p, em_cantanhede: c, reservas_pirapemas: rp, reservas_cantanhede: rc,
+  });
+  const vazio = { lugares: [], historico: [], textosAntigos: [] };
+  // Campestre: cidade do caminho, ponto Pirapemas (dono, 11/11), mesmo valor
+  const campestre = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre", lugares: [lugar("Campestre", true, true, 2, 2)] });
+  assertEquals(campestre?.cidade, "pirapemas");
+  assertStringIncludes(campestre?.aviso ?? "", "entre Pirapemas e Cantanhede");
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "no campestri" })?.cidade, "pirapemas");
+  // Rua 1º de Maio: só em Cantanhede, com 2 reservas (antes exigia 3)
+  const maio = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Rua 1° de maio", lugares: [lugar("1 de Maio", false, true, 0, 2)] });
+  assertEquals(maio?.cidade, "cantanhede");
+  // atrás da igreja: a igreja só em Pirapemas e, nas conversas antigas, ele só cita Pirapemas
+  const igreja = cidadeDaVoltaPelasPistas({
+    textoDoEmbarque: "Aqui atrás da igreja",
+    lugares: [lugar("Igreja", true, false, 1, 0)],
+    historico: [],
+    textosAntigos: ["Tem passagem para Pirapemas no domingo?", "Não vou conseguir ir para São Luís"],
+  });
+  assertEquals(igreja?.cidade, "pirapemas");
+  assertStringIncludes(igreja?.aviso ?? "", "nas conversas o cliente só cita Pirapemas");
+  // só o histórico de reservas também vale
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "em casa", historico: ["pirapemas", "pirapemas"] })?.cidade, "pirapemas");
+  // pistas que discordam: pergunta ao cliente
+  assertEquals(
+    cidadeDaVoltaPelasPistas({ textoDoEmbarque: "Rua A", lugares: [lugar("Rua A", false, true, 0, 1)], historico: ["pirapemas"], textosAntigos: [] }),
+    null,
+  );
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "x", historico: ["pirapemas", "cantanhede"] }), null);
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Lister Caldas", lugares: [lugar("Lister Caldas", true, true, 3, 3)] }), null);
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "" }), null);
+});
+
+Deno.test("#326: toda cidade do caminho é embarque válido da Volta (ponto Cantanhede)", async () => {
+  const { cidadeDaVoltaPelasPistas, cidadeDoCaminhoNoTexto } = await import("./rascunhoPuro.ts");
+  const vazio = { lugares: [], historico: [], textosAntigos: [] };
+  for (const [texto, nome] of [["Matões", "Matões do Norte"], ["em miranda", "Miranda do Norte"], ["Santa Rita, perto do posto", "Santa Rita"], ["bacabeira", "Bacabeira"]]) {
+    const r = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: texto });
+    assertEquals(r?.cidade, "cantanhede", texto);
+    assertStringIncludes(r?.aviso ?? "", nome);
+    assertStringIncludes(r?.aviso ?? "", "valor do trecho");
+  }
+  assertStringIncludes(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre" })?.aviso ?? "", "mesmo valor");
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Santa Rita de Cássia"), { chave: "santa rita", ponto: "cantanhede", nome: "Santa Rita" });
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Grande"), null);
+});
+
+Deno.test("#328: desembarque de costume fixado vale mesmo com o embarque variando", () => {
+  const costume = {
+    ida: { fonte: "manual", route_point_code: null, route_point_name: null, neighborhood: null, detail: null, dropoff_location: "Beco do Hospital" },
+    volta: null,
+  };
+  const r = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { ...ctx, costume, areaDoDesembarque: () => "pirapemas" },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.route_point_code, "outro");
+  assertEquals(r.rascunho.dropoff_location, "Beco do Hospital");
+  assert(r.rascunho.notes?.includes("Desembarque pelo endereço de costume"));
+  // embarque varia (sem ponto de costume) e o cliente não disse: o embarque não é chutado
+  const semEmbarque = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume, agendado: true });
+  assert(semEmbarque.ok);
+  if (semEmbarque.ok) assertEquals(semEmbarque.rascunho.dropoff_location, "Beco do Hospital");
+  // costume que veio só do histórico não força o desembarque
+  const doHistorico = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { ...ctx, costume: { ida: { ...costume.ida, fonte: "historico" }, volta: null } },
+  );
+  assert(doHistorico.ok);
+  if (doHistorico.ok) assertEquals(doHistorico.rascunho.dropoff_location, null);
+});

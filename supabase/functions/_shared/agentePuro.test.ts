@@ -626,3 +626,19 @@ Deno.test("#297 regressão: 'Estrada da Maioba' escrita no endereço vence o bai
   // endereço sem bairro da tabela
   assertEquals(bairroEscritoNoEndereco("Turu", "Residencial Colinas, rua 7", "", tabela), null);
 });
+
+Deno.test("#326: trecho de R$ 50+ não pede confirmação; abaixo, só em dia cheio", async () => {
+  const { trechoPrecisaDeConfirmacao, regraDoTrecho } = await import("./agentePuro.ts");
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: 50, vagasDepois: 0 }).pendente, false); // São Luís–Matões
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: 60, vagasDepois: 1 }).pendente, false);
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: 30, vagasDepois: 15 }).pendente, false); // Pirapemas–Miranda com vaga
+  const cheio = trechoPrecisaDeConfirmacao({ preco: 30, vagasDepois: 4 });
+  assertEquals(cheio.pendente, true);
+  assertEquals(cheio.motivo?.includes("dia cheio"), true);
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: 30, vagasDepois: null }).pendente, true);
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: null, vagasDepois: 20 }).pendente, true);
+  assertEquals(trechoPrecisaDeConfirmacao({ preco: 40, vagasDepois: 6, vagasMinimas: 5 }).pendente, false);
+  assertEquals(regraDoTrecho(null), { valorMinimo: 50, vagasMinimas: 10 });
+  assertEquals(regraDoTrecho({ valor_minimo: 45, vagas_minimas: "8" }), { valorMinimo: 45, vagasMinimas: 8 });
+  assertEquals(regraDoTrecho({ valor_minimo: -1 }), { valorMinimo: 50, vagasMinimas: 10 });
+});

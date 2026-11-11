@@ -67,13 +67,16 @@ export async function blocoDoClienteAtual(): Promise<string> {
       clienteId = data?.id ?? null;
     }
     if (!clienteId) return "";
-    const { data: nota } = await supabaseAdmin
-      .from("bot_customer_notes")
-      .select("notes")
-      .eq("customer_id", clienteId)
-      .eq("status", "ativa")
-      .maybeSingle();
-    return blocoDoCliente(nota?.notes);
+    const [{ data: nota }, { data: cadastro }] = await Promise.all([
+      supabaseAdmin.from("bot_customer_notes").select("notes").eq("customer_id", clienteId).eq("status", "ativa").maybeSingle(),
+      supabaseAdmin.from("customers").select("bot_instructions").eq("id", clienteId).maybeSingle(),
+    ]);
+    // o que a EQUIPE ensinou sobre o passageiro vem antes e vale sobre a anotação automática (issue #328)
+    const instrucoes = String(cadastro?.bot_instructions ?? "").trim();
+    return [
+      instrucoes ? `INSTRUÇÕES DA EQUIPE SOBRE ESTE CLIENTE (siga sempre; valem sobre o histórico e a anotação):\n${instrucoes}` : "",
+      blocoDoCliente(nota?.notes),
+    ].filter(Boolean).join("\n\n");
   } catch (err) {
     console.error("Falha ao ler a anotação do cliente:", String(err).slice(0, 200));
     return "";
