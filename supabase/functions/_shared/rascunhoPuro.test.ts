@@ -708,11 +708,11 @@ Deno.test("#324: cidade da Volta cruzando as pistas (Campestre, base, histórico
     tipo: "rua", nome, em_pirapemas: p, em_cantanhede: c, reservas_pirapemas: rp, reservas_cantanhede: rc,
   });
   const vazio = { lugares: [], historico: [], textosAntigos: [] };
-  // Campestre: cidade do caminho, ponto Cantanhede, mesmo valor
+  // Campestre: cidade do caminho, ponto Pirapemas (dono, 11/11), mesmo valor
   const campestre = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre", lugares: [lugar("Campestre", true, true, 2, 2)] });
-  assertEquals(campestre?.cidade, "cantanhede");
+  assertEquals(campestre?.cidade, "pirapemas");
   assertStringIncludes(campestre?.aviso ?? "", "entre Pirapemas e Cantanhede");
-  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "no campestri" })?.cidade, "cantanhede");
+  assertEquals(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "no campestri" })?.cidade, "pirapemas");
   // Rua 1º de Maio: só em Cantanhede, com 2 reservas (antes exigia 3)
   const maio = cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Rua 1° de maio", lugares: [lugar("1 de Maio", false, true, 0, 2)] });
   assertEquals(maio?.cidade, "cantanhede");

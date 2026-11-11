@@ -824,11 +824,11 @@ export function perguntaAoCliente(
 
 /**
  * Cidades do caminho que são embarque da Volta, com o ponto do app (issue #324, dono 11/11):
- * Campestre fica entre Pirapemas e Cantanhede, sai junto com Cantanhede no cronograma e tem
+ * Campestre fica entre Pirapemas e Cantanhede e é lançado no ponto Pirapemas (dono, 11/11), com
  * o mesmo valor — não precisa de revisão.
  */
 export const EMBARQUES_INTERMEDIARIOS_DA_VOLTA: Record<string, { ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string }> = {
-  campestre: { ponto: "cantanhede", nome: "Campestre" },
+  campestre: { ponto: "pirapemas", nome: "Campestre" },
   // todas as cidades do caminho são embarque válido (dono, 11/11 — issue #326); no cronograma da Volta
   // todas vêm depois de Cantanhede, então o ponto é Cantanhede e o valor é o do trecho
   matoes: { ponto: "cantanhede", nome: "Matões do Norte" },

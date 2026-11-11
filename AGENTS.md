@@ -288,7 +288,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Pirapemas–Bacabeira) é reserva normal; **abaixo de R$ 50** só fica `pendente` em dia cheio (sobram menos de 10
   vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
   `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
-  Cantanhede com a cidade no embarque e o valor do trecho; Campestre tem o valor de Pirapemas/Cantanhede. Trecho sem
+  Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
   valor na tabela continua indo para a equipe; cidade fora da rota também.
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
@@ -351,7 +351,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
   Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
   **Cidade da Volta pelas pistas** (issue #324, `cidadeDaVoltaPelasPistas`): sem cidade dita, o Agendado cruza tudo o
-  que o sistema sabe — Campestre (cidade do caminho, entre Pirapemas e Cantanhede: ponto Cantanhede, mesmo valor, sem
+  que o sistema sabe — Campestre (cidade do caminho, entre Pirapemas e Cantanhede: ponto Pirapemas, mesmo valor, sem
   revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
   cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
   Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
