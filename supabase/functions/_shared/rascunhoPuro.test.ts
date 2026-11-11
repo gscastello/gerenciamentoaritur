@@ -598,3 +598,11 @@ Deno.test("aviso do Agendado: erro, nada lido, motivo e pendência viram pendên
   assertStringIncludes(p.detalhe, "1 reserva(s) lançada(s)");
   assertStringIncludes(p.detalhe, "Pirapemas ou Cantanhede");
 });
+
+Deno.test("#299 regressão: a cidade escrita pelo cliente é reconhecida no trecho dele", () => {
+  assertEquals(cidadeDaVolta("Bom dia gostaria de agendar duas passagens para amanhã a tarde de Pirapemas a são Luis"), "pirapemas");
+  assertEquals(cidadeDaVolta("venho de Catanhede dia 14 a tarde pra Sao luis"), "cantanhede");
+  // as duas cidades: não decide
+  assertEquals(cidadeDaVolta("moro em Cantanhede mas embarco em Pirapemas"), null);
+  assertEquals(cidadeDaVolta("Na descida da Inês uma casa com jardim na frente"), null);
+});

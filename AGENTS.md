@@ -323,7 +323,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **bairro**: `sao_luis_lugares` aprende rua/condomínio/referência → bairro com cada busca em casa confirmada
   (`fn_bairro_pelo_endereco`). Ordem para achar o bairro: bairro da tabela escrito no endereço → memória confirmada
   (`bairro_aliases`) → lugares de São Luís → internet. Bairro escrito no endereço vence o chute do leitor (nome de duas
-  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela.
+  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela. "Descida da Inês",
+  "subida do…", "entrada do…", "perto da…" valem como o lugar sem essas palavras (`fn_sem_qualificador`, issue #299), e
+  a cidade que o próprio cliente escreveu ("de Pirapemas a São Luís") vale como cidade dita mesmo se o leitor não marcar.
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem

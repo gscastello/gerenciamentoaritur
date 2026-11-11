@@ -226,6 +226,16 @@ async function lerEGravar(
   /** o que fica faltando confirmar em cada rascunho lançado pelo Agendado (vai para a reserva) */
   const aConfirmar = new Map<string, ItemAConfirmar[]>();
   for (const p of pedidos) {
+    // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
+    // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
+    if ((p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita)) {
+      const escrita = cidadeDaVolta(p.trecho_do_cliente);
+      const ehVolta = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
+      if (escrita && ehVolta) {
+        p.cidade_dita = escrita;
+        p.direcao = "volta";
+      }
+    }
     // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
     if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
       const direcaoProvavel = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
