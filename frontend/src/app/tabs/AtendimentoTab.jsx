@@ -1,7 +1,10 @@
 import {
   BookOpen,
   Bot,
+  CalendarPlus,
   Check,
+  ClipboardList,
+  Copy,
   ExternalLink,
   Eye,
   Inbox,
@@ -12,8 +15,15 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import {
+  anotacaoDaEncomenda,
+  embarqueDoRascunho,
+  inicialDoRascunho,
+  viagemDoRascunho,
+} from "../../domain/rascunhoReserva.js";
 import { useAtendimento } from "../../hooks/useAtendimento.js";
 import { useBotKnowledge } from "../../hooks/useBotKnowledge.js";
+import { useRascunhosDeReserva } from "../../hooks/useRascunhosDeReserva.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
@@ -49,8 +59,8 @@ const MODOS = {
   },
   sombra: {
     icon: Eye,
-    label: "Sombra (teste)",
-    desc: "O bot escreve a resposta como nota privada no Chatwoot; nada é enviado ao cliente.",
+    label: "Sombra (só aprende)",
+    desc: 'O bot observa e aprende, sem gastar com respostas, e lança as reservas que a equipe marcar com "Agendado ☑️". Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).',
   },
   manual: {
     icon: UserCog,
@@ -193,6 +203,107 @@ function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
   );
 }
 
+// Reserva preparada pela IA a partir da conversa (issue #254): a equipe confere
+// e lança com um toque — o formulário calcula preço e vaga como sempre.
+function RascunhoItem({ r, trips, chatwootUrl, onLancar, onDescartar, onCopiar }) {
+  const encomenda = r.type === "encomenda";
+  const embarque = embarqueDoRascunho(r, trips);
+  const quem = r.customer_name || r.phone || "cliente";
+  return (
+    <div
+      className="rounded-lg p-3 flex items-start justify-between gap-3"
+      style={{ background: C.panel2, border: `1px solid ${C.border}` }}
+      data-testid="rascunho-reserva"
+    >
+      <div className="min-w-0">
+        <div className="flex items-center flex-wrap gap-1.5">
+          <Chip cor={C.onBrand} fundo={C.amber}>
+            {viagemDoRascunho(r)}
+          </Chip>
+          {encomenda && (
+            <Chip cor={C.inkSoft} fundo={C.panel}>
+              Encomenda
+            </Chip>
+          )}
+          {!encomenda && r.quantity > 1 && (
+            <Chip cor={C.amber} fundo={C.amberSoft}>
+              {r.quantity} passagens
+            </Chip>
+          )}
+          {!r.customer_id && (
+            <Chip cor={C.inkSoft} fundo={C.panel}>
+              sem cadastro
+            </Chip>
+          )}
+        </div>
+        <div className="text-sm font-medium mt-1" style={{ overflowWrap: "anywhere" }}>
+          {embarque || "Embarque a definir"}
+        </div>
+        <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
+          {[r.customer_name, r.phone].filter(Boolean).join(" · ") || "sem identificação"}
+          {r.dropoff_location && <> · desce: {r.dropoff_location}</>}
+        </div>
+        {r.client_excerpt && (
+          <div
+            className="text-xs mt-1 italic"
+            style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+          >
+            “{r.client_excerpt}”
+          </div>
+        )}
+        {r.notes && (
+          <div className="text-[11px] mt-1" style={{ color: C.amber, overflowWrap: "anywhere" }}>
+            Conferir: {r.notes}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        {!encomenda && onLancar && (
+          <button
+            type="button"
+            onClick={() => onLancar(r)}
+            aria-label={`Lançar reserva de ${quem}`}
+            className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
+            style={{ background: C.amber, color: C.onBrand }}
+          >
+            <CalendarPlus size={13} /> Lançar
+          </button>
+        )}
+        {encomenda && (
+          <button
+            type="button"
+            onClick={() => onCopiar(r)}
+            className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
+            style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+          >
+            <Copy size={12} /> Copiar anotação
+          </button>
+        )}
+        {chatwootUrl && r.chatwoot_conversation_id && (
+          <a
+            href={`${chatwootUrl}/conversations/${r.chatwoot_conversation_id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+            style={{ background: C.panel, color: C.inkSoft }}
+          >
+            <ExternalLink size={12} /> Conversa
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() => onDescartar(r.id)}
+          aria-label={`Descartar reserva preparada de ${quem}`}
+          className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+          style={{ background: C.panel, color: C.inkSoft }}
+        >
+          <X size={12} /> Descartar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PerguntaItem({ p, onCadastrar, onDispensar }) {
   const [aberto, setAberto] = useState(false);
   const [form, setForm] = useState({ title: "", content: "" });
@@ -300,8 +411,9 @@ function Secao({ icon: Icon, titulo, resumo, children }) {
   );
 }
 
-export default function AtendimentoTab({ pend, modoAtendimento, onNavigate }) {
+export default function AtendimentoTab({ pend, modoAtendimento, onNavigate, trips, onAgendar }) {
   const at = useAtendimento();
+  const rasc = useRascunhosDeReserva();
   const kb = useBotKnowledge();
   const cfg = useSettings();
   const [erro, setErro] = useState("");
@@ -309,6 +421,17 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate }) {
 
   const perguntasSaida = useSaida(at.resolverPergunta, aoErrar("Não foi possível dispensar."));
   const pendenciasSaida = useSaida(pend.resolver, aoErrar("Não foi possível resolver."));
+  const rascunhosSaida = useSaida(rasc.descartar, aoErrar("Não foi possível descartar."));
+  const [copiado, setCopiado] = useState("");
+  const copiarAnotacao = async (r) => {
+    const linha = anotacaoDaEncomenda(r);
+    try {
+      await navigator.clipboard.writeText(linha);
+      setCopiado(r.id);
+    } catch {
+      setErro(`Não foi possível copiar. Anote na Agenda: ${linha}`);
+    }
+  };
 
   const cadastrarResposta = async (pergunta, item) => {
     setErro("");
@@ -374,6 +497,55 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate }) {
         </Card>
 
         <Secao
+          icon={ClipboardList}
+          titulo="Reservas prontas para lançar"
+          resumo="A IA leu as conversas e preparou estas reservas (o cliente já mandou a data e o endereço). Confira e lance: preço e vagas saem do app como sempre."
+        >
+          {rasc.error && (
+            <ErrorBanner onRetry={rasc.recarregar} className="mb-3">
+              {mensagemAmigavel(rasc.error, "Não foi possível carregar as reservas preparadas.")}
+            </ErrorBanner>
+          )}
+          {rasc.loading && rasc.rascunhos.length === 0 && (
+            <div className="space-y-2">
+              {[0, 1].map((i) => (
+                <Skeleton key={i} height={84} rounded={10} />
+              ))}
+            </div>
+          )}
+          {!rasc.loading && !rasc.error && rasc.rascunhos.length === 0 && (
+            <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
+              Nenhuma reserva preparada agora. Elas aparecem aqui quando o cliente manda a data e o
+              endereço na conversa.
+            </div>
+          )}
+          {copiado && (
+            <output className="block text-[11px] mb-2" style={{ color: C.inkSoft }}>
+              Anotação copiada: cole na caixinha do ponto, na Agenda.
+            </output>
+          )}
+          <div className="space-y-2">
+            {rasc.rascunhos.map((r) => (
+              <Presence
+                key={r.id}
+                when={!rascunhosSaida.saindo.has(r.id)}
+                duration={SAIDA_MS}
+                {...fadeScale}
+              >
+                <RascunhoItem
+                  r={r}
+                  trips={trips}
+                  chatwootUrl={chatwootUrl}
+                  onLancar={onAgendar ? (x) => onAgendar(inicialDoRascunho(x, trips)) : null}
+                  onDescartar={rascunhosSaida.sair}
+                  onCopiar={copiarAnotacao}
+                />
+              </Presence>
+            ))}
+          </div>
+        </Secao>
+
+        <Secao
           icon={MessageCircle}
           titulo="Conversas"
           resumo={
@@ -396,8 +568,8 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate }) {
           )}
           {!at.loading && !at.errorConversas && fila.length === 0 && (
             <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma conversa em andamento. A fila aparece assim que o Agent Bot do Chatwoot estiver
-              ligado à caixa do WhatsApp.
+              Nenhuma conversa em andamento. A fila aparece assim que o Agent Bot do Chatwoot
+              estiver ligado à caixa do WhatsApp.
             </div>
           )}
           <div className="space-y-2">
@@ -514,7 +686,11 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate }) {
                 duration={SAIDA_MS}
                 {...fadeScale}
               >
-                <PerguntaItem p={p} onCadastrar={cadastrarResposta} onDispensar={perguntasSaida.sair} />
+                <PerguntaItem
+                  p={p}
+                  onCadastrar={cadastrarResposta}
+                  onDispensar={perguntasSaida.sair}
+                />
               </Presence>
             ))}
           </div>

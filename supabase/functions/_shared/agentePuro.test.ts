@@ -7,6 +7,7 @@ import {
   cronogramaValido,
   lugarNoCronograma,
   bairroDaTabela,
+  bairroPorApelido,
   trechoDoPedido,
   calcularTotal,
   calendarioParaOPrompt,
@@ -32,6 +33,7 @@ import {
   ultimaFoiDoCliente,
   validarPedidoDeReserva,
   type MensagemDaConversa,
+  precoDoLocalDeOutros,
 } from "./agentePuro.ts";
 
 const m = (quem: MensagemDaConversa["quem"], texto: string, em: string): MensagemDaConversa => ({ quem, texto, em });
@@ -546,4 +548,81 @@ Deno.test("cronograma em texto: os dois sentidos e o aviso da segunda", () => {
   assertStringIncludes(t, "Bacabeira de 15:30 às 16:00");
   assertStringIncludes(t, "a ida sai 1 hora(s) mais cedo");
   assertEquals(cronogramaParaTexto(CRONOGRAMA_PADRAO).includes("segunda"), false);
+});
+
+const LOCAIS_OUTROS = [{ local: "Aeroporto", price: 70 }];
+
+Deno.test("preço de Outros: embarque dentro do aeroporto usa o preço próprio (issue #263)", () => {
+  for (const t of ["Aeroporto de São Luís", "no aeroporto", "AEROPORTO, saguão", "terminal do aeroporto"]) {
+    assertEquals(precoDoLocalDeOutros(t, LOCAIS_OUTROS), 70, t);
+  }
+});
+
+Deno.test("preço de Outros: 'retorno do aeroporto' NÃO é o aeroporto", () => {
+  for (const t of ["Retorno do aeroporto", "no retorno perto do aeroporto", "retorno"]) {
+    assertEquals(precoDoLocalDeOutros(t, LOCAIS_OUTROS), null, t);
+  }
+});
+
+Deno.test("preço de Outros: local sem preço próprio, vazio ou valor inválido → null", () => {
+  assertEquals(precoDoLocalDeOutros("BR — Maracanã", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros(null, LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("aeroportos", LOCAIS_OUTROS), null);
+  assertEquals(precoDoLocalDeOutros("aeroporto", [{ local: "Aeroporto", price: "x" }]), null);
+});
+
+Deno.test("preço de Outros: o local mais específico vence", () => {
+  const locais = [{ local: "Aeroporto", price: 70 }, { local: "Aeroporto Hangar", price: 90 }];
+  assertEquals(precoDoLocalDeOutros("aeroporto hangar 2", locais), 90);
+  assertEquals(precoDoLocalDeOutros("aeroporto", locais), 70);
+});
+
+Deno.test("bairroPorApelido: condomínio citado vira o bairro da memória (issue #270)", () => {
+  const memoria = [
+    { apelido: "Residencial Colinas", bairro: "Turu", confirmado: true },
+    { apelido: "Colinas", bairro: "Cohama", confirmado: false },
+    { apelido: "Vila Palmeira", bairro: "Vila Palmeira" },
+  ];
+  assertEquals(bairroPorApelido("residencial colinas, bloco 3 apto 201", memoria), "Turu");
+  assertEquals(bairroPorApelido("Residêncial Colinas", memoria), "Turu");
+  // confirmado vence o não confirmado, mesmo mais curto do lado não confirmado
+  assertEquals(bairroPorApelido("Colinas", [{ apelido: "Colinas", bairro: "Turu", confirmado: true }, ...memoria.slice(1)]), "Turu");
+  assertEquals(bairroPorApelido("perto do colinas", memoria), "Cohama");
+  // palavra inteira: "Colinasx" não é "Colinas"
+  assertEquals(bairroPorApelido("Colinasx", memoria), null);
+  assertEquals(bairroPorApelido("", memoria), null);
+  assertEquals(bairroPorApelido(null, memoria), null);
+});
+
+Deno.test("#297: bairro pelos lugares de São Luís — confirmado vence, dúvida não chuta", async () => {
+  const { bairroPelosLugares } = await import("./agentePuro.ts");
+  const l = (bairro: string, ocorrencias: number, confirmado = false) =>
+    ({ bairro, lugar: `Lugar ${bairro}`, tipo: "referencia", ocorrencias, confirmado, fonte: "reservas" });
+  assertEquals(bairroPelosLugares([]), null);
+  assertEquals(bairroPelosLugares([l("Estrada da Maioba", 1)])?.bairro, "Estrada da Maioba");
+  assertEquals(bairroPelosLugares([l("Turu", 3), l("Cohatrac", 1)])?.bairro, "Turu");
+  assertEquals(bairroPelosLugares([l("Turu", 2), l("Cohatrac", 2)]), null);
+  assertEquals(bairroPelosLugares([l("Turu", 1, true), l("Cohatrac", 5)])?.bairro, "Turu");
+  assertEquals(bairroPelosLugares([l("Turu", 1, true), l("Cohatrac", 1, true)]), null);
+  assertEquals(bairroPelosLugares([l("Turu", 0)]), null);
+});
+
+Deno.test("#297 regressão: 'Estrada da Maioba' escrita no endereço vence o bairro chutado", async () => {
+  const { bairroEscritoNoEndereco } = await import("./agentePuro.ts");
+  const tabela = [{ neighborhood: "Alto do Turu" }, { neighborhood: "Estrada da Maioba" }, { neighborhood: "Turu" }, { neighborhood: "Cohatrac" }];
+  const endereco = "Condomínio Belleville Residence, Estrada da Maioba, bloco C3 apartamento 12";
+  // o leitor chutou Alto do Turu; o cliente escreveu Estrada da Maioba
+  assertEquals(bairroEscritoNoEndereco("Alto do Turu", endereco, "moro no cond belleville na estrada da maioba", tabela)?.neighborhood, "Estrada da Maioba");
+  // sem bairro nenhum: o escrito
+  assertEquals(bairroEscritoNoEndereco(null, "Cond. Jardim di Napoli, Estrada da Maioba", "", tabela)?.neighborhood, "Estrada da Maioba");
+  // o cliente disse o bairro: fica o dele
+  assertEquals(bairroEscritoNoEndereco("Cohatrac", "Rua do Turu, 12", "sou do cohatrac, rua do turu", tabela), null);
+  // já é o mesmo
+  assertEquals(bairroEscritoNoEndereco("Estrada da Maioba", endereco, "", tabela), null);
+  // "Rua do Turu" não troca o bairro escolhido (nome de uma palavra só)
+  assertEquals(bairroEscritoNoEndereco("Cohatrac", "Rua do Turu, 12", "", tabela), null);
+  assertEquals(bairroEscritoNoEndereco(null, "Rua 5, Turu", "", tabela)?.neighborhood, "Turu");
+  // endereço sem bairro da tabela
+  assertEquals(bairroEscritoNoEndereco("Turu", "Residencial Colinas, rua 7", "", tabela), null);
 });

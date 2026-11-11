@@ -112,7 +112,8 @@ O contrato acima é validado por `npm run arch`
 
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
-`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`),
+`opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
+`assistentePuro`, `pedidoDoCliente`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -143,6 +144,20 @@ Nomes no AGENTS antigo → ferramenta real:
 
 Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 `npm run prepare`.
+
+**Skills do Claude em `.claude/skills/`** (issue #282) — carregadas sozinhas quando a tarefa pede:
+
+| Skill | Para quê | Fonte |
+|---|---|---|
+| `agendar` | lançar no app reservas combinadas no WhatsApp | deste repositório |
+| `vercel-react-best-practices` | desempenho em React (o app é Vite/SPA: regras `server-*` não valem) | vercel-labs/agent-skills (MIT) |
+| `supabase-postgres-best-practices` | consultas, índices, RLS, migrações | supabase/agent-skills (MIT) |
+| `systematic-debugging` | achar a causa antes de corrigir | obra/superpowers (MIT) |
+| `verification-before-completion` | rodar e ler a verificação antes de dizer que terminou | obra/superpowers (MIT) |
+
+Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda neste projeto). Este AGENTS.md
+vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
+instruções na internet a cada uso.
 
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
@@ -250,9 +265,18 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - Modo global em `settings.attendance_mode` (`ia` | `manual` | `sombra`),
   editável na aba Sistema e válido na hora para todos os sócios:
   - `ia` — o bot responde e confirma reservas sozinho;
-  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot;
-  - `sombra` — o bot roda tudo, mas a resposta vira **nota privada** e **nada é
-    gravado** no negócio. Todo bot novo ou mudança grande começa em `sombra`.
+  - `manual` — o bot não responde; a conversa aparece como Aberta no Chatwoot; só lê a conversa para reservar
+    quando a equipe escreve **"Agendado ☑️"** (não prepara reserva a cada mensagem — issue #278);
+  - `sombra` — o bot **só observa e aprende** (issue #278): não gera resposta nem reserva
+    preparada, que é o que custa. Registro de mensagem e comprovante continuam, e o **"Agendado ☑️" da equipe lança a
+    reserva normalmente** (dono, 10/11). Aprende com o atendente **e com os
+    clientes**: o que eles contam (lugares e referências, localidades, necessidades, épocas e motivos de viagem,
+    dúvidas e reclamações) vira lição `dito_pelo_cliente`, que serve para entender e confirmar e nunca vira preço,
+    valor, horário ou regra.
+  - **Teste sob demanda, em qualquer modo:** nota privada `#testar` no Chatwoot (com ou sem uma
+    pergunta depois) faz o bot escrever numa nota `🧪 [TESTE]` o que responderia; nada vai ao
+    cliente, nada é gravado e a nota não entra no histórico nem no aprendizado. Todo bot novo ou
+    mudança grande é testado assim antes de ligar o `ia`.
 - Por conversa: `whatsapp_conversations.attendance_mode` (`ia` | `humano`). O bot
   **continua ativo** quando a equipe responde pelo celular; só **cala** na
   transferência completa (`rpc_transfer_to_human` + status Aberta no Chatwoot).
@@ -291,11 +315,63 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   janela do lugar do cliente e diz pelo horário se já estamos em rota. Nunca diz onde a van está; se o cliente insistir,
   envia o contato do motorista (`settings.driver_contact`, aba Sistema → Bot). Na segunda, só a ida sai mais cedo.
   Paradas e plataforma viram lições `operacao`.
+- **Cidade da Volta e lugares das cidades** (issues #272 e #274): ruas e referências se repetem em Pirapemas e
+  Cantanhede, então a cidade de embarque da Volta só vale se o cliente disse (ou é o endereço de costume); nunca sai do
+  nome da rua. A base `cidade_lugares` (ruas, pontos de referência, "casa de fulano", povoados; OpenStreetMap + toda
+  reserva de Volta confirmada, aprendendo sozinha e cruzando os lugares citados juntos) só gera **aviso** e ajuda o
+  atendente a **confirmar** com o cliente (`onde_fica`). **Em São Luís** (issue #297) o mesmo mapeamento leva ao
+  **bairro**: `sao_luis_lugares` aprende rua/condomínio/referência → bairro com cada busca em casa confirmada
+  (`fn_bairro_pelo_endereco`). Ordem para achar o bairro: bairro da tabela escrito no endereço → memória confirmada
+  (`bairro_aliases`) → lugares de São Luís → internet. Bairro escrito no endereço vence o chute do leitor (nome de duas
+  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela. **Nome próprio é nome próprio**
+  (issue #301): na chave do lugar só Rua/Avenida saem; Beco, Travessa, Praça, Estrada, Alameda e Rodovia ficam ("Beco
+  do Hospital" ≠ "Rua do Hospital" ≠ "Hospital"), e nome de rua não é achado dentro de outro logradouro. Só palavras de
+  posição viram "perto de" ("descida/subida da…"; perto/atrás/em frente o separador já trata), valendo o lugar inteiro
+  E o de perto. Travas (`raise exception`) nas migrações 91–92 impedem a volta. A cidade da Volta que o cliente escreveu
+  em **qualquer** mensagem do pedido vale como dita; se o Agendado ia ficar pendente por falta de leitura (cidade,
+  endereço, dia, sentido), o bot **relê com o modelo capaz** antes de desistir. **Tudo o que a reserva precisa é
+  conferido no que o cliente escreveu** (issue #303, `pedidoDoCliente.ts`): sentido, dia (contando do dia de cada
+  mensagem), quantidade, ponto, bairro e cidade. Vazio que o cliente escreveu → completa com aviso; o que contradiz →
+  aviso para conferir (nunca troca sozinho) e, no Agendado, relê com o modelo capaz e, se ainda não bater, fica
+  pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
+- **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
+  interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
+  `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem
+  de ser igual, 4–8 aceitam 1 erro, 9+ aceitam 2, no máximo 2 no total; empate não chuta. A base de lugares guarda
+  as grafias erradas (`cidade_lugares_grafias`). Erro de escrita só ajuda a **reconhecer**: nunca decide preço, vaga
+  ou cidade sozinho.
 - A fila de atendimento fica na aba **Atendimento** (espelho do Chatwoot).
+- **Assistente da equipe** (issue #288, aba **Assistente**, Edge Function `assistente`): a equipe pede como pede ao
+  Claude Code (agendar lendo a conversa, remarcar, cancelar, pendências, vagas, preço, números do financeiro) pela
+  chave da API, sem depender do plano do Claude. Age **com as permissões de quem está logado** (RLS e RPCs da Agenda;
+  autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
+  no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
+  `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
+  mensagem ao cliente. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
+  conhecimento (`montarFatos`), as lições aprovadas, o cronograma e `CONHECIMENTO_DA_OPERACAO` (as regras do `/agendar`);
+  e faz, sempre como proposta, o que o dono pede aqui: confere os "Agendado ☑️", lança/descarta reservas prontas,
+  resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
+  operação combinada com o dono entra também em `CONHECIMENTO_DA_OPERACAO`. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
+  chave pessoal (só o hash no banco; apagar desliga), respostas curtas para ler em voz alta e "sim" por voz para gravar.
+- **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
+  no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
+  com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de
+  nome do perfil do WhatsApp, nenhuma mensagem ao cliente sem o dono pedir.
+- **Reservas preparadas pela IA** (issue #254, `WHATSAPP.md §6e`): quando a equipe atende, o bot lê a conversa e, com
+  **data + endereço ou ponto**, deixa um rascunho em `reservation_drafts`. A equipe lança com um toque (preço e vaga
+  pelo app); criar a reserva por qualquer caminho fecha o rascunho. A IA nunca reserva nem decide preço por aqui,
+  **exceto** quando a equipe escreve **"Agendado ☑️"** na conversa (issue #257): a marca é a confirmação manual e a
+  reserva preparada é lançada com o preço da tabela (mesma regra do bot) e a vaga validada pelo banco; se faltar algo,
+  fica na lista com o motivo. Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
+  vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
+  costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. **"Hoje" dito pelo cliente nunca vira amanhã calado** (issue #307): se a viagem daquele sentido já saiu e o
+  destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente. Quando
+  o cliente informa depois (outro dia, endereço, cidade), o bot completa a reserva (`extra_data.a_confirmar`).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
   Observa só texto (90 dias), gera lições sem nomes/telefones e uma anotação por cliente
-  recorrente. **Aprende só com o atendente** (o que o próprio bot escreveu não entra), em
+  recorrente. **Aprende com o atendente e com os clientes** (o que o próprio bot escreveu não entra;
+  o que o cliente conta vira `dito_pelo_cliente`, só para entender e confirmar — issue #278), em
   orientações gerais e casos isolados aplicáveis, nunca roteiro, menu ou formulário fixo; o que o
   dono retirou não volta sozinho (issue #232). Linguagem/estilo/fluxo/situação/operação valem na hora com
   aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é
@@ -333,9 +409,21 @@ customizados (`feature`, `critico`, `integracao`, `financeiro`,
 repositório.
 
 **WhatsApp:** número no Chatwoot por Coexistência desde 2026-10-15; bot e painel
-seguem o `WHATSAPP.md` (issue #163). Ações em produção (migrações, deploy de
-função, secrets, criar o Agent Bot) são **manuais e autorizadas pelo dono**, uma a
-uma; secrets nunca vão em chat, issue ou PR.
+seguem o `WHATSAPP.md` (issue #163).
+
+**Ações em produção:**
+- **Migrações** (`database/NN-*.sql`): desde 2026-11-09 o dono autorizou o agente a
+  aplicá-las sozinho, sem pedir a cada uma (issue #250). Antes de aplicar, confira no
+  banco o que a migração troca (trecho de função esperado, colunas, dados afetados) e
+  teste o que der sem gravar (`raise exception` para desfazer). Depois, verifique o
+  efeito e conte ao dono o que foi aplicado. A migração continua indo num PR com
+  `Closes #N`, como qualquer mudança.
+- **Deploy de Edge Function**: desde 2026-11-11 o dono autorizou o agente a publicar
+  sozinho, sem pedir a cada vez (issue #293). Antes, `deno check` da versão enviada ao
+  GitHub (o deploy importa o commit pelo SHA); depois, conferir que a função responde
+  (GET 405, sem assinatura/login 401) e contar ao dono o que foi publicado.
+- **Secrets e criar o Agent Bot** continuam **manuais e autorizados pelo dono**, um a um.
+- Secrets nunca vão em chat, issue ou PR.
 
 Ao pegar uma tarefa nova que não tem Issue: **crie a Issue primeiro**
 (template `Tarefa`), depois o branch `tipo/numero-slug`, depois o PR com

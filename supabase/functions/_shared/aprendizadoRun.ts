@@ -43,7 +43,16 @@ const TOOL = {
           properties: {
             kind: {
               type: "string",
-              enum: ["linguagem_cliente", "estilo_atendente", "fluxo_agendamento", "situacao", "operacao", "fato", "negocio"],
+              enum: [
+                "linguagem_cliente",
+                "estilo_atendente",
+                "fluxo_agendamento",
+                "situacao",
+                "operacao",
+                "fato",
+                "negocio",
+                "dito_pelo_cliente",
+              ],
             },
             title: { type: "string", description: "Título curto (3 a 80 caracteres)." },
             content: { type: "string", description: "A lição em 1 a 3 frases, sem nomes, telefones nem endereços." },
@@ -99,9 +108,9 @@ const TOOL = {
   },
 };
 
-const SYSTEM = `Você analisa conversas de WhatsApp de uma empresa de transporte de passageiros (São Luís ⇄ Pirapemas/Cantanhede) para ensinar um atendente virtual, que conversa com naturalidade e se adapta a cada atendimento. Cada conversa mostra o CLIENTE e o ATENDENTE humano: aprenda com o que o atendente faz, e use o cliente como contexto e para aprender como os clientes escrevem.
+const SYSTEM = `Você analisa conversas de WhatsApp de uma empresa de transporte de passageiros (São Luís ⇄ Pirapemas/Cantanhede) para ensinar um atendente virtual, que conversa com naturalidade e se adapta a cada atendimento. Cada conversa mostra o CLIENTE e o ATENDENTE humano: aprenda com o que o atendente faz E com o que os clientes contam — as mensagens dos clientes trazem informações que agregam ao conhecimento do bot.
 
-Extraia só o que as conversas realmente mostram, em 7 tipos:
+Extraia só o que as conversas realmente mostram, em 8 tipos:
 - linguagem_cliente: como os clientes escrevem e pedem (gírias, abreviações, jeitos de dizer data/local/quantidade, confusões comuns). Pode citar trechos curtos e genéricos como exemplo.
 - estilo_atendente: como o atendente responde (tom, como confirma, como conduz a conversa).
 - fluxo_agendamento: que informações o atendente pede para agendar uma passagem e em que ordem, como trata endereço, pagamento e confirmação.
@@ -109,9 +118,10 @@ Extraia só o que as conversas realmente mostram, em 7 tipos:
 - operacao: como a viagem funciona no dia a dia, do jeito que o atendente disse ao cliente: onde a van para ou espera, qual plataforma, por onde passa, a que horas costuma sair, passar por cada cidade e chegar. Ex.: "Na rodoviária, a van fica na primeira plataforma, ao lado do café"; "Sai de Pirapemas às 12h e costuma chegar em São Luís por volta das 17h". Só o que vale para outras viagens: um recado do momento ("estou passando em Miranda") não é lição. Não coloque preço aqui.
 - fato: informação CONCRETA que o atendente informou ao cliente (regra, política, valor, horário), inclusive o valor de trechos curtos ou específicos: diga de onde até onde e quanto custa. Só registre se o ATENDENTE afirmou claramente; nunca deduza.
 - negocio: como a empresa funciona, em visão geral (rotas e dias de viagem, como é a busca em casa, como funciona o pagamento, bagagem, encomendas, quem atende, o que a empresa faz e não faz). Só o que o atendente deixou claro.
+- dito_pelo_cliente: o que os CLIENTES contam e serve para atender outros clientes: onde ficam lugares públicos e referências (comércio, igreja, escola, posto, praça, povoado, condomínio) e em que cidade, bairro ou rua; localidades e trajetos que pedem (povoados, cidades no caminho); necessidades que aparecem (bagagem grande, criança de colo, animal, cadeira de rodas, volume para levar); quando e por que costumam viajar (consulta, festa, feriado, início de mês); dúvidas e reclamações que se repetem. Escreva como informação de cliente ("Clientes dizem que…", "É comum o cliente pedir…"). Nunca preço, valor, horário ou regra da empresa (isso só vale dito pelo atendente), nem o endereço ou a vida de uma pessoa.
 
 REGRAS:
-- NUNCA inclua nomes de pessoas, telefones, e-mails, links ou endereços de clientes. Generalize ("o cliente informa o bairro e a rua").
+- NUNCA inclua nomes de pessoas, telefones, e-mails, links ou endereços de clientes. Generalize ("o cliente informa o bairro e a rua"). Lugares públicos (comércio, praça, igreja, escola, povoado) podem ser citados pelo nome.
 - Não invente nada. Se uma conversa não ensina nada novo, não registre.
 - Escreva orientações gerais: em tal situação, faça tal coisa. Um caso isolado também vale quando ensina o que fazer numa situação que pode se repetir: descreva a situação e a atitude do atendente, sem contar a história.
 - NÃO registre relatos sem orientação (o atendente só respondeu "Ok", o cliente sumiu) nem falhas de atendimento como se fossem exemplo.

@@ -6,6 +6,8 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
+import { nomeParecidoNoTexto } from "./grafia.ts";
+import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
   /** id da mensagem no Chatwoot, quando se sabe */
@@ -32,6 +34,9 @@ export type MensagemBruta = {
 /** No modo sombra o rascunho do bot fica numa nota privada com este começo. */
 export const PREFIXO_DO_RASCUNHO = "🤖 [SOMBRA] Resposta que o bot enviaria:";
 
+/** Teste do dono (nota "#testar", issue #278): a resposta fica numa nota com este começo e não entra no histórico. */
+export const PREFIXO_DO_TESTE = "🧪 [TESTE] Resposta que o bot daria:";
+
 /**
  * Chatwoot → conversa que o modelo lê. Ignora atividades e notas privadas, EXCETO
  * o rascunho do bot no modo sombra (vira fala do bot, para ele não se repetir).
@@ -40,7 +45,8 @@ export function converterMensagensDoChatwoot(brutas: MensagemBruta[]): MensagemD
   const saida: MensagemDaConversa[] = [];
   for (const b of brutas) {
     if (b.message_type !== 0 && b.message_type !== 1) continue;
-    const conteudo = String(b.content ?? "").trim();
+    // card de contato (issue #268) entra como texto: é o número do passageiro
+    const conteudo = textoComContatos(String(b.content ?? ""), b.attachments) ?? "";
     let quem: MensagemDaConversa["quem"];
     let texto = conteudo;
     if (b.private) {
@@ -652,4 +658,125 @@ export function cronogramaParaTexto(c: Cronograma, ajusteSegundaHoras = 0): stri
     partes.push(`- Na segunda-feira a ida sai ${ajusteSegundaHoras} hora(s) mais cedo em todos os pontos; a volta não muda.`);
   }
   return partes.join("\n");
+}
+
+export type LocalDeOutros = { local: string; price: number | string };
+
+/**
+ * Preço próprio de um local da categoria Outros (issue #263): o embarque DENTRO do
+ * aeroporto custa diferente. Compara palavras inteiras, sem acento; o nome mais longo
+ * vence. Texto que fala em "retorno" NUNCA conta: "retorno do aeroporto" é o ponto
+ * Retorno, não o aeroporto (regra do dono). Sem correspondência, null (vale o preço do ponto).
+ */
+export function precoDoLocalDeOutros(texto: string | null | undefined, locais: LocalDeOutros[]): number | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  if (!t.trim() || t.includes(" retorno ")) return null;
+  let melhor: LocalDeOutros | null = null;
+  for (const l of locais) {
+    const nome = normalizar(l.local);
+    if (nome && t.includes(` ${nome} `) && (!melhor || nome.length > normalizar(melhor.local).length)) melhor = l;
+  }
+  const preco = melhor ? Number(melhor.price) : Number.NaN;
+  return Number.isFinite(preco) && preco > 0 ? preco : null;
+}
+
+/**
+ * Memória de endereços (issue #270): o condomínio/residencial que o cliente citou
+ * ("Residencial Colinas, bloco 3") e o bairro onde ele fica. Compara palavras
+ * inteiras, sem acento; o apelido mais longo vence. Confirmados vêm antes.
+ */
+export function bairroPorApelido(
+  texto: string | null | undefined,
+  apelidos: { apelido: string; bairro: string; confirmado?: boolean | null }[],
+): string | null {
+  const t = ` ${normalizar(texto ?? "")} `;
+  if (!t.trim()) return null;
+  let melhor: { bairro: string; tamanho: number; confirmado: boolean } | null = null;
+  for (const a of apelidos) {
+    const nome = normalizar(a.apelido);
+    if (!nome || !t.includes(` ${nome} `)) continue;
+    const confirmado = a.confirmado === true;
+    if (
+      !melhor ||
+      (confirmado && !melhor.confirmado) ||
+      (confirmado === melhor.confirmado && nome.length > melhor.tamanho)
+    ) {
+      melhor = { bairro: a.bairro, tamanho: nome.length, confirmado };
+    }
+  }
+  return melhor?.bairro ?? null;
+}
+
+/**
+ * Bairro da tabela citado com erro de escrita ("cohatrc", "bequimao", "turuu"), quando
+ * bairroDaTabela não acha o nome exato (issue #276). Dois bairros igualmente parecidos = null.
+ */
+export function bairroParecido<T extends { neighborhood: string }>(
+  texto: string | null | undefined,
+  tabela: T[],
+): { bairro: T; escrito: string } | null {
+  if (bairroDaTabela(texto, tabela)) return null;
+  const achado = nomeParecidoNoTexto(texto, tabela, (b) => b.neighborhood);
+  return achado && achado.erros > 0 ? { bairro: achado.item, escrito: achado.escrito } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Lugares de São Luís → bairro (issue #297)
+// ---------------------------------------------------------------------------
+
+export type LugarDeSaoLuis = {
+  bairro: string;
+  lugar: string;
+  tipo: string;
+  ocorrencias: number;
+  confirmado: boolean;
+  fonte: string;
+};
+
+/**
+ * Qual bairro os lugares citados indicam (fn_bairro_pelo_endereco)? Confirmado pela
+ * equipe vence; senão, o bairro com mais evidência, se for pelo menos o dobro do
+ * segundo (empate ou dúvida não chuta). Devolve também o lugar que decidiu.
+ */
+export function bairroPelosLugares(
+  lugares: LugarDeSaoLuis[],
+): { bairro: string; lugar: string; vezes: number; confirmado: boolean } | null {
+  if (!lugares.length) return null;
+  const confirmados = [...new Set(lugares.filter((l) => l.confirmado).map((l) => l.bairro))];
+  if (confirmados.length === 1) {
+    const l = lugares.find((x) => x.confirmado && x.bairro === confirmados[0])!;
+    return { bairro: l.bairro, lugar: l.lugar, vezes: l.ocorrencias, confirmado: true };
+  }
+  if (confirmados.length > 1) return null;
+  const porBairro = new Map<string, { vezes: number; lugar: string }>();
+  for (const l of lugares) {
+    const atual = porBairro.get(l.bairro) ?? { vezes: 0, lugar: l.lugar };
+    porBairro.set(l.bairro, { vezes: atual.vezes + Math.max(l.ocorrencias, 0), lugar: atual.lugar });
+  }
+  const ordem = [...porBairro.entries()].sort((a, b) => b[1].vezes - a[1].vezes);
+  const [primeiro, segundo] = ordem;
+  if (!primeiro || primeiro[1].vezes < 1) return null;
+  if (segundo && primeiro[1].vezes < 2 * segundo[1].vezes) return null;
+  return { bairro: primeiro[0], lugar: primeiro[1].lugar, vezes: primeiro[1].vezes, confirmado: false };
+}
+
+/**
+ * O leitor pôs um bairro, mas o endereço escrito pelo cliente cita OUTRO bairro da
+ * tabela (ex.: "Condomínio Belleville, Estrada da Maioba" lido como "Alto do Turu").
+ * Vale o bairro escrito no endereço, a não ser que o cliente tenha dito o outro.
+ */
+export function bairroEscritoNoEndereco<T extends { neighborhood: string }>(
+  escolhido: string | null | undefined,
+  endereco: string | null | undefined,
+  palavrasDoCliente: string | null | undefined,
+  tabela: T[],
+): T | null {
+  const citado = bairroDaTabela(endereco, tabela);
+  if (!citado) return null;
+  if (escolhido && normalizar(escolhido) === normalizar(citado.neighborhood)) return null;
+  // "Rua do Turu" cita "Turu" sem ser no Turu: nome de uma palavra só não troca o bairro já escolhido
+  if (escolhido && normalizar(citado.neighborhood).split(" ").length < 2) return null;
+  const disse = ` ${normalizar(palavrasDoCliente ?? "")} `;
+  if (escolhido && disse.includes(` ${normalizar(escolhido)} `)) return null;
+  return citado;
 }

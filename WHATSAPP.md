@@ -51,6 +51,13 @@ Cliente ⇄ WhatsApp ⇄ Meta ⇄ Chatwoot Cloud (caixa "Aritur WhatsApp")
    para o bot propor o pedido pronto (ver §6d). (O 65 corrige o índice das observações.)
 6. `database/69-licao-operacao.sql` — lições de operação: paradas, plataforma e chegada (ver §6c).
 7. `database/70-precos-por-trecho.sql` — tabela de trechos e sugestões de preço para o dono aprovar em Sistema (ver §6c).
+8. `database/72-rascunhos-de-reserva.sql` — reservas preparadas pela IA para a equipe lançar com um toque (ver §6e).
+9. `database/73-embarque-outros.sql` — na Ida só Buscar em Casa, Rodoviária, Retorno e **Outros**: BR, Posto Carone,
+   aeroporto e qualquer outro local vão em Outros (código `outro`), com o local citado no detalhe. Outros não é "fora da área".
+10. `database/74-precos-locais-outros.sql` — locais de Outros com preço próprio (`boarding_spot_prices`, Sistema → Preços):
+   embarque **dentro do aeroporto** = R$ 70. **"Retorno do aeroporto" é o ponto Retorno**, não o aeroporto: a regra de preço
+   (`precoDoLocalDeOutros`, igual no bot e no app) ignora texto com "retorno", e o atendente/leitura de rascunhos pergunta
+   quando não dá para saber qual dos dois.
 
 ## 3b. Painel "Atendimento" (no app)
 
@@ -94,11 +101,15 @@ Nunca cole esses valores em chat, issue ou PR. URL da função:
 
 | Modo | O que acontece |
 |---|---|
-| **Sombra (teste)** | O bot roda o roteiro inteiro, mas escreve a resposta como **nota privada** no Chatwoot e **não grava nada** no negócio (reserva, cancelamento, comprovante, transferência). Nada vai ao cliente. |
+| **Sombra (só aprende)** | O bot **só observa e aprende** (issue #278): não gera resposta nem reserva preparada (é o que custa). Mensagem e comprovante continuam registrados e o "Agendado ☑️" da equipe lança a reserva normalmente. Nada vai ao cliente. |
 | **IA automática** | O bot responde ao cliente e confirma reservas sozinho. |
 | **Manual** | O bot não responde; a conversa aparece como Aberta pra equipe. |
 
-Comece em **Sombra** por alguns dias, leia as notas privadas e só então troque para
+**Testar o bot (qualquer modo, issue #278):** escreva no Chatwoot uma **nota privada** começando com
+`#testar`. Só `#testar` → o bot responde à conversa como ela está; `#testar tem vaga amanhã pra
+Cantanhede?` → responde como se o cliente tivesse mandado essa mensagem. A resposta vem numa nota
+`🧪 [TESTE] Resposta que o bot daria:`; reservas e mudanças viram "criaria…" (nada é gravado), a nota não
+entra no histórico do bot nem no aprendizado. Log: `bot_teste_pedido`. Teste assim antes de trocar para
 IA automática (a troca vale na hora, para todos os sócios).
 
 ## 6b. O que o bot aprende, em qualquer modo (issue #218)
@@ -119,9 +130,11 @@ Aprender agora**, o modelo lê as conversas **sem nomes nem telefones** e devolv
 (`bot_learnings`), acumulando: lição já conhecida só ganha evidência; texto melhor só substitui
 o antigo se o dono ainda não revisou.
 
-**Aprende só com o atendente (issue #232):** o que o bot enviou e os rascunhos ficam guardados, mas
-não entram nas conversas lidas pelo aprendizado; o cliente entra como contexto e para aprender como
-os clientes escrevem. O pedido ao modelo é de orientações gerais e casos isolados que ensinem o que
+**Aprende com o atendente e com os clientes (issues #232 e #278):** o que o bot enviou e os rascunhos ficam
+guardados, mas não entram nas conversas lidas pelo aprendizado. O cliente ensina como os clientes escrevem
+(`linguagem_cliente`) e o que eles contam (`dito_pelo_cliente`: lugares e referências, localidades, necessidades,
+épocas e motivos de viagem, dúvidas e reclamações que se repetem — migração 80). Essa lição vale na hora para
+entender e confirmar com o cliente; nunca vira preço, valor, horário ou regra (o filtro descarta). O pedido ao modelo é de orientações gerais e casos isolados que ensinem o que
 fazer, nunca roteiro, menu ou formulário fixo, nem relato sem orientação. Valor de trecho citado pelo
 atendente vira `fato` e só vale depois de aprovado. Lição arquivada ou recusada não volta sozinha.
 
@@ -225,9 +238,112 @@ pedido pronto ("Ida amanhã, saindo de …, descendo em …, 1 passagem, no dinh
 valor** a menos que o cliente pergunte, nunca presume a data e **só cria depois do "sim"**. Se o cliente mudar algo,
 vale o que ele disser. Sem costume (cliente novo ou sem repetição) o fluxo normal continua igual.
 
-## 7. Checklist de teste (em modo Sombra)
+## 6e. Reservas preparadas pela IA (issue #254)
 
-1. Mande uma mensagem de outro número → aparece uma nota privada `[SOMBRA]` com a resposta.
+Quando a conversa foi transferida para a equipe no modo **IA** (no **manual** o bot só lê a conversa quando aparece o "Agendado ☑️"; no **sombra** só aprende — issue #278), o `chatwoot-bot`
+prepara a reserva para ela lançar com um toque:
+
+1. Depois de cada mensagem do cliente, espera ~20 s (`BOT_RASCUNHO_ESPERA_MS`) para ele terminar de escrever. Se
+   chegou mensagem mais nova, quem cuida é ela.
+2. Filtro barato: sem data citada pelo cliente nas últimas 48 h ("amanhã", "sexta", "dia 12", "12/11"), não chama o
+   modelo.
+3. Um modelo pequeno (`BOT_RASCUNHO_MODELO`, padrão `claude-haiku-5-5`) lê o fim da conversa e devolve até dois pedidos
+   (ida e volta) pela ferramenta `registrar_pedidos`. A validação é pura (`_shared/rascunhoPuro.ts`): precisa de
+   **data + endereço ou ponto** (regra do dono). O sentido sai do ponto; endereço em São Luís sem ponto = busca em casa;
+   quantidade sem número = 1.
+4. **Interpretação (issue #266):** pedido sem embarque usa o **endereço de costume** do cliente naquele sentido
+   (`rpc_endereco_de_costume`) e o que ele citou em **conversas anteriores** (a leitura recebe até 4 páginas do Chatwoot),
+   com aviso em "Conferir". Pedido para hoje feito depois que a viagem daquele sentido saiu (Ida após 07:00, Volta após
+   14:00, `SAIDA_ENCERRADA`) vira **amanhã**, com aviso. Nome de rua ("Estrada Matões") não é cidade.
+   **Marcando para outra pessoa (issue #268):** o card de contato do WhatsApp (anexo `contact` do Chatwoot: telefone em
+   `fallback_title`, nome em `meta`) entra no texto como "[contato compartilhado: Nome — telefone]"; a reserva vai para o
+   **passageiro** (telefone e nome dele) e quem pediu fica anotado. O log `bot_anexo_recebido` mostra os tipos de anexo que
+   chegam (sem conteúdo).
+   **Endereço que o bot não conhece (issue #270):** busca em casa cujo bairro não está na tabela de preços (ex.: o
+   cliente diz "Residencial Colinas") passa por `_shared/bairroResolver.ts`: primeiro a **memória de endereços**
+   (`bairro_aliases`, migração 75: o que a equipe confirmou, o que o dono cadastrou, o que já foi descoberto); senão, uma
+   **pesquisa na internet** (`BOT_BAIRRO_MODELO`, padrão `claude-sonnet-5-5`, ferramenta `web_search`, até 3 buscas) que
+   só pode responder um bairro **da tabela** ou "nenhum". O achado entra na memória como `fonte = 'internet'`,
+   `confirmado = false`, e no rascunho vai com aviso "Bairro deduzido pela internet… Confira." (o texto do cliente fica
+   no endereço). O preço continua sendo o do bairro na tabela: nada aqui inventa valor. O mesmo vale para
+   `calcular_valor`/`criar_reserva` do atendente. Bairro que a equipe confirmou na conversa ("Turu, certo?" → "sim") vale
+   direto. Log: `bot_bairro_deduzido` (fonte, bairro) e `bot_aviso` com `bairro_nao_resolvido`.
+   **Cidade da Volta (issue #272):** o ponto da Volta é a cidade (Pirapemas ou Cantanhede) que o cliente **disse** ou
+   confirmou com a equipe (`cidade_dita`), ou a do endereço de costume. Ruas se repetem nas duas cidades (ex.: Lister
+   Caldas), então a cidade **nunca** sai do nome da rua. Sem cidade dita, o rascunho vai com aviso em "Conferir" e o
+   "Agendado ☑️" **não lança** (fica pendente com o motivo). O atendente pergunta o endereço e a cidade juntos.
+   **Lugares das cidades (issue #274, migrações 76–77):** `cidade_lugares` conhece Pirapemas e Cantanhede: **ruas**
+   (com ou sem "Rua": "Isidora Lopes"), **pontos de referência** (bar, padaria, hospital, posto, fórum, "Marajá",
+   "Provisória"…), **"casa de fulano"** ("casa do Erasmo", "mãe do Jackson") e **povoados**. Começou com o
+   OpenStreetMap e **aprende sozinha** com toda reserva de Volta confirmada/embarcada, por qualquer caminho (gatilho
+   `trg_reservations_aprende_lugares`; se a equipe corrige a cidade, o que a reserva ensinou é desfeito). Cada
+   endereço é quebrado em pedaços (`fn_pedacos_do_endereco`: "Lister caldas ao lado choperia do riba" → rua + referência)
+   e os lugares citados juntos ficam **cruzados**: `fn_lugares_no_texto(endereço)` diz em que cidade(s) cada lugar
+   aparece, em quantas reservas e a rua que costuma vir junto. No rascunho vira aviso em "Conferir" ("existe em
+   Pirapemas e em Cantanhede", "costuma ser Cantanhede, não Pirapemas", "Choperia do Riba é em Pirapemas, junto da
+   Rua Lister Caldas"). O atendente usa a ferramenta `onde_fica` para confirmar com o cliente ("É a choperia do Riba, na
+   Lister Caldas, em Pirapemas?") e, se o lugar só é conhecido na outra cidade (mapa ou 2+ reservas), `criar_reserva`
+   devolve `CIDADE_A_CONFIRMAR`. Só avisa e ajuda a confirmar: nunca decide a cidade.
+   **Erros de escrita (issue #276, migrações 78–79):** o filtro de data aceita "hj", "amnh", "sesta", "sabdo"
+   (`temDataNoTexto`); a cidade da Volta aceita "Pirapema", "Catanhede"; o bairro de São Luís escrito errado
+   ("cohatrc") vira o da tabela com aviso "Bairro entendido como…" (`bairroParecido`, também no preço). Na base de
+   lugares, "listre caldas" e "choparia do riba" são reconhecidos (`fn_lugar_parecido`; palavra solta só corrige
+   para o mesmo tipo, para "campo" não virar "Rua do Campo") e a grafia fica guardada em `cidade_lugares_grafias`;
+   o aviso mostra como o cliente escreveu. Regra única em `_shared/grafia.ts` = `fn_distancia_grafia`.
+   Cliente que já tem reserva naquela viagem não gera rascunho. Há um rascunho aberto por conversa e sentido: se o
+   cliente corrige a data, o mesmo rascunho é atualizado. O nome é o do cadastro ou o que o cliente **escreveu**
+   (nunca o perfil do WhatsApp).
+5. No app, aba **Atendimento → Reservas prontas para lançar**: **Lançar** abre a nova reserva já preenchida (preço e
+   vaga pelo app, como sempre); **Descartar** tira da lista. Encomenda não tem Lançar nem valor: **Copiar anotação**
+   gera a linha `E <onde buscar> <telefone>` para a caixinha da Agenda.
+6. Criar a reserva daquele cliente naquela viagem, por **qualquer** caminho (app, anotação, bot, Claude), fecha o
+   rascunho sozinho (gatilho `trg_reservations_fecha_rascunho`).
+
+Sem a marca abaixo, nada é reservado nem respondido ao cliente por aqui. Log: `bot_rascunho_preparado` (pedidos,
+gravados, motivos, tokens) e `bot_aviso` com `rascunho_falhou` / `rascunho_nao_gravado`.
+
+**"Agendado ☑️" lança sozinho (issue #257).** Quando a **equipe** escreve na conversa a marca combinada pelo dono
+(**"Agendado ☑️"**; vale também agendada/agendados, ☑ ✅ ✔, em qualquer posição, mas não pergunta nem nota privada), o
+bot lê a conversa na hora (sem espera nem filtro de data), prepara o rascunho do que a equipe acabou de confirmar e o
+**lança**: preço pela mesma regra do bot (`valorDoPedido`: trecho → ponto → bairro), vaga validada pelo banco, status
+`confirmada` (a marca da equipe é a confirmação manual), pagamento em dinheiro, autor Bot com
+`extra_data.origem = 'agendado_equipe'`. É idempotente pela mensagem da equipe. Encomenda é lançada **sem valor**. Se faltar
+algo (ponto não reconhecido, trecho sem preço, lotado, recusa do banco), a reserva **não** é criada e o rascunho fica em
+"Reservas prontas para lançar" com o motivo em "Conferir". Vale em **qualquer modo**, inclusive no **sombra** (dono, 10/11).
+
+**Agendado mais esperto (issue #286):** (1) na Volta sem cidade dita, se o lugar citado só aparece numa cidade
+com evidência (no mapa ou em 3+ reservas, `cidadePelaBase`) e nenhum lugar aponta a outra, o Agendado lança nessa
+cidade e avisa em "Conferir"; (2) se o Agendado não lançou e o cliente completa em até 30 min (o dia, a quantidade),
+o bot tenta de novo (`relerAgendadoPendente`, idempotente pela mensagem do Agendado; log `bot_agendado_relido`);
+(3) sem dia dito pelo cliente, vale o horário que a equipe disse ("5 horas"/"amanhã cedo" = Ida; "12 horas"/"após
+às 12" = Volta; a próxima viagem desse sentido); (4) "hoje"/"amanhã" contam da data da MENSAGEM; quem já tem reserva
+no mesmo sentido na véspera não ganha rascunho novo (no Agendado, fica pendente com aviso); e todo dia às 00:15 o
+rascunho pronto com data passada é descartado (`fn_expirar_rascunhos_de_reserva`, migração 84). **Ida e volta sem o dia da volta**
+(dono, 10/11): o normal é a volta no mesmo dia, mas é sempre confirmado com o cliente — o atendente pergunta ("A volta é
+no mesmo dia, à tarde?") e só reserva depois do sim. Log: `bot_agendado_lancado`
+(lançadas, pendentes) e `bot_aviso` com `agendado_falhou`. **Aviso (dono, 10/11):** quando o Agendado não lança (ou
+lança só parte), abre uma pendência na aba **Pendências** (e no sino) com o motivo legível e o link da conversa
+(`avisoDoAgendado`, uma por marca; se a releitura lançar tudo depois, ela se resolve sozinha). Log `bot_agendado_avisado`.
+
+**Agendado = reservar como está (dono, 10/11).** A marca da equipe reserva a vaga **mesmo faltando informação**; o que
+falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:
+- **Sem endereço:** a Ida entra em Outros com "Endereço a confirmar" e **sem valor** (R$ 0); busca em casa sem bairro
+  fica "(bairro a confirmar)". Ponto fixo (rodoviária, retorno…) não precisa de endereço. A Volta com cidade entra com
+  o valor da cidade e "Endereço a confirmar".
+- **Volta sem cidade dita:** a base de lugares (acima) → senão a cidade do endereço de costume (aviso em "Conferir") →
+  senão fica **pendente** em "Reservas prontas" para a equipe escolher. A cidade nunca é chutada.
+- **Ida e volta sem o dia da volta:** a Volta é lançada no **mesmo dia** com "confirmar com o cliente se a volta é no
+  mesmo dia" no embarque.
+- **Depois, sozinho:** quando o cliente escreve, o bot lê o que ele disse desde a reserva (`atualizarReservasAConfirmar`,
+  módulo puro `planejarAtualizacao`) e completa: outro dia da volta → muda o dia (`rpc_move_reservation`, vaga validada);
+  confirmou o mesmo dia → tira a marca; disse onde embarca → preenche o endereço (bairro de São Luís vira busca em casa) e
+  o valor pela tabela (mesma regra do bot); disse a cidade da Volta → troca o ponto. Se a equipe já preencheu no app, não
+  mexe. Log `bot_reserva_completada`; falhas em `bot_aviso` (`reserva_nao_movida`, `reserva_nao_completada`). Vale em
+  qualquer modo, inclusive no **sombra**; preço continua decidido pela tabela e vaga pelo banco.
+
+## 7. Checklist de teste (com `#testar`, em qualquer modo)
+
+1. Numa conversa, escreva a nota privada `#testar` (ou `#testar <mensagem do cliente>`) → aparece uma nota `🧪 [TESTE]` com a resposta.
 2. Responda pelo **app do celular** → a mensagem aparece no Chatwoot e o bot continua respondendo à seguinte.
 3. Peça "falar com atendente" → nota "Transferiria…" (em IA real: conversa vira Aberta).
 4. Pergunte algo que está na base (ex.: bagagem) e algo que não está → responde / transfere.

@@ -89,14 +89,14 @@ const ROUTE_POINTS = [
     deleted_at: null,
   },
   {
-    id: "rp-br",
+    id: "rp-outro",
     direction: "ida",
-    code: "br",
-    name: "BR (Posto)",
-    base_time: "06:00:00",
+    code: "outro",
+    name: "Outros",
+    base_time: "06:30:00",
     price: 60,
     requires_detail: true,
-    detail_label: "Ponto na BR",
+    detail_label: "Local de embarque",
     boarding_window: null,
     is_core: true,
     display_order: 2,
@@ -288,6 +288,12 @@ export async function mockSupabase(page, opts = {}) {
   let errorLogRows = (opts.errorLog ?? []).map((e) => ({ ...e }));
   // painel de atendimento (database/52): fila espelhada do Chatwoot + perguntas sem resposta
   const atendimentoRows = (opts.atendimento ?? []).map((c) => ({ ...c }));
+  // locais de Outros com preço próprio (issue #263)
+  const locaisOutrosRows = opts.locaisOutros ?? [
+    { id: "lo-aeroporto", local: "Aeroporto", price: 70 },
+  ];
+  // reservas preparadas pela IA (issue #254)
+  let rascunhosRows = (opts.rascunhos ?? []).map((r) => ({ status: "pronta", ...r }));
   let botUnansweredRows = (opts.botUnanswered ?? []).map((q) => ({ resolved_at: null, ...q }));
   // base de conhecimento do bot (database/50) — stateful pra testar o CRUD
   let botKnowledgeRows = (opts.botKnowledge ?? []).map((k) => ({ ...k }));
@@ -548,6 +554,13 @@ export async function mockSupabase(page, opts = {}) {
         statusOverride[b.p_reservation_id] = "confirmada";
         return route.fulfill(json({ success: true, status: "confirmada" }));
       }
+      if (fn === "rpc_descartar_rascunho_de_reserva") {
+        const id = req.postDataJSON?.()?.p_draft_id;
+        rascunhosRows = rascunhosRows.map((r) =>
+          r.id === id ? { ...r, status: "descartada" } : r,
+        );
+        return route.fulfill(json({ success: true }));
+      }
       if (fn === "rpc_endereco_de_costume") {
         const c = costumes[req.postDataJSON?.()?.p_customer_id] ?? {};
         return route.fulfill(
@@ -730,6 +743,9 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "maintenance_types") rows = maintenanceTypesRows;
     else if (table === "v_atendimento_whatsapp") rows = atendimentoRows;
+    else if (table === "boarding_spot_prices") rows = locaisOutrosRows;
+    else if (table === "reservation_drafts")
+      rows = rascunhosRows.filter((r) => r.status === "pronta");
     else if (table === "bot_unanswered" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
@@ -856,7 +872,13 @@ export async function mockSupabase(page, opts = {}) {
         .filter((n) => !limpadas.has(n.id))
         .map((n) => ({ ...n, lida: n.lida || lidas.has(n.id) }));
     else if (table === "v_pendencias_atendimento") rows = tickets;
-    else if (table === "app_error_log" && req.method() === "PATCH") {
+    else if (table === "app_error_log" && req.method() === "PATCH" && !url.searchParams.get("id")) {
+      // "Limpar todos" (issue #264): resolve todos os abertos
+      const body = req.postDataJSON?.() ?? {};
+      const abertos = errorLogRows.filter((e) => !e.resolved_at).map((e) => e.id);
+      errorLogRows = errorLogRows.map((e) => (abertos.includes(e.id) ? { ...e, ...body } : e));
+      return route.fulfill(json(abertos.map((id) => ({ id }))));
+    } else if (table === "app_error_log" && req.method() === "PATCH") {
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const body = req.postDataJSON?.() ?? {};
       errorLogRows = errorLogRows.map((e) => (e.id === id ? { ...e, ...body } : e));

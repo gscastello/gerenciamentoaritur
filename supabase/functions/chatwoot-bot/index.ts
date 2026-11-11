@@ -16,12 +16,22 @@
 //   CHATWOOT_INBOX_ID        id da caixa "Aritur WhatsApp" (ex.: 146985) — opcional, filtra
 //   ANTHROPIC_API_KEY        leitura do texto + respostas da base de conhecimento
 //
-// Dois trabalhos por evento:
+// Trabalhos por evento:
 //   1) ESPELHO — grava em whatsapp_conversations o status da conversa no
 //      Chatwoot, quem falou por último e a prévia: é o que alimenta a fila
 //      do painel "Atendimento" do app (sem guardar token do Chatwoot no
 //      navegador).
 //   2) BOT — se for mensagem de cliente, roda o motor de reservas.
+//   3) RASCUNHO — conversa transferida para a equipe no modo IA: prepara a reserva
+//      para ela lançar com um toque (issue #254). No manual, só o "Agendado ☑️" lê.
+//   4) AGENDADO ☑️ — a equipe confirmou na conversa com a marca combinada pelo
+//      dono: a reserva preparada é lançada (issue #257). Vale em qualquer modo,
+//      inclusive no sombra (dono, 10/11): a marca da equipe é a confirmação.
+//   5) TESTE — nota privada "#testar [mensagem]" da equipe: o bot escreve, numa nota
+//      privada, a resposta que daria (issue #278). Qualquer modo; nada vai ao cliente.
+// Modo sombra (issue #278): observa e aprende — não gera resposta nem reserva
+// preparada (é o que custa), mas lança o que a equipe marcar com "Agendado ☑️"
+// (dono, 10/11). Para ver o que o bot sabe, use o #testar.
 //
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
@@ -29,10 +39,18 @@
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
-import { extrairAtividade, extrairMensagemDeCliente } from "../_shared/chatwootPayload.ts";
+import { extrairAtividade, extrairMensagemDeCliente, extrairPedidoDeTeste } from "../_shared/chatwootPayload.ts";
+import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
+import { ehMarcaDeAgendado } from "../_shared/rascunhoPuro.ts";
+import {
+  atualizarReservasAConfirmar,
+  lancarPeloAgendado,
+  prepararRascunhoDeReserva,
+  relerAgendadoPendente,
+} from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { whatsappService } from "../_shared/whatsappService.ts";
 
@@ -82,6 +100,21 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
 
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any) {
+  // teste do dono: nota privada "#testar …" (issue #278)
+  const teste = extrairPedidoDeTeste(body, INBOX_ID);
+  if (teste) {
+    await testarBot(teste);
+    return;
+  }
+  // o que o Chatwoot entrega como anexo (card de contato, issue #268): tipos e campos, sem conteúdo
+  if (body?.event === "message_created" && Array.isArray(body.attachments) && body.attachments.length) {
+    evento("bot_anexo_recebido", {
+      conversa: body.conversation?.id ?? null,
+      tipo_mensagem: body.message_type ?? null,
+      tipos: body.attachments.map((a: { file_type?: string }) => a?.file_type ?? null),
+      campos: Object.keys(body.attachments[0] ?? {}),
+    });
+  }
   const atividade = extrairAtividade(body, INBOX_ID);
   const conversaEspelhada = atividade ? await espelhar(atividade) : undefined;
 
@@ -102,6 +135,38 @@ async function processar(body: any) {
       content: atividade.texto,
     });
     observou = true;
+  }
+
+  // a equipe confirmou com "Agendado ☑️": lança a reserva preparada (a marca é a confirmação manual)
+  if (
+    atividade?.autor === "equipe" &&
+    atividade.texto &&
+    atividade.mensagemId &&
+    conversaEspelhada &&
+    ehMarcaDeAgendado(atividade.texto)
+  ) {
+    // em qualquer modo, inclusive no sombra: a marca da equipe é a confirmação (dono, 10/11)
+    await lancarPeloAgendado({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      mensagemId: atividade.mensagemId,
+      telefone: atividade.telefone,
+    });
+  }
+
+  // o cliente completou depois do Agendado ☑️ (dia, quantidade…) e ele não tinha lançado: tenta de novo (issue #286)
+  if (atividade?.autor === "cliente" && atividade.texto && conversaEspelhada) {
+    await relerAgendadoPendente({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      telefone: atividade.telefone,
+    });
+    // reserva feita "como está" pelo Agendado e o cliente completou (outro dia da volta, endereço, cidade)
+    await atualizarReservasAConfirmar({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      telefone: atividade.telefone,
+    });
   }
 
   const m = extrairMensagemDeCliente(body, INBOX_ID);
@@ -144,8 +209,42 @@ async function processar(body: any) {
       }),
   );
 
+  // Conversa transferida para a equipe no modo IA: deixa a reserva preparada (nada é reservado aqui).
+  // No manual e no sombra o bot só lê a conversa quando a equipe escreve "Agendado ☑️" (issues #278 e #286).
+  if (m.texto && modo === "ia" && conversation.attendance_mode === "humano") {
+    await prepararRascunhoDeReserva({
+      conversationId: conversation.id,
+      chatwootConversationId: m.chatwootConversationId,
+      mensagemId: m.chatwootMessageId,
+      telefone: m.telefone,
+    });
+  }
+
   // depois de responder ao cliente, para o aprendizado não atrasar o atendimento
   if (observou) await aprenderSePreciso();
+}
+
+/**
+ * Teste do dono (issue #278): o atendente de IA lê a conversa e escreve numa nota
+ * privada o que responderia — com a pergunta da nota como próxima mensagem do
+ * cliente, se houver. Roda como sombra: nada é enviado, gravado ou aprendido.
+ */
+async function testarBot(t: NonNullable<ReturnType<typeof extrairPedidoDeTeste>>) {
+  const conversation = await whatsappService.resolveConversation(t.telefone);
+  evento("bot_teste_pedido", { conversa: t.chatwootConversationId, com_pergunta: !!t.pergunta });
+  await runWithBotContext(
+    { chatwootConversationId: t.chatwootConversationId, conversationId: conversation.id, shadow: true, teste: true },
+    () =>
+      responderComAgente(
+        { conversationId: conversation.id, telefone: t.telefone, waMessageId: "cw-0" },
+        { teste: { pergunta: t.pergunta } },
+      ),
+  ).catch(async (err) => {
+    evento("bot_erro", { onde: "teste", conversa: t.chatwootConversationId, erro: String(err).slice(0, 300) });
+    await chatwootClient
+      .postMessage(t.chatwootConversationId, `🧪 [TESTE] Não consegui responder: ${String(err).slice(0, 200)}`, { private: true })
+      .catch(() => {});
+  });
 }
 
 Deno.serve(async (req: Request) => {

@@ -32,6 +32,11 @@ export const TIPOS_DE_LICAO = {
     rotulo: "Como a empresa funciona",
     ajuda: "Funcionamento da empresa, em visão geral. Só vale depois de aprovada.",
   },
+  dito_pelo_cliente: {
+    rotulo: "O que os clientes contam",
+    ajuda:
+      "Lugares, referências, necessidades e dúvidas que os clientes trazem. Ajuda o bot a entender e confirmar; nunca vira preço, horário ou regra.",
+  },
 };
 
 /** Tipos que mudam o que o bot afirma: só valem depois de aprovados. */

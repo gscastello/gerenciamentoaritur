@@ -6,17 +6,22 @@
 
 import { useMemo } from "react";
 import { routePointsService } from "../services/routePointsService";
-import { useSupabaseQuery } from "./useSupabaseQuery";
-import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
+import { useRealtimeTable } from "./useRealtimeTable";
 import { useSettings } from "./useSettings";
+import { useSupabaseQuery } from "./useSupabaseQuery";
 
 // o formulário do cliente decide o campo extra pelo código do ponto
-const CAMPO_POR_CODE = { busca: "bairro", br: "localExato", outro: "localOutro" };
+const CAMPO_POR_CODE = { busca: "bairro", outro: "localOutro" };
 
 const WRAP = {
   ida: { id: "ida", nome: "Ida", direcao: "ida", label: "São Luís → Pirapemas / Cantanhede" },
-  volta: { id: "volta", nome: "Volta", direcao: "volta", label: "Pirapemas / Cantanhede → São Luís" },
+  volta: {
+    id: "volta",
+    nome: "Volta",
+    direcao: "volta",
+    label: "Pirapemas / Cantanhede → São Luís",
+  },
 };
 
 function mapPoint(rp) {
@@ -41,7 +46,11 @@ export function useRouteConfig() {
   const update = useAsyncAction(routePointsService.update);
   const add = useAsyncAction(routePointsService.addCustomPoint);
   const remove = useAsyncAction(routePointsService.removeCustomPoint);
-  const after = async (p) => { const r = await p; await query.refetch(); return r; };
+  const after = async (p) => {
+    const r = await p;
+    await query.refetch();
+    return r;
+  };
 
   const trips = useMemo(() => {
     const rows = (query.data || []).filter((r) => r.active !== false);
