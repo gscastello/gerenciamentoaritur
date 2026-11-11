@@ -401,6 +401,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   aviso; fato e negócio (inclusive valor de trecho) só aprovados, e operação que cite dinheiro também. Lição já revisada nunca é
   reescrita sozinha: o bot deixa uma sugestão de atualização para o dono aceitar ou manter. Mudança no aprendizado não pode quebrar essas
   garantias (nem fazer o bot decidir preço, vaga, horário ou confirmação).
+- **Acerto do bot** (issue #311, `database/93-acerto-do-bot.sql`, aba Sistema → Bot): `rpc_bot_acerto(p_dias)` lê o
+  `audit_logs` das reservas lançadas pelo bot (usuário "Bot WhatsApp" ou `origem = agendado_equipe`) e separa o que
+  outra pessoa **corrigiu** (mudou o que o bot gravou), **completou** (preencheu o que estava vazio/"a confirmar") e
+  **cancelou**. Acerto = lançadas sem correção ÷ lançadas. É o número que decide quando ligar o modo `ia`; todo erro do
+  bot vira um teste de regressão antes de ser corrigido.
 
 ---
 

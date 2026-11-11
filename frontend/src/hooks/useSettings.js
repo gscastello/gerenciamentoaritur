@@ -43,6 +43,8 @@ export function useSettings() {
     botStyleGuide: settings.bot_style_guide?.text ?? "",
     // enviado pelo bot quando o cliente insiste em saber onde a van está (issue #244)
     driverContact: settings.driver_contact ?? null,
+    // confirmação da reserva ao cliente depois do "Agendado ☑️" (issue #310): sem a chave = ligada
+    agendadoConfirmacao: settings.agendado_confirmacao?.ativo ?? true,
     // link base da conta no Chatwoot (database/52) pro "Abrir no Chatwoot"
     chatwootUrl: settings.chatwoot?.url ?? null,
 
@@ -50,6 +52,7 @@ export function useSettings() {
     setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),
     setDriverContact: ({ name, phone }) => after(setKey.run("driver_contact", { name, phone })),
     setAutoRevenue: (enabled) => after(setKey.run("auto_revenue", { enabled })),
+    setAgendadoConfirmacao: (ativo) => after(setKey.run("agendado_confirmacao", { ativo })),
     setMondayAdjustment: ({ active, hours }) =>
       after(setKey.run("monday_adjustment", { active, hours })),
     setServedCities: (list) => after(setKey.run("served_cities", list)),
