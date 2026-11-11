@@ -78,7 +78,8 @@ export async function montarFatos(): Promise<{ fatos: string; estilo: string }> 
 
   if (bairros.data?.length) {
     linhas.push("", "VALOR DA BUSCA EM CASA POR BAIRRO:");
-    for (const b of bairros.data) linhas.push(`- ${b.neighborhood}: R$ ${b.price}`);
+    // sem preço (issue #330): o bot não diz valor; a equipe confirma
+    for (const b of bairros.data) linhas.push(`- ${b.neighborhood}: ${b.price == null ? "sem preço (a equipe confirma o valor)" : `R$ ${b.price}`}`);
   }
 
   if (cfg.monday_adjustment?.active) {

@@ -642,3 +642,14 @@ Deno.test("#326: trecho de R$ 50+ não pede confirmação; abaixo, só em dia ch
   assertEquals(regraDoTrecho({ valor_minimo: 45, vagas_minimas: "8" }), { valorMinimo: 45, vagasMinimas: 8 });
   assertEquals(regraDoTrecho({ valor_minimo: -1 }), { valorMinimo: 50, vagasMinimas: 10 });
 });
+
+Deno.test("#330: bairro cadastrado sem preço nunca vira R$ 0", async () => {
+  const { precoDoBairroCadastrado } = await import("./agentePuro.ts");
+  assertEquals(precoDoBairroCadastrado({ neighborhood: "Turu", price: 80 }), { ok: true, preco: 80 });
+  assertEquals(precoDoBairroCadastrado({ neighborhood: "Turu", price: "90.00" }), { ok: true, preco: 90 });
+  for (const price of [null, undefined, "", 0, "0"]) {
+    const r = precoDoBairroCadastrado({ neighborhood: "Planalto Pingão", price });
+    assertEquals(r.ok, false, String(price));
+    if (!r.ok) assertEquals(r.erro.codigo, "BAIRRO_SEM_PRECO");
+  }
+});
