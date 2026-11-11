@@ -404,7 +404,8 @@ Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto cert
 - Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, outro (Outros: BR, Posto Carone, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
 - "Retorno do aeroporto" / "no retorno" é o ponto retorno. Dentro do aeroporto (terminal, chegando de voo) é outro com "Aeroporto de São Luís", que tem preço próprio. Na dúvida, pergunte qual.
 - Busca em casa precisa do bairro (nome da tabela). Bairro da tabela escrito no endereço ("…, Estrada da Maioba") é o bairro. Condomínio ou rua sem bairro: use onde_fica (São Luís aprende rua/condomínio → bairro com as reservas); sem certeza, pergunte, ou use "(bairro a confirmar)" e sem valor.
-- Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade só vale se foi dita ou é o endereço de costume; onde_fica só ajuda a confirmar.
+- Volta: o ponto é a cidade (pirapemas ou cantanhede). Ruas e referências se repetem nas duas cidades: a cidade vale se foi dita, é o endereço de costume, ou TODAS as pistas apontam a mesma (lugar que só existe numa cidade em onde_fica, reservas anteriores do cliente, cidade que ele cita nas conversas antigas). Pistas que discordam: pergunte.
+- Campestre fica entre Pirapemas e Cantanhede e é embarque válido da Volta: ponto cantanhede com "Campestre" no embarque, mesmo valor, sem revisão.
 - Preço compara embarque e desembarque na tabela de trechos (ex.: Pirapemas até Miranda). Cidade intermediária sem trecho cadastrado: não invente; fica sem valor e avise.
 - Valor dito pelo SÓCIO neste chat vale (valor_dito). Valor dito só pelo cliente, não.
 Clientes e passageiros
