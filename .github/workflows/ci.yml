@@ -121,7 +121,16 @@ jobs:
         run: |
           sudo grep -rlE 'dl\.google\.com|packages\.microsoft\.com' \
             /etc/apt/sources.list.d/ 2>/dev/null | sudo xargs -r rm -f || true
-          npx playwright install-deps chromium
+          # o espelho do apt do runner às vezes não baixa os índices (exit 100, issue #322):
+          # tenta de novo antes de desistir
+          echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
+          for tentativa in 1 2 3; do
+            if npx playwright install-deps chromium; then exit 0; fi
+            echo "install-deps falhou (tentativa $tentativa); tentando de novo em 20 s"
+            sleep 20
+            sudo apt-get update || true
+          done
+          exit 1
       - run: npx playwright install chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v7
