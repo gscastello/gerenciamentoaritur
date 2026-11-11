@@ -235,3 +235,29 @@ Deno.test("#305: pela Siri não existe cartão; com proposta pendente termina em
   if (avisoDaPropostaPendente([]) !== "") throw new Error("aviso sem pendente");
   if (!avisoDaPropostaPendente([{ descricao: "Volta 11/11" }]).includes("não proponha de novo")) throw new Error("aviso");
 });
+
+Deno.test("#318: ensinar o bot — lição e lugar validados, sem preço e sem telefone", async () => {
+  const { validarLicao, validarLugar, descreverAcao } = await import("./assistentePuro.ts");
+  const ok = validarLicao({ tipo: "operacao", titulo: "Descida da Inês", conteudo: "Descida da Inês é perto da casa da Inês, em Pirapemas." });
+  assert(ok.ok);
+  if (ok.ok) assertStringIncludes(descreverAcao({ ...ok.acao, id: "x" }), "Ensinar ao bot (operação): Descida da Inês");
+  assertEquals(validarLicao({ tipo: "dito_pelo_cliente", titulo: "x y z", conteudo: "qualquer coisa aqui" }).ok, false);
+  assertEquals(validarLicao({ tipo: "fato", titulo: "Preço", conteudo: "A passagem para Miranda é R$ 30." }).ok, false);
+  assertEquals(validarLicao({ tipo: "fato", titulo: "Preço", conteudo: "A passagem para Miranda é 30 reais." }).ok, false);
+  assertEquals(validarLicao({ tipo: "fato", titulo: "Motorista", conteudo: "O motorista atende no 98 98101-2388." }).ok, false);
+  assertEquals(validarLicao({ tipo: "fato", titulo: "ab", conteudo: "curta" }).ok, false);
+
+  const cidade = validarLugar({ cidade: "pirapemas", nome: "Descida da Inês", bairro: "Turu" });
+  assert(cidade.ok);
+  if (cidade.ok) {
+    assertEquals(cidade.acao.bairro, null);
+    assertEquals(descreverAcao({ ...cidade.acao, id: "x" }), "Ensinar ao bot: Descida da Inês fica em Pirapemas");
+  }
+  const sl = validarLugar({ cidade: "São Luís", nome: "Condomínio Jardim di Napoli", bairro: "Turu" });
+  assert(sl.ok);
+  if (sl.ok) assertEquals(descreverAcao({ ...sl.acao, id: "x" }), "Ensinar ao bot: Condomínio Jardim di Napoli fica no bairro Turu (São Luís)");
+  assertEquals(validarLugar({ cidade: "sao_luis", nome: "Condomínio X" }).ok, false);
+  assertEquals(validarLugar({ cidade: "miranda", nome: "Rua A" }).ok, false);
+  assertEquals(validarLugar({ cidade: "cantanhede", nome: "" }).ok, false);
+  assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "ENSINAR O BOT");
+});

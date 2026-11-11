@@ -35,6 +35,8 @@ import {
   type Uso,
   validarCriacao,
   validarMudanca,
+  validarLicao,
+  validarLugar,
 } from "./assistentePuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { variantesTelefone } from "./telefone.ts";
@@ -507,6 +509,14 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       ctx.acoes.push(acao);
       return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
     }
+    case "propor_licao":
+    case "propor_lugar": {
+      const v = nome === "propor_licao" ? validarLicao(a) : validarLugar(a);
+      if (!v.ok) return { ok: false, erro: v.erro };
+      const acao: Acao = { ...v.acao, id: crypto.randomUUID() };
+      ctx.acoes.push(acao);
+      return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
+    }
     case "propor_cancelamento": {
       const atual = await buscarReserva(ctx, String(a.reserva_id ?? ""));
       if (!atual || atual.status === "cancelada") return { ok: false, erro: "Reserva não encontrada ou já cancelada." };
@@ -641,6 +651,26 @@ export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: b
       ctx,
       `assistente-rascunho-${d.id}`,
     );
+  }
+
+  // ensinar o bot (issue #318): a regra e as travas estão no banco
+  if (tipo === "ensinar" || tipo === "ensinar_lugar") {
+    const { data, error } = tipo === "ensinar"
+      ? await ctx.db.rpc("rpc_ensinar_ao_bot", {
+        p_tipo: String(bruta.licao_tipo ?? ""),
+        p_titulo: String(bruta.titulo ?? ""),
+        p_conteudo: String(bruta.conteudo ?? ""),
+        p_actor: ctx.userId,
+      })
+      : await ctx.db.rpc("rpc_ensinar_lugar", {
+        p_cidade: String(bruta.cidade ?? ""),
+        p_nome: String(bruta.nome ?? ""),
+        p_bairro: bruta.bairro ? String(bruta.bairro) : null,
+        p_actor: ctx.userId,
+      });
+    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não ensinou.") };
+    evento("assistente_acao", { tipo, ok: true });
+    return { ok: true, mensagem: String(data?.message ?? "O bot aprendeu.") };
   }
 
   if (tipo === "resolver_pendencia") {

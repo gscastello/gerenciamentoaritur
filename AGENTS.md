@@ -349,6 +349,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
   operação combinada com o dono entra também em `CONHECIMENTO_DA_OPERACAO`. **Pela Siri** (issue #290, `SIRI.md`, função `assistente-voz`): atalho do iPhone com uma
   chave pessoal (só o hash no banco; apagar desliga), respostas curtas para ler em voz alta e "sim" por voz para gravar.
+  **Ensina o bot** (issue #318, `database/94`): o que o sócio informa ou corrige vira aprendizado, também só depois
+  do "Confirmar"/"sim" — `propor_licao` → `rpc_ensinar_ao_bot` (lição em `bot_learnings`; admin = já aprovada) e
+  `propor_lugar` → `rpc_ensinar_lugar` (lugar de Pirapemas/Cantanhede em `cidade_lugares`, fonte dono/equipe, vale
+  como mapa; lugar de São Luís → bairro em `bairro_aliases` confirmado + `sao_luis_lugares`). Preço e telefone nunca
+  entram em lição (o banco recusa). Correção de reserva pelo assistente já conta no Acerto do bot e ensina as bases
+  de lugares pelos gatilhos das reservas.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
   com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de
