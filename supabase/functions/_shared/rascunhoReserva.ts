@@ -52,7 +52,8 @@ import {
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
 } from "./rascunhoPuro.ts";
-import { conferirPeloCliente, datasEscritas } from "./pedidoDoCliente.ts";
+import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
+import { conferenciaFinal, conferirPeloCliente, datasEscritas } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -364,6 +365,20 @@ async function lerEGravar(
     if (opcoes.confirmadoPelaEquipe && avisosDoCliente.length) {
       pendencia ??= { motivo: `o que foi lido não bate com o que o cliente escreveu: ${avisosDoCliente.join("; ")}`, codigo: "conferir" };
     }
+    // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
+    // desfazer o que o cliente escreveu sem ninguém ver (issue #309)
+    const naoBate = conferenciaFinal(r, mensagensDoCliente, {
+      hoje,
+      pedidosLidos: pedidos.length,
+      cidadeEscrita: cidadeEscritaPeloCliente(textosDoCliente),
+    });
+    if (naoBate.length) {
+      evento("bot_conferencia_final", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe, nao_bate: naoBate.length });
+      r.notes = [r.notes, `Não bate com o cliente: ${naoBate.join("; ")}.`].filter(Boolean).join(" ").slice(0, 300);
+      if (opcoes.confirmadoPelaEquipe) {
+        pendencia ??= { motivo: `a reserva pronta não bate com o que o cliente escreveu: ${naoBate.join("; ")}`, codigo: "conferir" };
+      }
+    }
     const linha = {
       ...r,
       // nome: o do cadastro; senão o que o CLIENTE escreveu (nunca o perfil do WhatsApp)
@@ -450,6 +465,10 @@ function chaveDoAgendado(mensagemId: number, direcao: string, telefoneDoRascunho
 export async function lancarPeloAgendado(entrada: Entrada) {
   const conversa = entrada.chatwootConversationId;
   const lancadas: string[] = [];
+  /** criadas AGORA (não as repetidas pela idempotência): vão na confirmação ao cliente (issue #310) */
+  const paraConfirmar: ReservaParaConfirmar[] = [];
+  let hojeDoAgendado = "";
+  let nomeDoCliente: string | null = null;
   const pendentes: string[] = [];
   let lidos = 0;
   let motivosLidos: string[] = [];
@@ -470,6 +489,8 @@ export async function lancarPeloAgendado(entrada: Entrada) {
     }
     lidos = lido.pedidos.length;
     motivosLidos = lido.motivos;
+    hojeDoAgendado = lido.hoje;
+    nomeDoCliente = lido.cliente?.name ?? null;
 
     const { data: prontos } = await supabaseAdmin
       .from("reservation_drafts")
@@ -554,6 +575,22 @@ export async function lancarPeloAgendado(entrada: Entrada) {
       }
       // o gatilho do banco fecha o rascunho; aqui só conta
       lancadas.push(res.reservation_id);
+      if (res.message === "created") {
+        const outraPessoa = d.phone && !variantesTelefone(entrada.telefone).includes(normalizarTelefone(d.phone));
+        paraConfirmar.push({
+          tipo: encomenda ? "encomenda" : "passagem",
+          direcao,
+          data: d.trip_date,
+          pontoCodigo: ponto?.code ?? null,
+          pontoNome: ponto?.name ?? null,
+          bairro: d.pickup_neighborhood,
+          detalhe: encomenda ? null : d.pickup_detail,
+          desembarque: d.dropoff_location,
+          quantidade: d.quantity ?? 1,
+          aConfirmar: falta,
+          passageiro: outraPessoa ? (existente?.name ?? d.customer_name ?? null) : null,
+        });
+      }
     }
     evento("bot_agendado_lancado", {
       conversa,
@@ -567,11 +604,31 @@ export async function lancarPeloAgendado(entrada: Entrada) {
     erro = String(err);
     evento("bot_aviso", { aviso: "agendado_falhou", conversa, erro: erro.slice(0, 300) });
   }
+  // o cliente confere o que foi reservado (issue #310): é ele quem mais sabe o que pediu
+  if (paraConfirmar.length) await confirmarAoCliente(entrada, paraConfirmar, { hoje: hojeDoAgendado, nome: nomeDoCliente });
   // não virou reserva (ou só parte): pendência na aba Pendências + sino, com o motivo (dono, 10/11)
   await avisarAgendadoQueFalhou(
     entrada,
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
   );
+}
+
+/**
+ * Manda ao cliente o resumo do que o Agendado lançou (issue #310). Liga/desliga em
+ * `settings.agendado_confirmacao` ({ ativo }), ligado por padrão a pedido do dono.
+ * Melhor esforço: falhar aqui nunca desfaz a reserva.
+ */
+async function confirmarAoCliente(entrada: Entrada, reservas: ReservaParaConfirmar[], ctx: { hoje: string; nome: string | null }) {
+  try {
+    const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
+    if (cfg?.value?.ativo === false) return;
+    const texto = mensagemDeConfirmacao(reservas, { hoje: ctx.hoje || diaCivil(new Date()), nome: ctx.nome });
+    if (!texto) return;
+    await chatwootClient.postMessage(entrada.chatwootConversationId, texto);
+    evento("bot_confirmacao_enviada", { conversa: entrada.chatwootConversationId, reservas: reservas.length });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "confirmacao_nao_enviada", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
+  }
 }
 
 /**

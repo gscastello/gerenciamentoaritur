@@ -255,3 +255,46 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
   if (notas) pedido.duvida = [pedido.duvida, notas].filter(Boolean).join(" ").slice(0, 400);
   return { pedido, completados, avisos };
 }
+
+// ---------------------------------------------------------------------------
+// Conferência final (issue #309)
+// ---------------------------------------------------------------------------
+
+const ddmm = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
+
+/**
+ * A ÚLTIMA trava, com a reserva PRONTA (depois de todas as regras que mexem nela:
+ * troca de dia, bairro, cidade, costume): ainda bate com o que o cliente escreveu?
+ * Devolve o que não bate; vazio = pode gravar. Pega o erro de qualquer regra,
+ * inclusive das que ainda vão ser criadas. Só compara o que o cliente escreveu de
+ * forma clara; o que ele não escreveu não conta contra.
+ */
+export function conferenciaFinal(
+  r: { type?: string | null; trip_date: string; direction: string; quantity?: number | null; route_point_code?: string | null },
+  mensagens: MensagemDoCliente[],
+  ctx: { hoje: string; pedidosLidos: number; cidadeEscrita?: string | null },
+): string[] {
+  if (r.type === "encomenda") return [];
+  const textos = mensagens.map((m) => m.texto);
+  const naoBate: string[] = [];
+
+  const datas = datasEscritas(mensagens).filter((d) => d >= ctx.hoje);
+  if (datas.length && !datas.includes(r.trip_date)) {
+    naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
+  }
+
+  const sentido = sentidoEscrito(textos);
+  if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
+    naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
+  }
+
+  const q = quantidadeEscrita(textos);
+  if (q != null && ctx.pedidosLidos === 1 && (r.quantity ?? 1) !== q) {
+    naoBate.push(`o cliente escreveu ${q} passagem(ns) e a reserva ficou com ${r.quantity ?? 1}`);
+  }
+
+  if (r.direction === "volta" && ctx.cidadeEscrita && r.route_point_code && r.route_point_code !== ctx.cidadeEscrita) {
+    naoBate.push(`o cliente escreveu ${ctx.cidadeEscrita} e a Volta ficou saindo de ${r.route_point_code}`);
+  }
+  return naoBate;
+}

@@ -108,3 +108,42 @@ Deno.test("conferência: encomenda não é mexida", () => {
   assertEquals(r.pedido.data, undefined);
   assertEquals(r.completados, []);
 });
+
+Deno.test("#309 conferência final: a Ida de amanhã não passa se o cliente escreveu hoje", async () => {
+  const { conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = [
+    { texto: "Deixe minha vaga", em: "2026-11-11T12:33:00Z" },
+    { texto: "Hoje", em: "2026-11-11T12:34:00Z" },
+    { texto: "Indo pra Miranda por favor", em: "2026-11-11T12:34:30Z" },
+  ];
+  const ctx = { hoje: "2026-11-11", pedidosLidos: 1 };
+  const errada = conferenciaFinal({ trip_date: "2026-11-12", direction: "ida", quantity: 1 }, msgs, ctx);
+  assertEquals(errada.length, 1);
+  assertStringIncludes(errada[0], "o cliente escreveu o dia 11/11 e a reserva ficou para 12/11");
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-11", direction: "volta", quantity: 1, route_point_code: "pirapemas" }, msgs, ctx), []);
+});
+
+Deno.test("#309 conferência final: sentido, quantidade e cidade da Volta", async () => {
+  const { conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = [{ texto: "duas passagens de Pirapemas pra São Luís amanhã", em: "2026-11-11T12:00:00Z" }];
+  const ctx = { hoje: "2026-11-11", pedidosLidos: 1, cidadeEscrita: "pirapemas" };
+  const certo = { trip_date: "2026-11-12", direction: "volta", quantity: 2, route_point_code: "pirapemas" };
+  assertEquals(conferenciaFinal(certo, msgs, ctx), []);
+  assertEquals(conferenciaFinal({ ...certo, direction: "ida", route_point_code: "busca" }, msgs, ctx).length, 1);
+  assertEquals(conferenciaFinal({ ...certo, quantity: 1 }, msgs, ctx).length, 1);
+  assertEquals(conferenciaFinal({ ...certo, route_point_code: "cantanhede" }, msgs, ctx).length, 1);
+  // dois pedidos lidos: sentido e quantidade não se comparam (cada pedido tem o seu)
+  assertEquals(conferenciaFinal({ ...certo, direction: "ida", quantity: 1, route_point_code: "busca" }, msgs, { ...ctx, pedidosLidos: 2 }), []);
+  // encomenda e cliente que não escreveu nada claro: nada contra
+  assertEquals(conferenciaFinal({ ...certo, type: "encomenda", quantity: 9 }, msgs, ctx), []);
+  assertEquals(conferenciaFinal(certo, [{ texto: "Bom dia, deixa minha vaga", em: "2026-11-11T12:00:00Z" }], ctx), []);
+});
+
+Deno.test("#309 conferência final: ida e volta em dias diferentes passam", async () => {
+  const { conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = [{ texto: "vou sexta e volto domingo", em: "2026-11-11T12:00:00Z" }];
+  const ctx = { hoje: "2026-11-11", pedidosLidos: 2 };
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-13", direction: "ida" }, msgs, ctx), []);
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-15", direction: "volta" }, msgs, ctx), []);
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-14", direction: "volta" }, msgs, ctx).length, 1);
+});
