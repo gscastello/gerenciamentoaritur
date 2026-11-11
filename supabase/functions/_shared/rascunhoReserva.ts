@@ -49,6 +49,8 @@ import {
   type PedidoExtraido,
   pareceTerPedido,
   validarPedidoExtraido,
+  agendadoPrecisaReler,
+  cidadeEscritaPeloCliente,
 } from "./rascunhoPuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -118,18 +120,27 @@ async function contexto() {
   };
 }
 
-async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco }> {
+/** Modelo para reler o que o rápido não entendeu (issue #301). */
+const MODELO_CAPAZ = Deno.env.get("BOT_RASCUNHO_MODELO_CAPAZ") ?? "claude-sonnet-5-5";
+
+async function lerPedidos(
+  system: string,
+  conversa: string,
+  modelo = MODELO,
+): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco }> {
+  // os modelos 5.5 maiores não aceitam ferramenta forçada: pede pelo texto (tool_choice auto)
+  const forcado = modelo === MODELO;
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      model: MODELO,
-      max_tokens: 2000, // até 4 pedidos com trecho e dúvida: 800 cortava (conversa com 2 passageiros)
-      system,
+      model: modelo,
+      max_tokens: forcado ? 2000 : 6000, // até 4 pedidos com trecho e dúvida: 800 cortava (conversa com 2 passageiros)
+      system: forcado ? system : `${system}\n\nResponda SEMPRE chamando a ferramenta ${FERRAMENTA_PEDIDOS.name} (lista vazia se não houver pedido).`,
       tools: [FERRAMENTA_PEDIDOS],
-      tool_choice: { type: "tool", name: FERRAMENTA_PEDIDOS.name },
+      tool_choice: forcado ? { type: "tool", name: FERRAMENTA_PEDIDOS.name } : { type: "auto" },
       messages: [{ role: "user", content: `CONVERSA (mais recentes por último):\n${conversa}` }],
     }),
     signal: AbortSignal.timeout(45000),
@@ -140,7 +151,8 @@ async function lerPedidos(system: string, conversa: string): Promise<{ pedidos: 
   const uso = corpo.usage;
   const bloco = (corpo.content ?? []).find((b: Bloco) => b.type === "tool_use" && b.name === FERRAMENTA_PEDIDOS.name);
   const pedidos = Array.isArray(bloco?.input?.pedidos) ? (bloco.input.pedidos as PedidoExtraido[]) : [];
-  return { pedidos: pedidos.slice(0, 2), uso };
+  // até 4: ida e volta de duas pessoas (cortar em 2 perdia passageiro)
+  return { pedidos: pedidos.slice(0, 4), uso };
 }
 
 const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
@@ -190,7 +202,7 @@ async function viagensJaReservadas(customerId: string | null, hoje: string): Pro
 async function lerEGravar(
   entrada: Entrada,
   mensagens: MensagemDaConversa[],
-  opcoes: { confirmadoPelaEquipe: boolean },
+  opcoes: { confirmadoPelaEquipe: boolean; modelo?: string },
 ) {
   const agora = new Date();
   const hoje = diaCivil(agora);
@@ -214,7 +226,9 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 25, 200)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 30, 500)}`
     : formatarHistorico(recentes, 30, 500);
-  const { pedidos, uso } = await lerPedidos(system, conversa);
+  const { pedidos, uso } = await lerPedidos(system, conversa, opcoes.modelo);
+  // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
+  const textosDoCliente = recentes.filter((m) => m.quem === "cliente").map((m) => m.texto);
 
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
@@ -226,6 +240,17 @@ async function lerEGravar(
   /** o que fica faltando confirmar em cada rascunho lançado pelo Agendado (vai para a reserva) */
   const aConfirmar = new Map<string, ItemAConfirmar[]>();
   for (const p of pedidos) {
+    // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
+    // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
+    if ((p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita)) {
+      // no trecho copiado ou em QUALQUER mensagem do cliente no pedido (issue #301)
+      const escrita = cidadeDaVolta(p.trecho_do_cliente) ?? cidadeEscritaPeloCliente(textosDoCliente);
+      const ehVolta = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
+      if (escrita && ehVolta) {
+        p.cidade_dita = escrita;
+        p.direcao = "volta";
+      }
+    }
     // Agendado ☑️ numa Volta sem cidade dita: a base de lugares decide se só uma cidade conhece o lugar (issue #286)
     if (opcoes.confirmadoPelaEquipe && (p.tipo ?? "passagem") !== "encomenda" && !cidadeDaVolta(p.cidade_dita) && p.endereco) {
       const direcaoProvavel = p.direcao === "volta" || ctx.pontos.volta.includes(String(p.ponto ?? "").toLowerCase());
@@ -404,7 +429,18 @@ export async function lancarPeloAgendado(entrada: Entrada) {
   let erro: string | null = null;
   try {
     const { mensagens } = await lerConversa(conversa, Number.MAX_SAFE_INTEGER);
-    const lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
+    let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
+    // ia ficar pendente por falta de leitura? relê com o modelo mais capaz antes de desistir (issue #301)
+    if (
+      agendadoPrecisaReler({
+        pedidos: lido.pedidos.length,
+        motivos: lido.motivos,
+        codigosPendentes: [...lido.incertos.values()].map((i) => i.codigo),
+      })
+    ) {
+      evento("bot_agendado_releitura", { conversa, motivos: lido.motivos, pendentes: [...lido.incertos.values()].map((i) => i.codigo) });
+      lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, modelo: MODELO_CAPAZ });
+    }
     lidos = lido.pedidos.length;
     motivosLidos = lido.motivos;
 

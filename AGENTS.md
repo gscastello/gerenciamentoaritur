@@ -323,7 +323,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **bairro**: `sao_luis_lugares` aprende rua/condomínio/referência → bairro com cada busca em casa confirmada
   (`fn_bairro_pelo_endereco`). Ordem para achar o bairro: bairro da tabela escrito no endereço → memória confirmada
   (`bairro_aliases`) → lugares de São Luís → internet. Bairro escrito no endereço vence o chute do leitor (nome de duas
-  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela.
+  palavras ou mais; "Rua do Turu" não troca bairro). O preço continua sendo o do bairro na tabela. **Nome próprio é nome próprio**
+  (issue #301): na chave do lugar só Rua/Avenida saem; Beco, Travessa, Praça, Estrada, Alameda e Rodovia ficam ("Beco
+  do Hospital" ≠ "Rua do Hospital" ≠ "Hospital"), e nome de rua não é achado dentro de outro logradouro. Só palavras de
+  posição viram "perto de" ("descida/subida da…"; perto/atrás/em frente o separador já trata), valendo o lugar inteiro
+  E o de perto. Travas (`raise exception`) nas migrações 91–92 impedem a volta. A cidade da Volta que o cliente escreveu
+  em **qualquer** mensagem do pedido vale como dita; se o Agendado ia ficar pendente por falta de leitura (cidade,
+  endereço, dia, sentido), o bot **relê com o modelo capaz** antes de desistir.
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem

@@ -14,6 +14,8 @@ import {
   avisoDaCidadePelaBase,
   avisoDosLugares,
   cidadePelaBase,
+  agendadoPrecisaReler,
+  cidadeEscritaPeloCliente,
   lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
   A_CONFIRMAR,
@@ -597,4 +599,43 @@ Deno.test("aviso do Agendado: erro, nada lido, motivo e pendência viram pendên
   assertEquals(p.assunto, "Agendado ☑️ lançou só parte");
   assertStringIncludes(p.detalhe, "1 reserva(s) lançada(s)");
   assertStringIncludes(p.detalhe, "Pirapemas ou Cantanhede");
+});
+
+Deno.test("#299 regressão: a cidade escrita pelo cliente é reconhecida no trecho dele", () => {
+  assertEquals(cidadeDaVolta("Bom dia gostaria de agendar duas passagens para amanhã a tarde de Pirapemas a são Luis"), "pirapemas");
+  assertEquals(cidadeDaVolta("venho de Catanhede dia 14 a tarde pra Sao luis"), "cantanhede");
+  // as duas cidades: não decide
+  assertEquals(cidadeDaVolta("moro em Cantanhede mas embarco em Pirapemas"), null);
+  assertEquals(cidadeDaVolta("Na descida da Inês uma casa com jardim na frente"), null);
+});
+
+Deno.test("#301 regressão: a cidade escrita em QUALQUER mensagem do cliente vale (não só no trecho copiado)", () => {
+  // caso real: a cidade na 1ª mensagem, o endereço na 2ª
+  assertEquals(
+    cidadeEscritaPeloCliente(["Bom dia gostaria de agendar duas passagens para amanhã a tarde de Pirapemas a são Luis", "Adriana. Na descida da Inês uma casa com jardim na frente"]),
+    "pirapemas",
+  );
+  assertEquals(cidadeEscritaPeloCliente(["vou sair de Catanhede", "rua do campinho"]), "cantanhede");
+  // as duas cidades no pedido: não decide sozinho
+  assertEquals(cidadeEscritaPeloCliente(["moro em Pirapemas", "mas vou embarcar em Cantanhede"]), null);
+  assertEquals(cidadeEscritaPeloCliente(["descida da Inês"]), null);
+  assertEquals(cidadeEscritaPeloCliente([]), null);
+});
+
+Deno.test("#301: o Agendado relê com o modelo capaz antes de ficar pendente por falta de leitura", () => {
+  assert(agendadoPrecisaReler({ pedidos: 0, motivos: [], codigosPendentes: [] }));
+  assert(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: ["cidade"] }));
+  assert(agendadoPrecisaReler({ pedidos: 1, motivos: ["sem_cidade"], codigosPendentes: [] }));
+  assert(agendadoPrecisaReler({ pedidos: 1, motivos: ["sem_data"], codigosPendentes: [] }));
+  // motivos que não são de leitura: não relê
+  assert(!agendadoPrecisaReler({ pedidos: 1, motivos: ["ja_reservado"], codigosPendentes: [] }));
+  assert(!agendadoPrecisaReler({ pedidos: 2, motivos: [], codigosPendentes: ["vespera"] }));
+});
+
+Deno.test("#301: o leitor é orientado a ler tudo e interpretar, sem confundir nome próprio", () => {
+  const t = instrucoesDaLeitura({ calendario: "-", pontos: "-", desembarques: "-" });
+  assertStringIncludes(t, "LEIA TODAS AS MENSAGENS DO CLIENTE");
+  assertStringIncludes(t, "descida da Inês");
+  assertStringIncludes(t, "Beco do Hospital");
+  assertStringIncludes(t, "NOMES de lugares");
 });
