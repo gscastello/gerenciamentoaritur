@@ -223,3 +223,15 @@ Deno.test("#295: cartões de rascunho, pendência e pagamento", () => {
   };
   assertEquals(descreverAcao(mudar), "Mudar Volta 10/11 · Zé → pagamento pix, marcar PAGO, valor R$ 70,00");
 });
+
+Deno.test("#305: pela Siri não existe cartão; com proposta pendente termina em Confirma?", async () => {
+  const { falaDaSiri, avisoDaPropostaPendente } = await import("./assistentePuro.ts");
+  const caso =
+    "A passagem da Pamela para hoje, saindo de Pirapemas, já está no cartão de proposta. Não criei outra, para não duplicar. Abra o cartão e toque em Confirmar.";
+  const f = falaDaSiri(caso, true);
+  if (/cart[aã]o|toque/i.test(f) || !f.endsWith("Confirma?") || !f.includes("Não criei outra")) throw new Error(f);
+  if (falaDaSiri("Feito. Reserva lançada.", false) !== "Feito. Reserva lançada.") throw new Error("mudou fala sem pendente");
+  if (falaDaSiri("Confira o cartão.", true) !== "Confirma?") throw new Error("vazio");
+  if (avisoDaPropostaPendente([]) !== "") throw new Error("aviso sem pendente");
+  if (!avisoDaPropostaPendente([{ descricao: "Volta 11/11" }]).includes("não proponha de novo")) throw new Error("aviso");
+});
