@@ -817,3 +817,23 @@ export function regraDoTrecho(valor: unknown): { valorMinimo: number; vagasMinim
     vagasMinimas: num(v.vagas_minimas, REGRA_DO_TRECHO_PADRAO.vagasMinimas),
   };
 }
+
+/**
+ * Preço do bairro da tabela (issue #330): cadastrado sem preço (o dono preenche depois)
+ * NUNCA vira R$ 0 — vai como BAIRRO_SEM_PRECO, e o bot não diz valor.
+ */
+export function precoDoBairroCadastrado(
+  b: { neighborhood: string; price: number | string | null | undefined },
+): { ok: true; preco: number } | { ok: false; erro: { codigo: string; erro: string } } {
+  const preco = b.price == null || b.price === "" ? Number.NaN : Number(b.price);
+  if (!(preco > 0)) {
+    return {
+      ok: false,
+      erro: {
+        codigo: "BAIRRO_SEM_PRECO",
+        erro: `O bairro "${b.neighborhood}" está cadastrado, mas ainda sem preço. Não diga valor: a equipe confirma.`,
+      },
+    };
+  }
+  return { ok: true, preco };
+}

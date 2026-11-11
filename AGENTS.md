@@ -290,6 +290,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
   valor na tabela continua indo para a equipe; cidade fora da rota também.
+- **Bairro sem preço** (issue #330, `database/96`): a tabela de bairros de São Luís foi completada pelo OpenStreetMap
+  e pelas reservas, com o preço vazio até o dono preencher. Preço vazio **nunca vira R$ 0**: o bot devolve
+  `BAIRRO_SEM_PRECO` (não diz valor; no Agendado fica "valor a confirmar") e o app mostra o campo vazio no topo de
+  Sistema → Bairros. Nomes de cidades da rota (Matões, "Residencial Pirapemas") não entram como bairro.
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e

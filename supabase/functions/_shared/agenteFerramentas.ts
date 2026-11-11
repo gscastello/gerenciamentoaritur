@@ -27,6 +27,7 @@ import {
   validarPedidoDeReserva,
   regraDoTrecho,
   trechoPrecisaDeConfirmacao,
+  precoDoBairroCadastrado,
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
@@ -308,7 +309,8 @@ async function precoUnitario(
         },
       };
     }
-    return { ok: true, preco: Number(achado.price) };
+    // bairro cadastrado sem preço (issue #330): o dono preenche depois — nunca vira R$ 0
+    return precoDoBairroCadastrado(achado);
   }
   return {
     ok: false,
