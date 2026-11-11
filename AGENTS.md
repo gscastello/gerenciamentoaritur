@@ -113,7 +113,7 @@ O contrato acima é validado por `npm run arch`
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
 `opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
-`assistentePuro`, `pedidoDoCliente`),
+`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -334,6 +334,21 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   mensagem), quantidade, ponto, bairro e cidade. Vazio que o cliente escreveu → completa com aviso; o que contradiz →
   aviso para conferir (nunca troca sozinho) e, no Agendado, relê com o modelo capaz e, se ainda não bater, fica
   pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
+  **Conferência final** (issue #309, `conferenciaFinal`): com a reserva PRONTA, depois de todas as regras, dia,
+  sentido, quantidade e cidade da Volta são comparados de novo com o que o cliente escreveu; não bate → o Agendado não
+  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega.
+  **Confirmação ao cliente** (issue #310, `confirmacaoAoCliente.ts`): depois que o Agendado lança, o bot manda ao
+  cliente o resumo (sentido, dia, embarque, desembarque, quantidade; **nunca valor**, nunca o nome do perfil) e pede o
+  que faltou (endereço, dia da volta). Uma vez por reserva criada; desliga em `settings.agendado_confirmacao`
+  (`{"ativo": false}`). É a única mensagem automática ao cliente fora do modo `ia`, autorizada pelo dono (11/11).
+  **Próxima viagem e dúvida perguntada ao cliente** (issue #314): pedido lido como Ida de hoje depois que a Ida saiu,
+  com a Volta ainda por sair, e embarque que é lugar conhecido de Pirapemas/Cantanhede → Volta de hoje; se o nome também
+  é bairro de São Luís → pendente `qual_viagem`. Dúvida que só o cliente resolve (`qual_viagem`, `cidade`) o bot
+  **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
+  Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
+  **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
+  depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
+  ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem
