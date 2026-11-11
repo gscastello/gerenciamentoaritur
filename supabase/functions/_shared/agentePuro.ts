@@ -719,3 +719,64 @@ export function bairroParecido<T extends { neighborhood: string }>(
   const achado = nomeParecidoNoTexto(texto, tabela, (b) => b.neighborhood);
   return achado && achado.erros > 0 ? { bairro: achado.item, escrito: achado.escrito } : null;
 }
+
+// ---------------------------------------------------------------------------
+// Lugares de São Luís → bairro (issue #297)
+// ---------------------------------------------------------------------------
+
+export type LugarDeSaoLuis = {
+  bairro: string;
+  lugar: string;
+  tipo: string;
+  ocorrencias: number;
+  confirmado: boolean;
+  fonte: string;
+};
+
+/**
+ * Qual bairro os lugares citados indicam (fn_bairro_pelo_endereco)? Confirmado pela
+ * equipe vence; senão, o bairro com mais evidência, se for pelo menos o dobro do
+ * segundo (empate ou dúvida não chuta). Devolve também o lugar que decidiu.
+ */
+export function bairroPelosLugares(
+  lugares: LugarDeSaoLuis[],
+): { bairro: string; lugar: string; vezes: number; confirmado: boolean } | null {
+  if (!lugares.length) return null;
+  const confirmados = [...new Set(lugares.filter((l) => l.confirmado).map((l) => l.bairro))];
+  if (confirmados.length === 1) {
+    const l = lugares.find((x) => x.confirmado && x.bairro === confirmados[0])!;
+    return { bairro: l.bairro, lugar: l.lugar, vezes: l.ocorrencias, confirmado: true };
+  }
+  if (confirmados.length > 1) return null;
+  const porBairro = new Map<string, { vezes: number; lugar: string }>();
+  for (const l of lugares) {
+    const atual = porBairro.get(l.bairro) ?? { vezes: 0, lugar: l.lugar };
+    porBairro.set(l.bairro, { vezes: atual.vezes + Math.max(l.ocorrencias, 0), lugar: atual.lugar });
+  }
+  const ordem = [...porBairro.entries()].sort((a, b) => b[1].vezes - a[1].vezes);
+  const [primeiro, segundo] = ordem;
+  if (!primeiro || primeiro[1].vezes < 1) return null;
+  if (segundo && primeiro[1].vezes < 2 * segundo[1].vezes) return null;
+  return { bairro: primeiro[0], lugar: primeiro[1].lugar, vezes: primeiro[1].vezes, confirmado: false };
+}
+
+/**
+ * O leitor pôs um bairro, mas o endereço escrito pelo cliente cita OUTRO bairro da
+ * tabela (ex.: "Condomínio Belleville, Estrada da Maioba" lido como "Alto do Turu").
+ * Vale o bairro escrito no endereço, a não ser que o cliente tenha dito o outro.
+ */
+export function bairroEscritoNoEndereco<T extends { neighborhood: string }>(
+  escolhido: string | null | undefined,
+  endereco: string | null | undefined,
+  palavrasDoCliente: string | null | undefined,
+  tabela: T[],
+): T | null {
+  const citado = bairroDaTabela(endereco, tabela);
+  if (!citado) return null;
+  if (escolhido && normalizar(escolhido) === normalizar(citado.neighborhood)) return null;
+  // "Rua do Turu" cita "Turu" sem ser no Turu: nome de uma palavra só não troca o bairro já escolhido
+  if (escolhido && normalizar(citado.neighborhood).split(" ").length < 2) return null;
+  const disse = ` ${normalizar(palavrasDoCliente ?? "")} `;
+  if (escolhido && disse.includes(` ${normalizar(escolhido)} `)) return null;
+  return citado;
+}

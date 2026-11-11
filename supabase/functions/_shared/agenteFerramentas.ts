@@ -284,9 +284,11 @@ async function precoUnitario(
   }
   if (ponto.price != null && Number(ponto.price) > 0) return { ok: true, preco: Number(ponto.price) };
   if (ponto.code === "busca") {
-    if (!bairro) return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
+    if (!bairro && !endereco) {
+      return { ok: false, erro: { codigo: "FALTA_BAIRRO", erro: "A busca em casa é cobrada por bairro: pergunte o bairro." } };
+    }
     const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
-    let achado = bairroDaTabela(bairro, data ?? []) ?? bairroParecido(bairro, data ?? [])?.bairro ?? null;
+    let achado = bairro ? (bairroDaTabela(bairro, data ?? []) ?? bairroParecido(bairro, data ?? [])?.bairro ?? null) : null;
     if (!achado) {
       // condomínio/residencial fora da tabela: memória de endereços e internet (issue #270)
       const deduzido = await resolverBairro([bairro, endereco].filter(Boolean).join(" "));
@@ -297,7 +299,9 @@ async function precoUnitario(
         ok: false,
         erro: {
           codigo: "BAIRRO_NAO_ATENDIDO",
-          erro: `O bairro "${bairro}" não está na tabela de busca em casa. Se for um bairro da lista com outro nome, use o nome exato; senão chame o atendente.`,
+          erro: bairro
+            ? `O bairro "${bairro}" não está na tabela de busca em casa. Se for um bairro da lista com outro nome, use o nome exato; senão chame o atendente.`
+            : "Não deu para saber o bairro pelo endereço: pergunte o bairro.",
           bairros_da_tabela: (data ?? []).map((b: Linha) => b.neighborhood),
         },
       };

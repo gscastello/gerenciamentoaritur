@@ -323,8 +323,19 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         reservas_pendentes: (pendentes.data ?? []).map((r: Linha) => ({ id: r.id, resumo: resumoDaReserva(r, ctx.nomesDosPontos) })),
       };
     }
-    case "onde_fica":
-      return { ok: true, lugares: await lugaresNasCidades(String(a.texto ?? "")) };
+    case "onde_fica": {
+      const texto = String(a.texto ?? "");
+      const [cidades, saoLuis] = await Promise.all([
+        lugaresNasCidades(texto),
+        supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: texto }),
+      ]);
+      return {
+        ok: true,
+        pirapemas_e_cantanhede: cidades,
+        sao_luis_bairros: (saoLuis.data ?? []).slice(0, 8),
+        nota: "São Luís: lugar → bairro aprendido das buscas em casa confirmadas (confirmado = equipe). Só ajuda a confirmar.",
+      };
+    }
     case "financeiro": {
       if (!["admin", "financeiro"].includes(ctx.papel)) return { ok: false, erro: "Números do financeiro são só para admin/financeiro." };
       const de = String(a.de ?? "");
