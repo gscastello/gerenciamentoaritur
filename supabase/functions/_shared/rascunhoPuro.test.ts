@@ -627,6 +627,8 @@ Deno.test("#301: o Agendado relê com o modelo capaz antes de ficar pendente por
   assert(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: ["cidade"] }));
   assert(agendadoPrecisaReler({ pedidos: 1, motivos: ["sem_cidade"], codigosPendentes: [] }));
   assert(agendadoPrecisaReler({ pedidos: 1, motivos: ["sem_data"], codigosPendentes: [] }));
+  // o lido contradiz o que o cliente escreveu (#303): relê
+  assert(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: ["conferir"] }));
   // motivos que não são de leitura: não relê
   assert(!agendadoPrecisaReler({ pedidos: 1, motivos: ["ja_reservado"], codigosPendentes: [] }));
   assert(!agendadoPrecisaReler({ pedidos: 2, motivos: [], codigosPendentes: ["vespera"] }));

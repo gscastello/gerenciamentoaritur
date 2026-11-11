@@ -681,6 +681,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   ponto: "ponto de embarque não reconhecido",
   LOTADO: "a viagem está lotada",
   RESERVA_DUPLICADA: "o cliente já tem reserva nesse dia e sentido",
+  conferir: "o que foi lido não bate com o que o cliente escreveu (dia, quantidade, embarque ou bairro)",
 };
 
 /**
@@ -738,6 +739,6 @@ export function cidadeEscritaPeloCliente(textos: (string | null | undefined)[]):
  */
 export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; codigosPendentes: string[] }): boolean {
   if (r.pedidos === 0) return true;
-  if (r.codigosPendentes.includes("cidade")) return true;
+  if (r.codigosPendentes.includes("cidade") || r.codigosPendentes.includes("conferir")) return true;
   return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
 }
