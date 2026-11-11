@@ -22,20 +22,22 @@ Volte ali e toque em **Apagar**: o atalho para na hora.
 ## 2. Montar o atalho no app Atalhos
 
 Abra o app **Atalhos** → **+** → dê o nome que você vai falar para a Siri (ex.: **Rota Van**;
-evite "Agenda", "Lembrete" ou "Mensagem"). Adicione, nesta ordem:
+evite "Agenda", "Lembrete" ou "Mensagem"). Adicione, nesta ordem (4 ações):
 
 1. **Ditar Texto** — Idioma: Português (Brasil). Parar de ouvir: Após Pausa.
 2. **Obter Conteúdo do URL**
-   - URL: o **endereço** copiado (termina em `/functions/v1/assistente-voz`)
+   - URL: o **endereço** copiado (termina em `/assistente-voz?formato=texto`)
    - Método: **POST**
    - Cabeçalhos: `Authorization` = `Bearer ` + a **chave** (com um espaço depois de Bearer)
    - Corpo da Solicitação: **JSON**, um campo de texto `texto` = **Texto Ditado**
-3. **Obter Valor do Dicionário** — Chave: `fala` — do **Conteúdo do URL**.
-4. **Falar Texto** — o **Valor do Dicionário**.
-5. **Obter Valor do Dicionário** — Chave: `continuar` — do **Conteúdo do URL**.
-6. **Se** — Valor do Dicionário **tem qualquer valor** (o campo só vem quando é para ouvir de novo):
+3. **Mostrar Resultado** — **Conteúdo do URL**. Pela Siri ela lê em voz alta; tocando no atalho,
+   aparece na tela (bom para conferir).
+4. **Se** — **Conteúdo do URL** **contém** `?`:
    - **Executar Atalho** — o próprio atalho (ele ouve de novo para o "sim" ou a sua resposta).
-7. (Fim do Se.)
+   - Se a condição "contém" não aparecer, toque uma vez na bolinha **Conteúdo do URL** e escolha **Texto**.
+
+Com `?formato=texto` a resposta vem só com o texto da fala (sem dicionário), e quando é para ouvir
+de novo ela termina em "?". Sem `?formato=texto` vem o JSON `{ fala, continuar }` (atalhos antigos).
 
 Toque em **Concluído**. Teste no celular parado: "E aí Siri, Rota Van" → "quantas vagas tem na
 Volta de amanhã?".
@@ -51,7 +53,7 @@ em **Ajustes → Siri** deixe **Permitir Siri Bloqueado** ligado.
   guardada só como hash sha256 em `assistente_chaves` (migração 87); `rpc_criar_chave_assistente`
   e `rpc_revogar_chave_assistente`, só para a equipe.
 - Resposta sempre `200 { fala }`, com `continuar: "sim"` só quando é para ouvir de novo (o "Se" do atalho
-  usa "tem qualquer valor", que funciona com qualquer tipo de variável): a Siri lê até os erros.
+  compara o Texto com "sim"; sem o campo, o Texto fica vazio e o atalho termina): a Siri lê até os erros.
 - Conversa e proposta pendente em `assistente_voz_sessao` (10 min). `ehConfirmacao` /
   `ehRecusa` (módulo puro `assistentePuro.ts`) decidem o "sim" e o "não".
 - Usa o mesmo assistente da aba (`_shared/assistente.ts`) no **modo voz** (frases curtas, sem

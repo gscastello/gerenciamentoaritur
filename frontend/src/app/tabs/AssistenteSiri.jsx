@@ -9,7 +9,7 @@ import { C, ErrorBanner } from "../tabShared.jsx";
    Chave pessoal para o atalho do iPhone (app Atalhos). A chave aparece uma vez;
    no banco fica só o hash. Apagar a chave desliga o atalho na hora. */
 
-const URL_VOZ = `${import.meta.env.VITE_SUPABASE_URL ?? ""}/functions/v1/assistente-voz`;
+const URL_VOZ = `${import.meta.env.VITE_SUPABASE_URL ?? ""}/functions/v1/assistente-voz?formato=texto`;
 
 function fmtData(iso) {
   if (!iso) return "nunca";
@@ -64,11 +64,11 @@ function Campo({ titulo, valor, rotulo }) {
 }
 
 const PASSOS = [
-  'No iPhone, abra o app "Atalhos" e toque em "+" para criar um atalho. Dê o nome que você vai falar para a Siri (ex.: "Rota Van").',
-  'Ação "Ditar Texto" (idioma Português, Brasil).',
-  'Ação "Obter Conteúdo do URL": cole o ENDEREÇO acima; Método POST; Cabeçalho "Authorization" com o valor "Bearer " + a CHAVE; Corpo JSON com o campo "texto" = Texto Ditado.',
-  'Ação "Obter Valor do Dicionário": chave "fala". Depois, ação "Falar Texto".',
-  'Ação "Obter Valor do Dicionário": chave "continuar" (do Conteúdo do URL). Ação "Se" esse valor "tem qualquer valor": dentro dele, "Executar Atalho" com o próprio atalho.',
+  'No iPhone, abra o app "Atalhos" e toque em "+". Dê o nome que você vai falar para a Siri (ex.: "Rota Van").',
+  'Ação "Ditar Texto" (idioma Português, Brasil; parar de ouvir: Após Pausa).',
+  'Ação "Obter Conteúdo do URL": cole o ENDEREÇO acima; Método POST; Cabeçalho "Authorization" = "Bearer " + a CHAVE; Corpo JSON com o campo de texto "texto" = Texto Ditado.',
+  'Ação "Mostrar Resultado" com o Conteúdo do URL (pela Siri, ela lê em voz alta).',
+  'Ação "Se" o Conteúdo do URL "contém" ? (ponto de interrogação): dentro dele, "Executar Atalho" com o próprio atalho.',
   'Pronto: "E aí Siri, <nome do atalho>" e fale o pedido. Para gravar, responda "sim".',
 ];
 

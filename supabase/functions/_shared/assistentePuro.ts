@@ -7,6 +7,8 @@
 // "Confirmar" no app, e a gravação usa as mesmas RPCs da Agenda, com as
 // permissões de quem está logado. Preço sempre pela tabela; vaga pelo banco.
 
+import { normalizarTexto, palavraParecida } from "./grafia.ts";
+
 /** Modelos (preço US$ por milhão de tokens). Haiku para o simples, Sonnet para o difícil. */
 export const MODELOS = {
   rapido: "claude-haiku-5-5",
@@ -245,6 +247,9 @@ REGRAS DE RESERVA (as mesmas do app)
 - "Ida e volta" sem o dia da volta = volta no mesmo dia, mas avise que precisa confirmar com o cliente.
 - Contato compartilhado só é passageiro se pediram passagem para ele. Duas pessoas = duas propostas.
 - Antes de propor, confira vagas e se o cliente já tem reserva nesse dia e sentido (buscar_cliente).
+- Citaram um passageiro pelo nome, rua, bairro ou ponto ("a Iara da rua Santo Antônio", "o Zé do Cohatrac")? Use
+  PRIMEIRO procurar_reserva com tudo o que foi dito. Só peça o telefone se nada aparecer. Mais de uma parecida:
+  pergunte qual, dizendo o dia, o sentido e o embarque de cada uma.
 - Data relativa ("amanhã", "sexta") pela data de hoje informada. Ambíguo? Pergunte uma coisa só.
 - Nunca mande mensagem ao cliente; você não tem como. Nunca apague nada (cancelar é mudar o status).
 
@@ -267,6 +272,19 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
     input_schema: {
       type: "object",
       properties: { telefone: { type: "string" }, nome: { type: "string" } },
+    },
+  },
+  {
+    name: "procurar_reserva",
+    description:
+      "Acha reservas de hoje até 3 semanas pelo que foi dito sobre o passageiro: nome, rua, bairro, ponto, desembarque. Junte tudo num texto só. Tolera erro de escrita e falta de acento. Para remarcar, procure sem a data nova.",
+    input_schema: {
+      type: "object",
+      properties: {
+        texto: { type: "string", description: "O que foi dito sobre o passageiro, ex.: 'Iara rua Santo Antônio'. Sem datas." },
+        sentido: { type: "string", enum: ["ida", "volta"], description: "Só se disseram o sentido da reserva atual." },
+      },
+      required: ["texto"],
     },
   },
   {
@@ -407,4 +425,57 @@ export function sessaoValida(atualizadaEm: string | null | undefined, agora: Dat
   if (!atualizadaEm) return false;
   const t = Date.parse(atualizadaEm);
   return Number.isFinite(t) && agora.getTime() - t <= minutos * 60_000;
+}
+
+// ---------------------------------------------------------------------------
+// Achar a reserva pelo que foi falado (issue #293)
+// ---------------------------------------------------------------------------
+
+/** Palavras que não ajudam a achar o passageiro ("muda a volta da Iara pra amanhã" → ["iara"]). */
+const PALAVRAS_SEM_PESO = new Set(
+  (
+    "a o as os e de da do das dos para pra pro pros na no nas nos em com que um uma ao aos " +
+    "passagem passagens passageiro passageira reserva reservas volta ida hoje amanha depois ontem " +
+    "muda mude mudar troca troque trocar altera altere alterar remarca remarque remarcar cancela cancele cancelar " +
+    "dia rua avenida av travessa tv estrada bairro casa perto proximo frente senhor senhora dona seu sr sra " +
+    "manha tarde noite segunda terca quarta quinta sexta sabado domingo semana"
+  ).split(" "),
+);
+
+export function palavrasDaBusca(texto: string | null | undefined): string[] {
+  return [...new Set(normalizarTexto(texto).split(" "))].filter((p) => p.length >= 3 && !PALAVRAS_SEM_PESO.has(p) && !/^\d+$/.test(p));
+}
+
+/**
+ * Quantas das palavras ditas aparecem nos campos da reserva (nome, rua, bairro, ponto…),
+ * com erro pequeno de escrita. Nome conta mais: 2 pontos; o resto, 1.
+ */
+export function pontosDaReserva(palavras: string[], nome: string | null | undefined, outros: (string | null | undefined)[]): number {
+  const doNome = normalizarTexto(nome).split(" ").filter(Boolean);
+  const doResto = normalizarTexto(outros.filter(Boolean).join(" ")).split(" ").filter(Boolean);
+  let pontos = 0;
+  for (const p of palavras) {
+    if (doNome.some((t) => palavraParecida(p, t))) pontos += 2;
+    else if (doResto.some((t) => palavraParecida(p, t))) pontos += 1;
+  }
+  return pontos;
+}
+
+/** As reservas mais parecidas com o que foi dito (no máximo `max`), da mais para a menos. */
+export function reservasParecidas<T>(
+  texto: string,
+  lista: T[],
+  campos: (r: T) => { nome: string | null | undefined; outros: (string | null | undefined)[] },
+  max = 5,
+): { reserva: T; pontos: number }[] {
+  const palavras = palavrasDaBusca(texto);
+  if (!palavras.length) return [];
+  return lista
+    .map((reserva) => {
+      const c = campos(reserva);
+      return { reserva, pontos: pontosDaReserva(palavras, c.nome, c.outros) };
+    })
+    .filter((x) => x.pontos > 0)
+    .sort((a, b) => b.pontos - a.pontos)
+    .slice(0, max);
 }

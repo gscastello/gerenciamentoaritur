@@ -22,9 +22,24 @@ function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
 }
 
+type Resposta = { fala: string; continuar: boolean };
+
 /** O atalho sempre recebe 200 com uma "fala": assim a Siri lê até os erros. */
-function falar(fala: string, continuar = false) {
-  return new Response(JSON.stringify(continuar ? { fala, continuar: "sim" } : { fala }), {
+function falar(fala: string, continuar = false): Resposta {
+  return { fala, continuar };
+}
+
+/**
+ * Formato da resposta. Padrão: JSON { fala, continuar? }. Com ?formato=texto no
+ * endereço, só o texto da fala (o atalho fica com 4 ações e o iPhone não confunde
+ * o tipo da variável); quando é para ouvir de novo, a fala termina em "?".
+ */
+function responder(r: Resposta, formato: string | null): Response {
+  if (formato === "texto") {
+    const fala = r.continuar && !/\?\s*$/.test(r.fala) ? `${r.fala.replace(/[.!]\s*$/, "")}?` : r.fala;
+    return new Response(fala, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  return new Response(JSON.stringify(r.continuar ? { fala: r.fala, continuar: "sim" } : { fala: r.fala }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -37,6 +52,10 @@ async function sha256(texto: string): Promise<string> {
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Método não permitido.", { status: 405 });
+  return responder(await atender(req), new URL(req.url).searchParams.get("formato"));
+});
+
+async function atender(req: Request): Promise<Resposta> {
 
   const chave = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!/^ari_[0-9a-f]{40}$/.test(chave)) return falar("Chave do atalho inválida. Gere uma nova na aba Assistente do app.");
@@ -123,4 +142,4 @@ Deno.serve(async (req: Request) => {
     evento("bot_erro", { etapa: "assistente_voz", erro: String(err).slice(0, 300) });
     return falar("Não consegui responder agora. Tente de novo em instantes.");
   }
-});
+}

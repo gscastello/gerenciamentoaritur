@@ -140,3 +140,28 @@ Deno.test("voz: texto limpo para a Siri e sessão de 10 minutos", async () => {
   assertStringIncludes(t, '"Confirma?"');
   assert(!instrucoesDoAssistente({ pontos: "-", desembarques: "-" }).includes("MODO VOZ"));
 });
+
+Deno.test("regressão #293: nome + rua falados acham a reserva (antes: 'não achei no cadastro')", async () => {
+  const { palavrasDaBusca, reservasParecidas } = await import("./assistentePuro.ts");
+  assertEquals(palavrasDaBusca("muda a volta da Ana Rua Santo Antônio pra amanhã"), ["ana", "santo", "antonio"]);
+  const lista = [
+    { id: "1", nome: "Helena", embarque: null, bairro: "santo Antônio estrada da vitória" },
+    { id: "2", nome: "ana", embarque: "rua santo Antônio", bairro: null },
+    { id: "3", nome: "Mariana", embarque: "Rua 7", bairro: "Cohatrac" },
+  ];
+  const campos = (r: (typeof lista)[number]) => ({ nome: r.nome, outros: [r.embarque, r.bairro] });
+  const achadas = reservasParecidas("Ana Santo Antonio para amanhã", lista, campos);
+  assertEquals(achadas[0].reserva.id, "2");
+  assertEquals(achadas.map((a) => a.reserva.id), ["2", "1"]);
+  // erro de escrita e falta de acento
+  assertEquals(reservasParecidas("Helna santo antonio", lista, campos)[0].reserva.id, "1");
+  // nada parecido
+  assertEquals(reservasParecidas("Zequinha Cajueiro", lista, campos), []);
+  assertEquals(reservasParecidas("muda pra amanhã", lista, campos), []);
+});
+
+Deno.test("instruções: procurar a reserva antes de pedir telefone", async () => {
+  const { instrucoesDoAssistente, FERRAMENTAS_DO_ASSISTENTE } = await import("./assistentePuro.ts");
+  assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "PRIMEIRO procurar_reserva");
+  assert(FERRAMENTAS_DO_ASSISTENTE.some((f) => f.name === "procurar_reserva"));
+});
