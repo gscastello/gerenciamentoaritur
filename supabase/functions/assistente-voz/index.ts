@@ -13,7 +13,16 @@
 // Deploy: verify_jwt = false (a autenticação é a chave). Secrets: ANTHROPIC_API_KEY.
 
 import { conversar, executarAcao, gastoDoMes, montarContexto, registrarUso } from "../_shared/assistente.ts";
-import { ehConfirmacao, ehRecusa, historicoValido, type MensagemDoChat, paraVoz, sessaoValida } from "../_shared/assistentePuro.ts";
+import {
+  avisoDaPropostaPendente,
+  ehConfirmacao,
+  ehRecusa,
+  falaDaSiri,
+  historicoValido,
+  type MensagemDoChat,
+  paraVoz,
+  sessaoValida,
+} from "../_shared/assistentePuro.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const PAPEIS = ["admin", "atendente", "financeiro"];
@@ -128,16 +137,19 @@ async function atender(req: Request): Promise<Resposta> {
       return falar("O assistente atingiu o teto de gasto do mês. Use o app normalmente.");
     }
 
-    historico = [...historico, { papel: "usuario", texto }];
+    // o assistente fica sabendo da proposta que ainda espera o "sim" (issue #305)
+    const aviso = avisoDaPropostaPendente(pendentes);
+    historico = [...historico, { papel: "usuario", texto: aviso ? `${texto}\n\n${aviso}` : texto }];
     const inicio = Date.now();
     const r = await conversar(historico, ctx, { voz: true });
     await registrarUso(userId, r.modelo, r.uso, r.custo);
-    let fala = paraVoz(r.texto);
-    if (r.acoes.length && !/\?\s*$/.test(fala)) fala = `${fala} Confirma?`;
-    const descricoes = r.acoes.map((a) => `[proposta: ${a.descricao}]`).join("\n");
-    await guardar([...historico, { papel: "assistente", texto: [r.texto, descricoes].filter(Boolean).join("\n") }], r.acoes);
-    evento("assistente_pedido", { papel, canal: "voz", modelo: r.modelo, acoes: r.acoes.length, custo: r.custo, ms: Date.now() - inicio });
-    return falar(fala, r.acoes.length > 0 || /\?\s*$/.test(fala));
+    // a proposta não some se o assistente não propôs outra: continua esperando o "sim"
+    const aguardando = r.acoes.length ? r.acoes : pendentes;
+    const fala = falaDaSiri(r.texto, aguardando.length > 0);
+    const descricoes = aguardando.map((a) => `[proposta: ${a.descricao}]`).join("\n");
+    await guardar([...historico, { papel: "assistente", texto: [r.texto, descricoes].filter(Boolean).join("\n") }], aguardando);
+    evento("assistente_pedido", { papel, canal: "voz", modelo: r.modelo, acoes: r.acoes.length, mantidas: r.acoes.length ? 0 : pendentes.length, custo: r.custo, ms: Date.now() - inicio });
+    return falar(fala, aguardando.length > 0 || /\?\s*$/.test(fala));
   } catch (err) {
     evento("bot_erro", { etapa: "assistente_voz", erro: String(err).slice(0, 300) });
     return falar("Não consegui responder agora. Tente de novo em instantes.");
