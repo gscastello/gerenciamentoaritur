@@ -157,6 +157,11 @@ export function validarPedidoExtraido(
     areaDoDesembarque?: (t: string, d: "ida" | "volta") => string | null;
     /** "HH:MM" em São Luís: pedido para hoje depois que a viagem saiu vira amanhã */
     horaAgora?: string | null;
+    /**
+     * O CLIENTE escreveu o dia de hoje ("hoje", ou "amanhã" ontem): então não vira amanhã
+     * calado se a viagem lida já saiu (issue #307).
+     */
+    hojeDito?: boolean;
     /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
     costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
     /**
@@ -184,10 +189,27 @@ export function validarPedidoExtraido(
   }
   if (!direcao) return { ok: false, motivo: "sem_sentido" };
 
-  // "à tarde" sem dia, depois que a viagem de hoje já saiu: é a de amanhã
   if (data === ctx.hoje && viagemDeHojeJaSaiu(direcao, ctx.horaAgora)) {
-    data = somarDias(ctx.hoje, 1);
-    avisos.push(`A viagem de hoje já tinha saído: considerei amanhã (${ddmm(data)}).`);
+    const outro = direcao === "ida" ? "volta" : "ida";
+    if (ctx.hojeDito) {
+      // o cliente disse HOJE (issue #307): "hoje, indo pra Miranda" às 9h não é a Ida de amanhã,
+      // é a Volta de hoje, que passa por Miranda. Troca de sentido só se o pedido cabe na outra
+      // viagem (não disse onde embarca neste sentido e o destino existe lá); senão, a equipe confere.
+      const embarqueDito =
+        !!texto(p.endereco) || !!texto(p.bairro) || (!!pontoBruto && pontoBruto !== "busca" && ctx.pontos[direcao].includes(pontoBruto));
+      const destino = texto(p.desembarque);
+      const cabeNoOutro =
+        !viagemDeHojeJaSaiu(outro, ctx.horaAgora) && !embarqueDito && !!destino && !!ctx.areaDoDesembarque?.(destino, outro);
+      if (!cabeNoOutro) return { ok: false, motivo: "hoje_ja_saiu" };
+      avisos.push(
+        `O cliente pediu hoje e a ${direcao === "ida" ? "Ida" : "Volta"} de hoje já tinha saído: é a ${outro === "ida" ? "Ida" : "Volta"} de hoje, que passa por ${destino}. Confira o embarque.`,
+      );
+      direcao = outro;
+    } else {
+      // "à tarde" sem dia, depois que a viagem de hoje já saiu: é a de amanhã (issue #266)
+      data = somarDias(ctx.hoje, 1);
+      avisos.push(`A viagem de hoje já tinha saído: considerei amanhã (${ddmm(data)}).`);
+    }
   }
 
   let bairro = texto(p.bairro, 80);
@@ -366,6 +388,7 @@ ${quando}
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
+- Disse HOJE: o dia é hoje, nunca troque por amanhã. Se a viagem daquele sentido já saiu, pense na outra: as cidades do caminho (Bacabeira, Santa Rita, Miranda, Matões…) têm as duas viagens. Ex.: às 9h "hoje, indo pra Miranda" é a VOLTA de hoje (sai à tarde de Pirapemas/Cantanhede e passa por Miranda), não a Ida de amanhã. Veja nas CONVERSAS ANTERIORES de onde ele costuma sair nesse trecho.
 - Nome de rua ou estrada ("Estrada Matões", "Rua Miranda") não é cidade: não use como cidade de embarque ou desembarque.
 - Volta: a cidade de embarque (Pirapemas ou Cantanhede) vai em cidade_dita SÓ se o cliente disse ou confirmou com a equipe ("de Pirapemas para São Luís", "aqui em Cantanhede", "saindo de Cantanhede"). LEIA TODAS AS MENSAGENS DO CLIENTE: a cidade costuma vir na primeira ("duas passagens de Pirapemas a São Luís") e o endereço depois. Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): nunca deduza a cidade pela rua ou pela referência; sem cidade dita, deixe cidade_dita vazio e diga em duvida.
 - Interprete o que o cliente quis dizer, não só as palavras: "descida da Inês", "perto do posto", "atrás da igreja", "depois da ponte" dizem que ele fica PERTO de um lugar conhecido — ponha a frase inteira em endereco, como ele escreveu. Já "Beco do Hospital", "Travessa da Paz", "Praça da Cruz", "Entrada da Cidade" são NOMES de lugares (beco, travessa, praça são tipos de rua): não confunda com "Hospital" ou "Rua da Paz".
@@ -670,6 +693,7 @@ export function planejarAtualizacao(
 const MOTIVO_LEGIVEL: Record<string, string> = {
   sem_data: "o dia da viagem não aparece na conversa",
   data_passada: "o dia lido já passou",
+  hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
   sem_endereco: "falta o local de embarque",
@@ -681,6 +705,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   ponto: "ponto de embarque não reconhecido",
   LOTADO: "a viagem está lotada",
   RESERVA_DUPLICADA: "o cliente já tem reserva nesse dia e sentido",
+  conferir: "o que foi lido não bate com o que o cliente escreveu (dia, quantidade, embarque ou bairro)",
 };
 
 /**
@@ -738,6 +763,6 @@ export function cidadeEscritaPeloCliente(textos: (string | null | undefined)[]):
  */
 export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; codigosPendentes: string[] }): boolean {
   if (r.pedidos === 0) return true;
-  if (r.codigosPendentes.includes("cidade")) return true;
+  if (r.codigosPendentes.includes("cidade") || r.codigosPendentes.includes("conferir")) return true;
   return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
 }
