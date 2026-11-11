@@ -128,6 +128,8 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
 export type CostumeDoSentido = {
+  /** "manual" = fixado pela equipe; senão veio do histórico */
+  fonte?: string | null;
   route_point_code?: string | null;
   route_point_name?: string | null;
   neighborhood?: string | null;
@@ -229,6 +231,11 @@ export function validarPedidoExtraido(
     desembarqueDoCostume = texto(costume.dropoff_location, 120);
     const onde = [costume.route_point_name ?? costume.route_point_code, bairro, endereco].filter(Boolean).join(", ");
     avisos.push(`Embarque pelo endereço de costume (${onde}).`);
+  }
+  // desembarque de costume fixado pela equipe vale mesmo com o embarque dito ou "embarque varia" (issue #328)
+  if (tipo === "passagem" && !desembarqueDoCostume && !texto(p.desembarque) && costume?.fonte === "manual" && texto(costume.dropoff_location)) {
+    desembarqueDoCostume = texto(costume.dropoff_location, 120);
+    avisos.push(`Desembarque pelo endereço de costume (${desembarqueDoCostume}).`);
   }
   // endereço de casa em São Luís sem ponto dito = busca em casa
   if (tipo === "passagem" && !ponto && direcao === "ida" && (bairro || endereco) && ctx.pontos.ida.includes("busca")) {
@@ -369,6 +376,8 @@ export function instrucoesDaLeitura(ctx: {
   desembarques: string;
   confirmadoPelaEquipe?: boolean;
   costume?: string;
+  /** o que a equipe ensinou sobre este passageiro (customers.bot_instructions, issue #328) */
+  instrucoesDoCliente?: string;
   /** bairros de São Luís (tabela da busca em casa): separam embarque de desembarque */
   bairrosSaoLuis?: string;
 }): string {
@@ -415,7 +424,10 @@ LOCAIS DE DESEMBARQUE:
 ${ctx.desembarques}${ctx.costume ? `
 
 ENDEREÇO DE COSTUME DESTE CLIENTE (onde ele sempre embarca/desce):
-${ctx.costume}` : ""}${ctx.bairrosSaoLuis ? `
+${ctx.costume}` : ""}${ctx.instrucoesDoCliente ? `
+
+INSTRUÇÕES DA EQUIPE SOBRE ESTE PASSAGEIRO (valem sobre o histórico; siga sempre):
+${ctx.instrucoesDoCliente}` : ""}${ctx.bairrosSaoLuis ? `
 
 BAIRROS DE SÃO LUÍS: ${ctx.bairrosSaoLuis}` : ""}`;
 }

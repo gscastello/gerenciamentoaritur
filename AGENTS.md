@@ -383,6 +383,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   como mapa; lugar de São Luís → bairro em `bairro_aliases` confirmado + `sao_luis_lugares`). Preço e telefone nunca
   entram em lição (o banco recusa). Correção de reserva pelo assistente já conta no Acerto do bot e ensina as bases
   de lugares pelos gatilhos das reservas.
+  **Hábito de cada passageiro** (issue #328, `database/95`): `propor_costume` fixa o endereço de costume por sentido
+  (ponto vazio = **embarque varia**: o bot não chuta o embarque, mas usa o desembarque de costume fixado) e
+  `propor_instrucao_cliente` guarda em `customers.bot_instructions` o que a equipe ensinou sobre o passageiro (o que
+  varia, o que perguntar). O aprendizado não mexe nas instruções (a anotação automática segue em `bot_customer_notes`);
+  o leitor do Agendado, o atendimento automático e o assistente leem e seguem, valendo sobre o histórico.
 - **Lançamento manual pelo Claude** (issue #253): a skill `/agendar` (`.claude/skills/agendar/`) lê a conversa
   no banco (ou a lista colada), confere cadastro, vagas, preço e duplicidade e cria pela `rpc_create_reservation`
   com o sócio que pediu como autor. Mesmas travas do bot: preço nunca inventado, encomenda sem valor, nada de

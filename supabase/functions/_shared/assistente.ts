@@ -37,6 +37,8 @@ import {
   validarMudanca,
   validarLicao,
   validarLugar,
+  validarCostume,
+  validarInstrucaoDoCliente,
 } from "./assistentePuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { variantesTelefone } from "./telefone.ts";
@@ -167,7 +169,7 @@ async function precoDaMudanca(ctx: Contexto, atual: Linha, m: Omit<AcaoMudar, "t
 async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promise<unknown> {
   switch (nome) {
     case "buscar_cliente": {
-      let q = ctx.db.from("customers").select("id, name, phone, phone_secondary").is("deleted_at", null).limit(8);
+      let q = ctx.db.from("customers").select("id, name, phone, phone_secondary, bot_instructions").is("deleted_at", null).limit(8);
       if (a.telefone) {
         const { semDdi } = telefonesDe(String(a.telefone));
         if (!semDdi.length) return { ok: false, erro: "telefone inválido" };
@@ -199,6 +201,8 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
           id: c.id,
           nome: c.name,
           telefone: c.phone,
+          // o que a equipe ensinou sobre o passageiro (issue #328): siga
+          instrucoes_da_equipe: c.bot_instructions ?? null,
           proximas_reservas: (reservas ?? []).filter((r: Linha) => r.customer_id === c.id).map((r: Linha) => ({
             id: r.id,
             resumo: resumoDaReserva(r, ctx.nomesDosPontos),
@@ -463,7 +467,7 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       if (!semDdi.length) return { ok: false, erro: "telefone inválido" };
       const { data: cliente } = await ctx.db
         .from("customers")
-        .select("id, name")
+        .select("id, name, bot_instructions")
         .or(`phone.in.(${semDdi.join(",")}),phone_secondary.in.(${semDdi.join(",")})`)
         .is("deleted_at", null)
         .limit(1)
@@ -471,7 +475,7 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       if (!cliente) return { ok: true, costume: null, nota: "Cliente não cadastrado." };
       const { data, error } = await ctx.db.rpc("rpc_endereco_de_costume", { p_customer_id: cliente.id });
       if (error) return { ok: false, erro: error.message };
-      return { ok: true, cliente: cliente.name, costume: data };
+      return { ok: true, cliente: cliente.name, cliente_id: cliente.id, costume: data, instrucoes_da_equipe: cliente.bot_instructions ?? null };
     }
     case "propor_lancar_rascunho":
     case "propor_descartar_rascunho": {
@@ -506,6 +510,16 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         resumo_atual: `${p.assunto}${p.cliente ? ` (${p.cliente})` : ""}`,
         id: crypto.randomUUID(),
       };
+      ctx.acoes.push(acao);
+      return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
+    }
+    case "propor_costume":
+    case "propor_instrucao_cliente": {
+      const v = nome === "propor_costume" ? validarCostume(a, ctx.pontos) : validarInstrucaoDoCliente(a);
+      if (!v.ok) return { ok: false, erro: v.erro };
+      const { data: cliente } = await ctx.db.from("customers").select("id, name").eq("id", v.acao.cliente_id).is("deleted_at", null).maybeSingle();
+      if (!cliente) return { ok: false, erro: "Cliente não encontrado: use buscar_cliente." };
+      const acao = { ...v.acao, cliente_nome: cliente.name || "o passageiro", id: crypto.randomUUID() } as Acao;
       ctx.acoes.push(acao);
       return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
     }
@@ -651,6 +665,33 @@ export async function executarAcao(bruta: Linha, ctx: Contexto): Promise<{ ok: b
       ctx,
       `assistente-rascunho-${d.id}`,
     );
+  }
+
+  // hábito do passageiro (issue #328): endereço de costume e instrução da equipe
+  if (tipo === "costume") {
+    const { data, error } = await ctx.db.rpc("rpc_definir_endereco_de_costume", {
+      p_customer_id: String(bruta.cliente_id ?? ""),
+      p_direction: bruta.sentido === "volta" ? "volta" : "ida",
+      p_route_point_code: bruta.ponto ? String(bruta.ponto) : null,
+      p_neighborhood: bruta.bairro ? String(bruta.bairro) : null,
+      p_detail: bruta.embarque ? String(bruta.embarque) : null,
+      p_dropoff_location: bruta.desembarque ? String(bruta.desembarque) : null,
+      p_dropoff_area: null,
+    });
+    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não guardou o costume.") };
+    evento("assistente_acao", { tipo, ok: true });
+    return { ok: true, mensagem: "Endereço de costume guardado: vale nos próximos agendamentos." };
+  }
+  if (tipo === "instruir_cliente") {
+    const { data, error } = await ctx.db.rpc("rpc_instruir_sobre_cliente", {
+      p_customer_id: String(bruta.cliente_id ?? ""),
+      p_texto: String(bruta.texto ?? ""),
+      p_substituir: false,
+      p_actor: ctx.userId,
+    });
+    if (error || data?.success === false) return { ok: false, mensagem: String(error?.message ?? data?.message ?? "Não guardou a instrução.") };
+    evento("assistente_acao", { tipo, ok: true });
+    return { ok: true, mensagem: String(data?.message ?? "Instrução guardada.") };
   }
 
   // ensinar o bot (issue #318): a regra e as travas estão no banco

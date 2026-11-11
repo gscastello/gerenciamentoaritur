@@ -125,7 +125,29 @@ export type AcaoPendencia = { tipo: "resolver_pendencia"; pendencia_id: string; 
 /** Ensinar o bot (issue #318): uma lição ou um lugar, gravados só no "Confirmar". */
 export type AcaoEnsinar = { tipo: "ensinar"; licao_tipo: TipoDeLicao; titulo: string; conteudo: string };
 export type AcaoEnsinarLugar = { tipo: "ensinar_lugar"; cidade: CidadeDoLugar; nome: string; bairro: string | null };
-export type Acao = (AcaoCriar | AcaoMudar | AcaoCancelar | AcaoRascunho | AcaoPendencia | AcaoEnsinar | AcaoEnsinarLugar) & {
+/** Hábito de um passageiro (issue #328): endereço de costume (ponto vazio = embarque varia) e instrução da equipe. */
+export type AcaoCostume = {
+  tipo: "costume";
+  cliente_id: string;
+  cliente_nome: string;
+  sentido: "ida" | "volta";
+  ponto: string | null;
+  bairro: string | null;
+  embarque: string | null;
+  desembarque: string | null;
+};
+export type AcaoInstruirCliente = { tipo: "instruir_cliente"; cliente_id: string; cliente_nome: string; texto: string };
+export type Acao = (
+  | AcaoCriar
+  | AcaoMudar
+  | AcaoCancelar
+  | AcaoRascunho
+  | AcaoPendencia
+  | AcaoEnsinar
+  | AcaoEnsinarLugar
+  | AcaoCostume
+  | AcaoInstruirCliente
+) & {
   id: string;
 };
 
@@ -175,6 +197,49 @@ export function validarLicao(a: Record<string, unknown>): { ok: true; acao: Acao
   }
   if (/\d{8,}/.test(tudo.replace(/\D/g, ""))) return { ok: false, erro: "Lição não guarda telefone nem documento." };
   return { ok: true, acao: { tipo: "ensinar", licao_tipo: tipo, titulo, conteudo } };
+}
+
+/**
+ * Confere o endereço de costume proposto. Ponto vazio = "embarque varia" e aí o
+ * desembarque é obrigatório (é o que fica fixo).
+ */
+export function validarCostume(
+  a: Record<string, unknown>,
+  pontos: { ida: string[]; volta: string[] },
+): { ok: true; acao: Omit<AcaoCostume, "cliente_nome"> } | { ok: false; erro: string } {
+  const clienteId = txt(a.cliente_id, 60);
+  if (!clienteId) return { ok: false, erro: "Use buscar_cliente e passe o cliente_id." };
+  const s = sentido(a.sentido);
+  if (!s) return { ok: false, erro: "Informe o sentido: ida ou volta." };
+  const ponto = txt(a.ponto, 40)?.toLowerCase() ?? null;
+  if (ponto && !pontos[s].includes(ponto)) return { ok: false, erro: `Ponto "${ponto}" não existe na ${s}. Pontos: ${pontos[s].join(", ")}.` };
+  const desembarque = txt(a.desembarque, 120);
+  if (!ponto && !desembarque) return { ok: false, erro: "Embarque varia? Então diga o desembarque de costume." };
+  if (ponto === "busca" && !txt(a.bairro, 80)) return { ok: false, erro: "Buscar em casa precisa do bairro." };
+  return {
+    ok: true,
+    acao: {
+      tipo: "costume",
+      cliente_id: clienteId,
+      sentido: s,
+      ponto,
+      bairro: ponto === "busca" ? txt(a.bairro, 80) : null,
+      embarque: ponto ? txt(a.embarque) : null,
+      desembarque,
+    },
+  };
+}
+
+/** Confere a instrução sobre um passageiro: frase curta, sem telefone. */
+export function validarInstrucaoDoCliente(
+  a: Record<string, unknown>,
+): { ok: true; acao: Omit<AcaoInstruirCliente, "cliente_nome"> } | { ok: false; erro: string } {
+  const clienteId = txt(a.cliente_id, 60);
+  if (!clienteId) return { ok: false, erro: "Use buscar_cliente e passe o cliente_id." };
+  const texto = txt(a.texto, 500);
+  if (!texto || texto.length < 5) return { ok: false, erro: "Escreva a instrução numa frase." };
+  if (/\d{8,}/.test(texto.replace(/\D/g, ""))) return { ok: false, erro: "A instrução não guarda telefone nem documento." };
+  return { ok: true, acao: { tipo: "instruir_cliente", cliente_id: clienteId, texto } };
 }
 
 /** Confere o lugar que o assistente propõe ensinar: cidade da rota, ou São Luís com o bairro. */
@@ -283,6 +348,13 @@ const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 /** Texto do cartão de confirmação no app. */
 export function descreverAcao(a: Acao, nomesDosPontos: Record<string, string> = {}): string {
   if (a.tipo === "ensinar") return `Ensinar ao bot (${NOME_DO_TIPO[a.licao_tipo]}): ${a.titulo} — ${a.conteudo}`;
+  if (a.tipo === "instruir_cliente") return `Guardar sobre ${a.cliente_nome}: ${a.texto}`;
+  if (a.tipo === "costume") {
+    const sobe = a.ponto
+      ? [nomesDosPontos[a.ponto] ?? a.ponto, a.bairro, a.embarque].filter(Boolean).join(", ")
+      : "embarque varia";
+    return `Costume de ${a.cliente_nome} na ${a.sentido === "ida" ? "Ida" : "Volta"}: ${sobe}${a.desembarque ? ` → desce em ${a.desembarque}` : ""}`;
+  }
   if (a.tipo === "ensinar_lugar") {
     return a.cidade === "sao_luis"
       ? `Ensinar ao bot: ${a.nome} fica no bairro ${a.bairro} (São Luís)`
@@ -360,6 +432,7 @@ ENSINAR O BOT (o que o sócio informa ou corrige vira aprendizado)
 - Corrigiu um erro de uma reserva lançada pelo bot (dia, sentido, cidade, bairro)? Depois de propor a correção, pergunte se quer ensinar ao bot a causa, e proponha a lição ou o lugar se ele disser que sim.
 - Preço NUNCA vira lição: o bot usa a tabela. Se o sócio disser um preço, diga que ele muda na aba Sistema (Bairros, Trechos ou Locais).
 - Não proponha ensinar o que já está nos dados do sistema ou nas lições aprovadas.
+- Hábito de UM passageiro ("o embarque dela na Ida varia entre X e Y", "ela sempre desce no Z", "na Volta ele sai sempre de W") NÃO é lição geral: use buscar_cliente e proponha propor_costume (por sentido; embarque que varia = sem ponto, só o desembarque) e, para o que não cabe no costume (o que varia, preferências, o que perguntar), propor_instrucao_cliente. Uma proposta por sentido e uma para a instrução.
 
 REGRAS DE RESERVA (as mesmas do app)
 - Ida = sai de São Luís. Volta = sai de Pirapemas/Cantanhede e vai PARA São Luís ("pra São Luís" é Volta, inclusive encomenda).
@@ -595,6 +668,36 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
         conteudo: { type: "string", description: "a lição numa ou duas frases (até 800 letras)" },
       },
       required: ["tipo", "titulo", "conteudo"],
+    },
+  },
+  {
+    name: "propor_costume",
+    description:
+      "Propõe fixar o endereço de costume de um passageiro num sentido (ida ou volta). Sem ponto = o embarque varia e só o desembarque fica fixo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente_id: { type: "string", description: "id do buscar_cliente" },
+        sentido: { type: "string", enum: ["ida", "volta"] },
+        ponto: { type: "string", description: "código do ponto de embarque; deixe vazio se o embarque varia" },
+        bairro: { type: "string", description: "busca em casa: bairro da tabela" },
+        embarque: { type: "string", description: "rua, referência ou local do embarque" },
+        desembarque: { type: "string", description: "onde desce de costume" },
+      },
+      required: ["cliente_id", "sentido"],
+    },
+  },
+  {
+    name: "propor_instrucao_cliente",
+    description:
+      "Propõe guardar uma instrução da equipe sobre um passageiro (o que varia, o que perguntar, preferências). O bot e o assistente seguem nos próximos agendamentos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente_id: { type: "string", description: "id do buscar_cliente" },
+        texto: { type: "string", description: "a instrução numa frase (até 500 letras, sem telefone)" },
+      },
+      required: ["cliente_id", "texto"],
     },
   },
   {

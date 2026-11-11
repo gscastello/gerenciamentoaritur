@@ -750,3 +750,30 @@ Deno.test("#326: toda cidade do caminho é embarque válido da Volta (ponto Cant
   assertEquals(cidadeDoCaminhoNoTexto("Rua Santa Rita de Cássia"), { chave: "santa rita", ponto: "cantanhede", nome: "Santa Rita" });
   assertEquals(cidadeDoCaminhoNoTexto("Rua Grande"), null);
 });
+
+Deno.test("#328: desembarque de costume fixado vale mesmo com o embarque variando", () => {
+  const costume = {
+    ida: { fonte: "manual", route_point_code: null, route_point_name: null, neighborhood: null, detail: null, dropoff_location: "Beco do Hospital" },
+    volta: null,
+  };
+  const r = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { ...ctx, costume, areaDoDesembarque: () => "pirapemas" },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.route_point_code, "outro");
+  assertEquals(r.rascunho.dropoff_location, "Beco do Hospital");
+  assert(r.rascunho.notes?.includes("Desembarque pelo endereço de costume"));
+  // embarque varia (sem ponto de costume) e o cliente não disse: o embarque não é chutado
+  const semEmbarque = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida" }, { ...ctx, costume, agendado: true });
+  assert(semEmbarque.ok);
+  if (semEmbarque.ok) assertEquals(semEmbarque.rascunho.dropoff_location, "Beco do Hospital");
+  // costume que veio só do histórico não força o desembarque
+  const doHistorico = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { ...ctx, costume: { ida: { ...costume.ida, fonte: "historico" }, volta: null } },
+  );
+  assert(doHistorico.ok);
+  if (doHistorico.ok) assertEquals(doHistorico.rascunho.dropoff_location, null);
+});

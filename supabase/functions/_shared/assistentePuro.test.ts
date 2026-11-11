@@ -261,3 +261,28 @@ Deno.test("#318: ensinar o bot — lição e lugar validados, sem preço e sem t
   assertEquals(validarLugar({ cidade: "cantanhede", nome: "" }).ok, false);
   assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "ENSINAR O BOT");
 });
+
+Deno.test("#328: costume do passageiro (embarque varia) e instrução da equipe", async () => {
+  const { validarCostume, validarInstrucaoDoCliente, descreverAcao } = await import("./assistentePuro.ts");
+  const pontos = { ida: ["busca", "rodoviaria", "outro"], volta: ["pirapemas", "cantanhede"] };
+  const ida = validarCostume({ cliente_id: "c1", sentido: "ida", desembarque: "Beco do Hospital" }, pontos);
+  assert(ida.ok);
+  if (ida.ok) {
+    assertEquals(ida.acao.ponto, null);
+    assertEquals(descreverAcao({ ...ida.acao, cliente_nome: "Ana", id: "x" }), "Costume de Ana na Ida: embarque varia → desce em Beco do Hospital");
+  }
+  const volta = validarCostume({ cliente_id: "c1", sentido: "volta", ponto: "Pirapemas", embarque: "Beco do Hospital" }, pontos);
+  assert(volta.ok);
+  if (volta.ok) assertEquals(descreverAcao({ ...volta.acao, cliente_nome: "Ana", id: "x" }, { pirapemas: "Pirapemas" }), "Costume de Ana na Volta: Pirapemas, Beco do Hospital");
+  assertEquals(validarCostume({ cliente_id: "c1", sentido: "ida" }, pontos).ok, false);
+  assertEquals(validarCostume({ cliente_id: "c1", sentido: "ida", ponto: "pirapemas", desembarque: "x" }, pontos).ok, false);
+  assertEquals(validarCostume({ sentido: "ida", desembarque: "x" }, pontos).ok, false);
+  assertEquals(validarCostume({ cliente_id: "c1", sentido: "ida", ponto: "busca" }, pontos).ok, false);
+
+  const inst = validarInstrucaoDoCliente({ cliente_id: "c1", texto: "Na Ida o embarque varia entre dois lugares: pergunte qual." });
+  assert(inst.ok);
+  if (inst.ok) assertStringIncludes(descreverAcao({ ...inst.acao, cliente_nome: "Ana", id: "x" }), "Guardar sobre Ana:");
+  assertEquals(validarInstrucaoDoCliente({ cliente_id: "c1", texto: "Ligue 98 98101-2388" }).ok, false);
+  assertEquals(validarInstrucaoDoCliente({ cliente_id: "c1", texto: "oi" }).ok, false);
+  assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "propor_costume");
+});

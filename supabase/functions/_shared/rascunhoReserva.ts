@@ -193,6 +193,9 @@ function textoDoCostume(c: CostumeDoCliente): string {
       ? `- ${rotulo}: ${[s.route_point_name ?? s.route_point_code, s.neighborhood, s.detail].filter(Boolean).join(", ")}${
         s.dropoff_location ? ` → desce em ${s.dropoff_location}` : ""
       }`
+      : s?.dropoff_location
+      // "embarque varia" (issue #328): não presuma o embarque; o desembarque é o de sempre
+      ? `- ${rotulo}: embarque varia (use o que ele disser; não presuma) → desce em ${s.dropoff_location}`
       : "";
   return [linha("Ida", c.ida), linha("Volta", c.volta)].filter(Boolean).join("\n");
 }
@@ -208,6 +211,12 @@ async function viagensJaReservadas(customerId: string | null, hoje: string): Pro
     .neq("status", "cancelada")
     .gte("trips.trip_date", hoje);
   return new Set((data ?? []).map((r: Bloco) => `${r.trips.trip_date}|${r.trips.direction}`));
+}
+
+/** O que a equipe ensinou sobre o passageiro (customers.bot_instructions, issue #328). */
+async function instrucoesDaEquipe(customerId: string): Promise<string> {
+  const { data } = await supabaseAdmin.from("customers").select("bot_instructions").eq("id", customerId).maybeSingle();
+  return String(data?.bot_instructions ?? "").trim();
 }
 
 /** Cidade de cada reserva anterior do cliente: Volta pelo ponto, Ida pelo destino (issue #324). */
@@ -260,12 +269,14 @@ async function lerEGravar(
 
   const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const costume = cliente ? await costumeDoCliente(cliente.id) : null;
+  const instrucoesDoCliente = cliente ? await instrucoesDaEquipe(cliente.id) : "";
   const system = instrucoesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
     pontos: ctx.listaPontos,
     desembarques: ctx.desembarques,
     confirmadoPelaEquipe: opcoes.confirmadoPelaEquipe,
     costume: costume ? textoDoCostume(costume) : undefined,
+    instrucoesDoCliente: instrucoesDoCliente || undefined,
     bairrosSaoLuis: ctx.bairrosSaoLuis,
   });
   const conversa = anteriores.length
