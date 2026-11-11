@@ -101,7 +101,8 @@ Deno.test("cartões: texto de criar, mudar e cancelar", () => {
   assertStringIncludes(descreverAcao({ ...criar, tipo_reserva: "encomenda" }), "sem valor (encomenda)");
   const mudar: Acao = {
     id: "2", tipo: "mudar", reserva_id: "x", resumo_atual: "Volta 10/11 · Zé", nova_data: "2026-11-13", novo_sentido: null,
-    novo_ponto: null, embarque: null, bairro: null, desembarque: null, quantidade: null, valor_unitario: null,
+    novo_ponto: null, embarque: null, bairro: null, desembarque: null, quantidade: null, nome: null, telefone: null,
+    valor_dito: null, pagamento: null, pago: null, valor_unitario: null,
   };
   assertEquals(descreverAcao(mudar), "Mudar Volta 10/11 · Zé → dia 13/11");
   assertEquals(descreverAcao({ id: "3", tipo: "cancelar", reserva_id: "x", resumo_atual: "Volta 10/11 · Zé" }), "Cancelar: Volta 10/11 · Zé");
@@ -164,4 +165,61 @@ Deno.test("instruções: procurar a reserva antes de pedir telefone", async () =
   const { instrucoesDoAssistente, FERRAMENTAS_DO_ASSISTENTE } = await import("./assistentePuro.ts");
   assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "PRIMEIRO procurar_reserva");
   assert(FERRAMENTAS_DO_ASSISTENTE.some((f) => f.name === "procurar_reserva"));
+});
+
+Deno.test("#295: o assistente recebe o conhecimento da operação, os dados do sistema e as lições", async () => {
+  const { instrucoesDoAssistente, CONHECIMENTO_DA_OPERACAO } = await import("./assistentePuro.ts");
+  const t = instrucoesDoAssistente({
+    pontos: "-",
+    desembarques: "-",
+    fatos: "PONTOS DE EMBARQUE E HORÁRIOS (dados do sistema): rodoviária R$ 60",
+    licoes: "- Na Volta de segunda a van passa pela BR",
+    cronograma: "HORÁRIOS PREVISTOS EM CADA LUGAR: Miranda 14:30",
+  });
+  assertStringIncludes(t, CONHECIMENTO_DA_OPERACAO);
+  for (const trecho of ["conferir_agendados", "Retorno do aeroporto", "quem ENVIA", "nunca o nome do perfil do WhatsApp", "Áudio e ligação"]) {
+    assertStringIncludes(t, trecho);
+  }
+  assertStringIncludes(t, "DADOS DO SISTEMA");
+  assertStringIncludes(t, "rodoviária R$ 60");
+  assertStringIncludes(t, "lições aprovadas");
+  assertStringIncludes(t, "Miranda 14:30");
+  // sem dados, nada de bloco vazio
+  assert(!instrucoesDoAssistente({ pontos: "-", desembarques: "-" }).includes("DADOS DO SISTEMA"));
+});
+
+Deno.test("#295: mudança aceita nome, telefone, valor do sócio, pagamento e pago", () => {
+  const m = validarMudanca({ nome: "Ana Maria", telefone: "(98) 98415-5216", valor_dito: 70, pagamento: "pix", pago: true }, ctx);
+  assert(m.ok);
+  assertEquals(m.mudancas.telefone, "98984155216");
+  assertEquals(m.mudancas.valor_dito, 70);
+  assertEquals(m.mudancas.pagamento, "pix");
+  assertEquals(m.mudancas.pago, true);
+  assertEquals(validarMudanca({ telefone: "123" }, ctx).ok, false);
+  assertEquals(validarMudanca({ valor_dito: -5 }, ctx).ok, false);
+  assertEquals(validarMudanca({ pagamento: "fiado" }, ctx).ok, false);
+  const pagoFalse = validarMudanca({ pago: false }, ctx);
+  assert(pagoFalse.ok);
+  assertEquals(pagoFalse.mudancas.pago, false);
+});
+
+Deno.test("#295: cartões de rascunho, pendência e pagamento", () => {
+  assertEquals(
+    descreverAcao({ id: "1", tipo: "lancar_rascunho", rascunho_id: "r", resumo_atual: "Volta 12/11 · Ana" }),
+    "Lançar a reserva pronta: Volta 12/11 · Ana",
+  );
+  assertEquals(
+    descreverAcao({ id: "2", tipo: "descartar_rascunho", rascunho_id: "r", resumo_atual: "Ida 12/11 · Zé" }),
+    "Descartar a reserva pronta: Ida 12/11 · Zé",
+  );
+  assertEquals(
+    descreverAcao({ id: "3", tipo: "resolver_pendencia", pendencia_id: "p", resumo_atual: "Agendado não lançou" }),
+    "Resolver a pendência: Agendado não lançou",
+  );
+  const mudar: Acao = {
+    id: "4", tipo: "mudar", reserva_id: "x", resumo_atual: "Volta 10/11 · Zé", nova_data: null, novo_sentido: null,
+    novo_ponto: null, embarque: null, bairro: null, desembarque: null, quantidade: null, nome: null, telefone: null,
+    valor_dito: 70, pagamento: "pix", pago: true, valor_unitario: 70,
+  };
+  assertEquals(descreverAcao(mudar), "Mudar Volta 10/11 · Zé → pagamento pix, marcar PAGO, valor R$ 70,00");
 });
