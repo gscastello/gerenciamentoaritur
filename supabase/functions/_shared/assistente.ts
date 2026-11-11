@@ -202,22 +202,25 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       };
     }
     case "procurar_reserva": {
-      const desde = /^\d{4}-\d{2}-\d{2}$/.test(String(a.data ?? "")) ? String(a.data) : ctx.hoje;
-      let q = ctx.db
+      // sempre de hoje a 3 semanas: "para amanhã" costuma ser o dia NOVO, não o da reserva (issue #293)
+      const { data: rs, error } = await ctx.db
         .from("v_reservations_flat")
         .select(CAMPOS_RESERVA)
-        .gte("data", desde)
-        .lte("data", somarDias(desde, a.data ? 0 : 21))
+        .gte("data", ctx.hoje)
+        .lte("data", somarDias(ctx.hoje, 21))
         .neq("status", "cancelada")
         .order("data")
         .limit(800);
-      if (a.sentido === "ida" || a.sentido === "volta") q = q.eq("direcao", a.sentido);
-      const { data: rs, error } = await q;
       if (error) return { ok: false, erro: error.message };
-      const achadas = reservasParecidas(String(a.texto ?? ""), (rs ?? []) as Linha[], (r) => ({
+      // o sentido dito ajuda a ordenar; se filtrar e não achar nada, vale a lista toda
+      const todas = (rs ?? []) as Linha[];
+      const doSentido = a.sentido === "ida" || a.sentido === "volta" ? todas.filter((r) => r.direcao === a.sentido) : todas;
+      const campos = (r: Linha) => ({
         nome: r.nome,
         outros: [r.localExato, r.bairro, r.desembarque, ctx.nomesDosPontos[r.pontoId] ?? r.pontoId],
-      }));
+      });
+      let achadas = reservasParecidas(String(a.texto ?? ""), doSentido, campos);
+      if (!achadas.length && doSentido !== todas) achadas = reservasParecidas(String(a.texto ?? ""), todas, campos);
       if (!achadas.length) return { ok: true, reservas: [], nota: "Nada parecido nas reservas de hoje em diante." };
       return {
         ok: true,

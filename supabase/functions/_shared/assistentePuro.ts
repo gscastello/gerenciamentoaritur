@@ -277,13 +277,12 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
   {
     name: "procurar_reserva",
     description:
-      "Acha reservas (de hoje em diante) pelo que foi dito sobre o passageiro: nome, rua, bairro, ponto, desembarque. Junte tudo num texto só. Tolera erro de escrita e falta de acento.",
+      "Acha reservas de hoje até 3 semanas pelo que foi dito sobre o passageiro: nome, rua, bairro, ponto, desembarque. Junte tudo num texto só. Tolera erro de escrita e falta de acento. Para remarcar, procure sem a data nova.",
     input_schema: {
       type: "object",
       properties: {
-        texto: { type: "string", description: "O que foi dito, ex.: 'Iara rua Santo Antônio'." },
-        data: { type: "string", description: "AAAA-MM-DD, se disseram o dia da reserva atual." },
-        sentido: { type: "string", enum: ["ida", "volta"] },
+        texto: { type: "string", description: "O que foi dito sobre o passageiro, ex.: 'Iara rua Santo Antônio'. Sem datas." },
+        sentido: { type: "string", enum: ["ida", "volta"], description: "Só se disseram o sentido da reserva atual." },
       },
       required: ["texto"],
     },

@@ -399,8 +399,11 @@ seguem o `WHATSAPP.md` (issue #163).
   teste o que der sem gravar (`raise exception` para desfazer). Depois, verifique o
   efeito e conte ao dono o que foi aplicado. A migração continua indo num PR com
   `Closes #N`, como qualquer mudança.
-- **Deploy de Edge Function, secrets e criar o Agent Bot** continuam **manuais e
-  autorizados pelo dono**, um a um.
+- **Deploy de Edge Function**: desde 2026-11-11 o dono autorizou o agente a publicar
+  sozinho, sem pedir a cada vez (issue #293). Antes, `deno check` da versão enviada ao
+  GitHub (o deploy importa o commit pelo SHA); depois, conferir que a função responde
+  (GET 405, sem assinatura/login 401) e contar ao dono o que foi publicado.
+- **Secrets e criar o Agent Bot** continuam **manuais e autorizados pelo dono**, um a um.
 - Secrets nunca vão em chat, issue ou PR.
 
 Ao pegar uma tarefa nova que não tem Issue: **crie a Issue primeiro**
