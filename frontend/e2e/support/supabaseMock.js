@@ -176,6 +176,17 @@ export async function mockSupabase(page, opts = {}) {
       ultimo_aprendizado: null,
       dias_guardados: 90,
     },
+    // acerto do bot (issue #311): sem reservas por padrão
+    botAcerto = {
+      success: true,
+      dias: 30,
+      lancadas: 0,
+      corrigidas: 0,
+      completadas: 0,
+      canceladas: 0,
+      acerto: null,
+      correcoes: [],
+    },
     botAprendizadoResumo = {
       observacoes: 0,
       novas: 0,
@@ -594,6 +605,7 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_bot_learning_stats") return route.fulfill(json(botStats));
+      if (fn === "rpc_bot_acerto") return route.fulfill(json(botAcerto));
       if (fn === "rpc_set_reservation_extra") {
         const b = req.postDataJSON?.() ?? {};
         if (opts.extraRecusado && !b.p_extra) {

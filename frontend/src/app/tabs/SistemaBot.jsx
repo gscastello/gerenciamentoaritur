@@ -17,6 +17,7 @@ import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import { C, Card, ErrorBanner, Field, TextArea, TextInput } from "../tabShared.jsx";
+import SistemaBotAcerto from "./SistemaBotAcerto.jsx";
 import SistemaBotAprendizado from "./SistemaBotAprendizado.jsx";
 
 // Duração da saída antes de tirar o item da lista de verdade — precisa
@@ -379,6 +380,8 @@ export default function SistemaBot() {
           ))}
         </div>
       </Card>
+
+      <SistemaBotAcerto />
 
       <SistemaBotAprendizado />
     </div>
