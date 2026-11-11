@@ -681,3 +681,23 @@ Deno.test("#307: disse hoje, a Ida saiu e a Volta não serve: fica para a equipe
   );
   assertEquals(asDuasSairam, { ok: false, motivo: "hoje_ja_saiu" });
 });
+
+Deno.test("#314: lugar de Cantanhede depois que a Ida saiu é a Volta de hoje; nome que também é bairro de São Luís pergunta", async () => {
+  const { proximaViagemPeloLugar, perguntaAoCliente } = await import("./rascunhoPuro.ts");
+  const santaBarbara = { tipo: "rua", nome: "Rua Santa Bárbara", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 2 };
+  assertEquals(proximaViagemPeloLugar({ lugares: [santaBarbara], bairroDeSaoLuis: false, costumeVolta: false }), "volta");
+  assertEquals(proximaViagemPeloLugar({ lugares: [santaBarbara], bairroDeSaoLuis: true, costumeVolta: false }), "qual_viagem");
+  assertEquals(proximaViagemPeloLugar({ lugares: [santaBarbara], bairroDeSaoLuis: true, costumeVolta: true }), "volta");
+  assertEquals(proximaViagemPeloLugar({ lugares: [], bairroDeSaoLuis: true, costumeVolta: false }), null);
+  assertEquals(
+    proximaViagemPeloLugar({ lugares: [{ ...santaBarbara, em_cantanhede: false }], bairroDeSaoLuis: false, costumeVolta: false }),
+    null,
+  );
+
+  const p1 = perguntaAoCliente(["cidade", "qual_viagem"], [], "Joel Silva");
+  assertEquals(p1?.codigo, "qual_viagem");
+  assertEquals(p1?.texto, "Joel, só pra confirmar sua vaga: é a Volta de hoje (saindo daí para São Luís) ou a Ida de amanhã (saindo de São Luís)? 😊");
+  assertEquals(perguntaAoCliente(["cidade", "qual_viagem"], ["qual_viagem"], null)?.texto, "Só pra confirmar sua vaga: você embarca em Pirapemas ou em Cantanhede? 😊");
+  assertEquals(perguntaAoCliente(["cidade"], ["cidade"], "Ana"), null);
+  assertEquals(perguntaAoCliente(["conferir", "vespera"], [], "Ana"), null);
+});
