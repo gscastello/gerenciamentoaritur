@@ -341,6 +341,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   cliente o resumo (sentido, dia, embarque, desembarque, quantidade; **nunca valor**, nunca o nome do perfil) e pede o
   que faltou (endereço, dia da volta). Uma vez por reserva criada; desliga em `settings.agendado_confirmacao`
   (`{"ativo": false}`). É a única mensagem automática ao cliente fora do modo `ia`, autorizada pelo dono (11/11).
+  **Próxima viagem e dúvida perguntada ao cliente** (issue #314): pedido lido como Ida de hoje depois que a Ida saiu,
+  com a Volta ainda por sair, e embarque que é lugar conhecido de Pirapemas/Cantanhede → Volta de hoje; se o nome também
+  é bairro de São Luís → pendente `qual_viagem`. Dúvida que só o cliente resolve (`qual_viagem`, `cidade`) o bot
+  **pergunta ao cliente**, uma vez por dúvida (`support_tickets.meta.perguntas`); quando ele responde, a releitura do
+  Agendado (janela de 4 h) lança e a pendência se resolve sozinha. Mesma chave da confirmação.
 - **Erros de escrita** (issue #276): cliente escreve "amnh", "hj", "sesta", "Catanhede", "listre caldas". O bot
   interpreta pelo sentido no contexto e confirma com a palavra certa; as comparações exatas usam a regra única de
   `_shared/grafia.ts` (igual a `fn_distancia_grafia` no banco): palavra por palavra, sem "da/de/do", até 3 letras tem

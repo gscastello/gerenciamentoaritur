@@ -694,6 +694,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   sem_data: "o dia da viagem não aparece na conversa",
   data_passada: "o dia lido já passou",
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
+  qual_viagem: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede: Volta de hoje ou Ida de amanhã?",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
   sem_endereco: "falta o local de embarque",
@@ -765,4 +766,43 @@ export function agendadoPrecisaReler(r: { pedidos: number; motivos: string[]; co
   if (r.pedidos === 0) return true;
   if (r.codigosPendentes.includes("cidade") || r.codigosPendentes.includes("conferir")) return true;
   return r.motivos.some((m) => ["sem_cidade", "sem_endereco", "sem_data", "sem_sentido"].includes(m));
+}
+
+/**
+ * A Ida de hoje já saiu e a Volta ainda sai (issue #314): o embarque que o cliente disse é
+ * um lugar conhecido de Pirapemas/Cantanhede? Então o pedido é a Volta de hoje. Se o mesmo
+ * nome também é bairro de São Luís (ex.: Santa Bárbara), só o cliente sabe: "qual_viagem"
+ * (a não ser que ele costume voltar). Lugar desconhecido = null (vale a regra de sempre).
+ */
+export function proximaViagemPeloLugar(p: {
+  lugares: LugarNasCidades[];
+  bairroDeSaoLuis: boolean;
+  costumeVolta: boolean;
+}): "volta" | "qual_viagem" | null {
+  const daRota = p.lugares.filter((l) => l.em_pirapemas || l.em_cantanhede);
+  if (!daRota.length) return null;
+  if (p.bairroDeSaoLuis && !p.costumeVolta) return "qual_viagem";
+  return "volta";
+}
+
+/** Dúvidas do Agendado que só o CLIENTE resolve: o bot pergunta a ele (issue #314). */
+export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
+  qual_viagem: "é a Volta de hoje (saindo daí para São Luís) ou a Ida de amanhã (saindo de São Luís)?",
+  cidade: "você embarca em Pirapemas ou em Cantanhede?",
+};
+
+/**
+ * A pergunta ao cliente para as dúvidas pendentes ainda não perguntadas (uma por vez,
+ * na ordem: qual viagem antes da cidade). null = nada a perguntar.
+ */
+export function perguntaAoCliente(
+  pendentes: string[],
+  jaPerguntadas: string[],
+  nome?: string | null,
+): { codigo: string; texto: string } | null {
+  const codigo = Object.keys(PERGUNTAS_AO_CLIENTE).find((c) => pendentes.includes(c) && !jaPerguntadas.includes(c));
+  if (!codigo) return null;
+  const primeiro = String(nome ?? "").trim().split(/\s+/)[0];
+  const saudacao = primeiro && primeiro.length >= 2 ? `${primeiro}, só` : "Só";
+  return { codigo, texto: `${saudacao} pra confirmar sua vaga: ${PERGUNTAS_AO_CLIENTE[codigo]} 😊` };
 }

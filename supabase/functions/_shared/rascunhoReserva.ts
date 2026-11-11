@@ -51,6 +51,9 @@ import {
   validarPedidoExtraido,
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
+  perguntaAoCliente,
+  proximaViagemPeloLugar,
+  viagemDeHojeJaSaiu,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { conferenciaFinal, conferirPeloCliente, datasEscritas } from "./pedidoDoCliente.ts";
@@ -244,6 +247,8 @@ async function lerEGravar(
   const incertos = new Map<string, { motivo: string; codigo: string }>();
   /** o que fica faltando confirmar em cada rascunho lançado pelo Agendado (vai para a reserva) */
   const aConfirmar = new Map<string, ItemAConfirmar[]>();
+  /** pedidos em que só o cliente sabe se é a Volta de hoje ou a Ida de amanhã (issue #314) */
+  const qualViagem = new Set<PedidoExtraido>();
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -261,6 +266,36 @@ async function lerEGravar(
         completados: conferido.completados.length,
         avisos: avisosDoCliente.length,
       });
+    }
+    // a Ida de hoje já saiu e a Volta ainda sai: o embarque dito é de Pirapemas/Cantanhede? Então é a
+    // Volta de hoje, não a Ida de amanhã (issue #314). Nome que também é bairro de São Luís: pergunta.
+    if (
+      (p.tipo ?? "passagem") !== "encomenda" &&
+      p.data === hoje &&
+      (p.direcao === "ida" || (!p.direcao && ctx.pontos.ida.includes(String(p.ponto ?? "").toLowerCase()))) &&
+      viagemDeHojeJaSaiu("ida", horaAgora) &&
+      !viagemDeHojeJaSaiu("volta", horaAgora) &&
+      !cidadeDaVolta(p.cidade_dita)
+    ) {
+      const onde = [p.endereco, p.bairro].filter(Boolean).join(", ");
+      const lugares = onde ? await lugaresNasCidades(onde) : [];
+      const decisao = proximaViagemPeloLugar({
+        lugares,
+        bairroDeSaoLuis: !!bairroDaTabela(p.bairro || p.endereco, ctx.bairrosTabela),
+        costumeVolta: !!costume?.volta?.route_point_code,
+      });
+      if (decisao === "volta") {
+        p.direcao = "volta";
+        p.ponto = null;
+        p.endereco = p.endereco || p.bairro || null;
+        p.bairro = null;
+        p.duvida = [p.duvida, `A Ida de hoje já tinha saído e ${lugares[0].nome} é de Pirapemas/Cantanhede: é a Volta de hoje.`]
+          .filter(Boolean)
+          .join(" ");
+      } else if (decisao === "qual_viagem") {
+        qualViagem.add(p);
+      }
+      if (decisao) evento("bot_proxima_viagem_pelo_lugar", { conversa: entrada.chatwootConversationId, decisao });
     }
     // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
     // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
@@ -357,6 +392,12 @@ async function lerEGravar(
       }
       r.notes = [r.notes, "Já tem reserva no mesmo sentido na véspera: confira se não é repetida."].filter(Boolean).join(" ").slice(0, 300);
       pendencia = { motivo: "o cliente já tem reserva no mesmo sentido na véspera (confira se não é repetida)", codigo: "vespera" };
+    }
+    if (qualViagem.has(p) && opcoes.confirmadoPelaEquipe) {
+      pendencia ??= {
+        motivo: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede (Volta de hoje ou Ida de amanhã?)",
+        codigo: "qual_viagem",
+      };
     }
     if (v.cidadeIncerta) {
       pendencia ??= { motivo: "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa", codigo: "cidade" };
@@ -610,6 +651,7 @@ export async function lancarPeloAgendado(entrada: Entrada) {
   await avisarAgendadoQueFalhou(
     entrada,
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
+    { pendentes, nome: nomeDoCliente },
   );
 }
 
@@ -618,6 +660,26 @@ export async function lancarPeloAgendado(entrada: Entrada) {
  * `settings.agendado_confirmacao` ({ ativo }), ligado por padrão a pedido do dono.
  * Melhor esforço: falhar aqui nunca desfaz a reserva.
  */
+/** Faz ao cliente a pergunta da dúvida pendente ainda não perguntada; devolve o código perguntado. */
+async function perguntarAoCliente(
+  entrada: Entrada,
+  duvidas: { pendentes: string[]; nome: string | null },
+  jaPerguntadas: string[],
+): Promise<string | null> {
+  const pergunta = perguntaAoCliente(duvidas.pendentes, jaPerguntadas, duvidas.nome);
+  if (!pergunta) return null;
+  try {
+    const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
+    if (cfg?.value?.ativo === false) return null;
+    await chatwootClient.postMessage(entrada.chatwootConversationId, pergunta.texto);
+    evento("bot_pergunta_ao_cliente", { conversa: entrada.chatwootConversationId, duvida: pergunta.codigo });
+    return pergunta.codigo;
+  } catch (err) {
+    evento("bot_aviso", { aviso: "pergunta_nao_enviada", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
+    return null;
+  }
+}
+
 async function confirmarAoCliente(entrada: Entrada, reservas: ReservaParaConfirmar[], ctx: { hoje: string; nome: string | null }) {
   try {
     const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
@@ -635,7 +697,11 @@ async function confirmarAoCliente(entrada: Entrada, reservas: ReservaParaConfirm
  * Abre UMA pendência por "Agendado ☑️" (a releitura não repete o aviso) e a resolve sozinha
  * quando a releitura lança tudo. Melhor esforço.
  */
-async function avisarAgendadoQueFalhou(entrada: Entrada, aviso: { assunto: string; detalhe: string } | null) {
+async function avisarAgendadoQueFalhou(
+  entrada: Entrada,
+  aviso: { assunto: string; detalhe: string } | null,
+  duvidas: { pendentes: string[]; nome: string | null } = { pendentes: [], nome: null },
+) {
   try {
     if (!aviso) {
       // a releitura lançou tudo (o cliente completou depois): a pendência daquele Agendado se resolve sozinha
@@ -646,12 +712,24 @@ async function avisarAgendadoQueFalhou(entrada: Entrada, aviso: { assunto: strin
         .eq("meta->>agendado_mensagem_id", String(entrada.mensagemId));
       return;
     }
-    const { count } = await supabaseAdmin
+    const { data: aberta } = await supabaseAdmin
       .from("support_tickets")
-      .select("id", { count: "exact", head: true })
+      .select("id, meta")
       .eq("status", "aberta")
-      .eq("meta->>agendado_mensagem_id", String(entrada.mensagemId));
-    if ((count ?? 0) > 0) return;
+      .eq("meta->>agendado_mensagem_id", String(entrada.mensagemId))
+      .limit(1)
+      .maybeSingle();
+    // dúvida que só o cliente resolve (qual viagem, cidade): o bot pergunta a ele, uma vez por dúvida;
+    // quando ele responde, a releitura do Agendado lança e esta pendência se resolve (issue #314)
+    const jaPerguntadas: string[] = Array.isArray(aberta?.meta?.perguntas) ? aberta.meta.perguntas : [];
+    const pergunta = await perguntarAoCliente(entrada, duvidas, jaPerguntadas);
+    const perguntas = pergunta ? [...jaPerguntadas, pergunta] : jaPerguntadas;
+    if (aberta) {
+      if (pergunta) {
+        await supabaseAdmin.from("support_tickets").update({ meta: { ...aberta.meta, perguntas } }).eq("id", aberta.id);
+      }
+      return;
+    }
     const { data: conv } = await supabaseAdmin
       .from("whatsapp_conversations")
       .select("phone, customer_id")
@@ -667,6 +745,7 @@ async function avisarAgendadoQueFalhou(entrada: Entrada, aviso: { assunto: strin
         conversation_id: entrada.conversationId,
         chatwoot_conversation_id: entrada.chatwootConversationId,
         agendado_mensagem_id: String(entrada.mensagemId),
+        perguntas,
       },
     });
     if (error) throw error;
@@ -681,7 +760,8 @@ async function avisarAgendadoQueFalhou(entrada: Entrada, aviso: { assunto: strin
  * Agendado não tinha conseguido lançar: tenta de novo (issue #286). Idempotente pela
  * mensagem do Agendado (a reserva nasce com cw-<mensagem>-agendado-<sentido>).
  */
-export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">, minutos = 30) {
+// 4 h: o bot pode ter perguntado ao cliente (issue #314) e a resposta não vem na hora
+export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">, minutos = 240) {
   try {
     const desde = new Date(Date.now() - minutos * 60 * 1000).toISOString();
     const { data: daEquipe } = await supabaseAdmin
