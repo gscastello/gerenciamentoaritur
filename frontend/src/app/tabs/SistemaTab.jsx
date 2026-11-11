@@ -525,9 +525,12 @@ function SistemaBairros() {
   const filtro = normalizar(busca);
   const lista = bairros.bairros
     .filter((b) => !filtro || normalizar(b.neighborhood).includes(filtro))
+    // sem preço primeiro (issue #330): é o que falta preencher
     .sort(
       (a, b) =>
-        Number(a.price) - Number(b.price) || a.neighborhood.localeCompare(b.neighborhood, "pt-BR"),
+        (a.price == null ? 0 : 1) - (b.price == null ? 0 : 1) ||
+        Number(a.price) - Number(b.price) ||
+        a.neighborhood.localeCompare(b.neighborhood, "pt-BR"),
     );
 
   return (
@@ -538,6 +541,12 @@ function SistemaBairros() {
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do
         bairro. Bairro não cadastrado → a reserva vai para confirmação manual.{" "}
+        {bairros.semPreco > 0 && (
+          <strong style={{ color: C.amber }}>
+            {bairros.semPreco} bairro(s) sem preço no topo da lista: o bot deixa o valor a confirmar
+            até você preencher.{" "}
+          </strong>
+        )}
         {bairros.bairros.length} bairros.
       </p>
 
@@ -599,12 +608,15 @@ function SistemaBairros() {
                 <td className="px-2 py-1.5 w-28">
                   <TextInput
                     type="number"
-                    defaultValue={String(b.price)}
+                    defaultValue={b.price == null ? "" : String(b.price)}
+                    placeholder="sem preço"
+                    aria-label={`preço de ${b.neighborhood}`}
                     value={precoEdit[b.id] ?? undefined}
                     onChange={(e) => setPrecoEdit({ ...precoEdit, [b.id]: e.target.value })}
                     onBlur={(e) => {
                       const v = e.target.value;
-                      if (v && Number(v) !== Number(b.price)) salvar(b.neighborhood, v);
+                      if (v && (b.price == null || Number(v) !== Number(b.price)))
+                        salvar(b.neighborhood, v);
                       setPrecoEdit((p) =>
                         Object.fromEntries(Object.entries(p).filter(([k]) => k !== b.id)),
                       );

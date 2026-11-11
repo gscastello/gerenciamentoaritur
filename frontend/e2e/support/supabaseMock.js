@@ -795,6 +795,8 @@ export async function mockSupabase(page, opts = {}) {
       rows = [
         { id: "np-1", neighborhood: "Cohama", price: 80 },
         { id: "np-2", neighborhood: "Anjo da Guarda", price: 90 },
+        // cadastrado sem preço (issue #330): o dono preenche depois
+        { id: "np-3", neighborhood: "Planalto Pingão", price: null },
       ];
     else if (table === "dropoff_areas")
       rows = [
