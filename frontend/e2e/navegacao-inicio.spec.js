@@ -4,6 +4,11 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // Issue #353 (dono, 12/11): o app abre na Agenda; Atendimento no lugar do Bloco de
 // notas na barra do celular; atalhos de Assistente e Pendências em todas as telas.
 
+// O service worker do PWA passa a controlar a página a partir do 2º carregamento e as
+// chamadas dele não passam pelo mock (page.route): depois do "puxar para atualizar" o
+// app falaria com o Supabase de mentira. No app real as chamadas vão ao Supabase de verdade.
+test.use({ serviceWorkers: "block" });
+
 test("o app abre na Agenda", async ({ page }) => {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
