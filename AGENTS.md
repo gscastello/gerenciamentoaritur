@@ -236,6 +236,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   webhook nunca duplica. O telefone do cliente é **sempre normalizado**
   (`fn_normalizar_telefone`: só dígitos, sem `+55`) e buscado também com/sem o
   nono dígito — senão o mesmo número vira dois clientes.
+- **Sem internet** (issue #355): a Agenda abre com a **cópia da última leitura** guardada no aparelho
+  (`src/lib/copiaOffline.js`, `offlineKey` no `useSupabaseQuery`), com o aviso "Sem internet" e a hora da cópia.
+  É só para **ler**: gravar continua indo ao banco. Só guarda com "Permanecer conectado"; sair da conta apaga.
+  Sem rede para renovar o token, o app segue com a sessão e o perfil guardados em vez de voltar ao login.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.

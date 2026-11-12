@@ -15,7 +15,9 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useNeighborhoodPricing() {
-  const query = useSupabaseQuery(() => neighborhoodPricingService.list(), []);
+  const query = useSupabaseQuery(() => neighborhoodPricingService.list(), [], {
+    offlineKey: "bairros",
+  });
   useRealtimeTable("neighborhood_pricing", () => query.refetch());
 
   const upsertAcao = useAsyncAction(neighborhoodPricingService.upsert);

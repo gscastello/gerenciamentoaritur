@@ -10,7 +10,9 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useDropoffAreas() {
-  const query = useSupabaseQuery(() => dropoffAreasService.list(), []);
+  const query = useSupabaseQuery(() => dropoffAreasService.list(), [], {
+    offlineKey: "desembarques",
+  });
   useRealtimeTable("dropoff_areas", () => query.refetch());
 
   const criarAcao = useAsyncAction(dropoffAreasService.upsert);
