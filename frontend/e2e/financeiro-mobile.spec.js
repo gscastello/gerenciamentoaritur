@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Regressão (2026-09-19): o mini-calendário de Lançamentos usava
@@ -13,15 +14,7 @@ test.use({ viewport: { width: 360, height: 780 } });
 async function abrirFinanceiro(page) {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
-    timeout: 10000,
-  });
-  let botao = page.getByRole("button", { name: /^Financeiro$/ });
-  if ((await botao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    botao = page.getByRole("button", { name: /^Financeiro$/ });
-  }
-  await botao.click();
+  await abrirTela(page, "financeiro");
 }
 
 test("calendário de Lançamentos continua com células quadradas e compactas depois de clicar num dia", async ({
@@ -68,20 +61,27 @@ test("Relatório: cards de totais mostram o valor completo no celular", async ({
   await mockSupabase(page, {
     role: "admin",
     financialEntries: [
-      { id: "e1", entry_date: `${ano}-06-10`, type: "receita", category: "passagem", amount: 31767 },
-      { id: "e2", entry_date: `${ano}-06-10`, type: "despesa", category: "combustivel", amount: 13135 },
+      {
+        id: "e1",
+        entry_date: `${ano}-06-10`,
+        type: "receita",
+        category: "passagem",
+        amount: 31767,
+      },
+      {
+        id: "e2",
+        entry_date: `${ano}-06-10`,
+        type: "despesa",
+        category: "combustivel",
+        amount: 13135,
+      },
     ],
   });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
     timeout: 10000,
   });
-  let botao = page.getByRole("button", { name: /^Financeiro$/ });
-  if ((await botao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    botao = page.getByRole("button", { name: /^Financeiro$/ });
-  }
-  await botao.click();
+  await abrirTela(page, "financeiro");
   await page.getByRole("button", { name: "Relatório" }).click();
 
   // getByText acha o texto mesmo truncado por CSS (overflow:hidden não
@@ -90,7 +90,10 @@ test("Relatório: cards de totais mostram o valor completo no celular", async ({
   const cartoes = page.locator(".truncate", { hasText: "R$" });
   await expect(cartoes).toHaveCount(3);
   for (const cartao of await cartoes.all()) {
-    const [scrollWidth, clientWidth] = await cartao.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    const [scrollWidth, clientWidth] = await cartao.evaluate((el) => [
+      el.scrollWidth,
+      el.clientWidth,
+    ]);
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   }
   await expect(page.getByText("R$ 31.767,00").first()).toBeVisible();
@@ -111,12 +114,7 @@ test("Gestão: as 4 sub-abas ficam todas à vista (sem precisar deslizar) no cel
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
     timeout: 10000,
   });
-  let botao = page.getByRole("button", { name: /^Gestão$/ });
-  if ((await botao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    botao = page.getByRole("button", { name: /^Gestão$/ });
-  }
-  await botao.click();
+  await abrirTela(page, "gestao");
 
   const aba = page.getByRole("button", { name: "Lançamentos do mês" });
   await expect(aba).toBeVisible();
@@ -134,9 +132,7 @@ test("Gestão: as 4 sub-abas ficam todas à vista (sem precisar deslizar) no cel
 // numa célula estreitíssima, dificultavam o toque (dono relatou "zoom"
 // só nos dias que já tinham lançamento — dia vazio nem renderiza essa
 // tabela). Vira lista de cards empilhados no celular.
-test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", async ({
-  page,
-}) => {
+test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", async ({ page }) => {
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
     new Date(),
   );
@@ -157,12 +153,7 @@ test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", 
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
     timeout: 10000,
   });
-  let botao = page.getByRole("button", { name: /^Financeiro$/ });
-  if ((await botao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    botao = page.getByRole("button", { name: /^Financeiro$/ });
-  }
-  await botao.click();
+  await abrirTela(page, "financeiro");
 
   // a tabela de desktop continua no DOM (hidden sm:block) — só não pode
   // estar visível no celular. Escopa a busca do texto na lista de cards
@@ -174,7 +165,9 @@ test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", 
   await listaCards.getByLabel("Editar lançamento").click();
   const valorInput = listaCards.locator("input[type=number]");
   await expect(valorInput).toBeVisible();
-  const fontSize = await valorInput.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+  const fontSize = await valorInput.evaluate((el) =>
+    Number.parseFloat(getComputedStyle(el).fontSize),
+  );
   expect(fontSize).toBeGreaterThanOrEqual(16);
 
   const overflow = await page.evaluate(

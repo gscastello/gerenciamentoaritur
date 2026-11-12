@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #200: remover / limpar lançamentos financeiros — inclusive os que
@@ -43,12 +44,7 @@ async function abrir(page, entradas = ENTRADAS) {
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible({
     timeout: 10000,
   });
-  let botao = page.getByRole("button", { name: /^Financeiro$/ });
-  if ((await botao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    botao = page.getByRole("button", { name: /^Financeiro$/ });
-  }
-  await botao.click();
+  await abrirTela(page, "financeiro");
   await expect(linha(page, "Receita da reserva A")).toBeVisible();
 }
 

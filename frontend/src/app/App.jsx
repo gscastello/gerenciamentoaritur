@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
-  Wallet,
   Wifi,
   X,
 } from "lucide-react";
@@ -40,6 +39,7 @@ import { useVehicles } from "../hooks/useVehicles.js";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
+import { SubAbas, grupoDaTela } from "./SubAbas.jsx";
 
 const BlocoDeNotasTab = React.lazy(() => import("./tabs/BlocoDeNotasTab.jsx"));
 const PendenciasTab = React.lazy(() => import("./tabs/PendenciasTab.jsx"));
@@ -766,6 +766,9 @@ const TAB_ROLES = {
   bloco: ["admin", "atendente", "motorista"],
   passageiros: ["admin", "atendente", "financeiro"],
   pendencias: ["admin", "atendente"],
+  // janelas do Atendimento (issue #360)
+  para_lancar: ["admin", "atendente"],
+  bot: ["admin", "atendente"],
   assistente: ["admin", "atendente", "financeiro"],
   financeiro: ["admin"],
   gestao: ["admin"],
@@ -783,12 +786,11 @@ const NAV_ITENS = [
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
   // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
   { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
-  { id: "financeiro", label: "Financeiro", icon: Wallet, grupo: "Financeiro" },
-  { id: "gestao", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
+  // Financeiro + Gestão + Operação numa tela só, com abas no topo (issue #360, SubAbas.jsx)
+  { id: "financeiro", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
   { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
-  { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
-  { id: "pendencias", label: "Pendências", icon: Inbox, grupo: "Atendimento" },
+  // Pendências fica dentro do Atendimento (aba no topo, issue #360)
   { id: "assistente", label: "Assistente", icon: Sparkles, grupo: "Atendimento" },
   // fora da barra do celular (fica em "Mais"); na lateral continua em Operação
   { id: "bloco", label: "Bloco de notas", icon: NotebookPen, grupo: "Operação" },
@@ -843,7 +845,7 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
 
 function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) {
   const badgeDe = (id) =>
-    id === "agenda" ? pendentesCount : id === "pendencias" ? pendenciasCount : 0;
+    id === "agenda" ? pendentesCount : id === "atendimento" ? pendenciasCount : 0;
   const [maisAberto, setMaisAberto] = useState(false);
   const LIMITE = 6;
   let visiveis = nav;
@@ -986,7 +988,15 @@ function AppInner() {
     () => NAV_ITENS.filter((n) => (TAB_ROLES[n.id] ?? []).includes(role)),
     [role],
   );
-  const tabPermitida = NAV.some((n) => n.id === tab);
+  // todas as telas que o papel pode abrir (as do menu e as abas dos grupos)
+  const TELAS = useMemo(
+    () => Object.keys(TAB_ROLES).filter((id) => TAB_ROLES[id].includes(role)),
+    [role],
+  );
+  const tabPermitida = TELAS.includes(tab);
+  // tela dentro de um grupo acende o item do grupo no menu (issue #360)
+  const grupoAtual = grupoDaTela(tab);
+  const navAtiva = grupoAtual?.nav ?? tab;
 
   // Papel não enxerga a aba atual (ex.: motorista cai no app com "atendimento"
   // selecionado) → manda para a primeira aba que ele pode ver.
@@ -1090,7 +1100,7 @@ function AppInner() {
                     NAV.some((n) => n.id === "assistente") ? () => mudarAba("assistente") : null
                   }
                   onPendencias={
-                    NAV.some((n) => n.id === "pendencias") && tab !== "pendencias"
+                    TELAS.includes("pendencias") && tab !== "pendencias"
                       ? () => mudarAba("pendencias")
                       : null
                   }
@@ -1101,7 +1111,7 @@ function AppInner() {
                 <GlobalSearchOverlay
                   onClose={() => setBuscaAberta(false)}
                   onNavigate={irParaBusca}
-                  navIds={NAV.map((n) => n.id)}
+                  navIds={TELAS}
                 />
               )}
               {agendarAberto && (
@@ -1191,7 +1201,7 @@ function AppInner() {
                         )}
                         {itens.map((n) => {
                           const Icon = n.icon;
-                          const active = tab === n.id;
+                          const active = navAtiva === n.id;
                           return (
                             <button
                               key={n.id}
@@ -1213,7 +1223,7 @@ function AppInner() {
                               <Icon size={16} />
                               {n.label}
                               {((n.id === "agenda" && pendentesCount > 0) ||
-                                (n.id === "pendencias" && pendenciasCount > 0)) && (
+                                (n.id === "atendimento" && pendenciasCount > 0)) && (
                                 <span
                                   className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
                                   style={{
@@ -1284,7 +1294,7 @@ function AppInner() {
 
               <MobileNav
                 nav={NAV}
-                tab={tab}
+                tab={navAtiva}
                 onSelect={mudarAba}
                 pendentesCount={pendentesCount}
                 pendenciasCount={pendenciasCount}
@@ -1332,14 +1342,22 @@ function AppInner() {
                     </button>
                   </div>
                 )}
+                {grupoAtual && (
+                  <SubAbas
+                    telas={grupoAtual.telas.filter((t) => TELAS.includes(t.id))}
+                    ativa={tab}
+                    onChange={mudarAba}
+                    badges={{ pendencias: pendenciasCount }}
+                  />
+                )}
                 {loading || !ready || !tabPermitida ? (
                   <TabSkeleton tab={tab} />
                 ) : (
                   <Suspense fallback={<TabSkeleton tab={tab} />}>
                     <div className="anim-fadeIn">
-                      {tab === "atendimento" && (
+                      {["atendimento", "para_lancar", "bot"].includes(tab) && (
                         <AtendimentoTab
-                          pend={pend}
+                          vista={{ para_lancar: "lancar", bot: "bot" }[tab] ?? "conversas"}
                           modoAtendimento={modoAtendimento}
                           onNavigate={irParaBusca}
                           trips={trips}

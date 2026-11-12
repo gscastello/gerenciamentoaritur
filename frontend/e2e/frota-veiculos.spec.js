@@ -1,21 +1,33 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Frota (pedido do dono, 2026-09-20): adicionar/remover veículo, editar
 // manutenção, tipo de manutenção como catálogo e comparativo da frota.
 
 const DOIS_VEICULOS = [
-  { id: "veh-1", name: "Ônibus 1", plate: "ABC-1234", type: "onibus", capacity: 31, is_default: true, active: true },
-  { id: "veh-2", name: "Ônibus 2", plate: "DEF-5678", type: "onibus", capacity: 28, is_default: false, active: true },
+  {
+    id: "veh-1",
+    name: "Ônibus 1",
+    plate: "ABC-1234",
+    type: "onibus",
+    capacity: 31,
+    is_default: true,
+    active: true,
+  },
+  {
+    id: "veh-2",
+    name: "Ônibus 2",
+    plate: "DEF-5678",
+    type: "onibus",
+    capacity: 28,
+    is_default: false,
+    active: true,
+  },
 ];
 
 async function abrirOperacao(page) {
-  await expect(page.getByRole("button", { name: /^Dashboard$/ }).first()).toBeVisible();
-  const operacao = page.getByRole("button", { name: /^Operação$/ });
-  if ((await operacao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-  }
-  await page.getByRole("button", { name: /^Operação$/ }).first().click();
+  await abrirTela(page, "operacao");
 }
 
 test("Frota: cria um veículo novo", async ({ page }) => {
