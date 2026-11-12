@@ -26,7 +26,7 @@ test("Nova reserva em Outros no aeroporto usa o preço próprio (R$ 70)", async 
   });
   await novaReservaEmOutros(page, "Aeroporto de São Luís");
   await expect(page.getByText(/auto: R\$\s*70,00/)).toBeVisible();
-  await page.getByRole("button", { name: /^Agendar$/ }).click();
+  await page.locator("div.anim-pop").getByRole("button", { name: /^Agendar$/ }).click();
   await expect.poll(() => corpo?.p_unit_price).toBe(70);
   expect(corpo.p_route_point_code).toBe("outro");
   expect(corpo.p_pickup_detail).toBe("Aeroporto de São Luís");
@@ -42,7 +42,7 @@ test("'Retorno do aeroporto' em Outros não pega o preço do aeroporto", async (
     },
   });
   await novaReservaEmOutros(page, "Retorno do aeroporto");
-  await page.getByRole("button", { name: /^Agendar$/ }).click();
+  await page.locator("div.anim-pop").getByRole("button", { name: /^Agendar$/ }).click();
   await expect.poll(() => corpo?.p_unit_price).toBe(60);
 });
 
