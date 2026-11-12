@@ -10,10 +10,7 @@ import {
   reservasParaOPrompt,
 } from "./revisaoPura.ts";
 
-const pontos = {
-  ida: ["busca", "rodoviaria", "retorno", "outro"],
-  volta: ["pirapemas", "cantanhede"],
-};
+const pontos = { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] };
 const base: ReservaRevisada = {
   id: "r1",
   data: "2026-11-14",
@@ -30,76 +27,27 @@ const base: ReservaRevisada = {
   criada_pelo_bot: true,
   criada_em: "2026-11-12T11:00:00Z",
 };
-const conversa =
-  `[12/11 08:40] CLIENTE: Quero passagem dia 14, vou estar na parada das vans
+const conversa = `[12/11 08:40] CLIENTE: Quero passagem dia 14, vou estar na parada das vans
 [12/11 08:41] CLIENTE: na verdade são 2 pessoas
 [12/11 08:42] EQUIPE: Agendado ☑️`;
 const ctx = { reservas: [base], conversa, hoje: "2026-11-12", pontos };
 
 Deno.test("revisor: evidência tem de estar na conversa", () => {
   assertEquals(evidenciaNaConversa("na verdade são 2 pessoas", conversa), true);
-  assertEquals(
-    evidenciaNaConversa("Na Verdade, SÃO 2 pessoas!", conversa),
-    true,
-  );
+  assertEquals(evidenciaNaConversa("Na Verdade, SÃO 2 pessoas!", conversa), true);
   assertEquals(evidenciaNaConversa("são 3 pessoas", conversa), false);
   assertEquals(evidenciaNaConversa("oi", conversa), false);
 });
 
 Deno.test("revisor: corrige sozinho só com prova e certeza alta; junta os campos da mesma reserva", () => {
   const achados = achadosValidos([
-    {
-      reserva_id: "r1",
-      campo: "quantidade",
-      valor_atual: "1",
-      valor_correto: "2",
-      evidencia: "na verdade são 2 pessoas",
-      certeza: "alta",
-      quem_errou: "bot",
-    },
-    {
-      reserva_id: "r1",
-      campo: "ponto",
-      valor_atual: "rodoviaria",
-      valor_correto: "retorno",
-      evidencia: "vou estar na parada das vans",
-      certeza: "alta",
-    },
-    {
-      reserva_id: "r1",
-      campo: "desembarque",
-      valor_correto: "Pirapemas",
-      evidencia: "vou para Pirapemas",
-      certeza: "alta",
-    }, // sem prova
-    {
-      reserva_id: "r1",
-      campo: "tipo",
-      valor_correto: "encomenda",
-      evidencia: "Quero passagem dia 14",
-      certeza: "alta",
-    }, // tipo: pendência
-    {
-      reserva_id: "r1",
-      campo: "data",
-      valor_correto: "2026-11-14",
-      evidencia: "Quero passagem dia 14",
-      certeza: "alta",
-    }, // igual: descarta
-    {
-      reserva_id: "r1",
-      campo: "bairro",
-      valor_correto: "Turu",
-      evidencia: "vou estar na parada das vans",
-      certeza: "media",
-    }, // média: pendência
-    {
-      reserva_id: "rX",
-      campo: "data",
-      valor_correto: "2026-11-15",
-      evidencia: "dia 14",
-      certeza: "alta",
-    }, // outra reserva
+    { reserva_id: "r1", campo: "quantidade", valor_atual: "1", valor_correto: "2", evidencia: "na verdade são 2 pessoas", certeza: "alta", quem_errou: "bot" },
+    { reserva_id: "r1", campo: "ponto", valor_atual: "rodoviaria", valor_correto: "retorno", evidencia: "vou estar na parada das vans", certeza: "alta" },
+    { reserva_id: "r1", campo: "desembarque", valor_correto: "Pirapemas", evidencia: "vou para Pirapemas", certeza: "alta" }, // sem prova
+    { reserva_id: "r1", campo: "tipo", valor_correto: "encomenda", evidencia: "Quero passagem dia 14", certeza: "alta" }, // tipo: pendência
+    { reserva_id: "r1", campo: "data", valor_correto: "2026-11-14", evidencia: "Quero passagem dia 14", certeza: "alta" }, // igual: descarta
+    { reserva_id: "r1", campo: "bairro", valor_correto: "Turu", evidencia: "vou estar na parada das vans", certeza: "media" }, // média: pendência
+    { reserva_id: "rX", campo: "data", valor_correto: "2026-11-15", evidencia: "dia 14", certeza: "alta" }, // outra reserva
     { campo: "preco", reserva_id: "r1", evidencia: "x", valor_correto: "60" }, // campo inválido some
   ]);
   assertEquals(achados.length, 7);
@@ -109,37 +57,20 @@ Deno.test("revisor: corrige sozinho só com prova e certeza alta; junta os campo
   assertEquals(r.correcoes[0].ponto, "retorno");
   assertEquals(r.correcoes[0].motivos.length, 2);
   assertEquals(r.pendencias.map((a) => a.campo).sort(), ["bairro", "tipo"]);
-  assertEquals(r.descartados.map((a) => a.campo).sort(), [
-    "data",
-    "data",
-    "desembarque",
-  ]);
+  assertEquals(r.descartados.map((a) => a.campo).sort(), ["data", "data", "desembarque"]);
 });
 
 Deno.test("revisor: data no passado ou ponto de outro sentido não são corrigidos sozinhos", () => {
-  const conv =
-    `${conversa}\n[12/11 08:50] CLIENTE: é a volta, saio de Cantanhede`;
+  const conv = `${conversa}\n[12/11 08:50] CLIENTE: é a volta, saio de Cantanhede`;
   const passado = decidirRevisao(
-    achadosValidos([{
-      reserva_id: "r1",
-      campo: "data",
-      valor_correto: "2026-11-10",
-      evidencia: "Quero passagem dia 14",
-      certeza: "alta",
-    }]),
+    achadosValidos([{ reserva_id: "r1", campo: "data", valor_correto: "2026-11-10", evidencia: "Quero passagem dia 14", certeza: "alta" }]),
     { ...ctx, conversa: conv },
   );
   assertEquals(passado.correcoes.length, 0);
   assertEquals(passado.pendencias.length, 1);
   // virou Volta mas o ponto (rodoviária) não existe na Volta: tudo vira pendência
   const sentido = decidirRevisao(
-    achadosValidos([{
-      reserva_id: "r1",
-      campo: "sentido",
-      valor_correto: "volta",
-      evidencia: "é a volta, saio de Cantanhede",
-      certeza: "alta",
-    }]),
+    achadosValidos([{ reserva_id: "r1", campo: "sentido", valor_correto: "volta", evidencia: "é a volta, saio de Cantanhede", certeza: "alta" }]),
     { ...ctx, conversa: conv },
   );
   assertEquals(sentido.correcoes.length, 0);
@@ -148,20 +79,8 @@ Deno.test("revisor: data no passado ou ponto de outro sentido não são corrigid
   const falas = [{ em: "2026-11-12T11:50:00Z", texto: "é a volta, saio de Cantanhede" }];
   const junto = decidirRevisao(
     achadosValidos([
-      {
-        reserva_id: "r1",
-        campo: "sentido",
-        valor_correto: "volta",
-        evidencia: "é a volta, saio de Cantanhede",
-        certeza: "alta",
-      },
-      {
-        reserva_id: "r1",
-        campo: "ponto",
-        valor_correto: "cantanhede",
-        evidencia: "saio de Cantanhede",
-        certeza: "alta",
-      },
+      { reserva_id: "r1", campo: "sentido", valor_correto: "volta", evidencia: "é a volta, saio de Cantanhede", certeza: "alta" },
+      { reserva_id: "r1", campo: "ponto", valor_correto: "cantanhede", evidencia: "saio de Cantanhede", certeza: "alta" },
     ]),
     { ...ctx, conversa: conv, falas },
   );
@@ -172,50 +91,20 @@ Deno.test("revisor: data no passado ou ponto de outro sentido não são corrigid
 
 Deno.test("revisor: duplicada do bot cancela a mais nova; com reserva da equipe vira pendência", () => {
   const dup = { ...base, id: "r2", criada_em: "2026-11-12T11:00:18Z" };
-  assertEquals(duplicadasDaRevisao([base, dup]), {
-    cancelar: ["r2"],
-    pendentes: [],
-  });
+  assertEquals(duplicadasDaRevisao([base, dup]), { cancelar: ["r2"], pendentes: [] });
   const daEquipe = { ...dup, criada_pelo_bot: false };
-  assertEquals(duplicadasDaRevisao([base, daEquipe]), {
-    cancelar: [],
-    pendentes: [["r1", "r2"]],
-  });
-  assertEquals(
-    duplicadasDaRevisao([base, { ...dup, trip_id: "t-volta-15" }]).cancelar,
-    [],
-  );
-  assertEquals(
-    duplicadasDaRevisao([base, { ...dup, status: "cancelada" }]).cancelar,
-    [],
-  );
+  assertEquals(duplicadasDaRevisao([base, daEquipe]), { cancelar: [], pendentes: [["r1", "r2"]] });
+  assertEquals(duplicadasDaRevisao([base, { ...dup, trip_id: "t-volta-15" }]).cancelar, []);
+  assertEquals(duplicadasDaRevisao([base, { ...dup, status: "cancelada" }]).cancelar, []);
 });
 
 Deno.test("revisor: preço só pela tabela", () => {
-  assertEquals(
-    precoRevisado({ atual: 0, tabela: 80, alteradoPelaEquipe: true }),
-    80,
-  );
-  assertEquals(
-    precoRevisado({ atual: null, tabela: 80, alteradoPelaEquipe: false }),
-    80,
-  );
-  assertEquals(
-    precoRevisado({ atual: 60, tabela: 80, alteradoPelaEquipe: false }),
-    80,
-  );
-  assertEquals(
-    precoRevisado({ atual: 60, tabela: 80, alteradoPelaEquipe: true }),
-    null,
-  );
-  assertEquals(
-    precoRevisado({ atual: 80, tabela: 80, alteradoPelaEquipe: false }),
-    null,
-  );
-  assertEquals(
-    precoRevisado({ atual: 0, tabela: null, alteradoPelaEquipe: false }),
-    null,
-  );
+  assertEquals(precoRevisado({ atual: 0, tabela: 80, alteradoPelaEquipe: true }), 80);
+  assertEquals(precoRevisado({ atual: null, tabela: 80, alteradoPelaEquipe: false }), 80);
+  assertEquals(precoRevisado({ atual: 60, tabela: 80, alteradoPelaEquipe: false }), 80);
+  assertEquals(precoRevisado({ atual: 60, tabela: 80, alteradoPelaEquipe: true }), null);
+  assertEquals(precoRevisado({ atual: 80, tabela: 80, alteradoPelaEquipe: false }), null);
+  assertEquals(precoRevisado({ atual: 0, tabela: null, alteradoPelaEquipe: false }), null);
 });
 
 Deno.test("revisor: texto das reservas e instruções", () => {
@@ -223,10 +112,7 @@ Deno.test("revisor: texto das reservas e instruções", () => {
   assertStringIncludes(t, "reserva_id=r1");
   assertStringIncludes(t, "Ida 14/11 (2026-11-14)");
   assertStringIncludes(t, "ponto rodoviaria (Rodoviária)");
-  const i = instrucoesDoRevisor({
-    pontos: "- ida: rodoviaria = Rodoviária",
-    hoje: "2026-11-12",
-  });
+  const i = instrucoesDoRevisor({ pontos: "- ida: rodoviaria = Rodoviária", hoje: "2026-11-12" });
   assertStringIncludes(i, "copie LITERALMENTE");
   assert(i.includes("Não aponte preço"));
 });
@@ -234,87 +120,29 @@ Deno.test("revisor: texto das reservas e instruções", () => {
 Deno.test("revisor: dia/sentido só mudam sozinhos com prova DEPOIS da reserva; viagem que já saiu não é mexida", async () => {
   const { horaDaEvidencia } = await import("./revisaoPura.ts");
   // caso real: "pra São Luís aqui de Pirapemas" era do pedido ANTERIOR (Volta do dia 11); a reserva (Ida 12) está certa
-  const ida = {
-    ...base,
-    id: "r9",
-    data: "2026-11-12",
-    ponto: "outro",
-    embarque: "entrada da vila Itamar, próximo a PRF",
-    criada_em: "2026-11-11T18:10:00Z",
-  };
+  const ida = { ...base, id: "r9", data: "2026-11-12", ponto: "outro", embarque: "entrada da vila Itamar, próximo a PRF", criada_em: "2026-11-11T18:10:00Z" };
   const falas = [
-    {
-      em: "2026-11-10T23:49:00Z",
-      texto: "queria reservar uma passagem pra São luiz aqui de pirapemas",
-    },
+    { em: "2026-11-10T23:49:00Z", texto: "queria reservar uma passagem pra São luiz aqui de pirapemas" },
     { em: "2026-11-11T16:46:00Z", texto: "queria reservar 3 vagas pra amanhã" },
-    {
-      em: "2026-11-11T16:47:00Z",
-      texto: "vou esperar na entrada da vila Itamar",
-    },
+    { em: "2026-11-11T16:47:00Z", texto: "vou esperar na entrada da vila Itamar" },
   ];
   const conv = falas.map((f) => f.texto).join("\n");
-  assertEquals(
-    horaDaEvidencia("pra São luiz aqui de pirapemas", falas),
-    "2026-11-10T23:49:00Z",
-  );
+  assertEquals(horaDaEvidencia("pra São luiz aqui de pirapemas", falas), "2026-11-10T23:49:00Z");
   const achados = achadosValidos([
-    {
-      reserva_id: "r9",
-      campo: "sentido",
-      valor_correto: "volta",
-      evidencia: "pra São luiz aqui de pirapemas",
-      certeza: "alta",
-    },
-    {
-      reserva_id: "r9",
-      campo: "ponto",
-      valor_correto: "pirapemas",
-      evidencia: "pra São luiz aqui de pirapemas",
-      certeza: "alta",
-    },
+    { reserva_id: "r9", campo: "sentido", valor_correto: "volta", evidencia: "pra São luiz aqui de pirapemas", certeza: "alta" },
+    { reserva_id: "r9", campo: "ponto", valor_correto: "pirapemas", evidencia: "pra São luiz aqui de pirapemas", certeza: "alta" },
   ]);
-  const antes = decidirRevisao(achados, {
-    reservas: [ida],
-    conversa: conv,
-    hoje: "2026-11-12",
-    pontos,
-    falas,
-    horaAgora: "06:00",
-  });
+  const antes = decidirRevisao(achados, { reservas: [ida], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "06:00" });
   assertEquals(antes.correcoes.length, 0); // prova anterior à reserva: não muda sozinho
   assert(antes.pendencias.length >= 1);
   // a mesma Ida às 11h: a viagem já saiu, nada é mexido
-  const saiu = decidirRevisao(achados, {
-    reservas: [ida],
-    conversa: conv,
-    hoje: "2026-11-12",
-    pontos,
-    falas,
-    horaAgora: "11:00",
-  });
+  const saiu = decidirRevisao(achados, { reservas: [ida], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "11:00" });
   assertEquals(saiu.correcoes.length + saiu.pendencias.length, 0);
   // cliente corrigiu DEPOIS da reserva: corrige sozinho
-  const depois = [...falas, {
-    em: "2026-11-11T19:00:00Z",
-    texto: "na verdade é dia 14",
-  }];
+  const depois = [...falas, { em: "2026-11-11T19:00:00Z", texto: "na verdade é dia 14" }];
   const r = decidirRevisao(
-    achadosValidos([{
-      reserva_id: "r9",
-      campo: "data",
-      valor_correto: "2026-11-14",
-      evidencia: "na verdade é dia 14",
-      certeza: "alta",
-    }]),
-    {
-      reservas: [ida],
-      conversa: depois.map((f) => f.texto).join("\n"),
-      hoje: "2026-11-12",
-      pontos,
-      falas: depois,
-      horaAgora: "06:00",
-    },
+    achadosValidos([{ reserva_id: "r9", campo: "data", valor_correto: "2026-11-14", evidencia: "na verdade é dia 14", certeza: "alta" }]),
+    { reservas: [ida], conversa: depois.map((f) => f.texto).join("\n"), hoje: "2026-11-12", pontos, falas: depois, horaAgora: "06:00" },
   );
   assertEquals(r.correcoes[0]?.data, "2026-11-14");
 });

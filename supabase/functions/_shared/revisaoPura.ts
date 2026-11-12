@@ -17,18 +17,11 @@ import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 export type FalaDaRevisao = { em: string; texto: string };
 
 /** Quando foi escrita a fala mais recente que contém a evidência (null se não achou). */
-export function horaDaEvidencia(
-  evidencia: string,
-  falas: FalaDaRevisao[],
-): string | null {
+export function horaDaEvidencia(evidencia: string, falas: FalaDaRevisao[]): string | null {
   const e = normalizarTexto(evidencia);
   if (e.replace(/\s/g, "").length < 3) return null;
   let achada: string | null = null;
-  for (const f of falas) {
-    if (
-      ` ${normalizarTexto(f.texto)} `.includes(e) && (!achada || f.em > achada)
-    ) achada = f.em;
-  }
+  for (const f of falas) if (` ${normalizarTexto(f.texto)} `.includes(e) && (!achada || f.em > achada)) achada = f.em;
   return achada;
 }
 
@@ -63,15 +56,7 @@ export const CAMPOS_DA_REVISAO = [
 export type CampoDaRevisao = (typeof CAMPOS_DA_REVISAO)[number];
 
 /** Campos que o revisor corrige sozinho (com evidência e certeza alta). */
-const CORRIGE_SOZINHO: CampoDaRevisao[] = [
-  "data",
-  "sentido",
-  "ponto",
-  "bairro",
-  "embarque",
-  "desembarque",
-  "quantidade",
-];
+const CORRIGE_SOZINHO: CampoDaRevisao[] = ["data", "sentido", "ponto", "bairro", "embarque", "desembarque", "quantidade"];
 
 export type Achado = {
   reserva_id: string;
@@ -98,21 +83,13 @@ export type Correcao = {
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const txt = (v: unknown, max = 200): string | null => {
-  const s = typeof v === "string"
-    ? v.replace(/\s+/g, " ").trim().slice(0, max)
-    : typeof v === "number"
-    ? String(v)
-    : "";
+  const s = typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : typeof v === "number" ? String(v) : "";
   return s ? s : null;
 };
-const mesmo = (a: unknown, b: unknown) =>
-  normalizarTexto(String(a ?? "")) === normalizarTexto(String(b ?? ""));
+const mesmo = (a: unknown, b: unknown) => normalizarTexto(String(a ?? "")) === normalizarTexto(String(b ?? ""));
 
 /** A frase citada está mesmo na conversa (sem acento/caixa/pontuação; pelo menos 3 letras)? */
-export function evidenciaNaConversa(
-  evidencia: string | null | undefined,
-  conversa: string,
-): boolean {
+export function evidenciaNaConversa(evidencia: string | null | undefined, conversa: string): boolean {
   const e = normalizarTexto(String(evidencia ?? ""));
   if (e.replace(/\s/g, "").length < 3) return false;
   return ` ${normalizarTexto(conversa)} `.includes(e);
@@ -128,12 +105,8 @@ export function achadosValidos(bruto: unknown): Achado[] {
     const reserva = txt(a.reserva_id, 60);
     const evidencia = txt(a.evidencia, 400);
     if (!reserva || !evidencia) continue;
-    const certeza = a.certeza === "alta" || a.certeza === "media"
-      ? a.certeza
-      : "baixa";
-    const quem = ["bot", "cliente", "equipe"].includes(String(a.quem_errou))
-      ? (a.quem_errou as Achado["quem_errou"])
-      : "desconhecido";
+    const certeza = a.certeza === "alta" || a.certeza === "media" ? a.certeza : "baixa";
+    const quem = ["bot", "cliente", "equipe"].includes(String(a.quem_errou)) ? (a.quem_errou as Achado["quem_errou"]) : "desconhecido";
     out.push({
       reserva_id: reserva,
       campo,
@@ -176,30 +149,16 @@ export function decidirRevisao(
       continue;
     }
     // viagem que já saiu (ou já passou) não é mexida
-    if (
-      r.data < ctx.hoje ||
-      (r.data === ctx.hoje && viagemDeHojeJaSaiu(r.direcao, ctx.horaAgora))
-    ) {
+    if (r.data < ctx.hoje || (r.data === ctx.hoje && viagemDeHojeJaSaiu(r.direcao, ctx.horaAgora))) {
       descartados.push(a);
       continue;
     }
     const valor = a.valor_correto;
     // "corrigir" para o mesmo valor não é achado
-    const atual = {
-      data: r.data,
-      sentido: r.direcao,
-      ponto: r.ponto,
-      bairro: r.bairro,
-      embarque: r.embarque,
-      desembarque: r.desembarque,
-      quantidade: String(r.quantidade),
-    }[
+    const atual = { data: r.data, sentido: r.direcao, ponto: r.ponto, bairro: r.bairro, embarque: r.embarque, desembarque: r.desembarque, quantidade: String(r.quantidade) }[
       a.campo as "data"
     ];
-    if (
-      a.campo !== "tipo" && a.campo !== "nome" && valor != null &&
-      mesmo(valor, atual)
-    ) {
+    if (a.campo !== "tipo" && a.campo !== "nome" && valor != null && mesmo(valor, atual)) {
       descartados.push(a);
       continue;
     }
@@ -249,11 +208,7 @@ export function decidirRevisao(
       pendencias.push(a);
       continue;
     }
-    c.motivos.push(
-      `${a.campo}: ${a.valor_atual ?? "—"} → ${
-        valor ?? "—"
-      } ("${a.evidencia}")`,
-    );
+    c.motivos.push(`${a.campo}: ${a.valor_atual ?? "—"} → ${valor ?? "—"} ("${a.evidencia}")`);
     correcoes.set(r.id, c);
   }
   // sentido mudou: o ponto tem de existir no novo sentido; senão a correção inteira vira pendência
@@ -263,11 +218,7 @@ export function decidirRevisao(
     const sentido = c.sentido ?? r.direcao;
     const ponto = c.ponto ?? r.ponto;
     if (ponto && !ctx.pontos[sentido].includes(ponto)) {
-      for (
-        const a of achados.filter((x) =>
-          x.reserva_id === c.reserva_id && CORRIGE_SOZINHO.includes(x.campo)
-        )
-      ) {
+      for (const a of achados.filter((x) => x.reserva_id === c.reserva_id && CORRIGE_SOZINHO.includes(x.campo))) {
         if (!pendencias.includes(a)) pendencias.push(a);
       }
       continue;
@@ -282,27 +233,18 @@ export function decidirRevisao(
  * criadas pelo bot, cancela as mais novas e fica a mais antiga; se a equipe criou alguma,
  * é pendência (a equipe pode ter lançado de propósito).
  */
-export function duplicadasDaRevisao(
-  reservas: ReservaRevisada[],
-): { cancelar: string[]; pendentes: string[][] } {
-  const ativas = reservas.filter((r) =>
-    r.status === "confirmada" || r.status === "pendente"
-  );
+export function duplicadasDaRevisao(reservas: ReservaRevisada[]): { cancelar: string[]; pendentes: string[][] } {
+  const ativas = reservas.filter((r) => r.status === "confirmada" || r.status === "pendente");
   const porViagem = new Map<string, ReservaRevisada[]>();
-  for (const r of ativas) {
-    porViagem.set(r.trip_id, [...(porViagem.get(r.trip_id) ?? []), r]);
-  }
+  for (const r of ativas) porViagem.set(r.trip_id, [...(porViagem.get(r.trip_id) ?? []), r]);
   const cancelar: string[] = [];
   const pendentes: string[][] = [];
   for (const grupo of porViagem.values()) {
     if (grupo.length < 2) continue;
-    const ordem = [...grupo].sort((a, b) =>
-      a.criada_em.localeCompare(b.criada_em)
-    );
+    const ordem = [...grupo].sort((a, b) => a.criada_em.localeCompare(b.criada_em));
     const [, ...repetidas] = ordem;
-    if (repetidas.every((r) => r.criada_pelo_bot)) {
-      cancelar.push(...repetidas.map((r) => r.id));
-    } else pendentes.push(ordem.map((r) => r.id));
+    if (repetidas.every((r) => r.criada_pelo_bot)) cancelar.push(...repetidas.map((r) => r.id));
+    else pendentes.push(ordem.map((r) => r.id));
   }
   return { cancelar, pendentes };
 }
@@ -311,13 +253,7 @@ export function duplicadasDaRevisao(
  * Preço depois da revisão: a tabela manda quando a reserva está sem valor, ou quando o
  * valor foi posto pelo bot e não bate com a tabela. Valor que a equipe mudou à mão fica.
  */
-export function precoRevisado(
-  p: {
-    atual: number | null;
-    tabela: number | null;
-    alteradoPelaEquipe: boolean;
-  },
-): number | null {
+export function precoRevisado(p: { atual: number | null; tabela: number | null; alteradoPelaEquipe: boolean }): number | null {
   if (p.tabela == null || !(p.tabela > 0)) return null;
   const atual = Number(p.atual ?? 0);
   if (!(atual > 0)) return p.tabela;
@@ -326,24 +262,15 @@ export function precoRevisado(
 }
 
 /** Reservas em texto para o modelo comparar com a conversa. */
-export function reservasParaOPrompt(
-  reservas: ReservaRevisada[],
-  nomesDosPontos: Record<string, string>,
-): string {
+export function reservasParaOPrompt(reservas: ReservaRevisada[], nomesDosPontos: Record<string, string>): string {
   if (!reservas.length) return "(nenhuma)";
   return reservas
     .map((r) =>
       [
         `- reserva_id=${r.id}`,
-        `${r.direcao === "ida" ? "Ida" : "Volta"} ${
-          r.data.split("-").reverse().slice(0, 2).join("/")
-        } (${r.data})`,
+        `${r.direcao === "ida" ? "Ida" : "Volta"} ${r.data.split("-").reverse().slice(0, 2).join("/")} (${r.data})`,
         `tipo ${r.tipo}`,
-        `ponto ${r.ponto ?? "?"}${
-          r.ponto && nomesDosPontos[r.ponto]
-            ? ` (${nomesDosPontos[r.ponto]})`
-            : ""
-        }`,
+        `ponto ${r.ponto ?? "?"}${r.ponto && nomesDosPontos[r.ponto] ? ` (${nomesDosPontos[r.ponto]})` : ""}`,
         r.bairro ? `bairro ${r.bairro}` : null,
         `embarque "${r.embarque ?? ""}"`,
         `desembarque "${r.desembarque ?? ""}"`,
@@ -356,9 +283,7 @@ export function reservasParaOPrompt(
 }
 
 /** Instruções do revisor: crítico, mas só aponta o que a conversa prova. */
-export function instrucoesDoRevisor(
-  ctx: { pontos: string; hoje: string; extras?: string },
-): string {
+export function instrucoesDoRevisor(ctx: { pontos: string; hoje: string; extras?: string }): string {
   return `Você é o REVISOR de reservas da AriTur (vans entre São Luís e Pirapemas/Cantanhede, MA). Hoje é ${ctx.hoje}.
 Você recebe as reservas FUTURAS de um passageiro e a conversa do WhatsApp dele com a equipe. Compare CADA campo de cada reserva com o que foi pedido e combinado na conversa e aponte TODO erro, por menor que seja — do bot, do cliente (ex.: escreveu o dia errado e corrigiu depois) ou da equipe.
 
@@ -383,8 +308,7 @@ ${ctx.pontos}${ctx.extras ? `\n\n${ctx.extras}` : ""}`;
 /** Ferramenta do revisor (formato da API). */
 export const FERRAMENTA_DA_REVISAO = {
   name: "registrar_revisao",
-  description:
-    "Registra o resultado da revisão das reservas do passageiro: os erros achados (com a prova da conversa).",
+  description: "Registra o resultado da revisão das reservas do passageiro: os erros achados (com a prova da conversa).",
   input_schema: {
     type: "object",
     properties: {
@@ -398,38 +322,20 @@ export const FERRAMENTA_DA_REVISAO = {
             valor_atual: { type: "string" },
             valor_correto: {
               type: "string",
-              description:
-                "data AAAA-MM-DD; sentido ida|volta; ponto = código; quantidade = número; demais = texto",
+              description: "data AAAA-MM-DD; sentido ida|volta; ponto = código; quantidade = número; demais = texto",
             },
-            evidencia: {
-              type: "string",
-              description: "trecho LITERAL da conversa que prova o valor certo",
-            },
-            quem_errou: {
-              type: "string",
-              enum: ["bot", "cliente", "equipe", "desconhecido"],
-            },
+            evidencia: { type: "string", description: "trecho LITERAL da conversa que prova o valor certo" },
+            quem_errou: { type: "string", enum: ["bot", "cliente", "equipe", "desconhecido"] },
             certeza: { type: "string", enum: ["alta", "media", "baixa"] },
             explicacao: { type: "string" },
           },
-          required: [
-            "reserva_id",
-            "campo",
-            "valor_correto",
-            "evidencia",
-            "certeza",
-          ],
+          required: ["reserva_id", "campo", "valor_correto", "evidencia", "certeza"],
         },
       },
-      observacoes: {
-        type: "string",
-        description:
-          "pedido sem reserva, desistência ou dúvida que a equipe deve ver",
-      },
+      observacoes: { type: "string", description: "pedido sem reserva, desistência ou dúvida que a equipe deve ver" },
       equipe_precisa_agir: {
         type: "boolean",
-        description:
-          "true SÓ se a observação pede uma ação da equipe (pedido sem reserva, desistência, dúvida que você não resolve). Tudo certo = false.",
+        description: "true SÓ se a observação pede uma ação da equipe (pedido sem reserva, desistência, dúvida que você não resolve). Tudo certo = false.",
       },
     },
     required: ["achados"],
