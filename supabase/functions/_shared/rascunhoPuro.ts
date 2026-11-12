@@ -927,3 +927,23 @@ export function cidadeDaVoltaPelasPistas(p: {
     aviso: `Cidade ${NOME_DA_CIDADE[cidade]} pelas pistas (${pistas.map((x) => x.motivo).join("; ")}); o cliente não disse a cidade nesta conversa.`,
   };
 }
+
+/** Tempo que a primeira leitura do Agendado pode levar (com a releitura no modelo capaz). */
+export const AGENDADO_EM_ANDAMENTO_MS = 3 * 60 * 1000;
+
+/**
+ * Uma mensagem nova do cliente depois do "Agendado ☑️" deve reler a conversa? (issue #337)
+ * Não enquanto a primeira leitura ainda pode estar rodando (resposta rápida, "Bgd" 9 s
+ * depois, lançava uma 2ª reserva em paralelo). Depois, só se sobrou rascunho pendente ou se
+ * a primeira leitura terminou sem lançar e abriu pendência.
+ */
+export function deveRelerAgendado(p: {
+  idadeDaMarcaMs: number;
+  lancadas: number;
+  pendentes: number;
+  pendenciaAberta: boolean;
+}): boolean {
+  if (!(p.idadeDaMarcaMs >= AGENDADO_EM_ANDAMENTO_MS)) return false;
+  if (p.pendentes > 0) return true;
+  return p.lancadas === 0 && p.pendenciaAberta;
+}

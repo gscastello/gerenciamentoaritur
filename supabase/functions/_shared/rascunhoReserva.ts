@@ -56,6 +56,7 @@ import {
   viagemDeHojeJaSaiu,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
+  deveRelerAgendado,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
@@ -878,7 +879,7 @@ export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">
     const marca = (daEquipe ?? []).find((o: Bloco) => o.chatwoot_message_id && ehMarcaDeAgendado(o.content));
     if (!marca) return;
     const mid = Number(marca.chatwoot_message_id);
-    const [{ count: lancadas }, { count: pendentes }] = await Promise.all([
+    const [{ count: lancadas }, { count: pendentes }, { count: pendencias }] = await Promise.all([
       supabaseAdmin
         .from("reservations")
         .select("id", { count: "exact", head: true })
@@ -888,9 +889,18 @@ export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">
         .select("id", { count: "exact", head: true })
         .eq("conversation_id", entrada.conversationId)
         .eq("status", "pronta"),
+      supabaseAdmin
+        .from("support_tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "aberta")
+        .eq("meta->>agendado_mensagem_id", String(mid)),
     ]);
-    // já lançou e não sobrou nada pendente: nada a fazer
-    if ((lancadas ?? 0) > 0 && (pendentes ?? 0) === 0) return;
+    // resposta rápida do cliente ("Bgd" 9 s depois) não relê enquanto a 1ª leitura ainda roda: lançava em
+    // dobro e mandava duas confirmações (issue #337). Depois, só relê o que ficou pendente.
+    const idadeDaMarcaMs = Date.now() - new Date(marca.created_at).getTime();
+    if (!deveRelerAgendado({ idadeDaMarcaMs, lancadas: lancadas ?? 0, pendentes: pendentes ?? 0, pendenciaAberta: (pendencias ?? 0) > 0 })) {
+      return;
+    }
     evento("bot_agendado_relido", { conversa: entrada.chatwootConversationId, lancadas_antes: lancadas ?? 0, pendentes: pendentes ?? 0 });
     await lancarPeloAgendado({ ...entrada, mensagemId: mid });
   } catch (err) {
