@@ -208,7 +208,8 @@ Deno.test("lição nova e recente não fica de fora do prompt só por ter pouca 
   const nova: LicaoGuardada = { id: "2", kind: "situacao", title: "Nova", content: "Começou a aparecer esta semana.", evidence_count: 2, last_seen_at: "2026-10-29T00:00:00Z" };
   assertEquals(pontuacaoDaLicao(nova, agora) > pontuacaoDaLicao(velha, agora), true);
   assertEquals(pontuacaoDaLicao({ ...velha, last_seen_at: undefined }, agora), 4);
-  const bloco = blocoDeLicoes([velha, nova], ["situacao"], { max: 1 });
+  // data fixa: o teste não pode depender do dia em que roda
+  const bloco = blocoDeLicoes([velha, nova], ["situacao"], { max: 1, agora });
   assertStringIncludes(bloco, "Nova");
   assertEquals(bloco.includes("Antiga"), false);
 });

@@ -202,7 +202,7 @@ const TITULO_DO_BLOCO: Record<TipoLicao, string> = {
 export function blocoDeLicoes(
   licoes: LicaoGuardada[],
   tipos: TipoLicao[],
-  { max = 12, maxChars = 2200 } = {},
+  { max = 12, maxChars = 2200, agora = new Date() }: { max?: number; maxChars?: number; agora?: Date } = {},
 ): string {
   const linhas: string[] = [];
   let restante = maxChars;
@@ -210,7 +210,7 @@ export function blocoDeLicoes(
     const cota = Math.floor(restante / (tipos.length - i));
     const doTipo = licoes
       .filter((l) => l.kind === tipo)
-      .sort((a, b) => pontuacaoDaLicao(b) - pontuacaoDaLicao(a))
+      .sort((a, b) => pontuacaoDaLicao(b, agora) - pontuacaoDaLicao(a, agora))
       .slice(0, max);
     const corpo: string[] = [];
     let usado = 0;
