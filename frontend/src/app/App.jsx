@@ -923,15 +923,13 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
 }
 
 const CHAVE_ABA = "aritur:aba-ao-atualizar";
+// só lê aqui (o React pode chamar duas vezes); a chave é apagada depois de montar
 function abaInicial() {
   try {
-    const salva = sessionStorage.getItem(CHAVE_ABA);
-    sessionStorage.removeItem(CHAVE_ABA);
-    if (salva) return salva;
+    return sessionStorage.getItem(CHAVE_ABA) || "agenda";
   } catch {
-    /* sem armazenamento: abre na Agenda */
+    return "agenda"; // sem armazenamento: abre na Agenda
   }
-  return "agenda";
 }
 
 function AppInner() {
@@ -942,6 +940,13 @@ function AppInner() {
   // o app abre na Agenda (dono, 12/11 — issue #353); depois de "puxar para
   // atualizar", volta na aba em que estava
   const [tab, setTab] = useState(abaInicial);
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(CHAVE_ABA);
+    } catch {
+      /* sem armazenamento */
+    }
+  }, []);
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
   // preenchimento vindo do endereço de costume do passageiro (#228)

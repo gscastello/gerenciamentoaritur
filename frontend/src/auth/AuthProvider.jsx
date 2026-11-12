@@ -25,12 +25,22 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true); // resolvendo a sessão inicial
   const mounted = useRef(true);
 
+  // Falha passageira (rede oscilando ao recarregar — "puxar para atualizar",
+  // issue #353 — ou duas leituras ao mesmo tempo) não pode virar "Conta sem
+  // permissão": tenta de novo e nunca apaga um perfil bom por causa de um erro.
+  // Quem zera o perfil é o logout (onAuthStateChange sem sessão).
   const loadProfile = useCallback(async () => {
-    try {
-      const p = await usersService.getCurrentProfile();
-      if (mounted.current) setProfile(p);
-    } catch {
-      if (mounted.current) setProfile(null);
+    for (let tentativa = 0; tentativa < 4; tentativa++) {
+      try {
+        const p = await usersService.getCurrentProfile();
+        if (p) {
+          if (mounted.current) setProfile(p);
+          return;
+        }
+      } catch {
+        /* tenta de novo */
+      }
+      if (tentativa < 3) await new Promise((r) => setTimeout(r, 400 * 2 ** tentativa));
     }
   }, []);
 

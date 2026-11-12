@@ -62,7 +62,10 @@ test("puxar para baixo no topo atualiza e volta na mesma aba", async ({ page }, 
     alvo.dispatchEvent(evento("touchend", 320));
   });
   await recarregou;
-  await expect(page.getByRole("heading", { name: /Lista/ }).first()).toBeVisible();
+  // depois de recarregar o app sobe do zero (login, dados, aba): no CI pode demorar
+  await expect(page.getByRole("heading", { name: /Lista/ }).first()).toBeVisible({
+    timeout: 20000,
+  });
 });
 
 test("puxão curto não atualiza", async ({ page }, info) => {
