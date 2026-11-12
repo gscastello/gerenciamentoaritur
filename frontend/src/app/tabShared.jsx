@@ -758,7 +758,9 @@ export function BusSilhueta({ className = "", style, color = C.brand, opacity = 
 
 export function Header({ title, subtitle, right }) {
   return (
-    <div className="relative px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
+    // z-30: o painel do sino (dentro deste cabeçalho animado) fica por cima do conteúdo
+    // da tela, como o cartão do topo da Agenda (issue #353)
+    <div className="relative z-30 px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
       <BusSilhueta
         className="absolute pointer-events-none hidden md:block bus-drift"
         style={{ width: 132, right: 12, top: 6, opacity: 0.9 }}

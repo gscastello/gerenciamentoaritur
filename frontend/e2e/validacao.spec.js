@@ -23,7 +23,7 @@ test("Agendar passagem: telefone inválido barra o envio", async ({ page }) => {
   const bairro = page.getByLabel("Bairro");
   if (await bairro.count()) await bairro.fill("Cohama");
 
-  await page.getByRole("button", { name: /^Agendar$/ }).click();
+  await page.locator("div.anim-pop").getByRole("button", { name: /^Agendar$/ }).click();
 
   await expect(page.getByText(/Telefone precisa ter DDD/)).toBeVisible();
   expect(criouRpc).toBe(false);

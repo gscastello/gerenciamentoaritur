@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Puxar para atualizar é do app (issue #353): o do navegador não recarrega por cima */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
