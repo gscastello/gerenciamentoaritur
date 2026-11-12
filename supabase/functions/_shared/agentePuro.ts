@@ -6,7 +6,7 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
-import { nomeParecidoNoTexto } from "./grafia.ts";
+import { nomeParecidoNoTexto, semLogradouros } from "./grafia.ts";
 import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
@@ -443,7 +443,8 @@ export function somarUso(
 }
 
 const citaLugar = (texto: string | null | undefined, lugar: string) => {
-  const t = normalizar(texto ?? "");
+  // "Rua Santa Rita de Cássia" não cita a cidade Santa Rita (issue #341)
+  const t = normalizar(semLogradouros(texto));
   const l = normalizar(lugar);
   if (!t || !l) return false;
   // "Miranda do Norte" cita Miranda; e "Matões" cita o trecho cadastrado como "Matões do Norte"

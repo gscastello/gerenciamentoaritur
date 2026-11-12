@@ -18,6 +18,7 @@
 //      lança WhatsappServiceError e a ação não acontece.
 
 import { getBotContext } from "./botContext.ts";
+import { semLogradouros } from "./grafia.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import { acharOuCriar, type Resultado } from "./conversaPura.ts";
 import { variantesTelefone } from "./telefone.ts";
@@ -297,7 +298,8 @@ export const whatsappService = {
       ? (data.value as string[])
       : CIDADES_INTERMEDIARIAS_FALLBACK;
     for (const texto of textos) {
-      const t = semAcento(texto);
+      // "Rua Santa Rita de Cássia" é rua, não a cidade (issue #341)
+      const t = semAcento(semLogradouros(texto));
       if (!t) continue;
       const achou = lista.find((c) => t.includes(semAcento(c)));
       if (achou) return achou;

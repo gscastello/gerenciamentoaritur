@@ -289,7 +289,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
   `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
-  valor na tabela continua indo para a equipe; cidade fora da rota também.
+  valor na tabela continua indo para a equipe; cidade fora da rota também. **Rua com nome de cidade é rua** (issue #341,
+  `semLogradouros` em `grafia.ts`): "Rua Santa Rita de Cássia", "Av. Colombo" não são as cidades do caminho.
 - **Bairro sem preço** (issue #330, `database/96`): a tabela de bairros de São Luís foi completada pelo OpenStreetMap
   e pelas reservas, com o preço vazio até o dono preencher. Preço vazio **nunca vira R$ 0**: o bot devolve
   `BAIRRO_SEM_PRECO` (não diz valor; no Agendado fica "valor a confirmar") e o app mostra o campo vazio no topo de
