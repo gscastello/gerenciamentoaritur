@@ -6,7 +6,7 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useVehicles() {
-  const query = useSupabaseQuery(() => vehiclesService.list(), []);
+  const query = useSupabaseQuery(() => vehiclesService.list(), [], { offlineKey: "veiculos" });
   useRealtimeTable("vehicles", () => query.refetch());
 
   const setDefault = useAsyncAction(vehiclesService.setDefault);
