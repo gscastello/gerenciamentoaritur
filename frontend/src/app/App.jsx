@@ -22,7 +22,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useDropoffAreas } from "../hooks/useDropoffAreas.js";
 import { useEnsureTrips } from "../hooks/useEnsureTrips.js";
@@ -37,6 +37,7 @@ import { useSettings } from "../hooks/useSettings.js";
 
 import { useVehicles } from "../hooks/useVehicles.js";
 
+import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 
@@ -424,7 +425,16 @@ function FabItem({ icon: Icon, label, onClick, accent = C.panel }) {
   );
 }
 
-function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar }) {
+function QuickActionsFab({
+  onBuscar,
+  onAgendar,
+  onHoje,
+  mostrarHoje,
+  podeAgendar,
+  onAssistente,
+  onPendencias,
+  pendencias = 0,
+}) {
   const [aberto, setAberto] = useState(false);
   const fechar = () => setAberto(false);
   return (
@@ -441,6 +451,27 @@ function QuickActionsFab({ onBuscar, onAgendar, onHoje, mostrarHoje, podeAgendar
       <div className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6">
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
+            {/* atalhos em todas as telas (dono, 12/11 — issue #353) */}
+            {onAssistente && (
+              <FabItem
+                icon={Sparkles}
+                label="Assistente"
+                onClick={() => {
+                  onAssistente();
+                  fechar();
+                }}
+              />
+            )}
+            {onPendencias && (
+              <FabItem
+                icon={Inbox}
+                label={pendencias > 0 ? `Pendências (${pendencias})` : "Pendências"}
+                onClick={() => {
+                  onPendencias();
+                  fechar();
+                }}
+              />
+            )}
             {mostrarHoje && (
               <FabItem
                 icon={Calendar}
@@ -750,15 +781,17 @@ const NAV_ITENS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
-  { id: "bloco", label: "Bloco de notas", icon: NotebookPen, grupo: "Operação" },
+  // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
+  { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   { id: "financeiro", label: "Financeiro", icon: Wallet, grupo: "Financeiro" },
   { id: "gestao", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
   { id: "passageiros", label: "Passageiros", icon: Users, grupo: "Clientes" },
   { id: "operacao", label: "Operação", icon: Bus, grupo: "Frota" },
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
-  { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   { id: "pendencias", label: "Pendências", icon: Inbox, grupo: "Atendimento" },
   { id: "assistente", label: "Assistente", icon: Sparkles, grupo: "Atendimento" },
+  // fora da barra do celular (fica em "Mais"); na lateral continua em Operação
+  { id: "bloco", label: "Bloco de notas", icon: NotebookPen, grupo: "Operação" },
 ];
 const NAV_GRUPOS = [
   "Principal",
@@ -889,12 +922,26 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
   );
 }
 
+const CHAVE_ABA = "aritur:aba-ao-atualizar";
+function abaInicial() {
+  try {
+    const salva = sessionStorage.getItem(CHAVE_ABA);
+    sessionStorage.removeItem(CHAVE_ABA);
+    if (salva) return salva;
+  } catch {
+    /* sem armazenamento: abre na Agenda */
+  }
+  return "agenda";
+}
+
 function AppInner() {
   // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
   // carregadas no index.html — valem também para a tela de login.
   const { profile, signOut } = useAuth();
   const role = profile?.role ?? null;
-  const [tab, setTab] = useState("dashboard");
+  // o app abre na Agenda (dono, 12/11 — issue #353); depois de "puxar para
+  // atualizar", volta na aba em que estava
+  const [tab, setTab] = useState(abaInicial);
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
   // preenchimento vindo do endereço de costume do passageiro (#228)
@@ -974,6 +1021,14 @@ function AppInner() {
     setTab(id);
     setDeepLink(null);
   };
+  const atualizarApp = useCallback(() => {
+    try {
+      sessionStorage.setItem(CHAVE_ABA, tab);
+    } catch {
+      /* sem armazenamento: volta na Agenda */
+    }
+    window.location.reload();
+  }, [tab]);
   const irParaHoje = () => setDeepLink({ kind: "data", data: todayStr(), at: Date.now() });
   useEffect(() => {
     if (!agendou) return undefined;
@@ -1016,6 +1071,8 @@ function AppInner() {
             >
               <GlobalStyles />
               <VideoBackdrop variant="app" />
+              {/* arrastar para baixo no topo atualiza, sem fechar e abrir o app (issue #353) */}
+              <PuxarParaAtualizar onAtualizar={atualizarApp} cor={C.amber} fundo={C.panel} />
               {/* no Assistente o "+" cobriria o campo do pedido (issue #288) */}
               {tab !== "assistente" && (
                 <QuickActionsFab
@@ -1024,6 +1081,15 @@ function AppInner() {
                   onHoje={irParaHoje}
                   mostrarHoje={tabComData}
                   podeAgendar={podeAgendar}
+                  onAssistente={
+                    NAV.some((n) => n.id === "assistente") ? () => mudarAba("assistente") : null
+                  }
+                  onPendencias={
+                    NAV.some((n) => n.id === "pendencias") && tab !== "pendencias"
+                      ? () => mudarAba("pendencias")
+                      : null
+                  }
+                  pendencias={pendenciasCount}
                 />
               )}
               {buscaAberta && (
