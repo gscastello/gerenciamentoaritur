@@ -321,3 +321,17 @@ describe("telefone sem DDD na anotação (#236)", () => {
     expect(a).toMatchObject({ ok: true, telefone: "" });
   });
 });
+
+describe("nome antes do telefone (#347)", () => {
+  it("o texto antes do telefone que é o nome cadastrado vira nome", async () => {
+    const { localEhONome } = await import("../anotacaoRapida.js");
+    expect(localEhONome("Nadir", "Nadir")).toBe(true);
+    expect(localEhONome("nádir", "Nadir Souza")).toBe(true);
+    expect(localEhONome("Nadir Souza", "Nadir Souza")).toBe(true);
+    expect(localEhONome("Cohatrac", "Nadir Souza")).toBe(false);
+    expect(localEhONome("Souza", "Nadir Souza")).toBe(false);
+    expect(localEhONome("Nadir", "Passageiro (Nadir)")).toBe(false);
+    expect(localEhONome("", "Nadir")).toBe(false);
+    expect(localEhONome("Nadir", null)).toBe(false);
+  });
+});
