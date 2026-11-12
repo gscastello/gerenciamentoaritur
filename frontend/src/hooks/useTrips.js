@@ -15,7 +15,10 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
 
 export function useTrips(tripDate) {
-  const query = useSupabaseQuery(() => tripsService.getDayOverview(tripDate), [tripDate], { enabled: !!tripDate });
+  const query = useSupabaseQuery(() => tripsService.getDayOverview(tripDate), [tripDate], {
+    enabled: !!tripDate,
+    offlineKey: `viagens:${tripDate}`,
+  });
 
   useRealtimeTable(["trips", "reservation_passengers"], () => query.refetch());
 
