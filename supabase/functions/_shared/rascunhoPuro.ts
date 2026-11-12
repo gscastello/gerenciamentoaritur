@@ -947,3 +947,12 @@ export function deveRelerAgendado(p: {
   if (p.pendentes > 0) return true;
   return p.lancadas === 0 && p.pendenciaAberta;
 }
+
+/**
+ * No fim da leitura do Agendado: o cliente escreveu enquanto ela rodava e ficou algo
+ * pendente (ou nada foi lido)? Então lê de novo, uma vez (issue #337). É o que cobre a
+ * resposta rápida que deveRelerAgendado deixa de lado para não rodar duas leituras juntas.
+ */
+export function deveLerDeNovoNoFim(p: { pendentes: number; lidos: number; novasDoCliente: number }): boolean {
+  return p.novasDoCliente > 0 && (p.pendentes > 0 || p.lidos === 0);
+}

@@ -827,3 +827,13 @@ Deno.test("#337: resposta rápida do cliente não relê o Agendado enquanto a 1�
   assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 0, pendentes: 0, pendenciaAberta: false }), false);
   assertEquals(deveRelerAgendado({ idadeDaMarcaMs: Number.NaN, lancadas: 0, pendentes: 1, pendenciaAberta: true }), false);
 });
+
+Deno.test("#337: o que o cliente manda durante a leitura do Agendado não se perde", async () => {
+  const { deveLerDeNovoNoFim } = await import("./rascunhoPuro.ts");
+  // ficou pendente (ex.: faltava o endereço) e ele mandou mensagem nesses segundos: lê de novo
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 1, lidos: 1, novasDoCliente: 1 }), true);
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 0, lidos: 0, novasDoCliente: 2 }), true);
+  // lançou tudo ("Obrigado" no meio): nada a fazer; sem mensagem nova também não
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 0, lidos: 1, novasDoCliente: 1 }), false);
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 1, lidos: 1, novasDoCliente: 0 }), false);
+});
