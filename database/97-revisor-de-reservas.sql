@@ -14,6 +14,8 @@
 --     da rotina é gerada aqui e fica no Vault; na tabela só o hash.
 -- =====================================================================
 
+create index if not exists idx_bot_observations_conversa on public.bot_observations (conversation_id, created_at);
+
 create table if not exists public.revisoes_reservas (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references public.customers(id),
@@ -45,13 +47,14 @@ returns text language sql stable security definer set search_path = public as $$
     where r.customer_id = p_customer_id and r.deleted_at is null and r.status in ('confirmada', 'pendente')
       and t.trip_date >= (now() at time zone 'America/Fortaleza')::date
   ),
+  convs as (
+    -- índice GIN em telefone_variantes: acha a conversa sem varrer todas
+    select w.id from whatsapp_conversations w, customers c
+    where c.id = p_customer_id and w.deleted_at is null and w.telefone_variantes && fn_variantes_telefone(c.phone)
+  ),
   msg as (
-    select max(o.created_at) ultima
-    from bot_observations o
-    join whatsapp_conversations w on w.id = o.conversation_id
-    join customers c on c.id = p_customer_id
-    where w.deleted_at is null and o.author in ('cliente', 'equipe')
-      and fn_normalizar_telefone(w.phone) = any(fn_variantes_telefone(c.phone))
+    select max(o.created_at) ultima from bot_observations o
+    where o.conversation_id in (select id from convs) and o.author in ('cliente', 'equipe')
   )
   select md5(coalesce((select s from res), '') || '#' || coalesce((select ultima::text from msg), ''))
 $$;
