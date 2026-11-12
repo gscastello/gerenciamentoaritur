@@ -653,3 +653,9 @@ Deno.test("#330: bairro cadastrado sem preço nunca vira R$ 0", async () => {
     if (!r.ok) assertEquals(r.erro.codigo, "BAIRRO_SEM_PRECO");
   }
 });
+
+Deno.test("#341: rua com nome de cidade não pega o valor do trecho da cidade", () => {
+  const trechos = [{ origem: "Santa Rita", destino: "Cantanhede", price: 30 }, { origem: "São Luís", destino: "Cantanhede", price: 60 }];
+  assertEquals(trechoDoPedido(["Rua Santa Rita de Cássia, nº 28 - Vila Isabel"], "Cantanhede", trechos), null);
+  assertEquals(trechoDoPedido(["Santa Rita, perto do posto"], "Cantanhede", trechos)?.price, 30);
+});

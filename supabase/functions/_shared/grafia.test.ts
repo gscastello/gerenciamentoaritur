@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert";
-import { distancia, distanciaDeGrafia, nomeParecidoNoTexto, palavraParecida, temDataNoTexto } from "./grafia.ts";
+import { distancia, distanciaDeGrafia, nomeParecidoNoTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { bairroParecido } from "./agentePuro.ts";
 import { cidadeDaVolta, pareceTerPedido } from "./rascunhoPuro.ts";
 
@@ -62,4 +62,13 @@ Deno.test("cidade da volta com erro de escrita (issue #276)", () => {
   assertEquals(cidadeDaVolta("saindo de cantanedi"), "cantanhede");
   assertEquals(cidadeDaVolta("Rua Lister Caldas"), null);
   assertEquals(cidadeDaVolta("pirapemas ou cantanhede"), null);
+});
+
+Deno.test("#341: rua com nome de cidade não é a cidade", () => {
+  assertEquals(semLogradouros("Rua Santa Rita de Cássia, N° 28 - Vila Isabel").includes("santa rita"), false);
+  assertEquals(semLogradouros("R. Miranda 10").includes("miranda"), false);
+  assertEquals(semLogradouros("Av Colombo, perto do posto").includes("colombo"), false);
+  assertEquals(semLogradouros("Santa Rita, perto do posto").includes("santa rita"), true);
+  assertEquals(semLogradouros("Rua Grande, em Bacabeira").includes("bacabeira"), true);
+  assertEquals(semLogradouros("Vila Isabel Cafeteira").includes("vila isabel cafeteira"), true);
 });

@@ -7,7 +7,7 @@
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
 import { type MensagemDaConversa, somarDias } from "./agentePuro.ts";
-import { normalizarTexto, palavraParecida, temDataNoTexto } from "./grafia.ts";
+import { normalizarTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
 
 /** Até quantos dias à frente um pedido vira rascunho. */
 export const HORIZONTE_DIAS = 60;
@@ -408,7 +408,7 @@ ${quando}
 - O cliente escreve com erros e abreviações ("amnh", "hj", "sesta", "Pirapema", "Catanhede", "rodovaria", "listre caldas"): entenda pelo sentido mais provável no contexto e registre com a grafia CERTA (data no formato do calendário, nome do ponto da lista, cidade e bairro escritos certo). Se ficar em dúvida, diga em duvida.
 - Use o que o CLIENTE escreveu; o que a equipe perguntou ou combinou com ele ajuda a entender (ex.: "é pra amanhã?" "sim").
 - A resposta do cliente vale para o que a equipe PERGUNTOU: depois de "Te buscamos aonde?", "Onde te pegamos?", "De onde você sai?", o que ele responde (rua, alojamento, referência, "100 metros da pista") é EMBARQUE, mesmo que pareça destino. Desembarque só quando a pergunta foi onde ele desce ou ele disse "desço", "me deixa em".
-- Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque VÁLIDOS. Volta com embarque nelas: ponto "cantanhede" e a cidade em endereco. Ida com embarque nelas: ponto "outro" e a cidade em endereco. Desembarque nelas: a cidade em desembarque.
+- Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque VÁLIDOS. Volta com embarque nelas: ponto "cantanhede" e a cidade em endereco. Ida com embarque nelas: ponto "outro" e a cidade em endereco. Desembarque nelas: a cidade em desembarque. Rua/Avenida/Travessa com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a RUA, não a cidade: num bairro de São Luís é busca em casa.
 - Sugestão da equipe ("Na usina, certo?") só vale se o cliente confirmou. Se ele disse "não", ignore a sugestão e use o que ele disse depois.
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - O DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
@@ -867,7 +867,8 @@ export const EMBARQUES_INTERMEDIARIOS_DA_VOLTA: Record<string, { ponto: (typeof 
 export function cidadeDoCaminhoNoTexto(
   texto: string | null | undefined,
 ): { chave: string; ponto: (typeof CIDADES_DA_VOLTA)[number]; nome: string } | null {
-  const n = normalizarTexto(String(texto ?? ""));
+  // "Rua Santa Rita de Cássia" é rua, não a cidade (issue #341)
+  const n = normalizarTexto(semLogradouros(texto));
   if (!n) return null;
   const palavras = n.split(" ").filter(Boolean);
   for (const [chave, c] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {

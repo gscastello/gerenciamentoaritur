@@ -747,7 +747,11 @@ Deno.test("#326: toda cidade do caminho é embarque válido da Volta (ponto Cant
     assertStringIncludes(r?.aviso ?? "", "valor do trecho");
   }
   assertStringIncludes(cidadeDaVoltaPelasPistas({ ...vazio, textoDoEmbarque: "Campestre" })?.aviso ?? "", "mesmo valor");
-  assertEquals(cidadeDoCaminhoNoTexto("Rua Santa Rita de Cássia"), { chave: "santa rita", ponto: "cantanhede", nome: "Santa Rita" });
+  // rua com nome de cidade é rua (issue #341)
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Santa Rita de Cássia, nº 28 - Vila Isabel"), null);
+  assertEquals(cidadeDoCaminhoNoTexto("Av. Colombo 120"), null);
+  assertEquals(cidadeDoCaminhoNoTexto("Travessa Miranda, perto da escola"), null);
+  assertEquals(cidadeDoCaminhoNoTexto("Rua Grande, em Santa Rita"), { chave: "santa rita", ponto: "cantanhede", nome: "Santa Rita" });
   assertEquals(cidadeDoCaminhoNoTexto("Rua Grande"), null);
 });
 

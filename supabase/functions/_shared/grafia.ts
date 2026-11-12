@@ -151,3 +151,17 @@ export function temDataNoTexto(texto: string | null | undefined): boolean {
   }
   return false;
 }
+
+/**
+ * Tira os nomes de logradouro do texto antes de procurar uma cidade (issue #341):
+ * "Rua Santa Rita de Cássia", "Av. Colombo", "Travessa Miranda" são ruas, não as cidades do
+ * caminho. Vai do tipo do logradouro até a próxima vírgula, hífen, número ou parêntese.
+ * Devolve o texto em minúsculas e sem acento (o resto como estava).
+ */
+export function semLogradouros(texto: string | null | undefined): string {
+  const t = String(texto ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  return t.replace(
+    /(^|[^a-z0-9])(rua|r\.|av\.?|avenida|travessa|trav\.?|tv\.?|beco|praca|alameda|estrada|rodovia|ladeira|largo)\s+[^,;\-–/()\n\d]*/g,
+    "$1 ",
+  );
+}
