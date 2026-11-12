@@ -56,6 +56,8 @@ import {
   viagemDeHojeJaSaiu,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
+  deveRelerAgendado,
+  deveLerDeNovoNoFim,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
@@ -602,8 +604,10 @@ function chaveDoAgendado(mensagemId: number, direcao: string, telefoneDoRascunho
   return fone && !variantesTelefone(telefoneDaConversa).includes(fone) ? `${base}-${fone}` : base;
 }
 
-export async function lancarPeloAgendado(entrada: Entrada) {
+export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false) {
   const conversa = entrada.chatwootConversationId;
+  // o cliente pode escrever enquanto esta leitura roda (issue #337): no fim, isso é conferido
+  const inicioDaLeitura = new Date().toISOString();
   const lancadas: string[] = [];
   /** criadas AGORA (não as repetidas pela idempotência): vão na confirmação ao cliente (issue #310) */
   const paraConfirmar: ReservaParaConfirmar[] = [];
@@ -756,6 +760,20 @@ export async function lancarPeloAgendado(entrada: Entrada) {
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
     { pendentes, nome: nomeDoCliente },
   );
+  // o cliente escreveu DURANTE esta leitura e ficou algo pendente: lê de novo uma vez, agora sem
+  // concorrência — o que ele mandou nesses segundos não se perde (issue #337)
+  if (!segundaRodada && (pendentes.length > 0 || lidos === 0)) {
+    const { count } = await supabaseAdmin
+      .from("bot_observations")
+      .select("id", { count: "exact", head: true })
+      .eq("chatwoot_conversation_id", conversa)
+      .eq("author", "cliente")
+      .gt("created_at", inicioDaLeitura);
+    if (deveLerDeNovoNoFim({ pendentes: pendentes.length, lidos, novasDoCliente: count ?? 0 })) {
+      evento("bot_agendado_segunda_rodada", { conversa, pendentes });
+      await lancarPeloAgendado(entrada, true);
+    }
+  }
 }
 
 /**
@@ -878,7 +896,7 @@ export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">
     const marca = (daEquipe ?? []).find((o: Bloco) => o.chatwoot_message_id && ehMarcaDeAgendado(o.content));
     if (!marca) return;
     const mid = Number(marca.chatwoot_message_id);
-    const [{ count: lancadas }, { count: pendentes }] = await Promise.all([
+    const [{ count: lancadas }, { count: pendentes }, { count: pendencias }] = await Promise.all([
       supabaseAdmin
         .from("reservations")
         .select("id", { count: "exact", head: true })
@@ -888,9 +906,18 @@ export async function relerAgendadoPendente(entrada: Omit<Entrada, "mensagemId">
         .select("id", { count: "exact", head: true })
         .eq("conversation_id", entrada.conversationId)
         .eq("status", "pronta"),
+      supabaseAdmin
+        .from("support_tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "aberta")
+        .eq("meta->>agendado_mensagem_id", String(mid)),
     ]);
-    // já lançou e não sobrou nada pendente: nada a fazer
-    if ((lancadas ?? 0) > 0 && (pendentes ?? 0) === 0) return;
+    // resposta rápida do cliente ("Bgd" 9 s depois) não relê enquanto a 1ª leitura ainda roda: lançava em
+    // dobro e mandava duas confirmações (issue #337). Depois, só relê o que ficou pendente.
+    const idadeDaMarcaMs = Date.now() - new Date(marca.created_at).getTime();
+    if (!deveRelerAgendado({ idadeDaMarcaMs, lancadas: lancadas ?? 0, pendentes: pendentes ?? 0, pendenciaAberta: (pendencias ?? 0) > 0 })) {
+      return;
+    }
     evento("bot_agendado_relido", { conversa: entrada.chatwootConversationId, lancadas_antes: lancadas ?? 0, pendentes: pendentes ?? 0 });
     await lancarPeloAgendado({ ...entrada, mensagemId: mid });
   } catch (err) {

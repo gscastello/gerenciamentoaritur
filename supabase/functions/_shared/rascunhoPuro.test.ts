@@ -812,3 +812,28 @@ Deno.test("#335: dia pedido sem pedido lido faz o Agendado reler", () => {
   assertEquals(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: [], diasSemPedido: ["2026-11-14"] }), true);
   assertEquals(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: [], diasSemPedido: [] }), false);
 });
+
+Deno.test("#337: resposta rápida do cliente não relê o Agendado enquanto a 1ª leitura roda", async () => {
+  const { deveRelerAgendado } = await import("./rascunhoPuro.ts");
+  // "Bgd" 9 s depois do Agendado: a primeira leitura ainda está lançando
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 0, pendentes: 0, pendenciaAberta: false }), false);
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 0, pendentes: 1, pendenciaAberta: true }), false);
+  // depois: relê o que ficou pendente
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 1, pendentes: 1, pendenciaAberta: true }), true);
+  // terminou sem lançar e abriu pendência: o cliente completou, relê
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 0, pendentes: 0, pendenciaAberta: true }), true);
+  // já lançou tudo, ou não há nada pendente nem pendência: não relê
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 1, pendentes: 0, pendenciaAberta: false }), false);
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 0, pendentes: 0, pendenciaAberta: false }), false);
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: Number.NaN, lancadas: 0, pendentes: 1, pendenciaAberta: true }), false);
+});
+
+Deno.test("#337: o que o cliente manda durante a leitura do Agendado não se perde", async () => {
+  const { deveLerDeNovoNoFim } = await import("./rascunhoPuro.ts");
+  // ficou pendente (ex.: faltava o endereço) e ele mandou mensagem nesses segundos: lê de novo
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 1, lidos: 1, novasDoCliente: 1 }), true);
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 0, lidos: 0, novasDoCliente: 2 }), true);
+  // lançou tudo ("Obrigado" no meio): nada a fazer; sem mensagem nova também não
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 0, lidos: 1, novasDoCliente: 1 }), false);
+  assertEquals(deveLerDeNovoNoFim({ pendentes: 1, lidos: 1, novasDoCliente: 0 }), false);
+});
