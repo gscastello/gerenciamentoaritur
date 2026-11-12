@@ -28,6 +28,7 @@ import {
   regraDoTrecho,
   trechoPrecisaDeConfirmacao,
   precoDoBairroCadastrado,
+  comoCobrarAVolta,
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
@@ -340,7 +341,42 @@ export async function valorDoPedido(
       },
     };
   }
+  // Volta: o valor é o do lugar onde deixamos o cliente, com a tabela da Ida (issue #349)
+  if (ponto.direction === "volta" || ["pirapemas", "cantanhede"].includes(String(ponto.code))) {
+    const daVolta = await precoDaVoltaPeloDesembarque(pedido.desembarque);
+    if (daVolta) return daVolta;
+  }
   return precoUnitario(ponto, pedido.bairro, pedido.endereco);
+}
+
+/** Preço da Volta pelo desembarque (null = desembarque vago: fica o valor base do ponto). */
+async function precoDaVoltaPeloDesembarque(
+  desembarque: string,
+): Promise<{ ok: true; preco: number } | { ok: false; erro: Record<string, unknown> } | null> {
+  const como = comoCobrarAVolta(desembarque);
+  if (!como) return null;
+  const { data: pontosDaIda } = await supabaseAdmin
+    .from("route_points")
+    .select("code, name, price, direction")
+    .eq("direction", "ida")
+    .is("deleted_at", null);
+  const daIda = (code: string) => ((pontosDaIda ?? []) as Linha[]).find((p) => p.code === code) ?? null;
+  if (como.tipo === "ponto") {
+    const p = daIda(como.code);
+    return p && Number(p.price) > 0 ? { ok: true, preco: Number(p.price) } : null;
+  }
+  if (como.tipo === "outro") {
+    const outro = daIda("outro");
+    return outro ? precoUnitario(outro, null, desembarque) : null;
+  }
+  const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
+  let achado = bairroDaTabela(como.texto, data ?? []) ?? bairroParecido(como.texto, data ?? [])?.bairro ?? null;
+  if (!achado) {
+    const deduzido = await resolverBairro(como.texto).catch(() => null);
+    if (deduzido) achado = (data ?? []).find((b: Linha) => b.neighborhood === deduzido.bairro) ?? null;
+  }
+  // lugar que não deu para ligar a um bairro: fica o valor base (a equipe confere)
+  return achado ? precoDoBairroCadastrado(achado) : null;
 }
 
 async function consultarViagem(args: Linha) {
