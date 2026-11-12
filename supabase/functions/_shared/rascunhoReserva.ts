@@ -56,6 +56,7 @@ import {
   viagemDeHojeJaSaiu,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
+  juntarPedidosDaMesmaViagem,
   deveRelerAgendado,
   deveLerDeNovoNoFim,
 } from "./rascunhoPuro.ts";
@@ -286,7 +287,10 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
     : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
-  const { pedidos, uso } = await lerPedidos(system, conversa, opcoes.modelo);
+  const lidos = await lerPedidos(system, conversa, opcoes.modelo);
+  const uso = lidos.uso;
+  // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
+  const pedidos = juntarPedidosDaMesmaViagem(lidos.pedidos);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
