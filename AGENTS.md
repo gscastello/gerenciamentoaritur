@@ -291,6 +291,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
   valor na tabela continua indo para a equipe; cidade fora da rota também. **Rua com nome de cidade é rua** (issue #341,
   `semLogradouros` em `grafia.ts`): "Rua Santa Rita de Cássia", "Av. Colombo" não são as cidades do caminho.
+  **Mesma viagem, uma reserva** (issue #345, `juntarPedidosDaMesmaViagem`): N passagens do mesmo passageiro no mesmo
+  dia e sentido, mesmo com desembarques diferentes ("2 ficam no Santo Antônio e 2 na Estrada da Maioba"), são UMA
+  reserva de N com os desembarques juntos. Apartamento/bloco/casa mandados depois só completam o endereço
+  (`ehComplementoDoEndereco`); condomínio/residencial vai com o bairro no campo bairro. Frase de costume ("eu e minhas
+  filhas viajamos sempre com vocês") não muda a quantidade.
 - **Bairro sem preço** (issue #330, `database/96`): a tabela de bairros de São Luís foi completada pelo OpenStreetMap
   e pelas reservas, com o preço vazio até o dono preencher. Preço vazio **nunca vira R$ 0**: o bot devolve
   `BAIRRO_SEM_PRECO` (não diz valor; no Agendado fica "valor a confirmar") e o app mostra o campo vazio no topo de
