@@ -82,3 +82,12 @@ Deno.test("vaga de outra pessoa e encomenda sem valor", () => {
   assertStringIncludes(m, "A equipe confirma com você o valor da encomenda.");
   assertEquals(mensagemDeConfirmacao([], { hoje: HOJE }), null);
 });
+
+Deno.test("#339: aviso de reserva atualizada pelo revisor", () => {
+  const m = mensagemDeConfirmacao([volta], { hoje: HOJE, nome: "Ana Maria", atualizacao: true });
+  assert(m);
+  assertStringIncludes(m, "Ana, atualizei sua reserva. Ficou assim:");
+  assertStringIncludes(m, "Se algo estiver diferente");
+  const sem = mensagemDeConfirmacao([volta, { ...volta, direcao: "ida" }], { hoje: HOJE, atualizacao: true });
+  assertStringIncludes(sem ?? "", "Atualizei suas reservas. Ficou assim:");
+});

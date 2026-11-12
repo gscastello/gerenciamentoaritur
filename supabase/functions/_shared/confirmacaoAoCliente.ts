@@ -91,7 +91,7 @@ export function primeiroNome(nome: string | null | undefined): string | null {
  */
 export function mensagemDeConfirmacao(
   reservas: ReservaParaConfirmar[],
-  ctx: { hoje: string; nome?: string | null },
+  ctx: { hoje: string; nome?: string | null; atualizacao?: boolean },
 ): string | null {
   if (!reservas.length) return null;
   const ordenadas = [...reservas].sort((a, b) =>
@@ -100,7 +100,10 @@ export function mensagemDeConfirmacao(
   const nome = primeiroNome(ctx.nome);
   const so = ordenadas.length === 1;
   const encomenda = ordenadas.every((r) => r.tipo === "encomenda");
-  const abertura = encomenda
+  const abertura = ctx.atualizacao
+    // o revisor corrigiu algo (issue #339): o cliente vê como ficou
+    ? `${nome ? `${nome}, a` : "A"}tualizei sua${so ? "" : "s"} reserva${so ? "" : "s"}. Ficou assim:`
+    : encomenda
     ? `Prontinho${nome ? `, ${nome}` : ""}! ✅ ${so ? "Sua encomenda está registrada" : "Suas encomendas estão registradas"}:`
     : `Prontinho${nome ? `, ${nome}` : ""}! ✅ ${so ? "Sua vaga está reservada" : "Suas vagas estão reservadas"}:`;
 
