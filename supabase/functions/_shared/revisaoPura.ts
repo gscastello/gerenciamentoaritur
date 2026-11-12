@@ -162,13 +162,15 @@ export function decidirRevisao(
       descartados.push(a);
       continue;
     }
-    let ok = a.certeza === "alta" && CORRIGE_SOZINHO.includes(a.campo);
+    const hora = ctx.falas ? horaDaEvidencia(a.evidencia, ctx.falas) : null;
+    // o cliente (ou a equipe) corrigiu DEPOIS de a reserva ser criada: é a confirmação (issue #343)
+    const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
+    const mudaAViagem = a.campo === "data" || a.campo === "sentido";
+    let ok = CORRIGE_SOZINHO.includes(a.campo) &&
+      (a.certeza === "alta" || (a.certeza === "media" && posterior && !mudaAViagem));
     // dia e sentido mudam a viagem inteira: só sozinho se o cliente/equipe disse DEPOIS da reserva
     // ("na verdade é dia 15"). Prova anterior pode ser de outro pedido — a equipe confere.
-    if (ok && (a.campo === "data" || a.campo === "sentido")) {
-      const hora = ctx.falas ? horaDaEvidencia(a.evidencia, ctx.falas) : null;
-      ok = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
-    }
+    if (ok && mudaAViagem) ok = posterior;
     const c = correcoes.get(r.id) ?? { reserva_id: r.id, motivos: [] };
     if (ok) {
       switch (a.campo) {
@@ -299,7 +301,7 @@ O que conferir em cada reserva:
 
 REGRAS DURAS
 - Só aponte um achado se a CONVERSA prova o erro. Em "evidencia", copie LITERALMENTE o trecho da conversa (cliente ou equipe) que mostra o valor certo. Sem trecho, não aponte.
-- "certeza": "alta" só quando a conversa deixa claro, sem outra leitura possível. Em dúvida, "media".
+- "certeza": "alta" só quando a conversa deixa claro, sem outra leitura possível. Em dúvida, "media". Correção clara que o cliente mandou DEPOIS da reserva ou da confirmação ("ficaremos na rodoviária", "é pra amanhã", "são 3") é "alta".
 - Não aponte preço/valor: o sistema recalcula pela tabela. Não aponte o que está certo. Não invente.
 - Tudo certo: achados vazio, sem observação e equipe_precisa_agir = false. Não escreva "confere" nem "nenhum erro".
 - Responda SEMPRE chamando a ferramenta registrar_revisao.

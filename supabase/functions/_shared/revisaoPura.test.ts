@@ -146,3 +146,26 @@ Deno.test("revisor: dia/sentido só mudam sozinhos com prova DEPOIS da reserva; 
   );
   assertEquals(r.correcoes[0]?.data, "2026-11-14");
 });
+
+Deno.test("#343: correção do cliente depois da reserva é aplicada mesmo com certeza média", () => {
+  const volta = { ...base, id: "r7", direcao: "volta" as const, ponto: "pirapemas", embarque: "Rua do Cajueiro", desembarque: "Em casa (bairro)", criada_em: "2026-11-12T15:14:53Z" };
+  const falas = [
+    { em: "2026-11-12T15:12:16Z", texto: "Rua do cajueiro" },
+    { em: "2026-11-12T15:15:33Z", texto: "Ficaremos na rodoviária" },
+  ];
+  const conv = falas.map((f) => f.texto).join(" | ");
+  const ach = achadosValidos([{ reserva_id: "r7", campo: "desembarque", valor_correto: "Rodoviária", evidencia: "Ficaremos na rodoviária", certeza: "media" }]);
+  const r = decidirRevisao(ach, { reservas: [volta], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "14:00" });
+  assertEquals(r.correcoes.length, 1);
+  assertEquals(r.correcoes[0].desembarque, "Rodoviária");
+  // a mesma fala ANTES da reserva, com certeza média: continua pendência
+  const antes = decidirRevisao(ach, { reservas: [{ ...volta, criada_em: "2026-11-12T16:00:00Z" }], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "14:00" });
+  assertEquals(antes.correcoes.length, 0);
+  assertEquals(antes.pendencias.length, 1);
+  // dia com certeza média, mesmo depois: pendência (muda a viagem inteira)
+  const dia = decidirRevisao(
+    achadosValidos([{ reserva_id: "r7", campo: "data", valor_correto: "2026-11-16", evidencia: "Ficaremos na rodoviária", certeza: "media" }]),
+    { reservas: [volta], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "14:00" },
+  );
+  assertEquals(dia.correcoes.length, 0);
+});
