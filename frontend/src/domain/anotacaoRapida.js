@@ -195,3 +195,16 @@ export function parseLinhaEncomenda(textoBruto) {
     nome: palavras.slice(achado.fim + 1).join(" "),
   };
 }
+
+/**
+ * O texto ANTES do telefone é o nome do passageiro já cadastrado com esse telefone?
+ * ("1P Nadir 98…" com o cadastro "Nadir" ou "Nadir Souza"). Aí ele é o nome, não o
+ * local de embarque (issue #347). Cadastro provisório "Passageiro (…)" não conta.
+ */
+export function localEhONome(local, nomeCadastrado) {
+  const l = normalizar(local).split(/\s+/).filter(Boolean);
+  const nomeLimpo = String(nomeCadastrado ?? "");
+  if (!l.length || !nomeLimpo.trim() || /^passageiro\b/i.test(nomeLimpo.trim())) return false;
+  const n = normalizar(nomeLimpo).split(/\s+/).filter(Boolean);
+  return l.length <= n.length && l.every((p, i) => p === n[i]);
+}

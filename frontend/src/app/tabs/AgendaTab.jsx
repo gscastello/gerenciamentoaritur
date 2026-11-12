@@ -35,6 +35,7 @@ import {
   textoParaTaxista,
 } from "../../domain/agendaLinha.js";
 import {
+  localEhONome,
   parseAnotacaoEncomenda,
   parseAnotacaoRapida,
   parseLinhaEncomenda,
@@ -356,8 +357,17 @@ export default function AgendaTab({
       }
     }
 
-    const achado = parseAnotacaoRapida(texto);
-    if (!achado.ok) return { ok: false, erro: achado.erro };
+    const lido = parseAnotacaoRapida(texto);
+    if (!lido.ok) return { ok: false, erro: lido.erro };
+    // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
+    let nomeExistente = null;
+    try {
+      nomeExistente = lido.nome ? null : await buscarClientePorTelefone(lido.telefone);
+    } catch (e) {
+      return { ok: false, erro: mensagemAmigavel(e, "Não foi possível criar a reserva.") };
+    }
+    // "1P Nadir 98…": o que vem antes do telefone é o nome cadastrado, não o embarque (issue #347)
+    const achado = localEhONome(lido.local, nomeExistente) ? { ...lido, local: "" } : lido;
 
     const ehBairro = ponto.campo === "bairro";
     // "Cohatrac Rua 7": o bairro (tabela de preços) cobra o valor; o resto é detalhe
@@ -371,8 +381,6 @@ export default function AgendaTab({
       : (precoDoLocal ?? ponto.valor ?? 60);
 
     try {
-      // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
-      const nomeExistente = achado.nome ? null : await buscarClientePorTelefone(achado.telefone);
       const nome =
         achado.nome || nomeExistente || `Passageiro${achado.local ? ` (${achado.local})` : ""}`;
       const res = await criarConfirmandoDuplicada(R.createReservation, {
