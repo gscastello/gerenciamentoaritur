@@ -273,13 +273,21 @@ const ddmm = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
 export function conferenciaFinal(
   r: { type?: string | null; trip_date: string; direction: string; quantity?: number | null; route_point_code?: string | null },
   mensagens: MensagemDoCliente[],
-  ctx: { hoje: string; pedidosLidos: number; cidadeEscrita?: string | null },
+  ctx: {
+    hoje: string;
+    pedidosLidos: number;
+    cidadeEscrita?: string | null;
+    /** datas de perguntas da equipe que o cliente confirmou ("A ida é sábado, certo?" → "Isso") — issue #335 */
+    datasConfirmadas?: string[];
+  },
 ): string[] {
   if (r.type === "encomenda") return [];
   const textos = mensagens.map((m) => m.texto);
   const naoBate: string[] = [];
 
-  const datas = datasEscritas(mensagens).filter((d) => d >= ctx.hoje);
+  const datas = [...new Set([...datasEscritas(mensagens), ...(ctx.datasConfirmadas ?? [])])]
+    .filter((d) => d >= ctx.hoje)
+    .sort();
   if (datas.length && !datas.includes(r.trip_date)) {
     naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
   }
@@ -397,4 +405,46 @@ export function semSugestoesRecusadas(endereco: string, recusadas: string[]): { 
     return !recusada;
   });
   return { texto: partes.join(", ").trim(), tirou };
+}
+
+// ---------------------------------------------------------------------------
+// Datas confirmadas e dia sem pedido (issue #335)
+// ---------------------------------------------------------------------------
+
+const RESPOSTA_SIM = /^(sim|isso|certo|exato|correto|isso mesmo|e isso|pode ser|pode|ok|blz|beleza|s)\b/;
+
+/**
+ * Datas de uma pergunta da equipe que o cliente confirmou: "A ida será no sábado,
+ * certo?" → "Isso" vale como se ele tivesse escrito "sábado". Conta do dia da pergunta.
+ */
+export function datasConfirmadas(falas: FalaDoPedido[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < falas.length; i++) {
+    const m = falas[i];
+    if (m.quem !== "equipe" || !m.texto.includes("?")) continue;
+    const ds = datasEscritas([{ texto: m.texto, em: m.em }]);
+    if (!ds.length) continue;
+    for (let k = i + 1; k < falas.length && k <= i + 3; k++) {
+      const r = falas[k];
+      if (r.quem === "equipe") break;
+      if (r.quem !== "cliente") continue;
+      if (RESPOSTA_SIM.test(normalizarTexto(r.texto))) out.push(...ds);
+      break;
+    }
+  }
+  return [...new Set(out)].sort();
+}
+
+/**
+ * Dias que o cliente pediu (escreveu ou confirmou) e que não viraram pedido lido nem
+ * reserva: a leitura deixou um pedido de fora (issue #335).
+ */
+export function datasSemPedido(
+  datasDoCliente: string[],
+  datasDosPedidos: (string | null | undefined)[],
+  datasJaReservadas: string[],
+  hoje: string,
+): string[] {
+  const cobertas = new Set([...datasDosPedidos.filter(Boolean) as string[], ...datasJaReservadas]);
+  return [...new Set(datasDoCliente)].filter((d) => d >= hoje && !cobertas.has(d)).sort();
 }

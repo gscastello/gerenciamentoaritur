@@ -65,6 +65,8 @@ import {
   desembarqueEraEmbarque,
   semSugestoesRecusadas,
   sugestoesRecusadas,
+  datasConfirmadas,
+  datasSemPedido,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -292,6 +294,8 @@ async function lerEGravar(
     .filter((m) => m.quem === "cliente" || m.quem === "equipe")
     .map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
   const recusadas = sugestoesRecusadas(falasDoPedido);
+  // "A ida é sábado, certo?" → "Isso": vale como dito pelo cliente (issue #335)
+  const confirmadas = datasConfirmadas(falasDoPedido);
 
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
   const telefone = normalizarTelefone(entrada.telefone);
@@ -498,6 +502,7 @@ async function lerEGravar(
       hoje,
       pedidosLidos: pedidos.length,
       cidadeEscrita: cidadeEscritaPeloCliente(textosDoCliente),
+      datasConfirmadas: confirmadas,
     });
     if (naoBate.length) {
       evento("bot_conferencia_final", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe, nao_bate: naoBate.length });
@@ -541,7 +546,15 @@ async function lerEGravar(
       if (v.aConfirmar.length) aConfirmar.set(salvo.id, [...v.aConfirmar]);
     }
   }
-  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje };
+  // dia que o cliente pediu e a leitura não trouxe nem já está reservado: pedido de fora (issue #335)
+  const diasSemPedido = datasSemPedido(
+    [...datasEscritas(mensagensDoCliente), ...confirmadas],
+    pedidos.map((p) => p.data),
+    [...jaReservadas].map((k) => k.split("|")[0]),
+    hoje,
+  );
+  if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
+  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -609,6 +622,7 @@ export async function lancarPeloAgendado(entrada: Entrada) {
         pedidos: lido.pedidos.length,
         motivos: lido.motivos,
         codigosPendentes: [...lido.incertos.values()].map((i) => i.codigo),
+        diasSemPedido: lido.diasSemPedido,
       })
     ) {
       evento("bot_agendado_releitura", { conversa, motivos: lido.motivos, pendentes: [...lido.incertos.values()].map((i) => i.codigo) });
@@ -616,6 +630,8 @@ export async function lancarPeloAgendado(entrada: Entrada) {
     }
     lidos = lido.pedidos.length;
     motivosLidos = lido.motivos;
+    // ainda falta um dia que o cliente pediu: não some calado, vira pendência (issue #335)
+    if (lido.diasSemPedido.length) pendentes.push("pedido_faltando");
     hojeDoAgendado = lido.hoje;
     nomeDoCliente = lido.cliente?.name ?? null;
 

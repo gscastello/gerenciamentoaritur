@@ -807,3 +807,8 @@ Deno.test("#333: Volta com só o nome da cidade completa o embarque pelo costume
   assert(dito.ok);
   if (dito.ok) assertEquals(dito.rascunho.pickup_detail, "Rua Nova, 10");
 });
+
+Deno.test("#335: dia pedido sem pedido lido faz o Agendado reler", () => {
+  assertEquals(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: [], diasSemPedido: ["2026-11-14"] }), true);
+  assertEquals(agendadoPrecisaReler({ pedidos: 1, motivos: [], codigosPendentes: [], diasSemPedido: [] }), false);
+});
