@@ -263,7 +263,8 @@ REGRAS DURAS
 - Só aponte um achado se a CONVERSA prova o erro. Em "evidencia", copie LITERALMENTE o trecho da conversa (cliente ou equipe) que mostra o valor certo. Sem trecho, não aponte.
 - "certeza": "alta" só quando a conversa deixa claro, sem outra leitura possível. Em dúvida, "media".
 - Não aponte preço/valor: o sistema recalcula pela tabela. Não aponte o que está certo. Não invente.
-- Responda SEMPRE chamando a ferramenta registrar_revisao (lista vazia se tudo está certo).
+- Tudo certo: achados vazio, sem observação e equipe_precisa_agir = false. Não escreva "confere" nem "nenhum erro".
+- Responda SEMPRE chamando a ferramenta registrar_revisao.
 
 PONTOS DE EMBARQUE (código = nome):
 ${ctx.pontos}${ctx.extras ? `\n\n${ctx.extras}` : ""}`;
@@ -297,6 +298,10 @@ export const FERRAMENTA_DA_REVISAO = {
         },
       },
       observacoes: { type: "string", description: "pedido sem reserva, desistência ou dúvida que a equipe deve ver" },
+      equipe_precisa_agir: {
+        type: "boolean",
+        description: "true SÓ se a observação pede uma ação da equipe (pedido sem reserva, desistência, dúvida que você não resolve). Tudo certo = false.",
+      },
     },
     required: ["achados"],
   },

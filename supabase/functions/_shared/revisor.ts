@@ -328,7 +328,10 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
       const r = await chamarRevisor(system, conteudo);
       custo += r.custo;
       achados = achadosValidos(r.entrada?.achados);
-      observacoes = typeof r.entrada?.observacoes === "string" ? r.entrada.observacoes.slice(0, 600) : null;
+      // observação só vira pendência quando o revisor diz que a equipe precisa agir
+      observacoes = r.entrada?.equipe_precisa_agir === true && typeof r.entrada?.observacoes === "string"
+        ? r.entrada.observacoes.slice(0, 600)
+        : null;
       const decisao = decidirRevisao(achados, { reservas: ativas, conversa: conversa.prova, hoje, pontos: porSentido });
       for (const c of decisao.correcoes) {
         const alvo = ativas.find((x) => x.id === c.reserva_id) as ReservaRevisada;
