@@ -345,7 +345,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
   **Conferência final** (issue #309, `conferenciaFinal`): com a reserva PRONTA, depois de todas as regras, dia,
   sentido, quantidade e cidade da Volta são comparados de novo com o que o cliente escreveu; não bate → o Agendado não
-  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega.
+  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega. Com **vários pedidos**, viagem no sentido que o cliente não
+  escreveu (e sem falar em volta) também não passa (issue #351): "agendar de novo" = refazer a reserva cancelada.
   **Confirmação ao cliente** (issue #310, `confirmacaoAoCliente.ts`): depois que o Agendado lança, o bot manda ao
   cliente o resumo (sentido, dia, embarque, desembarque, quantidade; **nunca valor**, nunca o nome do perfil) e pede o
   que faltou (endereço, dia da volta). Uma vez por reserva criada; desliga em `settings.agendado_confirmacao`

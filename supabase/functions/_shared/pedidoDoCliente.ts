@@ -32,6 +32,11 @@ const unico = <T>(valores: T[]): T | null => {
 // ---------------------------------------------------------------------------
 
 /** "pra São Luís", "de Pirapemas pra…" = volta; "pra Pirapemas", "saindo de São Luís" = ida. Os dois = null. */
+/** O cliente falou das duas viagens ("ida e volta", "e volto domingo", "a volta é…")? */
+export function falouDasDuasViagens(textos: string[]): boolean {
+  return textos.some((t) => / (ida e volta|volta|voltar|volto|voltando|vou e volto|regresso|retornar|retorno pra|retorno para) /.test(` ${normalizarTexto(t)} `));
+}
+
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   const achados: ("ida" | "volta")[] = [];
   for (const t of textos) {
@@ -295,6 +300,10 @@ export function conferenciaFinal(
   const sentido = sentidoEscrito(textos);
   if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
     naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
+  }
+  // vários pedidos: viagem no sentido que o cliente NÃO pediu (e sem falar em volta) não entra calada (issue #351)
+  if (sentido && ctx.pedidosLidos > 1 && sentido !== r.direction && !falouDasDuasViagens(textos)) {
+    naoBate.push(`o cliente só pediu a ${sentido === "volta" ? "Volta" : "Ida"}; a ${r.direction === "volta" ? "Volta" : "Ida"} não foi pedida`);
   }
 
   const q = quantidadeEscrita(textos);
