@@ -359,6 +359,16 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
   cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
   Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
+  **Revisor de reservas** (issue #339, `database/97`, função `revisor-reservas`, `revisaoPura.ts`): a cada 15 min
+  (`pg_cron` → `pg_net`, chave da rotina no Vault, só o hash em `rotinas_chaves`) o bot revê cada passageiro com reserva
+  futura em que algo mudou (`fn_clientes_para_revisar`: assinatura = reservas + última mensagem; reserva com menos de
+  3 min espera o Agendado). O modelo capaz relê a conversa inteira e aponta erros (do bot, do cliente ou da equipe) com
+  o trecho LITERAL da conversa; o código só corrige sozinho o que tem essa prova e certeza alta, nos campos dia,
+  sentido, ponto, bairro, embarque, desembarque e quantidade; tipo, nome e o resto viram pendência. Preço nunca vem
+  do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
+  Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
+  `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
+  `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada.
   **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
   depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
   ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).
