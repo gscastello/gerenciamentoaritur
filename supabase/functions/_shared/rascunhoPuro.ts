@@ -237,6 +237,21 @@ export function validarPedidoExtraido(
     desembarqueDoCostume = texto(costume.dropoff_location, 120);
     avisos.push(`Desembarque pelo endereço de costume (${desembarqueDoCostume}).`);
   }
+  // mesmo ponto do costume, mas sem o endereço (ou só o nome da cidade, "Cantanhede"): o embarque é o
+  // de sempre — completa pelo costume (issue #333)
+  const soACidade = !!endereco && (CIDADES_DA_VOLTA as readonly string[]).includes(normalizarTexto(endereco));
+  if (
+    tipo === "passagem" && !usouCostume && ponto && costume?.route_point_code === ponto &&
+    (texto(costume.detail) || texto(costume.neighborhood)) && !bairro && (!endereco || soACidade)
+  ) {
+    usouCostume = true;
+    bairro = texto(costume.neighborhood, 80);
+    endereco = texto(costume.detail);
+    desembarqueDoCostume ??= texto(costume.dropoff_location, 120);
+    avisos.push(`Embarque pelo endereço de costume (${[costume.route_point_name ?? ponto, bairro, endereco].filter(Boolean).join(", ")}).`);
+  } else if (soACidade && direcao === "volta") {
+    endereco = null; // "Cantanhede" é a cidade (o ponto), não o endereço
+  }
   // endereço de casa em São Luís sem ponto dito = busca em casa
   if (tipo === "passagem" && !ponto && direcao === "ida" && (bairro || endereco) && ctx.pontos.ida.includes("busca")) {
     ponto = "busca";
@@ -408,6 +423,7 @@ ${quando}
 - Marcando para OUTRA pessoa ("para minha mãe", "o contato do passageiro", card "[contato compartilhado: Nome — telefone]" ou outro número digitado): a reserva é do PASSAGEIRO. Preencha passageiro_nome e passageiro_telefone com os dados dele (o telefone do card), não os de quem está conversando.
 - Card de contato só vira passagem quando o cliente pediu passagem PARA aquela pessoa ("o outro passageiro é o Darlison" + card dele, "marca pra ela"). Card de quem vai RECEBER uma encomenda, ou mandado só para a equipe falar com alguém, NÃO é passageiro: na encomenda deixe passageiro_nome/passageiro_telefone vazios e ponha quem recebe (nome e telefone) em desembarque.
 - Passagens para MAIS de uma pessoa na mesma viagem com embarques ou contatos diferentes ("serão duas passagens: a Dona Bernarda, ao lado da padaria, e o Darlison, na Rua do Campinho"): registre UM pedido por passageiro, cada um com o seu nome, telefone (do card, se houver) e endereço. Passageiro sem telefone próprio fica com o de quem conversa (deixe passageiro_telefone vazio).
+- "Parada das vans", "ponto das vans" = ponto "retorno" (Retorno das Vans), NÃO a rodoviária.
 - "Retorno do aeroporto" / "no retorno" é o ponto "retorno", NÃO o aeroporto. Só embarque DENTRO do aeroporto (terminal, chegando de voo) é "outro" com endereco "Aeroporto de São Luís". Se não der para saber qual dos dois, use o que parecer mais provável e explique em duvida.
 - Cada mensagem vem com [dia/mês hora]. "Hoje", "amanhã", "sexta", "à tarde" contam a partir do DIA EM QUE AQUELA MENSAGEM FOI ESCRITA, não de hoje. Ex.: mensagem de 09/11 "pra amanhã" é 10/11, mesmo que você esteja lendo em 11/11. Pedido de um dia que já passou não é pedido novo: não registre.
 - Datas relativas pelo calendário abaixo. Nunca invente data, endereço, nome ou quantidade: deixe vazio.

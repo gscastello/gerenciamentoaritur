@@ -188,3 +188,11 @@ Deno.test("#320: resposta à pergunta de embarque é embarque; 'não' para a sug
   assertEquals(desembarqueEraEmbarque("Rodoviária", conversa), false);
   assertEquals(desembarqueEraEmbarque("", conversa), false);
 });
+
+Deno.test("#333: 'parada das vans' é o ponto Retorno", async () => {
+  const { pontoEscrito } = await import("./pedidoDoCliente.ts");
+  const pontos = ["busca", "rodoviaria", "retorno", "outro"];
+  assertEquals(pontoEscrito(["Vou estar na parada das vans"], pontos), "retorno");
+  assertEquals(pontoEscrito(["no ponto da van"], pontos), "retorno");
+  assertEquals(pontoEscrito(["na rodoviária"], pontos), "rodoviaria");
+});

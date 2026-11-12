@@ -777,3 +777,33 @@ Deno.test("#328: desembarque de costume fixado vale mesmo com o embarque variand
   assert(doHistorico.ok);
   if (doHistorico.ok) assertEquals(doHistorico.rascunho.dropoff_location, null);
 });
+
+Deno.test("#333: Volta com só o nome da cidade completa o embarque pelo costume", () => {
+  const costume = {
+    ida: null,
+    volta: { fonte: "historico", route_point_code: "cantanhede", route_point_name: "Cantanhede", neighborhood: null, detail: "Av. Rio Branco, Comercial Pinto", dropoff_location: null },
+  };
+  const r = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta", ponto: "cantanhede", endereco: "Cantanhede", cidade_dita: "cantanhede" },
+    { ...ctx, costume, agendado: true },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.route_point_code, "cantanhede");
+  assertEquals(r.rascunho.pickup_detail, "Av. Rio Branco, Comercial Pinto");
+  assert(r.rascunho.notes?.includes("Embarque pelo endereço de costume"));
+  // costume de OUTRA cidade não entra; sem costume, a cidade não vira endereço
+  const outra = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta", ponto: "pirapemas", endereco: "Pirapemas", cidade_dita: "pirapemas" },
+    { ...ctx, costume, agendado: true },
+  );
+  assert(outra.ok);
+  if (outra.ok) assertEquals(outra.rascunho.pickup_detail, "Endereço a confirmar");
+  // endereço dito pelo cliente vale sobre o costume
+  const dito = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "volta", ponto: "cantanhede", endereco: "Rua Nova, 10", cidade_dita: "cantanhede" },
+    { ...ctx, costume, agendado: true },
+  );
+  assert(dito.ok);
+  if (dito.ok) assertEquals(dito.rascunho.pickup_detail, "Rua Nova, 10");
+});
