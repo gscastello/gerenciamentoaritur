@@ -371,7 +371,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
   se a prova foi escrita **depois** da reserva (fala de pedido antigo pode ser de outra viagem: vira pendência), e o
-  modelo recebe as viagens passadas do passageiro para não confundir pedidos.
+  modelo recebe as viagens passadas do passageiro para não confundir pedidos. Correção que o cliente escreveu **depois** da reserva vale como confirmação
+  (issue #343): em embarque, desembarque, ponto, bairro e quantidade basta certeza média com essa prova.
   **Resposta à pergunta da equipe** (issue #320): o que o cliente responde vale para o que a equipe perguntou —
   depois de "Te buscamos aonde?" é embarque (`desembarqueEraEmbarque` tira do desembarque); sugestão da equipe
   ("Na usina, certo?") respondida com "não" sai do embarque (`sugestoesRecusadas`).
