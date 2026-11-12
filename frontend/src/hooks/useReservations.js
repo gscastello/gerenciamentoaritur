@@ -131,7 +131,8 @@ export function useReservationsWindow(fromDate, toDate) {
   const query = useSupabaseQuery(
     () => reservationsService.listWindow(fromDate, toDate),
     [fromDate, toDate],
-    { enabled: !!fromDate && !!toDate }
+    // sem internet, a Agenda abre com a última cópia (issue #355)
+    { enabled: !!fromDate && !!toDate, offlineKey: "reservas-janela" }
   );
 
   useRealtimeTable(
@@ -183,6 +184,8 @@ export function useReservationsWindow(fromDate, toDate) {
     loading: query.loading,
     error: query.error,
     refetch: query.refetch,
+    /** hora da cópia guardada que está na tela (sem internet), ou null */
+    offlineDesde: query.offlineDesde,
 
     createReservation: useCallback((payload) => after(create.run(payload)), [after, create]),
     confirmReservation: useCallback((id, opts) => after(confirm.run(id, opts)), [after, confirm]),

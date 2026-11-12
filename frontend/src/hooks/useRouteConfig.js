@@ -39,7 +39,7 @@ function mapPoint(rp) {
 }
 
 export function useRouteConfig() {
-  const query = useSupabaseQuery(() => routePointsService.listAll(), []);
+  const query = useSupabaseQuery(() => routePointsService.listAll(), [], { offlineKey: "pontos" });
   useRealtimeTable("route_points", () => query.refetch());
   const settings = useSettings();
 

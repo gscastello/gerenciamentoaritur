@@ -12,7 +12,7 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useLocaisOutros() {
-  const q = useSupabaseQuery(() => locaisOutrosService.list(), []);
+  const q = useSupabaseQuery(() => locaisOutrosService.list(), [], { offlineKey: "locais-outros" });
   useRealtimeTable("boarding_spot_prices", () => q.refetch());
   const salvarAcao = useAsyncAction(locaisOutrosService.upsert);
   const removerAcao = useAsyncAction(locaisOutrosService.remove);

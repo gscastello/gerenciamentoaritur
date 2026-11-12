@@ -11,20 +11,24 @@ export default defineConfig({
     // SHELL (JS/CSS/HTML/fontes/ícones) é pré-cacheado; dado de verdade
     // (reservas, capacidade, financeiro) NUNCA passa pelo cache do
     // service worker — vai sempre à rede (ver runtimeCaching abaixo).
-    // Uma tela offline sem internet nenhuma é melhor que a do próprio
-    // navegador, mas o app continua exigindo rede pra qualquer ação
-    // real, do jeito que sempre foi (capacidade decidida pelo banco).
+    // Sem internet, a Agenda abre com a cópia da última leitura que o
+    // próprio app guarda no aparelho (src/lib/copiaOffline.js, issue #355),
+    // não com cache do service worker; qualquer ação real continua exigindo
+    // rede (capacidade decidida pelo banco).
     VitePWA({
       registerType: "prompt",
       // registro manual (src/pwa/PWAUpdatePrompt.jsx, virtual:pwa-register/react)
       // — decide QUANDO trocar de versão, em vez do <script> automático
       // do plugin recarregar a página sozinho no meio de alguma anotação.
       injectRegister: false,
-      includeAssets: ["icons/*.png"],
+      // o logo do topo entra também: sem ele, o app aberto sem internet (issue #355)
+      // mostraria a imagem quebrada
+      includeAssets: ["icons/*.png", "brand/mark-transparent.png"],
       manifest: {
         name: "Gestão AriTur",
         short_name: "AriTur",
-        description: "Painel operacional da AriTur Transportes — reservas, agenda, lista do dia e financeiro.",
+        description:
+          "Painel operacional da AriTur Transportes — reservas, agenda, lista do dia e financeiro.",
         lang: "pt-BR",
         theme_color: "#E4121F",
         background_color: "#08090B",
@@ -34,8 +38,18 @@ export default defineConfig({
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icons/maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
-          { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          {
+            src: "/icons/maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/icons/maskable-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
         ],
       },
       workbox: {

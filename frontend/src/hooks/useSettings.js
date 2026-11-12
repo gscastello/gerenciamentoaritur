@@ -11,7 +11,7 @@ import { useRealtimeTable } from "./useRealtimeTable";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 
 export function useSettings() {
-  const query = useSupabaseQuery(() => settingsService.getAll(), []);
+  const query = useSupabaseQuery(() => settingsService.getAll(), [], { offlineKey: "settings" });
   useRealtimeTable("settings", () => query.refetch());
 
   const setKey = useAsyncAction(settingsService.set);
