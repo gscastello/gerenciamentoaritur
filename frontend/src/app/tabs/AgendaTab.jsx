@@ -45,6 +45,7 @@ import { RESPONSAVEIS_BUSCA, ordenarBusca, responsavelDaBusca } from "../../doma
 import { ditadoParaAnotacao } from "../../domain/ditado.js";
 import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { mensagemDeCancelamento } from "../../domain/lixeira.js";
+import { precoDaVolta } from "../../domain/precos.js";
 import { ehExtra } from "../../domain/vagas.js";
 import {
   primeiroErro,
@@ -2009,8 +2010,22 @@ export function NovaReservaModal({
     campoDetalhe === "bairro" && f.bairro.trim() && precoBairroAtual === null;
   // Outros: local com preço próprio (aeroporto, issue #263) — nunca "retorno do aeroporto"
   const precoDoLocal = ponto?.id === "outro" ? locaisOutros.preco(f.anotacao) : null;
+  // Volta: o valor é o do lugar onde DEIXAMOS o cliente, com a tabela da Ida (issue #349)
+  const daVolta =
+    f.direcao === "volta"
+      ? precoDaVolta({
+          area: f.desembarqueArea,
+          texto: f.desembarque,
+          valorDoPontoDaIda: (code) => trips.ida?.pontos?.find((p) => p.id === code)?.valor,
+          nomesDeBairros: bairros.nomes,
+          precoBairro: bairros.preco,
+          precoLocalOutros: locaisOutros.preco,
+        })
+      : null;
   const precoAuto =
-    campoDetalhe === "bairro" ? (precoBairroAtual ?? 80) : (precoDoLocal ?? ponto?.valor ?? 60);
+    campoDetalhe === "bairro"
+      ? (precoBairroAtual ?? 80)
+      : (daVolta?.preco ?? precoDoLocal ?? ponto?.valor ?? 60);
   const valorUnit = f.valorManual !== "" ? Number.parseFloat(f.valorManual) || 0 : precoAuto;
   const qtd = Number.parseInt(f.quantidade, 10) || 1;
   // Reserva "leve" (issue #214): basta o nome OU o telefone; o resto se completa
@@ -2306,12 +2321,31 @@ export function NovaReservaModal({
         </div>
 
         <div className="mb-2">
-          <Field label="Local de desembarque (opcional)">
+          <Field
+            label={
+              f.direcao === "volta"
+                ? "Onde deixamos (bairro, Rodoviária, Retorno…): define o valor"
+                : "Local de desembarque (opcional)"
+            }
+          >
             <TextInput
               value={f.desembarque}
               onChange={(e) => setF({ ...f, desembarque: e.target.value })}
             />
           </Field>
+          {daVolta?.preco != null && (
+            <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
+              Valor da Volta {daVolta.bairro ? `para ${daVolta.bairro}` : "por esse desembarque"}:{" "}
+              {fmtBRL(daVolta.preco)} / passagem
+            </div>
+          )}
+          {daVolta?.bairroNaoReconhecido && (
+            <div className="text-[11px] mt-1" style={{ color: C.warn }}>
+              {daVolta.bairro
+                ? `${daVolta.bairro} ainda não tem preço na tabela (Sistema → Bairros): confira o valor.`
+                : "Bairro não reconhecido na tabela: escreva o bairro ou confira o valor."}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-3">

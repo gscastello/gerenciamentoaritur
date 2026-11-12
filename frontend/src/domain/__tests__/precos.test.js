@@ -140,3 +140,50 @@ describe("precoDoLocalDeOutros — aeroporto ≠ retorno do aeroporto (issue #26
     expect(precoDoLocalDeOutros("aeroporto", locais)).toBe(70);
   });
 });
+
+describe("preço da Volta pelo desembarque (#349)", () => {
+  const base = {
+    valorDoPontoDaIda: (c) => ({ rodoviaria: 60, retorno: 60, outro: 60 })[c],
+    nomesDeBairros: [
+      "Santo Antônio",
+      "Estrada da Maioba",
+      "Cohatrac",
+      "Turu",
+      "Residencial Santo Antônio",
+    ],
+    precoBairro: (n) =>
+      ({ "Santo Antônio": 80, "Estrada da Maioba": 80, Cohatrac: 90, Turu: null })[n] ?? null,
+    precoLocalOutros: (t) => (/aeroporto/i.test(t) ? 70 : null),
+  };
+  it("cobra pelo lugar onde deixamos o cliente", async () => {
+    const { precoDaVolta } = await import("../precos.js");
+    expect(precoDaVolta({ ...base, area: "rodoviaria", texto: "" }).preco).toBe(60);
+    expect(precoDaVolta({ ...base, area: "", texto: "no retorno" }).preco).toBe(60);
+    expect(precoDaVolta({ ...base, area: "casa", texto: "Cohatrac, Rua 7" })).toEqual({
+      preco: 90,
+      bairro: "Cohatrac",
+      bairroNaoReconhecido: false,
+    });
+    expect(
+      precoDaVolta({ ...base, area: "", texto: "2 no Santo Antônio; 2 na Estrada da Maioba" })
+        .preco,
+    ).toBe(80);
+    expect(precoDaVolta({ ...base, area: "br", texto: "Aeroporto" }).preco).toBe(70);
+    expect(precoDaVolta({ ...base, area: "br", texto: "Maracanã" }).preco).toBe(60);
+  });
+  it("sem bairro, cidade do caminho ou bairro sem preço: não inventa", async () => {
+    const { precoDaVolta } = await import("../precos.js");
+    expect(precoDaVolta({ ...base, area: "", texto: "" }).preco).toBeNull();
+    expect(precoDaVolta({ ...base, area: "miranda", texto: "Miranda" }).preco).toBeNull();
+    expect(precoDaVolta({ ...base, area: "casa", texto: "Rua desconhecida" })).toEqual({
+      preco: null,
+      bairro: null,
+      bairroNaoReconhecido: true,
+    });
+    expect(precoDaVolta({ ...base, area: "casa", texto: "Turu" })).toEqual({
+      preco: null,
+      bairro: "Turu",
+      bairroNaoReconhecido: true,
+    });
+  });
+});

@@ -659,3 +659,18 @@ Deno.test("#341: rua com nome de cidade não pega o valor do trecho da cidade", 
   assertEquals(trechoDoPedido(["Rua Santa Rita de Cássia, nº 28 - Vila Isabel"], "Cantanhede", trechos), null);
   assertEquals(trechoDoPedido(["Santa Rita, perto do posto"], "Cantanhede", trechos)?.price, 30);
 });
+
+Deno.test("#349: a Volta cobra pelo lugar onde deixamos o cliente", async () => {
+  const { comoCobrarAVolta } = await import("./agentePuro.ts");
+  assertEquals(comoCobrarAVolta("Rodoviária"), { tipo: "ponto", code: "rodoviaria" });
+  assertEquals(comoCobrarAVolta("Rodoviária, São Luís"), { tipo: "ponto", code: "rodoviaria" });
+  assertEquals(comoCobrarAVolta("no retorno"), { tipo: "ponto", code: "retorno" });
+  assertEquals(comoCobrarAVolta("Aeroporto de São Luís"), { tipo: "outro" });
+  assertEquals(comoCobrarAVolta("na BR, Maracanã"), { tipo: "outro" });
+  assertEquals(comoCobrarAVolta("2 no Santo Antônio; 2 na Estrada da Maioba")?.tipo, "bairro");
+  assertEquals(comoCobrarAVolta("Cohatrac, Rua 7"), { tipo: "bairro", texto: "Cohatrac, Rua 7" });
+  assertEquals(comoCobrarAVolta("Em casa (bairro)"), null);
+  assertEquals(comoCobrarAVolta("São Luís"), null);
+  assertEquals(comoCobrarAVolta(""), null);
+  assertEquals(comoCobrarAVolta(null), null);
+});
