@@ -215,3 +215,50 @@ export function precoDoLocalDeOutros(texto, locais = []) {
   const preco = melhor ? Number(melhor.price) : Number.NaN;
   return Number.isFinite(preco) && preco > 0 ? preco : null;
 }
+
+/**
+ * Preço da VOLTA (issue #349, regra do dono): na Ida o valor é o do lugar onde buscamos;
+ * na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida.
+ * Mesma regra do bot (`comoCobrarAVolta` em supabase/functions/_shared/agentePuro.ts).
+ *  - Rodoviária / Retorno → preço desses pontos da Ida;
+ *  - BR, aeroporto, beira da estrada → Outros (local com preço próprio ou o de Outros);
+ *  - em casa (ou um bairro escrito no local) → preço do bairro da tabela;
+ *  - cidade do caminho ou desembarque vago → preco null (fica o valor do ponto da Volta).
+ * @param {{ area?: string, texto?: string, valorDoPontoDaIda: (code: string) => number|null|undefined,
+ *   nomesDeBairros: string[], precoBairro: (nome: string) => number|null|undefined,
+ *   precoLocalOutros?: (texto: string) => number|null }} p
+ * @returns {{ preco: number|null, bairro: string|null, bairroNaoReconhecido: boolean }}
+ */
+export function precoDaVolta({
+  area,
+  texto,
+  valorDoPontoDaIda,
+  nomesDeBairros,
+  precoBairro,
+  precoLocalOutros,
+}) {
+  const t = ` ${palavras(texto)} `;
+  const nada = { preco: null, bairro: null, bairroNaoReconhecido: false };
+  const doPonto = (code) => {
+    const v = Number(valorDoPontoDaIda(code));
+    return v > 0 ? { ...nada, preco: v } : nada;
+  };
+  if (area === "rodoviaria" || (!area && t.includes(" rodoviaria "))) return doPonto("rodoviaria");
+  if (area === "retorno" || (!area && t.includes(" retorno "))) return doPonto("retorno");
+  if (area === "br" || (!area && / (aeroporto|br|beira da estrada) /.test(t))) {
+    const proprio = precoLocalOutros?.(texto ?? "") ?? null;
+    return proprio != null ? { ...nada, preco: proprio } : doPonto("outro");
+  }
+  if (area && area !== "casa") return nada; // cidade do caminho: trecho/ponto
+  // bairro da tabela escrito no local (o nome mais longo vence)
+  let bairro = null;
+  for (const nome of nomesDeBairros ?? []) {
+    const n = palavras(nome);
+    if (n && t.includes(` ${n} `) && (!bairro || n.length > palavras(bairro).length)) bairro = nome;
+  }
+  if (bairro) {
+    const v = Number(precoBairro(bairro));
+    return { preco: v > 0 ? v : null, bairro, bairroNaoReconhecido: !(v > 0) };
+  }
+  return { ...nada, bairroNaoReconhecido: area === "casa" && !!t.trim() };
+}

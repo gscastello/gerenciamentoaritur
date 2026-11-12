@@ -132,8 +132,12 @@ Deno.test("#309 conferência final: sentido, quantidade e cidade da Volta", asyn
   assertEquals(conferenciaFinal({ ...certo, direction: "ida", route_point_code: "busca" }, msgs, ctx).length, 1);
   assertEquals(conferenciaFinal({ ...certo, quantity: 1 }, msgs, ctx).length, 1);
   assertEquals(conferenciaFinal({ ...certo, route_point_code: "cantanhede" }, msgs, ctx).length, 1);
-  // dois pedidos lidos: sentido e quantidade não se comparam (cada pedido tem o seu)
-  assertEquals(conferenciaFinal({ ...certo, direction: "ida", quantity: 1, route_point_code: "busca" }, msgs, { ...ctx, pedidosLidos: 2 }), []);
+  // dois pedidos lidos: a quantidade não se compara (cada pedido tem a sua), mas uma Ida que o cliente
+  // não pediu (ele só escreveu a Volta e não falou em ida) não passa calada (issue #351)
+  const doisPedidos = conferenciaFinal({ ...certo, direction: "ida", quantity: 1, route_point_code: "busca" }, msgs, { ...ctx, pedidosLidos: 2 });
+  assertEquals(doisPedidos.length, 1);
+  assertStringIncludes(doisPedidos[0], "a Ida não foi pedida");
+  assertEquals(conferenciaFinal({ ...certo, quantity: 1 }, msgs, { ...ctx, pedidosLidos: 2 }), []);
   // encomenda e cliente que não escreveu nada claro: nada contra
   assertEquals(conferenciaFinal({ ...certo, type: "encomenda", quantity: 9 }, msgs, ctx), []);
   assertEquals(conferenciaFinal(certo, [{ texto: "Bom dia, deixa minha vaga", em: "2026-11-11T12:00:00Z" }], ctx), []);
@@ -225,4 +229,25 @@ Deno.test("#335: data confirmada à pergunta da equipe vale; dia pedido sem pedi
   // dia que já tem reserva, ou que já passou, não conta
   assertEquals(datasSemPedido(datas, ["2026-11-15"], ["2026-11-14"], "2026-11-11"), []);
   assertEquals(datasSemPedido(["2026-11-10"], [], [], "2026-11-11"), []);
+});
+
+Deno.test("#351: reagendar só a Ida não lança uma Volta que o cliente não pediu", async () => {
+  const { conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = [
+    { texto: "Vou querer uma passagem pra pirapemas", em: "2026-11-11T16:32:00Z" },
+    { texto: "Sexta feira", em: "2026-11-11T16:55:00Z" },
+    { texto: "Condomínio village del mar", em: "2026-11-11T16:58:00Z" },
+    { texto: "Vou ficar na casa do professor lu", em: "2026-11-11T16:58:30Z" },
+    { texto: "Pirapemas", em: "2026-11-11T16:58:40Z" },
+    { texto: "Gostaria de agendar de novo! Agora certeza!", em: "2026-11-12T19:06:00Z" },
+    { texto: "Sim", em: "2026-11-12T19:08:00Z" },
+  ];
+  const ctx = { hoje: "2026-11-12", pedidosLidos: 2 };
+  const volta = conferenciaFinal({ trip_date: "2026-11-13", direction: "volta", quantity: 1, route_point_code: "pirapemas" }, msgs, ctx);
+  assertEquals(volta.length, 1);
+  assertStringIncludes(volta[0], "a Volta não foi pedida");
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-13", direction: "ida", quantity: 1 }, msgs, ctx), []);
+  // falou da volta: as duas valem
+  const comVolta = [...msgs, { texto: "e volto domingo", em: "2026-11-12T19:09:00Z" }];
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-15", direction: "volta", quantity: 1, route_point_code: "pirapemas" }, comVolta, { ...ctx, hoje: "2026-11-12" }).filter((x) => x.includes("não foi pedida")), []);
 });

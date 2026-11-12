@@ -841,3 +841,40 @@ Deno.test("#337: o que o cliente manda durante a leitura do Agendado não se per
   assertEquals(deveLerDeNovoNoFim({ pendentes: 0, lidos: 1, novasDoCliente: 1 }), false);
   assertEquals(deveLerDeNovoNoFim({ pendentes: 1, lidos: 1, novasDoCliente: 0 }), false);
 });
+
+Deno.test("#345: 4 passagens com dois desembarques na mesma viagem viram UMA reserva de 4", async () => {
+  const { juntarPedidosDaMesmaViagem } = await import("./rascunhoPuro.ts");
+  const base = { data: "2026-11-13", direcao: "volta", ponto: "pirapemas", endereco: "Pira Lanches, próximo ao SESCIBA" };
+  const r = juntarPedidosDaMesmaViagem([
+    { ...base, quantidade: 2, desembarque: "Santo Antônio" },
+    { ...base, quantidade: 2, desembarque: "Estrada da Maioba" },
+  ]);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].quantidade, 4);
+  assertEquals(r[0].desembarque, "2 em Santo Antônio; 2 em Estrada da Maioba");
+  assertEquals(r[0].endereco, "Pira Lanches, próximo ao SESCIBA");
+  // Ida e Volta, ou outro dia, continuam separados; passageiro de outra pessoa também
+  assertEquals(juntarPedidosDaMesmaViagem([{ ...base, quantidade: 1 }, { ...base, direcao: "ida", ponto: "busca", quantidade: 1 }]).length, 2);
+  assertEquals(juntarPedidosDaMesmaViagem([{ ...base, quantidade: 1 }, { ...base, data: "2026-11-14", quantidade: 1 }]).length, 2);
+  assertEquals(juntarPedidosDaMesmaViagem([{ ...base, quantidade: 1 }, { ...base, quantidade: 1, passageiro_nome: "Outra Pessoa", passageiro_telefone: "98999990000" }]).length, 2);
+  // mesmo desembarque: soma e mantém o texto
+  assertEquals(juntarPedidosDaMesmaViagem([{ ...base, quantidade: 1, desembarque: "Rodoviária" }, { ...base, desembarque: "rodoviaria" }])[0], { ...base, quantidade: 2, desembarque: "Rodoviária", bairro: null, cidade_dita: null, nome_informado: null, trecho_do_cliente: null, duvida: null });
+});
+
+Deno.test("#345: complemento (apto/bloco) completa o endereço, não substitui", async () => {
+  const { ehComplementoDoEndereco, planejarAtualizacao } = await import("./rascunhoPuro.ts");
+  assertEquals(ehComplementoDoEndereco("Apartamento 108 bloco 11"), true);
+  assertEquals(ehComplementoDoEndereco("casa 5"), true);
+  assertEquals(ehComplementoDoEndereco("qd 3 lt 10"), true);
+  assertEquals(ehComplementoDoEndereco("Rua do Sol, 10"), false);
+  assertEquals(ehComplementoDoEndereco("bloco"), false);
+  const pontos = { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] };
+  const res = { data: "2026-11-13", direcao: "ida" as const, ponto: "busca", pickupDetail: "Professora Concita, Condomínio Ponta Verde, próximo ao Pátio Norte ()", pendentes: ["endereco" as const] };
+  const p = planejarAtualizacao(res, { reserva: 1, endereco: "Apartamento 108 bloco 11" }, { hoje: "2026-11-12", pontos });
+  assertEquals(p?.pickupDetail, "Professora Concita, Condomínio Ponta Verde, próximo ao Pátio Norte, Apartamento 108 bloco 11");
+  // endereço de verdade troca o que estava
+  const q = planejarAtualizacao({ ...res, pickupDetail: "Endereço a confirmar" }, { reserva: 1, endereco: "Apartamento 108 bloco 11" }, { hoje: "2026-11-12", pontos });
+  assertEquals(q?.pickupDetail, "Apartamento 108 bloco 11");
+  const r = planejarAtualizacao(res, { reserva: 1, endereco: "Rua do Sol, 10" }, { hoje: "2026-11-12", pontos });
+  assertEquals(r?.pickupDetail, "Rua do Sol, 10");
+});

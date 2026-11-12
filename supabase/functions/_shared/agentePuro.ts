@@ -838,3 +838,24 @@ export function precoDoBairroCadastrado(
   }
   return { ok: true, preco };
 }
+
+/**
+ * Como cobrar a VOLTA (issue #349, regra do dono): na Ida o valor é o do lugar onde buscamos; na Volta,
+ * o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida:
+ *  - Rodoviária / Retorno → preço desses pontos da Ida;
+ *  - aeroporto, BR, beira da estrada → Outros (local com preço próprio ou o preço de Outros);
+ *  - o resto (bairro, rua, condomínio) → preço do bairro;
+ *  - vazio, "São Luís" ou "Em casa (bairro)" sem bairro → null (valor base do ponto da Volta).
+ */
+export function comoCobrarAVolta(
+  desembarque: string | null | undefined,
+): { tipo: "ponto"; code: "rodoviaria" | "retorno" } | { tipo: "outro" } | { tipo: "bairro"; texto: string } | null {
+  const bruto = String(desembarque ?? "").replace(/em casa \(bairro\)/gi, " ").trim();
+  const t = ` ${normalizar(bruto)} `;
+  if (!t.trim()) return null;
+  if (t.includes(" rodoviaria ")) return { tipo: "ponto", code: "rodoviaria" };
+  if (t.includes(" retorno ")) return { tipo: "ponto", code: "retorno" };
+  if (/ (aeroporto|br|beira da estrada|rodovia) /.test(t)) return { tipo: "outro" };
+  const resto = t.replace(/ (sao luis|sao luiz|slz|ma|em casa|casa|bairro|deixar|deixa|no|na|em|de|do|da) /g, " ").trim();
+  return resto ? { tipo: "bairro", texto: bruto } : null;
+}

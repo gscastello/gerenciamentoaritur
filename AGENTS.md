@@ -291,6 +291,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
   valor na tabela continua indo para a equipe; cidade fora da rota também. **Rua com nome de cidade é rua** (issue #341,
   `semLogradouros` em `grafia.ts`): "Rua Santa Rita de Cássia", "Av. Colombo" não são as cidades do caminho.
+  **Mesma viagem, uma reserva** (issue #345, `juntarPedidosDaMesmaViagem`): N passagens do mesmo passageiro no mesmo
+  dia e sentido, mesmo com desembarques diferentes ("2 ficam no Santo Antônio e 2 na Estrada da Maioba"), são UMA
+  reserva de N com os desembarques juntos. Apartamento/bloco/casa mandados depois só completam o endereço
+  (`ehComplementoDoEndereco`); condomínio/residencial vai com o bairro no campo bairro. Frase de costume ("eu e minhas
+  filhas viajamos sempre com vocês") não muda a quantidade.
 - **Bairro sem preço** (issue #330, `database/96`): a tabela de bairros de São Luís foi completada pelo OpenStreetMap
   e pelas reservas, com o preço vazio até o dono preencher. Preço vazio **nunca vira R$ 0**: o bot devolve
   `BAIRRO_SEM_PRECO` (não diz valor; no Agendado fica "valor a confirmar") e o app mostra o campo vazio no topo de
@@ -313,6 +318,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
   pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+- **Preço da Volta pelo lugar onde deixamos o cliente** (issue #349, dono 12/11): na Ida o valor é o do lugar onde
+  buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
+  pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
+  vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
 - **Preço por embarque e desembarque** (issue #239): `calcular_valor` e `criar_reserva` comparam os dois na tabela de
   trechos (`route_fares`, editada em Sistema), depois no ponto/bairro. Trecho em cidade intermediária sem valor vai para
   a equipe. **Bairros e trechos evoluem:** o que o atendente diz e o que a equipe repete nas reservas vira sugestão em
@@ -345,7 +354,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
   **Conferência final** (issue #309, `conferenciaFinal`): com a reserva PRONTA, depois de todas as regras, dia,
   sentido, quantidade e cidade da Volta são comparados de novo com o que o cliente escreveu; não bate → o Agendado não
-  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega.
+  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega. Com **vários pedidos**, viagem no sentido que o cliente não
+  escreveu (e sem falar em volta) também não passa (issue #351): "agendar de novo" = refazer a reserva cancelada.
   **Confirmação ao cliente** (issue #310, `confirmacaoAoCliente.ts`): depois que o Agendado lança, o bot manda ao
   cliente o resumo (sentido, dia, embarque, desembarque, quantidade; **nunca valor**, nunca o nome do perfil) e pede o
   que faltou (endereço, dia da volta). Uma vez por reserva criada; desliga em `settings.agendado_confirmacao`
