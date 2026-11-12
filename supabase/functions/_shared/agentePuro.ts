@@ -859,3 +859,15 @@ export function comoCobrarAVolta(
   const resto = t.replace(/ (sao luis|sao luiz|slz|ma|em casa|casa|bairro|deixar|deixa|no|na|em|de|do|da) /g, " ").trim();
   return resto ? { tipo: "bairro", texto: bruto } : null;
 }
+
+/**
+ * A dúvida que vai para "Perguntas que o bot não soube responder" (issue #358): só
+ * quando faltou informação para responder, nas palavras do cliente. Transferência por
+ * regra (encomenda, reclamação, negociação, pedido de pessoa) não manda nada e não
+ * entra na lista; texto sem letra ("???", número solto) também não.
+ */
+export function perguntaSemResposta(valor: unknown): string | null {
+  const t = String(valor ?? "").replace(/\s+/g, " ").trim();
+  if ((t.match(/\p{L}/gu) ?? []).length < 3) return null;
+  return t.slice(0, 500);
+}
