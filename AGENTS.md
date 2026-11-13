@@ -390,6 +390,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o trecho LITERAL da conversa; o código só corrige sozinho o que tem essa prova e certeza alta, nos campos dia,
   sentido, ponto, bairro, embarque, desembarque e quantidade; tipo, nome e o resto viram pendência. Preço nunca vem
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
+  **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
+  o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
