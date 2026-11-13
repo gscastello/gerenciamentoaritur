@@ -56,6 +56,53 @@ export function ehMarcaDeAgendado(texto: string | null | undefined): boolean {
   return !/\?\s*$/.test(t.replace(/[☑✅✔️\s]+$/u, ""));
 }
 
+/**
+ * O que o Agendado lança (issue #387): só os rascunhos que a leitura FINAL gravou. Quando
+ * o Agendado relê a conversa com o modelo capaz, um rascunho que só a primeira leitura
+ * criou (e que a releitura não confirmou) ficava "pronto" e era lançado sem as travas
+ * daquela leitura — foi assim que uma Ida não pedida entrou. Esses viram pendência.
+ */
+export function rascunhosDoAgendado<T extends { id?: unknown }>(
+  prontos: T[],
+  gravadosNaLeituraFinal: string[],
+): { lancar: T[]; naoConfirmados: T[] } {
+  const final = new Set(gravadosNaLeituraFinal);
+  return {
+    lancar: prontos.filter((d) => final.has(String(d.id))),
+    naoConfirmados: prontos.filter((d) => !final.has(String(d.id))),
+  };
+}
+
+/** Intervalo mínimo entre o "Agendado ☑️" anterior e o pedido atual para separar os pedidos (issue #387). */
+export const SEPARA_PEDIDOS_MS = 6 * 3600 * 1000;
+
+/**
+ * Onde começa o pedido atual (issue #387). O "Agendado ☑️" anterior da equipe fecha
+ * o pedido de antes: aquilo já foi lançado e não pode virar reserva de novo. Vale a
+ * última marca ANTES do disparo que tem mensagem do cliente depois dela, desde que essa
+ * mensagem venha mais de 6 h depois da marca (correção logo depois da marcação ainda é
+ * o mesmo pedido). `disparoEm` = quando foi escrita a mensagem que disparou a leitura
+ * (no Agendado, a própria marca). Devolve o instante da marca, ou null (sem corte).
+ */
+export function inicioDoPedidoAtual(
+  mensagens: { quem: string; texto: string; em: string }[],
+  disparoEm?: string | null,
+): string | null {
+  const ate = disparoEm ? Date.parse(disparoEm) : Number.POSITIVE_INFINITY;
+  const ordem = [...mensagens].sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
+  let corte: string | null = null;
+  for (const m of ordem) {
+    const em = Date.parse(m.em);
+    if (!(em < ate) || m.quem !== "equipe" || !ehMarcaDeAgendado(m.texto)) continue;
+    const novoPedido = ordem.some((c) => {
+      const t = Date.parse(c.em);
+      return c.quem === "cliente" && t > em && t < ate && t - em > SEPARA_PEDIDOS_MS;
+    });
+    if (novoPedido) corte = m.em;
+  }
+  return corte;
+}
+
 /** Um pedido como o modelo devolve (ferramenta registrar_pedidos). */
 export type PedidoExtraido = {
   tipo?: string;
@@ -164,6 +211,8 @@ export function validarPedidoExtraido(
      * calado se a viagem lida já saiu (issue #307).
      */
     hojeDito?: boolean;
+    /** sentido que o CLIENTE escreveu ("pra São Luís" = volta), se escreveu (pedidoDoCliente.sentidoEscrito) */
+    sentidoDito?: "ida" | "volta" | null;
     /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
     costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
     /**
@@ -200,11 +249,20 @@ export function validarPedidoExtraido(
       const embarqueDito =
         !!texto(p.endereco) || !!texto(p.bairro) || (!!pontoBruto && pontoBruto !== "busca" && ctx.pontos[direcao].includes(pontoBruto));
       const destino = texto(p.desembarque);
-      const cabeNoOutro =
-        !viagemDeHojeJaSaiu(outro, ctx.horaAgora) && !embarqueDito && !!destino && !!ctx.areaDoDesembarque?.(destino, outro);
-      if (!cabeNoOutro) return { ok: false, motivo: "hoje_ja_saiu" };
+      const outroAindaSai = !viagemDeHojeJaSaiu(outro, ctx.horaAgora);
+      const cabeNoOutro = outroAindaSai && !embarqueDito && !!destino && !!ctx.areaDoDesembarque?.(destino, outro);
+      // "quero uma passagem para hoje", sem dizer sentido, embarque nem destino, depois que a
+      // viagem saiu: é a outra viagem de hoje SÓ quando a equipe marcou o Agendado (quem marcou
+      // conhece o cliente) ou o cliente tem o hábito dessa viagem (costume no outro sentido).
+      // O bot sozinho, nos outros casos, não decide: a equipe/o cliente confirma (dono, 13/11 — #387)
+      const habito = !!ctx.costume?.[outro]?.route_point_code;
+      const soPediuHoje =
+        outroAindaSai && !embarqueDito && !destino && ctx.sentidoDito !== direcao && (!!ctx.agendado || habito);
+      if (!cabeNoOutro && !soPediuHoje) return { ok: false, motivo: "hoje_ja_saiu" };
       avisos.push(
-        `O cliente pediu hoje e a ${direcao === "ida" ? "Ida" : "Volta"} de hoje já tinha saído: é a ${outro === "ida" ? "Ida" : "Volta"} de hoje, que passa por ${destino}. Confira o embarque.`,
+        cabeNoOutro
+          ? `O cliente pediu hoje e a ${direcao === "ida" ? "Ida" : "Volta"} de hoje já tinha saído: é a ${outro === "ida" ? "Ida" : "Volta"} de hoje, que passa por ${destino}. Confira o embarque.`
+          : `O cliente pediu para hoje, sem dizer o sentido, depois que a ${direcao === "ida" ? "Ida" : "Volta"} saiu: considerei a ${outro === "ida" ? "Ida" : "Volta"} de hoje. Confira o embarque.`,
       );
       direcao = outro;
     } else {
@@ -746,6 +804,8 @@ export function planejarAtualizacao(
 // ---------------------------------------------------------------------------
 
 const MOTIVO_LEGIVEL: Record<string, string> = {
+  nao_confirmado:
+    "uma viagem veio de uma leitura anterior e a leitura final do Agendado não a confirmou (pode não ter sido pedida)",
   sem_data: "o dia da viagem não aparece na conversa",
   data_passada: "o dia lido já passou",
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
