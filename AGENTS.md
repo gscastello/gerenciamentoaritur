@@ -464,6 +464,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   da receita lançada como total do dia** (não lançar de novo), falta lançar, em dobro e lançado no app fora do banco.
   "Lançar" passa por `rpc_lancar_movimento` (o lançamento sai do próprio movimento; dois toques não lançam duas vezes);
   o que não é da empresa fica "ignorado", nunca apagado.
+- **Fechamento do mês** (issue #365, aba Gestão → Fechamento, `database/105`): `rpc_fechamento_do_mes('AAAA-MM')` =
+  `rpc_numeros_do_financeiro` do mês + todos os lançamentos (com a foto da nota, quando lançada pela foto), pagamentos
+  e contas quitadas; `domain/fechamentoDoMes.js` monta o DRE (com o DAS estimado de `simplesNacional.js`) e os avisos
+  (cobertura das reservas, meses sem receita no DAS, despesa sem nota). Baixa em PDF, planilha e .zip das fotos; todo
+  dia 1 às 08:00 o sino avisa (`fechamento`, só admin/financeiro veem).
 - Previsão de demanda = média histórica simples por dia da semana
   (`domain/demanda.js`). Ao crescer o volume, considerar série temporal
   real (Prophet, ou chamada à API do Claude com dados agregados).

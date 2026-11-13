@@ -56,6 +56,7 @@ const AtendimentoTab = React.lazy(() => import("./tabs/AtendimentoTab.jsx"));
 const AgendaTab = React.lazy(() => import("./tabs/AgendaTab.jsx"));
 const VencimentosTab = React.lazy(() => import("./tabs/VencimentosTab.jsx"));
 const ExtratoTab = React.lazy(() => import("./tabs/ExtratoTab.jsx"));
+const FechamentoTab = React.lazy(() => import("./tabs/FechamentoTab.jsx"));
 const NovaReservaModal = React.lazy(() =>
   import("./tabs/AgendaTab.jsx").then((m) => ({ default: m.NovaReservaModal })),
 );
@@ -381,6 +382,11 @@ const DESTINOS_BUSCA = [
     termos: "clientes histórico contatos telefone",
   },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
+  {
+    tab: "fechamento",
+    label: "Fechamento do mês (contador)",
+    termos: "fechamento mês contador dre resultado relatório notas imposto",
+  },
   {
     tab: "extrato",
     label: "Extrato do banco (conferência)",
@@ -788,6 +794,7 @@ const TAB_ROLES = {
   operacao: ["admin"],
   vencimentos: ["admin"],
   extrato: ["admin"],
+  fechamento: ["admin"],
   dashboard: ["admin"],
   sistema: ["admin"],
 };
@@ -1437,6 +1444,7 @@ function AppInner() {
                       {tab === "operacao" && <OperacaoTab />}
                       {tab === "vencimentos" && <VencimentosTab />}
                       {tab === "extrato" && <ExtratoTab />}
+                      {tab === "fechamento" && <FechamentoTab />}
                       {tab === "dashboard" && (
                         <DashboardTab
                           reservas={reservas}
