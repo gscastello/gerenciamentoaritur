@@ -13,6 +13,9 @@
 
 import { responderComAgente } from "./agente.ts";
 import { getBotContext } from "./botContext.ts";
+import { chatwootClient } from "./chatwootClient.ts";
+import { processarComprovante } from "./comprovante.ts";
+import { notaDaBaixa } from "./comprovantePuro.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { responderComBase } from "./botAnswer.ts";
@@ -378,35 +381,43 @@ async function sendText(conversationId: string, to: string, text: string) {
 }
 
 /**
- * Imagem/documento recebido (issue #8). Se há Pix pendente do cliente, arquiva
- * como comprovante. `falar` = a conversa está com o bot: só então responde ao
- * cliente. Sem Pix pendente NÃO assume que era comprovante nem tira o bot da
- * conversa — avisa a equipe (pendência) e responde de forma neutra.
+ * Imagem/documento recebido. Se é comprovante Pix (issue #363), o bot LÊ e, quando
+ * valor, recebedor, data e reserva batem, dá baixa sozinho (o banco confere de novo);
+ * qualquer dúvida vira pendência para a equipe. Isso vale em qualquer modo. Só FALA
+ * com o cliente (`falar`) quando a conversa está com o bot; a equipe vê uma nota
+ * privada no Chatwoot quando houve baixa.
  */
 async function handleProofUpload(conversation: any, msg: IncomingMessage, falar: boolean) {
   const to = msg.from;
   try {
-    const result = await whatsappService.receivePaymentProof(to, {
-      mediaId: msg.media!.mediaId,
-      mimeType: msg.media!.mimeType,
-      caption: msg.media!.caption,
+    const r = await processarComprovante({
+      telefone: to,
+      mediaUrl: msg.media!.mediaId,
       waMessageId: msg.waMessageId,
+      conversationId: conversation.id,
     });
-    if (!falar) return;
-    if (result.matched) {
-      await sendText(conversation.id, to,
-        "Comprovante recebido! 🧾 Nossa equipe confere o pagamento e confirma a sua reserva por aqui. Obrigado!");
-    } else {
-      await whatsappService.avisarEquipe(conversation.id, "Cliente enviou imagem/arquivo sem Pix pendente para associar.");
-      await sendText(conversation.id, to,
-        "Recebi seu arquivo! 🙏 Não encontrei um pagamento por Pix pendente no seu número, então avisei a equipe para conferir. Se quiser reservar, é só me dizer.");
+    const chatwoot = getBotContext()?.chatwootConversationId;
+    if (r.resultado === "baixa") {
+      if (chatwoot && !getBotContext()?.shadow) {
+        await chatwootClient.postMessage(chatwoot, notaDaBaixa(r.leitura, r.reservas), { private: true }).catch(() => {});
+      }
+      if (falar) await sendText(conversation.id, to, "Recebi o comprovante, obrigado! ✅ Pagamento confirmado.");
+      return;
     }
+    if (r.resultado === "pendencia") {
+      await whatsappService.avisarEquipe(conversation.id, `Comprovante Pix: ${r.motivo}`);
+      if (falar) await sendText(conversation.id, to, "Recebi seu comprovante! 🧾 A equipe vai conferir e já te confirma.");
+      return;
+    }
+    // não é comprovante (ou arquivo que não dá para ler): só a conversa com o bot pede ajuda à equipe
+    if (!falar) return;
+    await whatsappService.avisarEquipe(conversation.id, "Cliente mandou uma imagem/arquivo que não é comprovante de Pix.");
+    await sendText(conversation.id, to, "Recebi seu arquivo! 🙏 Avisei a equipe para dar uma olhada.");
   } catch (err) {
     console.error("Erro ao processar comprovante:", err);
+    await whatsappService.avisarEquipe(conversation.id, `Falha ao ler arquivo/comprovante: ${String(err).slice(0, 200)}`).catch(() => {});
     if (!falar) return;
-    await whatsappService.avisarEquipe(conversation.id, `Falha ao processar arquivo/comprovante: ${String(err)}`);
-    await sendText(conversation.id, to,
-      "Recebi seu arquivo, mas tive um problema para registrar. Já avisei a equipe para conferir. 🙏");
+    await sendText(conversation.id, to, "Recebi seu arquivo, mas tive um problema para registrar. Já avisei a equipe para conferir. 🙏");
   }
 }
 
