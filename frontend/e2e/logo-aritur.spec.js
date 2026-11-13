@@ -2,30 +2,38 @@ import { expect, test } from "@playwright/test";
 import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Issue #385 (dono, 13/11): a logo da AriTur sempre presente. No topo de cada tela o
-// monograma vai num selo branco (o T preto some no fundo escuro); no login, a logo
-// com brilho, feita para fundo escuro.
+// Logo oficial (issue #391, artes enviadas pelo dono em 13/11): no login, a logo para fundo
+// escuro (já traz o slogan); no topo de cada tela do celular, o AT direto no fundo, sem o
+// selo branco; na lateral do computador, a logo inteira.
 
-test("login mostra a logo com brilho, carregada", async ({ page }) => {
+test("login mostra a logo oficial para fundo escuro, carregada", async ({ page }) => {
   await page.goto("/");
   const logo = page.getByAltText(/AriTur Transportes/);
   await expect(logo).toBeVisible();
-  await expect(logo).toHaveAttribute("src", "/brand/logo-brilho.webp");
-  expect(await logo.evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(logo).toHaveAttribute("src", "/brand/logo-fundo-escuro.webp");
+  await expect.poll(() => logo.evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
 });
 
-test("a logo aparece no topo em todas as telas, num selo branco", async ({ page }) => {
+test("a logo aparece em todas as telas, sem fundo branco", async ({ page, isMobile }) => {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
   const conferir = async () => {
-    const selo = page.getByTestId("logo-aritur").filter({ visible: true }).first();
-    await expect(selo).toBeVisible();
-    expect(await selo.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-      "rgb(255, 255, 255)",
-    );
-    const img = selo.getByRole("img", { name: "AriTur" });
-    await expect(img).toBeVisible();
-    expect(await img.evaluate((i) => i.complete && i.naturalWidth > 0)).toBe(true);
+    if (isMobile) {
+      const at = page.getByTestId("logo-aritur").filter({ visible: true }).first();
+      await expect(at).toBeVisible();
+      await expect(at).toHaveAttribute("src", "/brand/emblema-at.webp");
+      expect(await at.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+        "rgba(0, 0, 0, 0)",
+      );
+      await expect.poll(() => at.evaluate((i) => i.complete && i.naturalWidth > 0)).toBe(true);
+    } else {
+      const logo = page
+        .getByAltText(/AriTur Transportes/)
+        .filter({ visible: true })
+        .first();
+      await expect(logo).toHaveAttribute("src", "/brand/logo-fundo-escuro.webp");
+      await expect.poll(() => logo.evaluate((i) => i.complete && i.naturalWidth > 0)).toBe(true);
+    }
   };
   await conferir(); // Agenda
   for (const tela of ["atendimento", "financeiro", "operacao"]) {

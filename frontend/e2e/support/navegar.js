@@ -40,3 +40,22 @@ export async function abrirTela(page, tela) {
   await abrirMenu(page, t.menu);
   await page.getByRole("tab", { name: new RegExp(`^${t.aba}`) }).click();
 }
+
+/** Agenda (issue #391): escolhe a viagem no seletor Ida/Volta. */
+export async function escolherSentido(page, sentido) {
+  await page
+    .getByTestId("seletor-sentido")
+    .getByRole("tab", { name: new RegExp(`^${sentido}`) })
+    .click();
+}
+
+/** "Sair da conta": na lateral do computador; no celular fica no "Mais" do topo (issue #391). */
+export async function sairDaConta(page) {
+  const sair = page.getByRole("button", { name: "Sair da conta" }).filter({ visible: true });
+  if ((await sair.count()) === 0) await page.getByRole("button", { name: "Mais" }).click();
+  await page
+    .getByRole("button", { name: "Sair da conta" })
+    .filter({ visible: true })
+    .first()
+    .click();
+}

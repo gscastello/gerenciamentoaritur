@@ -193,7 +193,7 @@ export default function BuscaEmCasaEditor({ itens, trips, onSalvar, onFechar }) 
                 />
                 <span
                   className="text-[11px] font-bold mt-1 shrink-0"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", color: C.inkFaint }}
+                  style={{ color: C.inkFaint }}
                 >
                   {i + 1}
                 </span>

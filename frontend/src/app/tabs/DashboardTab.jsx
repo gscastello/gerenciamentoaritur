@@ -1,29 +1,17 @@
-import {
-  AlertTriangle,
-  Bus,
-  CheckCircle2,
-  Hourglass,
-  Repeat,
-  Route,
-  Sparkles,
-  TrendingUp,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { AlertTriangle, Bell, ChevronRight, Hourglass, Inbox, Sparkles } from "lucide-react";
 import React, { Suspense, useMemo } from "react";
-import { useAuth } from "../../auth/AuthProvider.jsx";
 import { ehExtra } from "../../domain/vagas.js";
 import { useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
 import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useVehicles } from "../../hooks/useVehicles.js";
-import { VideoBackdrop } from "../../ui/VideoBackdrop.jsx";
+import { Skeleton } from "../../ui/motion/index.js";
 import { ChartsSkeleton } from "../../ui/skeletons/TabSkeleton.jsx";
 import {
   C,
   Card,
+  FUNDO_CARTAO,
   OCUPA_VAGA,
   SinoNotificacoes,
-  StatCard,
   dataOperacao,
   fmtBRL,
   gerarInsightsIA,
@@ -34,141 +22,171 @@ import {
   somaTipo,
   todayStr,
   useCountUp,
+  useNotificacoesCtx,
 } from "../tabShared.jsx";
 
 // Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
 // do bundle inicial (ver vite.config.js manualChunks). Issue #2.
 const SevenDayCharts = React.lazy(() => import("../../ui/charts/SevenDayCharts.jsx"));
 
-/* ============================= 7. DASHBOARD ============================= */
-function HeroChip({ label, valor, moeda, Icon }) {
-  const n = useCountUp(valor, 1100);
-  const txt = moeda ? fmtBRL(n) : Math.round(n).toLocaleString("pt-BR");
+/* ============================= 7. INÍCIO (Dashboard) =============================
+ * Visual aprovado pelo dono (issue #391): a imagem da AriTur inteira no primeiro cartão;
+ * faturamento do ano, do mês e de hoje com o lucro real (receitas − despesas, a mesma conta
+ * do Financeiro) em três cartões na mesma linha; os passageiros da Ida e da Volta separados
+ * (nunca somados); e "Precisa de você". Gráficos, IA operacional e previsão vêm depois.
+ */
+
+// Valor curto para caber três cartões numa linha de celular: "R$ 702 mil", "R$ 38,9 mil".
+export function valorCurto(n) {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  const sinal = v < 0 ? "−" : "";
+  if (abs >= 1_000_000)
+    return `${sinal}R$ ${(abs / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  if (abs >= 10_000)
+    return `${sinal}R$ ${(abs / 1000).toLocaleString("pt-BR", { maximumFractionDigits: abs >= 100_000 ? 0 : 1 })} mil`;
+  return `${sinal}R$ ${abs.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
+}
+
+const MES_LONGO = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
+const nomeDoMes = (ds) => MES_LONGO.format(new Date(`${ds.slice(0, 7)}-15T12:00:00Z`));
+
+function CartaoFinanceiro({ periodo, receita, lucro, carregando, onClick }) {
+  const r = useCountUp(receita, 700);
+  const l = useCountUp(lucro, 700);
   return (
-    <div
-      className="flex items-center gap-2 rounded-xl px-3 py-2"
-      style={{ background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.08)" }}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${periodo}: faturamento ${fmtBRL(receita)}, lucro real ${fmtBRL(lucro)}`}
+      className="toque-at cartao-at text-left rounded-2xl border px-2.5 pt-2.5 pb-3 min-w-0"
+      style={{ background: FUNDO_CARTAO, borderColor: C.border, containerType: "inline-size" }}
     >
-      <Icon size={15} style={{ color: "#fff" }} />
-      <span className="text-[11px]" style={{ color: "rgba(255,255,255,.7)" }}>
-        {label}
-      </span>
       <span
-        className="text-sm font-bold"
-        style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+        className="block uppercase truncate"
+        style={{
+          color: C.inkSoft,
+          fontSize: "min(11.5px, 13cqi)",
+          fontWeight: 600,
+          letterSpacing: ".08em",
+        }}
       >
-        {txt}
+        {periodo}
       </span>
-    </div>
-  );
-}
-
-function primeiroNome(profile) {
-  const raw = (profile?.name || "").trim();
-  if (!raw) return "equipe";
-  const base = raw.includes("@") ? raw.split("@")[0].replace(/[._-]+/g, " ") : raw;
-  const p = base.split(/\s+/)[0];
-  return p.charAt(0).toUpperCase() + p.slice(1);
-}
-
-// Chip de lotação do dia — SEMPRE separado por direção (cada viagem tem
-// `capacidade` lugares, nunca some as duas).
-function HeroChipCap({ paxIda, paxVolta, capacidade }) {
-  const lotIda = capacidade && paxIda >= capacidade;
-  const lotVolta = capacidade && paxVolta >= capacidade;
-  return (
-    <div
-      className="flex items-center gap-2.5 rounded-xl px-3 py-2"
-      style={{ background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.08)" }}
-    >
-      <Bus size={15} style={{ color: "#fff" }} />
-      <span className="text-[11px]" style={{ color: "rgba(255,255,255,.7)" }}>
-        Lotação
-      </span>
-      <span
-        className="text-sm font-bold"
-        style={{ color: lotIda ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
-      >
-        {paxIda}/{capacidade}
-      </span>
-      <span className="text-[10px]" style={{ color: "rgba(255,255,255,.55)" }}>
-        ida
-      </span>
-      <span style={{ color: "rgba(255,255,255,.25)" }}>·</span>
-      <span
-        className="text-sm font-bold"
-        style={{ color: lotVolta ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
-      >
-        {paxVolta}/{capacidade}
-      </span>
-      <span className="text-[10px]" style={{ color: "rgba(255,255,255,.55)" }}>
-        volta
-      </span>
-    </div>
-  );
-}
-
-function DashboardHero({ paxIda, paxVolta, capacidade, faturamento, pendencias }) {
-  const { profile } = useAuth();
-  const nome = primeiroNome(profile);
-  const h = new Date().getHours();
-  const saud = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
-  return (
-    <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
-      <div
-        className="relative rounded-2xl border overflow-hidden min-h-[260px] md:min-h-[300px]"
-        style={{ borderColor: C.brandDim }}
-      >
-        <VideoBackdrop variant="hero" />
-        <div className="relative p-5 md:p-7 max-w-xl lg:max-w-2xl">
-          <h1
-            className="hero-t hero-t-1"
+      {carregando ? (
+        <span className="block mt-1.5 space-y-1.5" aria-hidden="true">
+          <Skeleton height={16} width="80%" />
+          <Skeleton height={11} width="55%" />
+          <Skeleton height={13} width="70%" />
+        </span>
+      ) : (
+        <>
+          <span
+            className="block whitespace-nowrap mt-0.5"
             style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontWeight: 700,
-              fontSize: "1.7rem",
-              color: "#fff",
-              letterSpacing: "-0.015em",
-              textShadow: "0 2px 12px rgba(0,0,0,.5)",
+              color: C.ink,
+              fontWeight: 600,
+              fontSize: "min(15px, 17.5cqi)",
+              letterSpacing: "-.02em",
             }}
           >
-            {saud}, {nome}!
-          </h1>
-          <p className="hero-t hero-t-2 text-sm mt-1" style={{ color: "rgba(255,255,255,.82)" }}>
-            Aqui está o resumo da operação de hoje.
-          </p>
-          <div
-            className="hero-t hero-t-3 mt-2 inline-flex items-center gap-2 text-xs font-semibold"
-            style={{ color: "#fff", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}
+            {valorCurto(r)}
+          </span>
+          <span className="block mt-1" style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.25 }}>
+            lucro real
+          </span>
+          <span
+            className="flex items-center gap-1.5 whitespace-nowrap"
+            style={{ color: C.ink, fontWeight: 600, fontSize: "min(13px, 15.5cqi)" }}
           >
-            <span className="aritur-road" style={{ width: 22 }} />
-            Juntos, seguimos mais longe.
-          </div>
-          <div className="hero-t hero-t-4 mt-4 flex flex-wrap gap-2.5 items-center">
-            <div
-              className="flex items-center gap-2 rounded-xl px-3 py-2"
-              style={{ background: "rgba(0,0,0,.4)", border: "1px solid rgba(255,255,255,.1)" }}
-            >
-              <Bus size={15} style={{ color: C.brand }} />
-              <span className="text-xs font-semibold" style={{ color: "#fff" }}>
-                São Luís → Pirapemas
-              </span>
-              <span className="text-[10px]" style={{ color: "rgba(255,255,255,.6)" }}>
-                viagens todos os dias
-              </span>
-            </div>
-            <HeroChipCap paxIda={paxIda} paxVolta={paxVolta} capacidade={capacidade} />
-            <HeroChip label="Faturamento" valor={faturamento} moeda Icon={Wallet} />
-            <HeroChip label="Pendências" valor={pendencias} Icon={AlertTriangle} />
-          </div>
-        </div>
-      </div>
-    </div>
+            <span
+              aria-hidden="true"
+              className="inline-block w-1.5 h-1.5 rounded-sm shrink-0"
+              style={{ background: lucro < 0 ? C.inkSoft : C.brand }}
+            />
+            {valorCurto(l)}
+          </span>
+        </>
+      )}
+    </button>
   );
 }
 
-export default function DashboardTab({ reservas, capacidade, trips }) {
+function CartaoViagem({ rotulo, passageiros, capacidade, onClick }) {
+  const n = useCountUp(passageiros, 600);
+  const lotado = capacidade > 0 && passageiros >= capacidade;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={`inicio-${rotulo.toLowerCase()}`}
+      aria-label={`${rotulo}: ${passageiros} passageiros de ${capacidade}. Abrir na Agenda`}
+      className="toque-at cartao-at text-left rounded-2xl border p-3.5 min-w-0"
+      style={{ background: FUNDO_CARTAO, borderColor: C.border }}
+    >
+      <span
+        className="block"
+        style={{ color: C.inkSoft, fontSize: 12, fontWeight: 600, letterSpacing: ".1em" }}
+      >
+        {rotulo.toUpperCase()}
+      </span>
+      <span
+        className="block mt-1"
+        style={{
+          color: C.ink,
+          fontSize: 30,
+          fontWeight: 700,
+          letterSpacing: "-.035em",
+          lineHeight: 1.05,
+        }}
+      >
+        {Math.round(n)}
+      </span>
+      <span className="block mt-1 text-[13px]" style={{ color: C.inkSoft }}>
+        {lotado ? "lotado" : `passageiros de ${capacidade}`}
+      </span>
+    </button>
+  );
+}
+
+function ItemPrecisa({ Icon, titulo, detalhe, acao, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="toque-at w-full grid items-center gap-3 py-2.5 text-left border-t first:border-t-0 min-h-[58px]"
+      style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", borderColor: C.border }}
+    >
+      <span
+        className="w-9 h-9 rounded-xl flex items-center justify-center"
+        style={{ background: C.panel2, color: C.inkSoft }}
+      >
+        <Icon size={17} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] font-semibold truncate" style={{ color: C.ink }}>
+          {titulo}
+        </span>
+        {detalhe && (
+          <span className="block text-xs truncate" style={{ color: C.inkFaint }}>
+            {detalhe}
+          </span>
+        )}
+      </span>
+      <span
+        className="flex items-center gap-0.5 text-[13px] font-semibold"
+        style={{ color: "#FF5260" }}
+      >
+        {acao}
+        <ChevronRight size={15} />
+      </span>
+    </button>
+  );
+}
+
+export default function DashboardTab({ reservas, capacidade, trips, pendencias = 0, onIr }) {
   const hoje = todayStr();
+  const notif = useNotificacoesCtx();
   // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
   const now = new Date();
   const finThis = useFinanceMonth(now.getFullYear(), now.getMonth() + 1);
@@ -178,7 +196,6 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
     () => [...(finPrev.entries || []), ...(finThis.entries || [])].map(mapEntry),
     [finThis.entries, finPrev.entries],
   );
-  // Ano inteiro — só para o "Lucro real" (hoje/mês já saem de financeiro acima).
   const finAno = useFinanceYear(now.getFullYear());
   const financeiroAno = useMemo(() => (finAno.entries || []).map(mapEntry), [finAno.entries]);
   // combustível/manutenção do veículo padrão — só para os alertas de "IA Operacional"
@@ -197,11 +214,10 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
     [reservas, operacao, capacidade, trips],
   );
   const demanda = useMemo(() => previsaoDemanda(reservas), [reservas]);
-  const confirmadas = reservas.filter(
-    (r) => OCUPA_VAGA.includes(r.status) && !["frete", "encomenda"].includes(r.tipo),
+  const doDia = reservas.filter(
+    (r) =>
+      r.data === hoje && OCUPA_VAGA.includes(r.status) && !["frete", "encomenda"].includes(r.tipo),
   );
-  const doDia = confirmadas.filter((r) => r.data === hoje);
-  const passageirosHoje = doDia.reduce((s, r) => s + r.quantidade, 0);
   // Lotação SEMPRE por direção — cada viagem tem `capacidade` lugares.
   // Extras (fora das vagas, issue #210) ficam de fora da lotação.
   const paxIdaHoje = doDia
@@ -210,44 +226,20 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
   const paxVoltaHoje = doDia
     .filter((r) => r.direcao === "volta" && !ehExtra(r))
     .reduce((s, r) => s + r.quantidade, 0);
-  const vagasIdaHoje = Math.max(0, capacidade - paxIdaHoje);
-  const vagasVoltaHoje = Math.max(0, capacidade - paxVoltaHoje);
-  const ocupIda = capacidade ? Math.round((paxIdaHoje / capacidade) * 100) : 0;
-  const ocupVolta = capacidade ? Math.round((paxVoltaHoje / capacidade) * 100) : 0;
   const emEspera = reservas.filter((r) => r.status === "espera").length;
-  const receitaHoje = financeiro
-    .filter((f) => f.data === hoje && f.tipo === "receita")
-    .reduce((s, f) => s + f.valor, 0);
-  const receitaMes = useMemo(() => {
-    const m = hoje.slice(0, 7);
-    return financeiro
-      .filter((f) => f.tipo === "receita" && f.data.startsWith(m))
-      .reduce((s, f) => s + f.valor, 0);
-  }, [financeiro, hoje]);
-  // Lucro real = receita − despesa (a mesma conta da aba Financeiro),
-  // em 3 janelas: hoje, mês corrente (até hoje) e ano corrente (até hoje).
-  const despesaHoje = financeiro
-    .filter((f) => f.data === hoje && f.tipo === "despesa")
-    .reduce((s, f) => s + f.valor, 0);
-  const lucroHoje = receitaHoje - despesaHoje;
-  const despesaMes = useMemo(() => {
-    const m = hoje.slice(0, 7);
-    return financeiro
-      .filter((f) => f.tipo === "despesa" && f.data.startsWith(m))
-      .reduce((s, f) => s + f.valor, 0);
-  }, [financeiro, hoje]);
-  const lucroMes = receitaMes - despesaMes;
-  const lucroAno = useMemo(
-    () => somaTipo(financeiroAno, "receita") - somaTipo(financeiroAno, "despesa"),
-    [financeiroAno],
-  );
-  const contagemPorCliente = {};
-  confirmadas.forEach((r) => {
-    const k = r.telefone || r.nome;
-    contagemPorCliente[k] = (contagemPorCliente[k] || 0) + 1;
-  });
-  const recorrentes = Object.values(contagemPorCliente).filter((n) => n >= 2).length;
-  const ocupacaoMedia = Math.round((ocupIda + ocupVolta) / 2);
+  const pendentesHoje = reservas.filter((r) => r.data === hoje && r.status === "pendente").length;
+  // Faturamento e lucro real (receita − despesa, a mesma conta do Financeiro): hoje, mês e ano.
+  const soma = (lista, tipo, filtro) =>
+    lista.filter((f) => f.tipo === tipo && filtro(f)).reduce((s, f) => s + f.valor, 0);
+  const mes = hoje.slice(0, 7);
+  const receitaHoje = soma(financeiro, "receita", (f) => f.data === hoje);
+  const lucroHoje = receitaHoje - soma(financeiro, "despesa", (f) => f.data === hoje);
+  const receitaMes = soma(financeiro, "receita", (f) => f.data.startsWith(mes));
+  const lucroMes = receitaMes - soma(financeiro, "despesa", (f) => f.data.startsWith(mes));
+  const receitaAno = somaTipo(financeiroAno, "receita");
+  const lucroAno = receitaAno - somaTipo(financeiroAno, "despesa");
+  const carregandoMes = finThis.loading && !finThis.entries?.length;
+  const carregandoAno = finAno.loading && !finAno.entries?.length;
   const ultimos7 = useMemo(() => {
     const dias = [];
     for (let i = 6; i >= 0; i--) {
@@ -269,81 +261,146 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
     }
     return dias;
   }, [financeiro, reservas]);
-  const pendentesHoje = reservas.filter(
-    (r) => r.data === hoje && (r.status === "pendente" || r.status === "espera"),
-  ).length;
+  const ir = (tab, deepLink) => onIr?.({ tab, deepLink });
+  const avisos = (notif?.notificacoes || []).filter((n) => !n.lida).slice(0, 3);
+  const nomeMes = nomeDoMes(hoje);
+  const nada = pendencias === 0 && pendentesHoje === 0 && emEspera === 0 && avisos.length === 0;
   return (
-    <div>
-      <div className="flex justify-end px-4 md:px-10 pt-3 -mb-1">
+    <div className="px-3.5 md:px-10 pt-2 md:pt-6 pb-10">
+      <div className="hidden md:flex justify-end mb-3">
         <SinoNotificacoes />
       </div>
-      <DashboardHero
-        paxIda={paxIdaHoje}
-        paxVolta={paxVoltaHoje}
-        capacidade={capacidade}
-        faturamento={receitaHoje}
-        pendencias={pendentesHoje}
-      />
-      <div className="px-6 md:px-10 pb-10 space-y-5">
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger">
-          <StatCard
-            label="Passageiros hoje"
-            value={passageirosHoje}
-            hint={`ida ${paxIdaHoje} · volta ${paxVoltaHoje}`}
-            icon={Users}
-          />
-          <StatCard
-            label="Vagas hoje"
-            value={`${vagasIdaHoje} / ${vagasVoltaHoje}`}
-            hint="livres na ida · na volta"
-            icon={Bus}
-            accent={C.green}
-          />
-          <StatCard
-            label="Faturamento hoje"
-            value={fmtBRL(receitaHoje)}
-            icon={Wallet}
-            accent={C.green}
-          />
-          <StatCard
-            label="Faturamento do mês"
-            value={fmtBRL(receitaMes)}
-            icon={TrendingUp}
-            accent={C.amber}
-          />
-          <StatCard
-            label="Lucro hoje"
-            value={fmtBRL(lucroHoje)}
-            icon={Route}
-            accent={lucroHoje >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Lucro real do mês"
-            value={fmtBRL(lucroMes)}
-            icon={Route}
-            accent={lucroMes >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Lucro real do ano"
-            value={fmtBRL(lucroAno)}
-            icon={Route}
-            accent={lucroAno >= 0 ? C.blue : C.red}
-          />
-          <StatCard
-            label="Clientes recorrentes"
-            value={recorrentes}
-            icon={Repeat}
-            accent={C.blue}
-          />
-          <StatCard label="Lista de espera" value={emEspera} icon={Hourglass} accent={C.purple} />
-          <StatCard
-            label="Ocupação hoje"
-            value={`${ocupacaoMedia}%`}
-            hint={`ida ${ocupIda}% · volta ${ocupVolta}%`}
-            icon={CheckCircle2}
-            accent={C.blue}
+      <div className="md:max-w-3xl space-y-2.5 md:space-y-3 stagger">
+        <div
+          className="relative rounded-[22px] overflow-hidden"
+          style={{
+            aspectRatio: "16 / 9",
+            background: C.panel,
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,.06)",
+          }}
+        >
+          <img
+            src="/brand/capa-inicio.webp"
+            alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+            width={1280}
+            height={720}
+            decoding="async"
+            fetchPriority="high"
+            className="block w-full h-full object-cover"
+            data-testid="capa-inicio"
           />
         </div>
+        <div className="grid grid-cols-3 gap-1.5 md:gap-2.5" data-testid="inicio-financeiro">
+          <CartaoFinanceiro
+            periodo="Ano"
+            receita={receitaAno}
+            lucro={lucroAno}
+            carregando={carregandoAno}
+            onClick={() => ir("financeiro")}
+          />
+          <CartaoFinanceiro
+            periodo={nomeMes}
+            receita={receitaMes}
+            lucro={lucroMes}
+            carregando={carregandoMes}
+            onClick={() => ir("financeiro")}
+          />
+          <CartaoFinanceiro
+            periodo="Hoje"
+            receita={receitaHoje}
+            lucro={lucroHoje}
+            carregando={carregandoMes}
+            onClick={() => ir("financeiro")}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:gap-2.5">
+          <CartaoViagem
+            rotulo="Ida"
+            passageiros={paxIdaHoje}
+            capacidade={capacidade}
+            onClick={() => ir("agenda", { kind: "data", data: hoje, sentido: "ida" })}
+          />
+          <CartaoViagem
+            rotulo="Volta"
+            passageiros={paxVoltaHoje}
+            capacidade={capacidade}
+            onClick={() => ir("agenda", { kind: "data", data: hoje, sentido: "volta" })}
+          />
+        </div>
+        <div>
+          <h2
+            className="flex items-center mt-4 mb-2 px-0.5 text-[15px] font-bold"
+            style={{ color: C.ink }}
+          >
+            <span className="riscos-at" aria-hidden="true">
+              <i />
+              <i />
+            </span>
+            Precisa de você
+          </h2>
+          <div
+            className="cartao-at rounded-2xl border px-3"
+            style={{ background: FUNDO_CARTAO, borderColor: C.border }}
+            data-testid="precisa-de-voce"
+          >
+            {pendencias > 0 && (
+              <ItemPrecisa
+                Icon={Inbox}
+                titulo={
+                  pendencias === 1
+                    ? "1 pendência no atendimento"
+                    : `${pendencias} pendências no atendimento`
+                }
+                detalhe="clientes e reservas que pedem a equipe"
+                acao="Abrir"
+                onClick={() => ir("pendencias")}
+              />
+            )}
+            {pendentesHoje > 0 && (
+              <ItemPrecisa
+                Icon={AlertTriangle}
+                titulo={
+                  pendentesHoje === 1
+                    ? "1 reserva pendente hoje"
+                    : `${pendentesHoje} reservas pendentes hoje`
+                }
+                detalhe="confirmar ou recusar na Agenda"
+                acao="Ver"
+                onClick={() => ir("agenda", { kind: "data", data: hoje })}
+              />
+            )}
+            {emEspera > 0 && (
+              <ItemPrecisa
+                Icon={Hourglass}
+                titulo={
+                  emEspera === 1
+                    ? "1 pessoa na lista de espera"
+                    : `${emEspera} pessoas na lista de espera`
+                }
+                detalhe="chame quando abrir vaga"
+                acao="Ver"
+                onClick={() => ir("agenda")}
+              />
+            )}
+            {avisos.map((n) => (
+              <ItemPrecisa
+                key={n.id}
+                Icon={Bell}
+                titulo={n.title}
+                detalhe={n.body}
+                acao="Lido"
+                onClick={() => notif?.marcarLida?.(n.id)}
+              />
+            ))}
+            {nada && (
+              <p className="py-4 text-[13px]" style={{ color: C.inkSoft }}>
+                Tudo em dia por aqui.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-5 mt-6">
         <div className="anim-fadeUp">
           <Suspense fallback={<ChartsSkeleton />}>
             <SevenDayCharts data={ultimos7} />
@@ -391,7 +448,6 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
                 </div>
                 <div
                   style={{
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontWeight: 600,
                     fontSize: "0.85rem",
                   }}

@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { escolherSentido } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Edição de reserva numa transação só (rpc_edit_reservation, database/33).
 
 test("Agenda: editar reserva salva numa chamada e fecha o modal", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
@@ -35,7 +38,11 @@ test("Agenda: editar reserva salva numa chamada e fecha o modal", async ({ page 
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await escolherSentido(page, "Volta");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
   // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
   // reserva em vez de depender do default.

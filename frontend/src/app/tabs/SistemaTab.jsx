@@ -1350,7 +1350,6 @@ export default function SistemaTab({
             <div>
               <h1
                 style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
                   fontWeight: 700,
                   fontSize: "1.3rem",
                   color: "#fff",

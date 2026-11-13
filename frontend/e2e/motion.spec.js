@@ -116,7 +116,7 @@ test("Desligado: classes de entrada do conteúdo usam animation:none (não só d
     } catch {}
   });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.dataset.motion))
     .toBe("off");

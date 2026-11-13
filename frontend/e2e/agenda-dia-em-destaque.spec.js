@@ -38,7 +38,7 @@ const diaDaSemana = (d) => d.toLocaleDateString("pt-BR", { weekday: "long", time
 async function abrirAgenda(page) {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /^Dashboard$/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   await page
     .getByRole("button", { name: /^Agenda$/ })
     .first()

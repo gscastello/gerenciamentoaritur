@@ -69,7 +69,6 @@ function LinhaDRE({ label, valor, negativo = false, forte = false, indent = fals
       </span>
       <span
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: forte ? 700 : 500,
           color: forte ? (valor >= 0 ? C.green : C.red) : negativo && valor > 0 ? C.red : C.ink,
         }}
@@ -340,7 +339,7 @@ function GestaoResultado({
                         style={{ color: v > 0 ? C.ink : C.inkFaint }}
                       >
                         <span>{c.label}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                        <span>
                           {fmtBRL(v)}
                         </span>
                       </div>
@@ -689,7 +688,6 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                               </td>
                               <td
                                 className="px-3 py-2"
-                                style={{ fontFamily: "'JetBrains Mono', monospace" }}
                               >
                                 {fmtBRL(Number(t.amount))}
                               </td>
@@ -1050,7 +1048,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
           <div className="text-sm font-semibold">Custos empresariais lançados no mês</div>
           <div
             className="text-xs"
-            style={{ fontFamily: "'JetBrains Mono', monospace", color: C.inkSoft }}
+            style={{ color: C.inkSoft }}
           >
             {fmtBRL(totalMes)}
           </div>
@@ -1128,7 +1126,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
                     <td className="px-3 py-2" style={{ color: C.inkSoft }}>
                       {e.descricao || "—"}
                     </td>
-                    <td className="px-3 py-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    <td className="px-3 py-2">
                       {fmtBRL(e.valor)}
                     </td>
                     <td className="px-3 py-2">

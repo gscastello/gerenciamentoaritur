@@ -241,7 +241,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
               <div
                 className="capitalize text-center min-w-[130px]"
                 style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
                   fontWeight: 700,
                   fontSize: "1.15rem",
                   color: "#fff",
@@ -269,7 +268,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
                 <div
                   style={{
                     color: "#fff",
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontWeight: 700,
                   }}
                 >
@@ -286,7 +284,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
                 <div
                   style={{
                     color: "rgba(255,255,255,.72)",
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontWeight: 700,
                   }}
                 >
@@ -303,7 +300,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
                 <div
                   style={{
                     color: "#fff",
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontWeight: 800,
                     fontSize: "1.1rem",
                   }}
@@ -624,7 +620,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           </Pill>
                           <span
                             className="font-semibold"
-                            style={{ fontFamily: "'JetBrains Mono', monospace" }}
                           >
                             {fmtBRL(f.valor)}
                           </span>
@@ -787,7 +782,6 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           </td>
                           <td
                             className="px-4 py-2"
-                            style={{ fontFamily: "'JetBrains Mono', monospace" }}
                           >
                             {fmtBRL(f.valor)}
                           </td>
@@ -1037,7 +1031,7 @@ function RelatorioFinanceiroView() {
                     <th className="px-3 py-2 font-medium text-right">Lucro</th>
                   </tr>
                 </thead>
-                <tbody style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                <tbody>
                   {relatorio.linhas.map((l) => (
                     <tr
                       key={l.periodo}
@@ -1072,7 +1066,6 @@ function RelatorioFinanceiroView() {
                   </div>
                   <div
                     className="flex items-center justify-between"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
                     <span className="text-xs" style={{ color: C.inkSoft }}>
                       Faturamento
@@ -1081,7 +1074,6 @@ function RelatorioFinanceiroView() {
                   </div>
                   <div
                     className="flex items-center justify-between"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
                     <span className="text-xs" style={{ color: C.inkSoft }}>
                       Despesa
@@ -1091,7 +1083,6 @@ function RelatorioFinanceiroView() {
                   <div
                     className="flex items-center justify-between font-semibold"
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
                       color: l.lucro >= 0 ? C.green : C.red,
                     }}
                   >
@@ -1215,7 +1206,6 @@ function ContasReceberView({ pix }) {
                       </td>
                       <td
                         className="px-4 py-2"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
                       >
                         {fmtBRL(c.valor_devido)}
                       </td>
