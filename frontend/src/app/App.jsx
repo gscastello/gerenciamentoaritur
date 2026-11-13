@@ -169,16 +169,14 @@ function GlobalStyles() {
       .toque-at:active { transform: scale(.97); filter: brightness(.96); }
       /* seletor Ida/Volta da Agenda: só o texto e um traço vermelho embaixo do escolhido */
       .seletor-at-traco { transition: left .26s cubic-bezier(.2,0,0,1); }
-      /* lugar da van acendendo (mapa da Agenda) */
-      @keyframes lugarAcende { from { transform: scale(.6); opacity:.2; } to { transform: scale(1); opacity:1; } }
-      .lugar-at { transition: background-color .24s ease, box-shadow .24s ease; }
-      .lugar-at[data-ocupado="1"] { animation: lugarAcende .26s cubic-bezier(.16,1,.3,1) both; }
       button, a, select, input { touch-action: manipulation; }
-      .anim-fadeUp { animation: fadeUp .32s cubic-bezier(.16,1,.3,1) both; will-change: transform, opacity; }
-      .anim-fadeIn { animation: fadeIn .24s cubic-bezier(.16,1,.3,1) both; }
-      .anim-pop { animation: scaleIn .28s cubic-bezier(.16,1,.3,1) both; will-change: transform, opacity; }
-      .anim-slideDown { animation: slideDown .2s cubic-bezier(.16,1,.3,1) both; }
-      .stagger > * { animation: fadeUp .3s cubic-bezier(.16,1,.3,1) both; will-change: transform, opacity; }
+      .anim-fadeUp { animation: fadeUp .32s cubic-bezier(.16,1,.3,1) backwards; }
+      .anim-fadeIn { animation: fadeIn .24s cubic-bezier(.16,1,.3,1) backwards; }
+      .anim-pop { animation: scaleIn .28s cubic-bezier(.16,1,.3,1) backwards; }
+      .anim-slideDown { animation: slideDown .2s cubic-bezier(.16,1,.3,1) backwards; }
+      /* "backwards" e sem will-change (issue #393): depois de entrar, a tela não fica com transform/opacity
+         preso — senão as janelas "fixed" de dentro dela ficam abaixo da barra de baixo e do "+" */
+      .stagger > * { animation: fadeUp .3s cubic-bezier(.16,1,.3,1) backwards; }
       .stagger > *:nth-child(1){animation-delay:.01s} .stagger > *:nth-child(2){animation-delay:.04s}
       .stagger > *:nth-child(3){animation-delay:.07s} .stagger > *:nth-child(n+4){animation-delay:.1s}
       .skel { position:relative; overflow:hidden; background:${C.panel2}; }
@@ -285,14 +283,14 @@ function GlobalStyles() {
          em will-change pode ficar presa no frame inicial (opacity:0) sem
          repintar, "sumindo" com o conteúdo real. animation:none remove
          de vez o risco — o elemento nasce no estado final, sem keyframe. */
-      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
+      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
         animation: none !important; will-change: auto !important; }
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
         html:not([data-motion]) :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark),
         html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
-        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
+        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
           animation: none !important; will-change: auto !important; }
       }
     `}</style>
@@ -957,7 +955,7 @@ function MobileNav({
     <>
       {maisAberto && (
         <div
-          className="md:hidden fixed inset-0 z-30 anim-fadeIn"
+          className="md:hidden fixed inset-0 z-50 anim-fadeIn"
           style={{ background: "rgba(0,0,0,.55)" }}
           onClick={() => setMaisAberto(false)}
         >
@@ -1422,7 +1420,9 @@ function AppInner() {
                 docada={!noInicio}
               />
 
-              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative z-10">
+              {/* sem z-index aqui: as janelas das telas (z-40) precisam ficar por cima da barra de baixo
+                  e do botão "+" (issue #393) */}
+              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative">
                 {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
                 <header
                   data-testid="topo-tela"
@@ -1558,7 +1558,16 @@ function AppInner() {
                         />
                       )}
                       {tab === "financeiro" && (
-                        <FinanceiroTab pix={cfgSettings.pix} deepLink={deepLink} />
+                        <FinanceiroTab
+                          pix={cfgSettings.pix}
+                          deepLink={deepLink}
+                          atalhos={[
+                            { id: "fechamento", label: "Fechamento", Icon: ClipboardList },
+                            { id: "extrato", label: "Extrato", Icon: Landmark },
+                          ]
+                            .filter((a) => TELAS.includes(a.id))
+                            .map((a) => ({ ...a, onClick: () => mudarAba(a.id) }))}
+                        />
                       )}
                       {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
                       {tab === "operacao" && <OperacaoTab />}

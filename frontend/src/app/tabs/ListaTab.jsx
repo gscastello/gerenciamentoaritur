@@ -451,7 +451,7 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
       ) : (
         <ol className="list-none space-y-1.5">
           {itens.map((r, idx) => (
-            <li key={r.id} className="rounded-md px-2.5 py-2.5" style={{ background: C.panel2 }}>
+            <li key={r.id} className="px-1 py-2 border-b" style={{ borderColor: C.panel2 }}>
               <div className="flex items-start gap-2">
                 <span
                   className="tabular-nums shrink-0 mt-0.5 text-sm"
@@ -584,7 +584,7 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
           — sem anotações —
         </div>
       ) : (
-        <div className="space-y-2">
+        <div>
           {itens.map((r) => (
             <LinhaEmbarque
               key={r.id}
@@ -613,12 +613,16 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const ehEnc = r.tipo === "encomenda";
   const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
   const cidadeIntermediaria = useCidadeIntermediaria(r);
+  // crítica de design (issue #393): uma linha por passageiro, sem cartão dentro do cartão;
+  // Ligar e WhatsApp em ícones de 44 px; o resto em "ver reserva completa"
+  const icone = "btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0";
   return (
     <div
-      className="rounded-lg px-3 py-2.5 flex items-start gap-2.5"
+      className="row-hover grid items-start gap-1 py-1.5 border-b"
       style={{
-        background: cidadeIntermediaria ? C.rotaSoft : C.panel2,
-        borderLeft: cidadeIntermediaria ? `3px solid ${C.rota}` : undefined,
+        gridTemplateColumns: `${marcar ? "44px " : ""}minmax(0,1fr) auto`,
+        borderColor: C.panel2,
+        background: cidadeIntermediaria ? C.rotaSoft : "transparent",
         opacity: faltou ? 0.5 : 1,
       }}
     >
@@ -635,21 +639,23 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
                 ? "Desmarcar embarque"
                 : "Marcar embarque"
           }
-          className="check-fast shrink-0 mt-0.5 rounded-[4px] border flex items-center justify-center w-4 h-4"
-          style={{
-            borderColor: embarcado ? C.ink : C.inkFaint,
-            background: embarcado ? C.ink : "transparent",
-          }}
+          aria-pressed={embarcado}
+          className="check-fast w-11 h-11 flex items-center justify-center"
         >
-          {embarcado && <Check size={11} style={{ color: C.panel }} strokeWidth={3} />}
+          <span
+            className="w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center"
+            style={{
+              borderColor: embarcado ? C.ink : C.inkFaint,
+              background: embarcado ? C.ink : "transparent",
+            }}
+          >
+            {embarcado && <Check size={13} style={{ color: C.bg }} strokeWidth={3} />}
+          </span>
         </button>
       )}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 py-1.5">
         <div className="flex items-baseline gap-2">
-          <span
-            className="text-[15px] font-bold shrink-0"
-            style={{ color: C.ink }}
-          >
+          <span className="text-[15px] font-bold shrink-0" style={{ color: C.ink }}>
             {ehEnc ? (
               <>
                 <Package size={13} className="inline mr-0.5" aria-hidden="true" />
@@ -683,41 +689,49 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
             {resumoDaEncomenda(r)}
           </div>
         )}
-        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-          {tel && (
-            <>
-              <a
-                href={`tel:${tel}`}
-                className="btn-press flex items-center gap-1 text-[12px] px-2.5 py-1.5 rounded-md"
-                style={{ background: C.panel, color: C.ink }}
-              >
-                <PhoneCall size={13} /> {r.telefone}
-              </a>
-              <a
-                href={`https://wa.me/55${tel}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-press flex items-center gap-1 text-[12px] px-2.5 py-1.5 rounded-md"
-                style={{ background: C.panel, color: C.inkSoft }}
-              >
-                <MessageCircle size={13} /> WhatsApp
-              </a>
-            </>
-          )}
+        <div
+          className="mt-0.5 flex items-center gap-2 flex-wrap text-xs"
+          style={{ color: C.inkFaint }}
+        >
+          {tel && <span>{r.telefone}</span>}
           {buscar && <BuscaChip r={r} onCycle={buscar} />}
         </div>
       </div>
-      {onAbrir && (
-        <button
-          type="button"
-          onClick={() => onAbrir(r)}
-          aria-label="Ver reserva completa"
-          className="btn-press shrink-0 self-center w-8 h-8 rounded-md flex items-center justify-center"
-          style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
-        >
-          <ChevronRight size={16} />
-        </button>
-      )}
+      <div className="flex items-center">
+        {tel && (
+          <a
+            href={`tel:${tel}`}
+            aria-label={`Ligar para ${r.telefone}`}
+            className={icone}
+            style={{ color: C.inkSoft }}
+          >
+            <PhoneCall size={18} />
+          </a>
+        )}
+        {tel && (
+          <a
+            href={`https://wa.me/55${tel}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`WhatsApp de ${r.nome || r.telefone}`}
+            className={icone}
+            style={{ color: C.inkSoft }}
+          >
+            <MessageCircle size={18} />
+          </a>
+        )}
+        {onAbrir && (
+          <button
+            type="button"
+            onClick={() => onAbrir(r)}
+            aria-label="Ver reserva completa"
+            className={icone}
+            style={{ color: C.inkSoft }}
+          >
+            <ChevronRight size={19} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -758,10 +772,7 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
         <div className="flex items-start justify-between gap-2 mb-3">
           <div>
             <div className="text-base font-bold" style={{ color: C.ink }}>
-              <span>
-                {ehEnc ? "ENC" : `${r.quantidade}P`}
-              </span>{" "}
-              · {ehEnc ? "contato: " : ""}
+              <span>{ehEnc ? "ENC" : `${r.quantidade}P`}</span> · {ehEnc ? "contato: " : ""}
               {r.nome || (ehEnc ? r.telefone : "") || "—"}
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>

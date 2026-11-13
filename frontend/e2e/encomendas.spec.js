@@ -201,7 +201,7 @@ test("Agenda: encomenda agendada aparece no ponto da viagem como uma passagem, s
     page.getByText(/Documentos · entrega: Pirapemas centro · de: José Remetente/),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /WhatsApp/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Editar", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Mais ações/ }).first()).toBeVisible();
   // cabeçalho do ponto conta a encomenda à parte; nenhuma passagem
   await expect(page.getByText("1 encomenda(s)", { exact: true })).toBeVisible();
   await expect(page.getByText(/passagem\(ns\)/)).toHaveCount(0);
@@ -232,7 +232,11 @@ test("Agenda: Editar abre o formulário da encomenda já preenchido e salva sem 
     onEdit: (route) => chamadas.push(route.request().postDataJSON()),
   });
 
-  await page.getByRole("button", { name: "Editar", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Mais ações/ })
+    .first()
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Editar" }).click();
   await expect(page.getByText("Editar encomenda")).toBeVisible();
   await expect(page.getByLabel("Endereço de entrega (pode ser depois)")).toHaveValue(
     "Pirapemas centro",
@@ -325,6 +329,11 @@ test("Agenda: anotação rápida 'E endereço telefone' na caixinha do ponto cri
     .first()
     .click();
 
+  // a caixinha do ponto abre ao tocar em "Anotar em …" (crítica de design, issue #393)
+  await page
+    .getByRole("button", { name: /^Anotar em / })
+    .first()
+    .click();
   const caixa = page.getByRole("textbox", { name: /Anotar reserva/ }).first();
   await caixa.fill("E 98977776666");
   await caixa.press("Enter");

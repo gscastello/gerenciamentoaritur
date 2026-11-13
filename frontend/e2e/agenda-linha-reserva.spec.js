@@ -129,7 +129,7 @@ test("Agenda: em Outros a linha mostra só o local citado, sem repetir 'Outros' 
   await page.locator('input[type="date"]').first().fill(hoje);
 
   // a seção se chama "Outros"; a linha mostra só o embarque citado pelo cliente
-  await expect(page.getByText("OUTROS", { exact: true })).toBeVisible();
+  await expect(page.getByText("Outros", { exact: true }).first()).toBeVisible();
   const linha = page.locator("div.row-hover", { hasText: "Passageira do Aeroporto Teste" });
   await expect(linha).toContainText("Aeroporto de São Luís");
   await expect(linha).not.toContainText("Outros");

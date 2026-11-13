@@ -191,10 +191,7 @@ export default function BuscaEmCasaEditor({ itens, trips, onSalvar, onFechar }) 
                   onChange={() => alternar(id)}
                   aria-label={`Selecionar ${r.nome}`}
                 />
-                <span
-                  className="text-[11px] font-bold mt-1 shrink-0"
-                  style={{ color: C.inkFaint }}
-                >
+                <span className="text-[11px] font-bold mt-1 shrink-0" style={{ color: C.inkFaint }}>
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1">

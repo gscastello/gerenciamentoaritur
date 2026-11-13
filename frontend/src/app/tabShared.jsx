@@ -897,19 +897,16 @@ export function StatusPill({ status }) {
 export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
   return (
     <Card className="relative overflow-hidden">
-      <span
-        className="absolute left-0 top-0 bottom-0"
-        style={{ width: 3, background: accent, opacity: 0.9 }}
-      />
       <div className="flex items-start justify-between gap-2">
         <div className="text-[11px] leading-tight" style={{ color: C.inkSoft, minHeight: "2.2em" }}>
           {label}
         </div>
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: `${accent}1f`, border: `1px solid ${accent}33` }}
+          style={{ background: C.panel2 }}
+          data-acento={accent}
         >
-          <Icon size={16} style={{ color: accent }} />
+          <Icon size={16} style={{ color: C.inkSoft }} />
         </div>
       </div>
       <div
@@ -930,24 +927,6 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
         </div>
       )}
     </Card>
-  );
-}
-export function MiniStat({ label, value, cor }) {
-  return (
-    <div className="text-center">
-      <div className="text-[10px] uppercase tracking-wide" style={{ color: C.inkFaint }}>
-        {label}
-      </div>
-      <div
-        style={{
-          fontWeight: 700,
-          fontSize: "1.1rem",
-          color: cor || C.ink,
-        }}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 
@@ -979,21 +958,26 @@ export function SubTabs({ value, onChange, options }) {
   return (
     <div
       className="flex flex-wrap gap-1 rounded-xl p-1 max-w-full"
-      style={{ background: C.panel2, border: `1px solid ${C.border}` }}
+      style={{ background: C.panel, border: `1px solid ${C.border}` }}
     >
+      {/* crítica de design (issue #393): a escolhida em painel com traço vermelho embaixo,
+          como o seletor Ida/Volta — sem botão vermelho cheio */}
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
         return (
           <button
             key={id}
             type="button"
+            aria-pressed={active}
             onClick={() => onChange(id)}
-            className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg"
+            className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-lg"
             style={{
-              background: active ? C.brand : "transparent",
-              color: active ? C.onBrand : C.inkSoft,
+              background: active ? C.panel2 : "transparent",
+              color: active ? C.ink : C.inkSoft,
               fontWeight: active ? 600 : 500,
-              boxShadow: active ? `0 6px 16px -8px ${C.brandGlow}` : "none",
+              boxShadow: active
+                ? `inset 0 0 0 1px ${C.border}, inset 0 -2px 0 0 ${C.brand}`
+                : "none",
             }}
           >
             {Icon && <Icon size={13} />}

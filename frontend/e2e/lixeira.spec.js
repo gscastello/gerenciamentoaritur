@@ -131,7 +131,8 @@ test("Cancelar na Agenda pede confirmação — dispensar não cancela", async (
     mensagem = d.message();
     d.dismiss();
   });
-  await linha.getByRole("button", { name: "Cancelar" }).click();
+  await linha.getByRole("button", { name: /^Mais ações/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar reserva" }).click();
   expect(mensagem).toContain("Cancelar a reserva de Rita Ativa?");
   expect(mensagem).toContain("Lixeira");
   expect(cancelou).toBe(false);
@@ -145,8 +146,9 @@ test("confirmar o cancelamento manda a reserva para a Lixeira", async ({ page })
   page.once("dialog", (d) => d.accept());
   await page
     .locator("div.row-hover", { hasText: "Rita Ativa" })
-    .getByRole("button", { name: "Cancelar" })
+    .getByRole("button", { name: /^Mais ações/ })
     .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar reserva" }).click();
 
   await expect(lixeira(page)).toContainText("3");
   await expect(page.locator("div.row-hover", { hasText: "Rita Ativa" })).toHaveCount(0);

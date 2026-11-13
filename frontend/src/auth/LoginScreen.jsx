@@ -97,6 +97,7 @@ export function LoginScreen() {
           gap: 10,
         }}
       >
+        <h1 className="sr-only">Gestão AriTur</h1>
         <img
           src="/brand/logo-fundo-escuro.webp"
           alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"

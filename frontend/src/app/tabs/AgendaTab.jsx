@@ -975,7 +975,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
   const nome = r.nome || (ehEnc ? r.telefone : "") || "—";
-  const principal = endereco || nome;
+  const principal = endereco || (ehEnc ? `contato: ${nome}` : nome);
   const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
   // o que vem embaixo, separado por " · "
   const detalhes = [
@@ -997,7 +997,11 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       style={{
         gridTemplateColumns: "44px minmax(0,1fr) auto",
         borderColor: C.panel2,
-        background: cidadeIntermediaria ? C.rotaSoft : "transparent",
+        background: cidadeIntermediaria
+          ? C.rotaSoft
+          : modoBusca
+            ? `${modoBusca.cor}14`
+            : "transparent",
       }}
     >
       <button
@@ -1057,7 +1061,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
                 className="inline-flex items-center gap-1 font-semibold"
                 style={{ color: modoBusca.cor }}
               >
-                · <modoBusca.Icon size={12} /> {modoBusca.label}
+                · <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
               </span>
             )}
           </div>
@@ -1068,7 +1072,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         {tel && (
           <a
             href={`tel:${tel}`}
-            aria-label={`Ligar para ${nome}`}
+            aria-label={`Ligar para ${nome} (${r.telefone})`}
             className={icone}
             style={{ color: C.inkSoft }}
           >

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { campoAnotar } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Anotação rápida direto na Agenda (pedido do usuário, 2026-09-17):
@@ -21,7 +22,7 @@ test("Agenda: anotação rápida no ponto cria a reserva sem abrir modal", async
     .first()
     .click();
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await expect(campo).toBeVisible();
   await campo.fill("1P Cohatrac 98999998888");
   await campo.press("Enter");
@@ -56,7 +57,7 @@ test("Agenda: anotação rápida com prefixo 'E' agenda uma encomenda no ponto, 
     .first()
     .click();
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await expect(campo).toBeVisible();
   // issue #246: o texto antes do telefone é onde vamos buscar a encomenda
   await campo.fill("E Cohatrac Rua 7 98988887777");
@@ -91,7 +92,7 @@ test("Agenda: anotação sem telefone reconhecível mostra erro e não chama a R
     .first()
     .click();
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await campo.fill("1P Cohatrac");
   await campo.press("Enter");
 
@@ -121,7 +122,7 @@ test("Agenda: anotação rápida com nome — NP, endereço, telefone e nome num
     .first()
     .click();
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await campo.fill("2P Anjo da Guarda Rua 3 98988887777 Maria Silva");
   await campo.press("Enter");
 
@@ -155,7 +156,7 @@ test("Agenda: anotação rápida aceita ' - ' entre as partes", async ({ page })
     .first()
     .click();
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await campo.fill("1P - Cohama - 98 7024-2260 - João");
   await campo.press("Enter");
 
