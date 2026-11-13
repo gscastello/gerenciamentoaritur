@@ -494,6 +494,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   a cada carregamento: lotação por viagem, pendências, pagamentos em
   aberto, manutenção próxima do vencimento, consumo de combustível
   anômalo, lista de espera.
+- **Extrato do banco** (issue #364, aba Gestão → Extrato, `database/104`): o dono manda o OFX/CSV do mês; cada
+  movimento é guardado UMA vez em `extrato_linhas` (chave = id do banco ou data+valor+descrição+ordem) e a conferência
+  (`domain/extrato.js`) separa: bate (mesmo valor, ±3 dias), pagamento de reserva já pago no Pix/cartão, **Pix dentro
+  da receita lançada como total do dia** (não lançar de novo), falta lançar, em dobro e lançado no app fora do banco.
+  "Lançar" passa por `rpc_lancar_movimento` (o lançamento sai do próprio movimento; dois toques não lançam duas vezes);
+  o que não é da empresa fica "ignorado", nunca apagado.
 - Previsão de demanda = média histórica simples por dia da semana
   (`domain/demanda.js`). Ao crescer o volume, considerar série temporal
   real (Prophet, ou chamada à API do Claude com dados agregados).
