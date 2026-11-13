@@ -154,6 +154,18 @@ Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 | `supabase-postgres-best-practices` | consultas, índices, RLS, migrações | supabase/agent-skills (MIT) |
 | `systematic-debugging` | achar a causa antes de corrigir | obra/superpowers (MIT) |
 | `verification-before-completion` | rodar e ler a verificação antes de dizer que terminou | obra/superpowers (MIT) |
+| `frontend-design` | direção visual intencional, sem cara de template | anthropics/claude-plugins-official (Apache-2.0) |
+| `impeccable` | criticar, auditar e polir telas (modo *Operate* nas telas do app; sem o launcher, que baixa binário) | pbakaus/impeccable (Apache-2.0) |
+| `make-interfaces-feel-better` | detalhes de polimento: sombras, ícones, tipografia, entrada/saída | jakubkrehel/make-interfaces-feel-better (MIT) |
+| `color-expert` | cor: paletas, rampas, contraste WCAG/APCA, espaços de cor | meodai/skill.color-expert (CC BY 4.0) |
+| `mobile-app-design` | convenções de toque e acessibilidade no celular (o app é PWA) | awesome-skills/mobile-app-design (MIT no README) |
+| `css-animation` | animações HTML/CSS de demonstração de uma função (walkthrough), fora do app | neonwatty/css-animation-skill (MIT) |
+| `design-brief` | brief de uma tela antes de construir (`.design/<feature>/`) | julianoczkowski/designer-skills (Apache-2.0) |
+| `ui-ux-pro-max` | base local de estilos, paletas, fontes e regras de UX (referência; a identidade AriTur fica) | nextlevelbuilder/ui-ux-pro-max-skill (MIT) |
+
+Design (issue #381): o sistema do app (`ui/`, `ui/motion/`, tokens `C`, §5) vence o que essas skills sugerirem;
+elas ajudam a decidir e a revisar, não a trocar a identidade. `taste-skill` (sites de marketing, 39 MB) ficou só na
+máquina do dono; `animate-skill` não entrou (sem licença); `canvas-design` já vem da Anthropic.
 
 Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda neste projeto). Este AGENTS.md
 vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
@@ -249,6 +261,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
+- **Desembarque anotado na viagem** (issue #383, Lista do Dia → Desembarque, `database/106`): lista livre por dia e
+  sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
+  e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
+  `apagada`) — mesma regra de `domain/listaDesembarque.js`. Dois aparelhos na mesma viagem não se apagam.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.

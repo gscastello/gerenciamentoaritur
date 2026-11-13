@@ -49,6 +49,7 @@ import {
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
+import ListaDesembarqueAnotada from "./ListaDesembarqueAnotada.jsx";
 import OrdemDaListaEditor from "./OrdemDaListaEditor.jsx";
 
 export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
@@ -373,6 +374,7 @@ function DesembarqueView({ reservas, R, data }) {
 
   return (
     <div className="space-y-6">
+      <ListaDesembarqueAnotada data={data} />
       <div className="text-xs" style={{ color: C.inkFaint }}>
         Ordem de entrega por local, editável. Base: o desembarque que o cliente informou no
         agendamento — ajuste o balde e a ordem para montar a rota.
