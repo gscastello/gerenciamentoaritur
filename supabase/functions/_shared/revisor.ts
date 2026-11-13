@@ -17,8 +17,10 @@ import {
   type Correcao,
   decidirRevisao,
   duplicadasDaRevisao,
+  camposMudadosPelaEquipe,
   FERRAMENTA_DA_REVISAO,
   instrucoesDoRevisor,
+  type MudancaAuditada,
   precoRevisado,
   type ReservaRevisada,
   reservasParaOPrompt,
@@ -162,6 +164,25 @@ async function chamarRevisor(system: string, conteudo: string): Promise<{ entrad
   const corpo = await res.json();
   const bloco = (corpo.content ?? []).find((b: Linha) => b.type === "tool_use" && b.name === FERRAMENTA_DA_REVISAO.name);
   return { entrada: bloco?.input ?? null, custo: custoUsd(MODELO, corpo.usage) };
+}
+
+/** Por reserva, quando uma pessoa (não o bot) mudou cada campo — o revisor não desfaz (issue #389). */
+async function mudancasDaEquipe(ids: string[], botId: string | null) {
+  const out: Record<string, ReturnType<typeof camposMudadosPelaEquipe>> = {};
+  if (!ids.length) return out;
+  const { data } = await supabaseAdmin
+    .from("audit_logs")
+    .select("entity_id, before_data, after_data, performed_by, performed_at")
+    .eq("entity_table", "reservations")
+    .in("entity_id", ids)
+    .eq("action", "update")
+    .limit(1000);
+  const porReserva = new Map<string, MudancaAuditada[]>();
+  for (const l of (data ?? []) as Linha[]) {
+    porReserva.set(l.entity_id, [...(porReserva.get(l.entity_id) ?? []), l as MudancaAuditada]);
+  }
+  for (const [id, logs] of porReserva) out[id] = camposMudadosPelaEquipe(logs, botId);
+  return out;
 }
 
 /** A equipe mudou o preço desta reserva à mão? (então o revisor não mexe no valor) */
@@ -366,6 +387,8 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
         pontos: porSentido,
         falas: conversa.falas,
         horaAgora: agora,
+        // o que a equipe (ou o Assistente) mudou à mão vence a conversa anterior (issue #389)
+        mudancasDaEquipe: await mudancasDaEquipe(ativas.map((x) => x.id), botId),
       });
       for (const c of decisao.correcoes) {
         const alvo = ativas.find((x) => x.id === c.reserva_id) as ReservaRevisada;
