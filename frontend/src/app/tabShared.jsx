@@ -574,6 +574,8 @@ const NOTIF_META = {
   pendencia: { label: "Pendência", Icon: Inbox },
   vencimento: { label: "Vencimento", Icon: CalendarClock },
   fechamento: { label: "Fechamento do mês", Icon: CalendarClock },
+  consumo: { label: "Consumo", Icon: Fuel },
+  manutencao: { label: "Manutenção", Icon: Wrench },
 };
 export function tempoRelativo(iso) {
   const ms = Date.now() - new Date(iso).getTime();

@@ -494,6 +494,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   a cada carregamento: lotação por viagem, pendências, pagamentos em
   aberto, manutenção próxima do vencimento, consumo de combustível
   anômalo, lista de espera.
+- **Frota** (issue #369, `database/103`): consumo fora do normal = km/l abaixo de 85% da mediana dos 8 abastecimentos
+  anteriores do veículo (sem litros: custo por km acima de 120%; menos de 3 anteriores não avisa). Regra única em
+  `domain/frota.js` (tela Operação) e no trigger de `fuel_records` (aviso `consumo` no sino). Manutenção a 80% do
+  intervalo de km vai para Pendências e para o sino (`manutencao`); documentos e licenças são vencimentos (#366).
 - **Extrato do banco** (issue #364, aba Gestão → Extrato, `database/104`): o dono manda o OFX/CSV do mês; cada
   movimento é guardado UMA vez em `extrato_linhas` (chave = id do banco ou data+valor+descrição+ordem) e a conferência
   (`domain/extrato.js`) separa: bate (mesmo valor, ±3 dias), pagamento de reserva já pago no Pix/cartão, **Pix dentro
