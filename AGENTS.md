@@ -458,6 +458,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   a cada carregamento: lotação por viagem, pendências, pagamentos em
   aberto, manutenção próxima do vencimento, consumo de combustível
   anômalo, lista de espera.
+- **Frota** (issue #369, `database/103`): consumo fora do normal = km/l abaixo de 85% da mediana dos 8 abastecimentos
+  anteriores do veículo (sem litros: custo por km acima de 120%; menos de 3 anteriores não avisa). Regra única em
+  `domain/frota.js` (tela Operação) e no trigger de `fuel_records` (aviso `consumo` no sino). Manutenção a 80% do
+  intervalo de km vai para Pendências e para o sino (`manutencao`); documentos e licenças são vencimentos (#366).
 - Previsão de demanda = média histórica simples por dia da semana
   (`domain/demanda.js`). Ao crescer o volume, considerar série temporal
   real (Prophet, ou chamada à API do Claude com dados agregados).

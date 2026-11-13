@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { consumoForaDoNormal, textoDoConsumo } from "../../domain/frota.js";
 import { useMaintenanceTypes } from "../../hooks/useMaintenanceTypes.js";
 import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useDrivers, useVehicles } from "../../hooks/useVehicles.js";
@@ -235,11 +236,6 @@ export default function OperacaoTab() {
   const totalLitros = registrosFiltrados.reduce((s, r) => s + r.litros, 0);
   const consumoMedio = totalLitros > 0 ? (totalKm / totalLitros).toFixed(1) : null;
   const custoPorKm = totalKm > 0 ? totalCombustivel / totalKm : 0;
-  const mediaHistorica = (antesId) => {
-    const anteriores = registros.filter((r) => r.id !== antesId && r.km > 0);
-    if (anteriores.length === 0) return null;
-    return anteriores.reduce((s, r) => s + r.combustivel / r.km, 0) / anteriores.length;
-  };
   const kmAcumuladoDesde = (data) =>
     registros.filter((r) => r.data >= data).reduce((s, r) => s + r.km, 0);
 
@@ -706,9 +702,8 @@ export default function OperacaoTab() {
           </button>
           <div className="mt-4 space-y-1.5">
             {registros.slice(0, 20).map((r) => {
-              const media = mediaHistorica(r.id);
-              const custoAtual = r.km > 0 ? r.combustivel / r.km : 0;
-              const alerta = media && custoAtual > media * 1.2;
+              // mesma regra do aviso no sino (domain/frota.js ⇄ database/103)
+              const consumo = consumoForaDoNormal(r, registros);
               return editId === r.id ? (
                 <div
                   key={r.id}
@@ -763,7 +758,9 @@ export default function OperacaoTab() {
                     {fmtDate(r.data)} · {r.direcao === "ida" ? "Ida" : "Volta"} · {r.km}km ·{" "}
                     {fmtBRL(r.combustivel)}
                     {r.litros ? ` (${r.litros}L)` : ""}{" "}
-                    {alerta && <span style={{ color: C.red }}>⚠ consumo acima do normal</span>}
+                    {consumo?.fora && (
+                      <span style={{ color: C.red }}>⚠ {textoDoConsumo(consumo)}</span>
+                    )}
                   </span>
                   <div className="flex gap-2">
                     <button onClick={() => iniciarEdicaoReg(r)}>
