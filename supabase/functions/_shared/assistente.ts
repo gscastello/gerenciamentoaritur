@@ -349,32 +349,19 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate) || ate < de || ate > somarDias(de, 400)) {
         return { ok: false, erro: "período inválido (AAAA-MM-DD, até 400 dias)" };
       }
-      const [res, lanc, receber] = await Promise.all([
-        ctx.db.from("v_reservations_flat").select("data, direcao, tipo, quantidade, valorTotal, status").gte("data", de).lte("data", ate).in("status", ["confirmada", "embarcado"]).limit(10000),
-        ctx.db.from("financial_entries").select("type, category, amount").gte("entry_date", de).lte("entry_date", ate).is("deleted_at", null).limit(10000),
-        ctx.db.from("v_contas_a_receber").select("valor_devido"),
+      // a conta é uma só (database/102): o fechamento do mês usa a mesma
+      const [nums, enc] = await Promise.all([
+        ctx.db.rpc("rpc_numeros_do_financeiro", { p_de: de, p_ate: ate }),
+        ctx.db
+          .from("v_reservations_flat")
+          .select("id", { count: "exact", head: true })
+          .gte("data", de)
+          .lte("data", ate)
+          .eq("tipo", "encomenda")
+          .in("status", ["confirmada", "embarcado"]),
       ]);
-      const somar = (l: Linha[], f: (x: Linha) => string, v: (x: Linha) => number) => {
-        const out: Record<string, number> = {};
-        for (const x of l) out[f(x)] = Math.round(((out[f(x)] ?? 0) + v(x)) * 100) / 100;
-        return out;
-      };
-      const rs = (res.data ?? []) as Linha[];
-      const ls = (lanc.data ?? []) as Linha[];
-      return {
-        ok: true,
-        periodo: { de, ate },
-        passagens_por_sentido: somar(rs.filter((r) => r.tipo === "passagem"), (r) => r.direcao, (r) => Number(r.quantidade ?? 0)),
-        valor_das_passagens_por_sentido: somar(rs.filter((r) => r.tipo === "passagem"), (r) => r.direcao, (r) => Number(r.valorTotal ?? 0)),
-        encomendas: rs.filter((r) => r.tipo === "encomenda").length,
-        lancamentos_por_tipo: somar(ls, (l) => String(l.type), (l) => Number(l.amount ?? 0)),
-        lancamentos_por_categoria: somar(ls, (l) => `${l.type}:${l.category ?? "sem categoria"}`, (l) => Number(l.amount ?? 0)),
-        contas_a_receber: {
-          quantidade: receber.data?.length ?? 0,
-          total: Math.round((receber.data ?? []).reduce((s: number, x: Linha) => s + Number(x.valor_devido ?? 0), 0) * 100) / 100,
-        },
-        erros: [res.error?.message, lanc.error?.message, receber.error?.message].filter(Boolean),
-      };
+      if (nums.error) return { ok: false, erro: nums.error.message };
+      return { ok: true, ...(nums.data as Linha), encomendas: enc.count ?? null };
     }
     case "propor_reserva": {
       const v = validarCriacao(a, { hoje: ctx.hoje, pontos: ctx.pontos });

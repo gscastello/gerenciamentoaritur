@@ -408,7 +408,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
   no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
   `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
-  mensagem ao cliente. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
+  mensagem ao cliente. **Números** (issue #367): uma conta só no banco, `rpc_numeros_do_financeiro(de, até)`
+  (`database/102`, admin/financeiro) — resultado e margem por mês e categoria, por sentido, ticket médio, margem
+  estimada por viagem (despesas rateadas pelas viagens que rodaram), custo por km e km/l, quem mais viaja, a receber e
+  o período anterior; o fechamento do mês usa a mesma. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
   conhecimento (`montarFatos`), as lições aprovadas, o cronograma e `CONHECIMENTO_DA_OPERACAO` (as regras do `/agendar`);
   e faz, sempre como proposta, o que o dono pede aqui: confere os "Agendado ☑️", lança/descarta reservas prontas,
   resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
