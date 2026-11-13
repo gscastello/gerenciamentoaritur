@@ -38,16 +38,20 @@ export const FONTE = "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif";
 // Visual aprovado pelo dono (issue #391, simulação "Painel de bordo" v16): preto de verdade
 // no fundo, cartões em grafite, branco "de farol" no texto e o vermelho da marca só no que
 // acende. Os ornamentos em vermelho escuro (`rubro`) enfeitam sem chamar atenção.
+// Fora do Início, o app segue o modelo da crítica de design (issue #393, "Estrada à noite"):
+// fundo asfalto, painel e linha discretos; o vermelho só em ação principal, item selecionado e
+// aviso não lido; vermelho de TEXTO mais claro (`brandText`, 5,6:1 — o #E4121F dá 4,2:1).
 export const C = {
-  bg: "#000000",
-  panel: "#111215",
-  panel2: "#191B20",
-  border: "#24262C",
-  borderSoft: "#1B1C20",
-  ink: "#F4F5F7",
-  inkSoft: "#A6AAB2",
-  // 6,1:1 sobre o cartão (o #63666D antigo ficava em 3,3:1, difícil de ler)
+  bg: "#0A0B0D",
+  panel: "#131417",
+  panel2: "#1B1C20",
+  border: "#2A2C31",
+  borderSoft: "#1F2024",
+  ink: "#F3F4F6",
+  inkSoft: "#A7ABB3",
+  // 5,4:1 sobre o painel (o #63666D antigo ficava em 3,2:1, difícil de ler)
   inkFaint: "#8A8E96",
+  brandText: "#FF4D57",
   // vermelho da marca (era âmbar)
   amber: "#E4121F",
   amberSoft: "#2A0A0E",
@@ -793,9 +797,10 @@ export function BusSilhueta({ className = "", style, color = C.brand, opacity = 
   );
 }
 
-// Cabeçalho de cada tela. No celular, o nome da tela, a data e o sino já estão no topo do app
+// Cabeçalho de cada tela. No celular, o nome da tela e o sino já estão no topo do app
 // (issue #391): aqui fica só a linha de controles (`right`), e nada aparece se não houver
-// controle. No computador continua o título, a explicação e o sino.
+// controle. No computador, um título curto e o sino — sem o subtítulo fixo de ajuda, que a
+// crítica de design tirou (issue #393). `subtitle` vira dica ao passar o mouse no título.
 export function Header({ title, subtitle, right }) {
   return (
     // z-30: o painel do sino (dentro deste cabeçalho animado) fica por cima do conteúdo
@@ -807,21 +812,13 @@ export function Header({ title, subtitle, right }) {
     >
       <div className="hidden md:block">
         <h1
-          style={{ fontWeight: 700, fontSize: "1.5rem", color: C.ink, letterSpacing: "-0.025em" }}
+          title={subtitle || undefined}
+          style={{ fontWeight: 700, fontSize: "1.4rem", color: C.ink, letterSpacing: "-0.015em" }}
         >
-          <span className="riscos-at" aria-hidden="true">
-            <i />
-            <i />
-          </span>
           {title}
         </h1>
-        {subtitle && (
-          <p className="text-sm mt-1" style={{ color: C.inkSoft }}>
-            {subtitle}
-          </p>
-        )}
       </div>
-      <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
+      <div className="flex items-center gap-2 flex-wrap justify-end ml-auto w-full md:w-auto">
         {right}
         <span className="hidden md:block">
           <SinoNotificacoes />
@@ -862,14 +859,16 @@ export function ErrorBanner({ children, onDismiss, onRetry, className = "" }) {
     </div>
   );
 }
-// Fundo do cartão: grafite com o canto de cima em vermelho escuro (ornamento do visual
-// aprovado, issue #391). O filete fino no alto vem da classe `cartao-at` (GlobalStyles).
-export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.22) 0%, rgba(122,11,19,0) 55%), ${C.panel}`;
+// Início (issue #391, o dono quer como está): fundo preto, cartões grafite com o canto em
+// vermelho escuro e o filete fino no alto (classe `cartao-at`). Só o Início usa estes.
+export const INICIO = { fundo: "#000000", painel: "#111215", borda: "#24262C" };
+export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.22) 0%, rgba(122,11,19,0) 55%), ${INICIO.painel}`;
+// Resto do app (issue #393): cartão liso, sem enfeite.
 export function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`card-lift cartao-at rounded-2xl border p-5 ${className}`}
-      style={{ background: FUNDO_CARTAO, borderColor: C.border, ...style }}
+      className={`card-lift rounded-xl border p-4 md:p-5 ${className}`}
+      style={{ background: C.panel, borderColor: C.border, ...style }}
     >
       {children}
     </div>

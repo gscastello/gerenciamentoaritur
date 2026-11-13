@@ -66,6 +66,7 @@ import {
   CategoriasContext,
   DropoffContext,
   FONTE,
+  INICIO,
   NotificacoesContext,
   STATUS_META,
   SinoNotificacoes,
@@ -149,6 +150,14 @@ function GlobalStyles() {
       /* barra de baixo flutuante: a luz vinho desliza até a tela tocada */
       .barra-at { background: rgba(17,18,21,.9); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
         box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px -12px #000; }
+      .barra-at-base { left:10px; right:10px; bottom:max(10px, env(safe-area-inset-bottom)); height:68px; padding:6px;
+        border-radius:22px; transition: left .3s cubic-bezier(.2,0,0,1), right .3s cubic-bezier(.2,0,0,1),
+        bottom .3s cubic-bezier(.2,0,0,1), height .3s cubic-bezier(.2,0,0,1), border-radius .3s cubic-bezier(.2,0,0,1),
+        background-color .3s ease, box-shadow .3s ease; }
+      /* encaixada (telas de trabalho, issue #393): lisa no rodapé, linha fina em cima */
+      .barra-docada { left:0; right:0; bottom:0; height:calc(62px + env(safe-area-inset-bottom)); border-radius:0;
+        padding:0 4px env(safe-area-inset-bottom); background:${C.panel}; box-shadow: inset 0 1px 0 0 ${C.panel2}; }
+      .topo-liso { background:${C.bg}; box-shadow: inset 0 -1px 0 0 ${C.panel2}; }
       .barra-at-luz { transition: transform .26s cubic-bezier(.2,0,0,1), opacity .2s ease;
         background: linear-gradient(180deg, ${C.rubro2}, ${C.rubro3});
         box-shadow: inset 0 0 0 1px rgba(122,11,19,.9), inset 0 -2px 0 0 ${C.rubro}; }
@@ -243,9 +252,9 @@ function GlobalStyles() {
 
       /* issue #391: os cartões de destaque das telas ficam em grafite, com o canto vinho
          (saem o vermelho cheio, a estrada e o ônibus animados por trás) */
-      .aritur-hero { background: radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.3) 0%, rgba(122,11,19,0) 55%), ${C.panel} !important;
-        border-color: ${C.border} !important; }
-      .aritur-hero::before, .aritur-hero::after, .hero-fx { display: none !important; }
+      /* issue #393 (crítica de design): fora do Início, sem degradê nem traço decorativo */
+      .aritur-hero { background: ${C.panel} !important; border-color: ${C.border} !important; }
+      .aritur-hero::before, .aritur-hero::after, .hero-fx, .aritur-road { display: none !important; }
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         /* Só em campo de formulário — cresce pra um alvo de toque melhor
@@ -447,6 +456,7 @@ function QuickActionsFab({
   onAssistente,
   onPendencias,
   pendencias = 0,
+  noInicio = false,
 }) {
   const [aberto, setAberto] = useState(false);
   const fechar = () => setAberto(false);
@@ -461,7 +471,14 @@ function QuickActionsFab({
           onClick={fechar}
         />
       )}
-      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[calc(92px+env(safe-area-inset-bottom))] md:bottom-6">
+      <div
+        style={{
+          "--fab-bottom": noInicio
+            ? "calc(92px + env(safe-area-inset-bottom))"
+            : "calc(76px + env(safe-area-inset-bottom))",
+          transition: "bottom .3s cubic-bezier(.2,0,0,1)",
+        }}
+        className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[var(--fab-bottom)] md:bottom-6">
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
             {/* atalhos em todas as telas (dono, 12/11 — issue #353) */}
@@ -829,7 +846,7 @@ const NAV_GRUPOS = [
 // Navegação inferior (celular). Muitas abas não cabem numa linha só —
 // mostra as principais + "Mais" numa folha. A aba ativa sempre aparece
 // na barra, mesmo que normalmente estivesse em "Mais".
-function MobileNavItem({ n, active, grande, badge, onClick }) {
+function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
   const Icon = n.icon;
   return (
     <button
@@ -848,11 +865,25 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
               color: active ? C.ink : C.inkSoft,
               boxShadow: active ? `inset 0 0 0 1px ${C.rubro}` : "none",
             }
-          : { color: active ? C.ink : C.inkSoft }
+          : { color: active ? C.ink : docada ? C.inkFaint : C.inkSoft }
       }
     >
+      {!grande && (
+        <span
+          aria-hidden="true"
+          className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-[22px] rounded-full"
+          style={{
+            background: C.brand,
+            opacity: docada && active ? 1 : 0,
+            transition: "opacity .2s ease",
+          }}
+        />
+      )}
       <span className="relative flex items-center justify-center" style={{ minHeight: 21 }}>
-        <Icon size={grande ? 19 : 21} style={{ color: active ? "#FF5260" : "currentColor" }} />
+        <Icon
+          size={grande ? 19 : 21}
+          style={{ color: active && !docada ? "#FF5260" : "currentColor" }}
+        />
         {badge > 0 && (
           <span
             className="absolute -top-2 -right-3 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
@@ -860,7 +891,7 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
               background: C.brand,
               color: "#fff",
               pointerEvents: "none",
-              boxShadow: "0 0 0 2px #111215",
+              boxShadow: `0 0 0 2px ${docada ? C.panel : "#111215"}`,
             }}
           >
             {badge > 99 ? "99+" : badge}
@@ -879,8 +910,10 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
   );
 }
 
-// Barra de baixo flutuante (issue #391): cinco telas, a luz vinho desliza até a tocada. O resto
-// (Passageiros, Sistema, Assistente, Bloco de notas) e "Sair" ficam no botão "Mais" do topo.
+// Barra de baixo com cinco telas. No Início ela flutua com a luz vinho deslizando (issue #391,
+// o dono quer o Início como está); nas telas de trabalho encaixa no rodapé, lisa, com um traço
+// vermelho em cima do item atual (crítica de design, issue #393). A troca é animada.
+// O resto (Passageiros, Sistema, Assistente, Bloco de notas) e "Sair" ficam no "Mais" do topo.
 function MobileNav({
   nav,
   tab,
@@ -890,6 +923,7 @@ function MobileNav({
   maisAberto,
   setMaisAberto,
   onSair,
+  docada = false,
 }) {
   const badgeDe = (id) =>
     id === "agenda" ? pendentesCount : id === "atendimento" ? pendenciasCount : 0;
@@ -956,8 +990,8 @@ function MobileNav({
       <nav
         aria-label="Menu"
         data-testid="barra-de-baixo"
-        className="md:hidden fixed z-20 left-2.5 right-2.5 barra-at rounded-[22px] p-1.5"
-        style={{ bottom: "max(10px, env(safe-area-inset-bottom))", height: 68 }}
+        data-docada={docada ? "1" : "0"}
+        className={`md:hidden fixed z-20 barra-at-base ${docada ? "barra-docada" : "barra-at"}`}
       >
         <div
           className="relative h-full grid"
@@ -970,6 +1004,7 @@ function MobileNav({
               style={{
                 width: `${100 / colunas}%`,
                 transform: `translateX(${indiceAtivo * 100}%)`,
+                opacity: docada ? 0 : 1,
               }}
             />
           )}
@@ -980,6 +1015,7 @@ function MobileNav({
               active={tab === n.id}
               badge={badgeDe(n.id)}
               onClick={() => escolher(n.id)}
+              docada={docada}
             />
           ))}
         </div>
@@ -1062,6 +1098,8 @@ function AppInner() {
   // tela dentro de um grupo acende o item do grupo no menu (issue #360)
   const grupoAtual = grupoDaTela(tab);
   const navAtiva = grupoAtual?.nav ?? tab;
+  // o Início fica como o dono aprovou (#391); o resto segue a crítica de design (#393)
+  const noInicio = tab === "dashboard";
   // título do topo no celular (issue #391): saudação no Início, nome da tela nas outras
   const tituloTopo =
     tab === "dashboard"
@@ -1152,15 +1190,22 @@ function AppInner() {
           <DropoffContext.Provider value={dropoff}>
             <div
               className="min-h-screen w-full flex relative"
-              style={{ background: C.bg, fontFamily: FONTE, color: C.ink }}
+              style={{
+                background: noInicio ? INICIO.fundo : C.bg,
+                fontFamily: FONTE,
+                color: C.ink,
+                transition: "background-color .3s ease",
+              }}
             >
               <GlobalStyles />
-              <VideoBackdrop variant="app" />
+              {/* brilho do fundo só no Início (#391); o resto é asfalto liso (crítica, #393) */}
+              {noInicio && <VideoBackdrop variant="app" />}
               {/* arrastar para baixo no topo atualiza, sem fechar e abrir o app (issue #353) */}
               <PuxarParaAtualizar onAtualizar={atualizarApp} cor={C.amber} fundo={C.panel} />
               {/* no Assistente o "+" cobriria o campo do pedido (issue #288) */}
               {tab !== "assistente" && (
                 <QuickActionsFab
+                  noInicio={noInicio}
                   onBuscar={() => setBuscaAberta(true)}
                   onAgendar={() => setAgendarAberto(true)}
                   onHoje={irParaHoje}
@@ -1367,32 +1412,37 @@ function AppInner() {
                 maisAberto={maisAberto}
                 setMaisAberto={setMaisAberto}
                 onSair={signOut}
+                docada={!noInicio}
               />
 
               <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative z-10">
                 {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
                 <header
                   data-testid="topo-tela"
-                  className="md:hidden sticky top-0 z-20 topo-at flex items-center gap-3 pl-3 pr-3 pb-[18px]"
+                  className={`md:hidden sticky top-0 z-20 flex items-center gap-3 pl-3 pr-3 ${
+                    noInicio ? "topo-at pb-[18px]" : "topo-liso pb-2"
+                  }`}
                   style={{ paddingTop: "max(0.55rem, env(safe-area-inset-top))" }}
                 >
-                  <AriturMark size={46} />
+                  <AriturMark size={noInicio ? 46 : 34} />
                   <div className="flex-1 min-w-0">
                     <h1
                       className="truncate"
                       style={{
-                        fontSize: 19,
+                        fontSize: noInicio ? 19 : 17,
                         fontWeight: 700,
-                        letterSpacing: "-0.025em",
+                        letterSpacing: noInicio ? "-0.025em" : "-0.01em",
                         lineHeight: 1.2,
                         color: C.ink,
                       }}
                     >
                       {tituloTopo}
                     </h1>
-                    <p className="truncate text-xs" style={{ color: C.inkSoft }}>
-                      {diaPorExtenso()}
-                    </p>
+                    {noInicio && (
+                      <p className="truncate text-xs" style={{ color: C.inkSoft }}>
+                        {diaPorExtenso()}
+                      </p>
+                    )}
                   </div>
                   <SinoNotificacoes />
                   <button

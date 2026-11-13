@@ -10,6 +10,7 @@ import {
   C,
   Card,
   FUNDO_CARTAO,
+  INICIO,
   OCUPA_VAGA,
   SinoNotificacoes,
   dataOperacao,
@@ -60,7 +61,7 @@ function CartaoFinanceiro({ periodo, receita, lucro, carregando, onClick }) {
       onClick={onClick}
       aria-label={`${periodo}: faturamento ${fmtBRL(receita)}, lucro real ${fmtBRL(lucro)}`}
       className="toque-at cartao-at text-left rounded-2xl border px-2.5 pt-2.5 pb-3 min-w-0"
-      style={{ background: FUNDO_CARTAO, borderColor: C.border, containerType: "inline-size" }}
+      style={{ background: FUNDO_CARTAO, borderColor: INICIO.borda, containerType: "inline-size" }}
     >
       <span
         className="block uppercase truncate"
@@ -122,7 +123,7 @@ function CartaoViagem({ rotulo, passageiros, capacidade, onClick }) {
       data-testid={`inicio-${rotulo.toLowerCase()}`}
       aria-label={`${rotulo}: ${passageiros} passageiros de ${capacidade}. Abrir na Agenda`}
       className="toque-at cartao-at text-left rounded-2xl border p-3.5 min-w-0"
-      style={{ background: FUNDO_CARTAO, borderColor: C.border }}
+      style={{ background: FUNDO_CARTAO, borderColor: INICIO.borda }}
     >
       <span
         className="block"
@@ -155,7 +156,7 @@ function ItemPrecisa({ Icon, titulo, detalhe, acao, onClick }) {
       type="button"
       onClick={onClick}
       className="toque-at w-full grid items-center gap-3 py-2.5 text-left border-t first:border-t-0 min-h-[58px]"
-      style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", borderColor: C.border }}
+      style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", borderColor: INICIO.borda }}
     >
       <span
         className="w-9 h-9 rounded-xl flex items-center justify-center"
@@ -275,7 +276,7 @@ export default function DashboardTab({ reservas, capacidade, trips, pendencias =
           className="relative rounded-[22px] overflow-hidden"
           style={{
             aspectRatio: "16 / 9",
-            background: C.panel,
+            background: INICIO.painel,
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,.06)",
           }}
         >
@@ -340,7 +341,7 @@ export default function DashboardTab({ reservas, capacidade, trips, pendencias =
           </h2>
           <div
             className="cartao-at rounded-2xl border px-3"
-            style={{ background: FUNDO_CARTAO, borderColor: C.border }}
+            style={{ background: FUNDO_CARTAO, borderColor: INICIO.borda }}
             data-testid="precisa-de-voce"
           >
             {pendencias > 0 && (

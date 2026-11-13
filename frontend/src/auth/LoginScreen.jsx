@@ -5,41 +5,20 @@
 // Users) ou por um futuro fluxo de convite. Ver AGENTS.md §papéis.
 
 import { useState } from "react";
-import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 import { ProgressBar } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 
 const C = {
-  bg: "#000000",
-  panel: "#111215",
-  panel2: "#191B20",
-  border: "#24262C",
-  ink: "#F4F5F7",
-  inkSoft: "#A6AAB2",
+  bg: "#0A0B0D",
+  panel: "#131417",
+  panel2: "#1B1C20",
+  border: "#2A2C31",
+  ink: "#F3F4F6",
+  inkSoft: "#A7ABB3",
   inkFaint: "#8A8E96",
   brand: "#E4121F",
   red: "#F0625F",
 };
-
-function Bus() {
-  return (
-    <svg
-      viewBox="0 0 220 84"
-      fill="none"
-      aria-hidden="true"
-      style={{ position: "absolute", width: 320, left: -40, bottom: -30, opacity: 0.08 }}
-    >
-      <path
-        d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z"
-        fill={C.brand}
-      />
-      <g fill={C.brand} opacity="0.9">
-        <circle cx="54" cy="72" r="11" />
-        <circle cx="186" cy="72" r="11" />
-      </g>
-    </svg>
-  );
-}
 
 export function LoginScreen() {
   const { signIn } = useAuth();
@@ -66,153 +45,172 @@ export function LoginScreen() {
     }
   }
 
+  // Crítica de design (issue #393): a marca recebe quem chega. A foto vertical do ônibus enche
+  // a tela, com um véu escuro que garante a leitura; a logo oficial (que já traz o slogan) fica
+  // logo acima do formulário. É a única tela com a marca em tamanho cheio.
   return (
     <div
       style={{
         position: "relative",
         overflow: "hidden",
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
         background: C.bg,
         color: C.ink,
         fontFamily: "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif",
-        padding: 24,
       }}
     >
-      <VideoBackdrop variant="login" />
+      <img
+        src="/brand/login-onibus.webp"
+        alt=""
+        aria-hidden="true"
+        width={900}
+        height={1600}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "50% 30%",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `linear-gradient(180deg, rgba(10,11,13,0) 18%, rgba(10,11,13,.78) 48%, ${C.bg} 66%)`,
+        }}
+      />
       <form
         onSubmit={onSubmit}
+        className="anim-fadeUp"
         style={{
           position: "relative",
-          overflow: "hidden",
           width: "100%",
-          maxWidth: 380,
-          background: C.panel,
-          border: `1px solid ${C.border}`,
-          borderRadius: 18,
-          padding: 30,
+          maxWidth: 400,
+          padding: "0 20px max(28px, env(safe-area-inset-bottom))",
+          display: "grid",
+          gap: 10,
         }}
       >
-        <div
+        <img
+          src="/brand/logo-fundo-escuro.webp"
+          alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+          width={560}
+          height={542}
           style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            background:
-              "radial-gradient(120% 90% at 100% 0%, rgba(122,11,19,0.35) 0%, transparent 55%)",
+            width: "min(200px, 56vw)",
+            height: "auto",
+            display: "block",
+            margin: "0 auto 6px",
           }}
         />
-        <Bus />
-        <div style={{ position: "relative" }}>
-          {/* logo oficial para fundo escuro (issue #391) — já traz o slogan */}
-          <img
-            src="/brand/logo-fundo-escuro.webp"
-            alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
-            width={560}
-            height={542}
-            style={{ width: "min(240px, 72%)", height: "auto", display: "block", margin: "0 auto" }}
+
+        <label style={labelStyle}>
+          E-mail
+          <input
+            type="email"
+            required
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
           />
-          <p style={{ color: C.inkSoft, fontSize: 13, margin: "16px 0 20px" }}>
-            <b style={{ color: C.ink }}>Gestão AriTur</b> — entre com sua conta da equipe.
-          </p>
+        </label>
 
-          <label style={{ display: "block", fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>
-            E-mail
-            <input
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ ...inputStyle, marginTop: 4 }}
-            />
-          </label>
+        <label style={labelStyle}>
+          Senha
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
 
-          <label style={{ display: "block", fontSize: 12, color: C.inkSoft, marginTop: 14 }}>
-            Senha
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ ...inputStyle, marginTop: 4 }}
-            />
-          </label>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 13,
+            color: C.inkSoft,
+            minHeight: 44,
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={lembrar}
+            onChange={(e) => setLembrar(e.target.checked)}
+            style={{ width: 18, height: 18, accentColor: C.brand }}
+          />
+          Permanecer conectado (abre a Agenda sem internet)
+        </label>
 
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12,
-              color: C.inkSoft,
-              marginTop: 16,
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={lembrar}
-              onChange={(e) => setLembrar(e.target.checked)}
-              style={{ width: 15, height: 15, accentColor: C.brand }}
-            />
-            Permanecer conectado
-          </label>
-
-          {error && <div style={{ color: C.red, fontSize: 12, marginTop: 12 }}>{error}</div>}
-
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              width: "100%",
-              marginTop: 20,
-              padding: "11px 16px",
-              borderRadius: 11,
-              border: "none",
-              background: busy ? C.border : C.brand,
-              color: busy ? C.inkSoft : "#fff",
-              fontWeight: 700,
-              fontSize: 14,
-              letterSpacing: "0.02em",
-              cursor: busy ? "default" : "pointer",
-              boxShadow: busy ? "none" : "0 8px 22px -8px rgba(228,18,31,0.55)",
-            }}
-          >
-            {busy ? "Entrando…" : "Entrar"}
-          </button>
-          {busy && (
-            <div style={{ marginTop: 12 }}>
-              <ProgressBar />
-            </div>
-          )}
-          <div
-            style={{
-              marginTop: 18,
-              fontSize: "0.62rem",
-              letterSpacing: "0.14em",
-              color: C.inkFaint,
-            }}
-          >
-            MAIS QUE TRANSPORTE, <span style={{ color: C.brand }}>CONECTAMOS PESSOAS.</span>
+        {error && (
+          <div role="alert" style={{ color: C.red, fontSize: 13 }}>
+            {error}
           </div>
-        </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="login-entrar"
+          style={{
+            width: "100%",
+            minHeight: 50,
+            borderRadius: 12,
+            border: "none",
+            background: busy ? C.border : C.brand,
+            color: busy ? C.inkSoft : "#fff",
+            fontWeight: 700,
+            fontSize: 15,
+            cursor: busy ? "default" : "pointer",
+          }}
+        >
+          {busy ? "Entrando…" : "Entrar"}
+        </button>
+        {busy && <ProgressBar />}
       </form>
+      <style>{`
+        .login-entrar { transition: transform .12s cubic-bezier(.2,0,0,1), background-color .15s ease; }
+        .login-entrar:active { transform: scale(.97); }
+        @media (prefers-reduced-motion: reduce) { .login-entrar { transition: none; } .login-entrar:active { transform: none; } }
+      `}</style>
     </div>
   );
 }
 
+const labelStyle = {
+  display: "grid",
+  gap: 5,
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: ".07em",
+  textTransform: "uppercase",
+  color: C.inkFaint,
+};
+
 const inputStyle = {
   width: "100%",
-  background: C.panel2,
+  minHeight: 48,
+  background: "rgba(19,20,23,.92)",
   border: `1px solid ${C.border}`,
   borderRadius: 10,
   padding: "10px 12px",
   color: C.ink,
+  textTransform: "none",
+  letterSpacing: "normal",
+  fontWeight: 500,
   // 16px, não 14 — abaixo disso o Safari/iOS dá zoom sozinho ao focar o
   // campo (a tela de login não carrega o GlobalStyles do app, que tem a
   // correção equivalente pros campos do resto do app — precisa fixar aqui).
