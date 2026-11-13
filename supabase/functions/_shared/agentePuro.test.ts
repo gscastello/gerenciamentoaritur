@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   afirmaTerMexidoEmReserva,
+  perguntaSemResposta,
   andamentoPeloHorario,
   CRONOGRAMA_PADRAO,
   cronogramaParaTexto,
@@ -673,4 +674,13 @@ Deno.test("#349: a Volta cobra pelo lugar onde deixamos o cliente", async () => 
   assertEquals(comoCobrarAVolta("São Luís"), null);
   assertEquals(comoCobrarAVolta(""), null);
   assertEquals(comoCobrarAVolta(null), null);
+});
+
+Deno.test("perguntaSemResposta: só a dúvida que faltou conhecimento entra na lista (issue #358)", () => {
+  assertEquals(perguntaSemResposta("  Posso levar meu gatinho?  "), "Posso levar meu gatinho?");
+  assertEquals(perguntaSemResposta(undefined), null); // transferência por regra: nada
+  assertEquals(perguntaSemResposta(""), null);
+  assertEquals(perguntaSemResposta("???"), null);
+  assertEquals(perguntaSemResposta("98981874457"), null);
+  assertEquals(perguntaSemResposta("x".repeat(600))?.length, 500);
 });

@@ -29,6 +29,7 @@ import {
   trechoPrecisaDeConfirmacao,
   precoDoBairroCadastrado,
   comoCobrarAVolta,
+  perguntaSemResposta,
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
@@ -48,6 +49,8 @@ export type ContextoDoAgente = {
   escrita: { criou: boolean; alterou: boolean; cancelou: boolean; esperou: boolean };
   consultouReservas: boolean;
   transferiu: boolean;
+  /** a dúvida que o bot não soube responder (vai para a lista do painel), se foi falta de conhecimento */
+  perguntaSemResposta?: string | null;
   silencio: boolean;
   /** parar tudo: a conversa passou para atendimento humano durante o turno */
   parar: boolean;
@@ -218,6 +221,11 @@ export const FERRAMENTAS: Ferramenta[] = [
       properties: {
         motivo: { type: "string", description: "Em poucas palavras." },
         resumo_para_equipe: { type: "string", description: "O que já se sabe: quem é, o que quer, o que falta." },
+        pergunta_sem_resposta: {
+          type: "string",
+          description:
+            "SÓ quando você não soube responder por falta de informação (nem nas ferramentas, nem nas INFORMAÇÕES): a dúvida do cliente, curta e nas palavras dele, para a equipe cadastrar a resposta. Deixe vazio quando transferiu por regra (encomenda, reclamação, reembolso, negociação, mais de 10 passagens, pedido de pessoa, localização em tempo real).",
+        },
       },
       required: ["motivo", "resumo_para_equipe"],
     },
@@ -787,6 +795,7 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
           `${String(args.motivo ?? "").trim()} — ${String(args.resumo_para_equipe ?? "").trim()}`.slice(0, 900),
         );
         ctx.transferiu = true;
+        ctx.perguntaSemResposta = perguntaSemResposta(args.pergunta_sem_resposta);
         return { ok: true, transferido: true, proximo_passo: "Avise o cliente, em uma frase, que a equipe vai assumir." };
       case "nao_responder":
         ctx.silencio = true;

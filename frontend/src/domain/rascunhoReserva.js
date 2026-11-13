@@ -49,3 +49,18 @@ export function viagemDoRascunho(r) {
 export function anotacaoDaEncomenda(r) {
   return ["E", r?.pickup_detail, r?.phone, r?.customer_name].filter(Boolean).join(" ").trim();
 }
+
+// Mesma regra do bot (SAIDA_ENCERRADA em supabase/functions/_shared/rascunhoPuro.ts):
+// a partir destas horas, a viagem de hoje naquele sentido já saiu.
+const SAIDA_ENCERRADA = { ida: "07:00", volta: "14:00" };
+
+/**
+ * Reserva preparada que ainda dá para lançar (issue #357): viagem de um dia que
+ * não passou e, se for hoje, que ainda não saiu. `horaAgora` = "HH:MM" em São Luís.
+ */
+export function rascunhoAindaValeLancar(r, hoje, horaAgora) {
+  if (!r?.trip_date || r.trip_date < hoje) return false;
+  if (r.trip_date > hoje) return true;
+  const saida = SAIDA_ENCERRADA[r.direction];
+  return !saida || !horaAgora || horaAgora < saida;
+}

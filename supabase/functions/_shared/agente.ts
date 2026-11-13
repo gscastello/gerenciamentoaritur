@@ -339,15 +339,13 @@ export async function responderComAgente(
       return;
     }
 
-    if (ctx.transferiu) {
-      // a equipe assume: guarda a dúvida na lista "perguntas sem resposta" do painel
-      const ultima = [...historico].reverse().find((m) => m.quem === "cliente");
-      if (ultima) {
-        await supabaseAdmin
-          .from("bot_unanswered")
-          .insert({ conversation_id: entrada.conversationId, question: ultima.texto.slice(0, 500), reason: "Atendente de IA chamou a equipe" })
-          .then(() => {}, () => {});
-      }
+    if (ctx.transferiu && ctx.perguntaSemResposta) {
+      // a equipe assume e faltou conhecimento: a dúvida vai para "perguntas sem resposta" do
+      // painel. Transferência por regra (encomenda, negociação…) não entra (issue #358).
+      await supabaseAdmin
+        .from("bot_unanswered")
+        .insert({ conversation_id: entrada.conversationId, question: ctx.perguntaSemResposta, reason: "Faltou informação para responder" })
+        .then(() => {}, () => {});
     }
 
     if (ctx.silencio) {
