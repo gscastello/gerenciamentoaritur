@@ -16,10 +16,26 @@ import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 /** Uma fala da conversa (cliente ou equipe) com a hora em que foi escrita. */
 export type FalaDaRevisao = { em: string; texto: string };
 
-/** Quando foi escrita a fala mais recente que contém a evidência (null se não achou). */
+/**
+ * A prova pode juntar várias falas ("EQUIPE: Qual dia mesmo da sua viagem? / CLIENTE: Sábado",
+ * issue #377): separa nas partes (" / ", quebra de linha, "|", "…") e tira a hora e o rótulo de
+ * quem falou. "14/11" (sem espaço) não é separador. Partes com menos de 3 letras são ignoradas.
+ */
+export function partesDaEvidencia(evidencia: string | null | undefined): string[] {
+  return String(evidencia ?? "")
+    .split(/\s+\/\s+|\n|\s*\|\s*|…|\.{3}/)
+    .map((p) => p.replace(/^\s*(\[[^\]]*\]\s*)?(cliente|equipe|bot)\s*:\s*/i, ""))
+    .map((p) => normalizarTexto(p))
+    .filter((p) => p.replace(/\s/g, "").length >= 3);
+}
+
+/**
+ * Quando foi escrita a prova (null se não achou): a fala mais recente que contém a ÚLTIMA parte —
+ * numa prova "pergunta / resposta", vale a hora da resposta.
+ */
 export function horaDaEvidencia(evidencia: string, falas: FalaDaRevisao[]): string | null {
-  const e = normalizarTexto(evidencia);
-  if (e.replace(/\s/g, "").length < 3) return null;
+  const e = partesDaEvidencia(evidencia).at(-1);
+  if (!e) return null;
   let achada: string | null = null;
   for (const f of falas) if (` ${normalizarTexto(f.texto)} `.includes(e) && (!achada || f.em > achada)) achada = f.em;
   return achada;
@@ -55,6 +71,49 @@ export const CAMPOS_DA_REVISAO = [
 ] as const;
 export type CampoDaRevisao = (typeof CAMPOS_DA_REVISAO)[number];
 
+/** Colunas da reserva que correspondem a cada campo da revisão (para ler a auditoria). */
+const COLUNAS_DO_CAMPO: Record<string, CampoDaRevisao[]> = {
+  trip_id: ["data", "sentido"],
+  route_point_id: ["ponto"],
+  quantity: ["quantidade"],
+  pickup_neighborhood: ["bairro"],
+  pickup_detail: ["embarque"],
+  street: ["embarque"],
+  reference_point: ["embarque"],
+  dropoff_location: ["desembarque"],
+  dropoff_area: ["desembarque"],
+  dropoff_detail: ["desembarque"],
+  type: ["tipo"],
+};
+
+/** Uma linha de audit_logs de uma reserva. */
+export type MudancaAuditada = {
+  before_data?: Record<string, unknown> | null;
+  after_data?: Record<string, unknown> | null;
+  performed_by?: string | null;
+  performed_at: string;
+};
+
+/**
+ * Quando uma PESSOA (equipe ou Assistente — qualquer ator que não seja o bot) mudou
+ * cada campo da reserva pela última vez (issue #389). O que a pessoa mudou vence o que
+ * o cliente escreveu antes: o revisor não desfaz.
+ */
+export function camposMudadosPelaEquipe(
+  logs: MudancaAuditada[],
+  botId: string | null,
+): Partial<Record<CampoDaRevisao, string>> {
+  const out: Partial<Record<CampoDaRevisao, string>> = {};
+  for (const l of logs ?? []) {
+    if (!l.performed_by || l.performed_by === botId || !l.before_data || !l.after_data) continue;
+    for (const [coluna, campos] of Object.entries(COLUNAS_DO_CAMPO)) {
+      if (JSON.stringify(l.before_data[coluna] ?? null) === JSON.stringify(l.after_data[coluna] ?? null)) continue;
+      for (const c of campos) if (!out[c] || l.performed_at > (out[c] as string)) out[c] = l.performed_at;
+    }
+  }
+  return out;
+}
+
 /** Campos que o revisor corrige sozinho (com evidência e certeza alta). */
 const CORRIGE_SOZINHO: CampoDaRevisao[] = ["data", "sentido", "ponto", "bairro", "embarque", "desembarque", "quantidade"];
 
@@ -88,11 +147,15 @@ const txt = (v: unknown, max = 200): string | null => {
 };
 const mesmo = (a: unknown, b: unknown) => normalizarTexto(String(a ?? "")) === normalizarTexto(String(b ?? ""));
 
-/** A frase citada está mesmo na conversa (sem acento/caixa/pontuação; pelo menos 3 letras)? */
+/**
+ * A frase citada está mesmo na conversa (sem acento/caixa/pontuação; pelo menos 3 letras)?
+ * Prova com várias falas: TODAS as partes têm de estar na conversa (issue #377).
+ */
 export function evidenciaNaConversa(evidencia: string | null | undefined, conversa: string): boolean {
-  const e = normalizarTexto(String(evidencia ?? ""));
-  if (e.replace(/\s/g, "").length < 3) return false;
-  return ` ${normalizarTexto(conversa)} `.includes(e);
+  const partes = partesDaEvidencia(evidencia);
+  if (partes.length === 0) return false;
+  const c = ` ${normalizarTexto(conversa)} `;
+  return partes.every((p) => c.includes(p));
 }
 
 /** Converte o que o modelo devolveu em achados válidos (descarta o que vier torto). */
@@ -136,6 +199,8 @@ export function decidirRevisao(
     falas?: FalaDaRevisao[];
     /** "HH:MM" em São Luís: viagem que já saiu não é mexida */
     horaAgora?: string | null;
+    /** por reserva, quando uma pessoa mudou cada campo (camposMudadosPelaEquipe) — issue #389 */
+    mudancasDaEquipe?: Record<string, Partial<Record<CampoDaRevisao, string>>>;
   },
 ): { correcoes: Correcao[]; pendencias: Achado[]; descartados: Achado[] } {
   const porId = new Map(ctx.reservas.map((r) => [r.id, r]));
@@ -163,6 +228,14 @@ export function decidirRevisao(
       continue;
     }
     const hora = ctx.falas ? horaDaEvidencia(a.evidencia, ctx.falas) : null;
+    // a equipe (ou o Assistente) mudou este campo à mão: vence o que o cliente escreveu ANTES.
+    // Só se o cliente escreveu DEPOIS da mudança vira pendência; o revisor nunca desfaz sozinho (#389)
+    const mudouEm = ctx.mudancasDaEquipe?.[r.id]?.[a.campo];
+    if (mudouEm) {
+      if (hora && Date.parse(hora) > Date.parse(mudouEm)) pendencias.push(a);
+      else descartados.push(a);
+      continue;
+    }
     // o cliente (ou a equipe) corrigiu DEPOIS de a reserva ser criada: é a confirmação (issue #343)
     const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     const mudaAViagem = a.campo === "data" || a.campo === "sentido";
