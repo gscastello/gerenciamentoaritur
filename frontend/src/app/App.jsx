@@ -55,6 +55,7 @@ const SistemaTab = React.lazy(() => import("./tabs/SistemaTab.jsx"));
 const AtendimentoTab = React.lazy(() => import("./tabs/AtendimentoTab.jsx"));
 const AgendaTab = React.lazy(() => import("./tabs/AgendaTab.jsx"));
 const VencimentosTab = React.lazy(() => import("./tabs/VencimentosTab.jsx"));
+const ExtratoTab = React.lazy(() => import("./tabs/ExtratoTab.jsx"));
 const NovaReservaModal = React.lazy(() =>
   import("./tabs/AgendaTab.jsx").then((m) => ({ default: m.NovaReservaModal })),
 );
@@ -380,6 +381,11 @@ const DESTINOS_BUSCA = [
     termos: "clientes histórico contatos telefone",
   },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
+  {
+    tab: "extrato",
+    label: "Extrato do banco (conferência)",
+    termos: "extrato banco ofx csv conciliação conferir infinitepay pix",
+  },
   {
     tab: "vencimentos",
     label: "Vencimentos e imposto (DAS)",
@@ -781,6 +787,7 @@ const TAB_ROLES = {
   gestao: ["admin"],
   operacao: ["admin"],
   vencimentos: ["admin"],
+  extrato: ["admin"],
   dashboard: ["admin"],
   sistema: ["admin"],
 };
@@ -1429,6 +1436,7 @@ function AppInner() {
                       {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
                       {tab === "operacao" && <OperacaoTab />}
                       {tab === "vencimentos" && <VencimentosTab />}
+                      {tab === "extrato" && <ExtratoTab />}
                       {tab === "dashboard" && (
                         <DashboardTab
                           reservas={reservas}
