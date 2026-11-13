@@ -23,7 +23,7 @@ export default defineConfig({
       injectRegister: false,
       // o logo do topo entra também: sem ele, o app aberto sem internet (issue #355)
       // mostraria a imagem quebrada
-      includeAssets: ["icons/*.png", "brand/mark-transparent.png"],
+      includeAssets: ["icons/*.png", "brand/mark-transparent.png", "brand/logo-brilho.webp"],
       manifest: {
         name: "Gestão AriTur",
         short_name: "AriTur",
