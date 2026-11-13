@@ -113,7 +113,7 @@ O contrato acima é validado por `npm run arch`
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
 `opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
-`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`),
+`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`, `comprovantePuro`, `documentoPuro`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -240,6 +240,11 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`src/lib/copiaOffline.js`, `offlineKey` no `useSupabaseQuery`), com o aviso "Sem internet" e a hora da cópia.
   É só para **ler**: gravar continua indo ao banco. Só guarda com "Permanecer conectado"; sair da conta apaga.
   Sem rede para renovar o token, o app segue com a sessão e o perfil guardados em vez de voltar ao login.
+- **Comprovante Pix no WhatsApp** (issue #363, `comprovantePuro.ts`, `database/100`): o bot lê o comprovante (valor,
+  data, quem recebeu, id da transação) em qualquer modo. Só dá baixa quando é comprovante, quem recebeu é a empresa
+  (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
+  `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
+  pendência com o motivo, e tudo fica em `comprovantes_pix`.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
