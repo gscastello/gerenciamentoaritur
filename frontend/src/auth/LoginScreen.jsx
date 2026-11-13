@@ -106,11 +106,25 @@ export function LoginScreen() {
         />
         <Bus />
         <div style={{ position: "relative" }}>
-          <img
-            src="/brand/full-transparent.png"
-            alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
-            style={{ width: 220, height: "auto", display: "block", marginBottom: 10 }}
-          />
+          {/* logo com brilho do dono (issue #385): feita para fundo escuro, ocupa a
+              largura do cartão e funde no painel por baixo */}
+          <div style={{ margin: "-30px -30px 0", background: "#000", position: "relative" }}>
+            <img
+              src="/brand/logo-brilho.webp"
+              alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+              width={960}
+              height={640}
+              style={{ width: "100%", height: "auto", display: "block" }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: "auto 0 0 0",
+                height: 48,
+                background: `linear-gradient(rgba(0,0,0,0), ${C.panel})`,
+              }}
+            />
+          </div>
           <p style={{ color: C.inkSoft, fontSize: 13, margin: "16px 0 20px" }}>
             <b style={{ color: C.ink }}>Gestão AriTur</b> — entre com sua conta da equipe.
           </p>

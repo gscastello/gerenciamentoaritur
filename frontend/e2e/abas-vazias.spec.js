@@ -12,6 +12,7 @@ const TELAS_DE_GRUPO = [
   "financeiro",
   "gestao",
   "operacao",
+  "vencimentos",
   "atendimento",
   "para_lancar",
   "pendencias",

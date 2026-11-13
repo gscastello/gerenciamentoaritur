@@ -54,6 +54,7 @@ const GestaoTab = React.lazy(() => import("./tabs/GestaoTab.jsx"));
 const SistemaTab = React.lazy(() => import("./tabs/SistemaTab.jsx"));
 const AtendimentoTab = React.lazy(() => import("./tabs/AtendimentoTab.jsx"));
 const AgendaTab = React.lazy(() => import("./tabs/AgendaTab.jsx"));
+const VencimentosTab = React.lazy(() => import("./tabs/VencimentosTab.jsx"));
 const NovaReservaModal = React.lazy(() =>
   import("./tabs/AgendaTab.jsx").then((m) => ({ default: m.NovaReservaModal })),
 );
@@ -262,13 +263,35 @@ const MONO_T = "#DDDEE2";
 // escalar só pela altura.
 const MARK_RATIO = 1076 / 508;
 
+// O T do monograma é preto: no fundo escuro do app ele sumia e só ficavam o A e
+// a fita. Num selo branco (como a logo pintada no ônibus branco) a arte original
+// aparece inteira em toda tela — issue #385, pedido do dono.
 function AriturMark({ size = 42 }) {
+  const pad = Math.round(size * 0.14);
   return (
-    <img
-      src="/brand/mark-transparent.png"
-      alt="AriTur"
-      style={{ height: size, width: size * MARK_RATIO, flexShrink: 0, display: "block" }}
-    />
+    <span
+      data-testid="logo-aritur"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        background: "#fff",
+        borderRadius: Math.round(size * 0.28),
+        padding: `${pad}px ${Math.round(pad * 1.4)}px`,
+        boxShadow: "0 0 0 1px rgba(255,255,255,.08), 0 6px 18px -10px rgba(228,18,31,.6)",
+      }}
+    >
+      <img
+        src="/brand/mark-transparent.png"
+        alt="AriTur"
+        style={{
+          height: size - pad * 2,
+          width: (size - pad * 2) * MARK_RATIO,
+          display: "block",
+        }}
+      />
+    </span>
   );
 }
 
@@ -379,6 +402,11 @@ const DESTINOS_BUSCA = [
     termos: "clientes histórico contatos telefone",
   },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
+  {
+    tab: "vencimentos",
+    label: "Vencimentos e imposto (DAS)",
+    termos: "imposto das simples ipva seguro licenciamento vistoria parcela cnh vencimento",
+  },
   {
     tab: "operacao",
     label: "Manutenção preventiva",
@@ -774,6 +802,7 @@ const TAB_ROLES = {
   financeiro: ["admin"],
   gestao: ["admin"],
   operacao: ["admin"],
+  vencimentos: ["admin"],
   dashboard: ["admin"],
   sistema: ["admin"],
 };
@@ -1421,6 +1450,7 @@ function AppInner() {
                       )}
                       {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
                       {tab === "operacao" && <OperacaoTab />}
+                      {tab === "vencimentos" && <VencimentosTab />}
                       {tab === "dashboard" && (
                         <DashboardTab
                           reservas={reservas}

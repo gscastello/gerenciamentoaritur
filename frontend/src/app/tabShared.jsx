@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Bell,
   Bus,
+  CalendarClock,
   Car,
   CarTaxiFront,
   CreditCard,
@@ -571,6 +572,7 @@ const NOTIF_META = {
   mudanca_embarque: { label: "Mudança de embarque", Icon: MapPin },
   mudanca_desembarque: { label: "Mudança de desembarque", Icon: MapPin },
   pendencia: { label: "Pendência", Icon: Inbox },
+  vencimento: { label: "Vencimento", Icon: CalendarClock },
 };
 export function tempoRelativo(iso) {
   const ms = Date.now() - new Date(iso).getTime();
