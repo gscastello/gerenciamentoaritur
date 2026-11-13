@@ -33,6 +33,7 @@ import {
   mapManut,
   todayStr,
 } from "../tabShared.jsx";
+import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
 /* ============================= 6. OPERAÇÃO (combustível + manutenção preventiva) ============================= */
 
@@ -655,6 +656,8 @@ export default function OperacaoTab() {
 
         <Card>
           <div className="text-sm font-semibold mb-3">Registrar abastecimento / viagem</div>
+          {/* issue #369: a foto da nota do diesel (ou da oficina) preenche sozinho */}
+          <LancarPorFoto destino="abastecimento" />
           <div className="text-xs mb-3" style={{ color: C.inkFaint }}>
             A despesa de combustível entra sozinha no Financeiro do dia.
           </div>

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Tela de Pendências (issue #118): fila de atendimentos para a equipe.
@@ -26,12 +27,7 @@ test("Pendências: lista, abre manual e resolve", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
 
   // vai para a aba Pendências (pode estar no menu "Mais" no mobile)
-  let aba = page.getByRole("button", { name: "Pendências" });
-  if ((await aba.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    aba = page.getByRole("button", { name: "Pendências" });
-  }
-  await aba.first().click();
+  await abrirTela(page, "pendencias");
 
   await expect(page.getByText("Cliente pediu para falar com atendente")).toBeVisible();
 
@@ -67,12 +63,7 @@ test("Pendências: erro ao carregar mostra aviso, não a mensagem de lista vazia
 
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  let aba = page.getByRole("button", { name: "Pendências" });
-  if ((await aba.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    aba = page.getByRole("button", { name: "Pendências" });
-  }
-  await aba.first().click();
+  await abrirTela(page, "pendencias");
 
   await expect(page.getByText(/Não foi possível carregar as pendências/)).toBeVisible();
   await expect(page.getByText("Nenhuma pendência aberta.")).toHaveCount(0);

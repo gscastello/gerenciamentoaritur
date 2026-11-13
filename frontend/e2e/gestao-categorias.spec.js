@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Reforma da tela de Gestão (pedido do dono, 2026-09-20): categorias de
@@ -9,12 +10,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // no mobile a barra inferior só mostra os primeiros itens + "Mais"; no
 // desktop a sidebar mostra tudo — mesmo padrão de reserva.spec.js.
 async function abrirGestao(page) {
-  await expect(page.getByRole("button", { name: /^Dashboard$/ }).first()).toBeVisible();
-  const gestao = page.getByRole("button", { name: /^Gestão$/ });
-  if ((await gestao.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-  }
-  await gestao.first().click();
+  await abrirTela(page, "gestao");
 }
 
 test("Gestão: cria categoria de custo empresarial pela aba Categorias", async ({ page }) => {
@@ -41,11 +37,7 @@ test("Gestão: cria categoria de Caixa do dia e ela aparece no Financeiro", asyn
   await cardDespesa.getByRole("button", { name: "Criar" }).click();
   await expect(cardDespesa.getByText("Pedágio de viagem", { exact: true })).toBeVisible();
 
-  const financeiro = page.getByRole("button", { name: /^Financeiro$/ });
-  if ((await financeiro.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-  }
-  await financeiro.first().click();
+  await abrirTela(page, "financeiro");
   await expect(page.getByRole("button", { name: /Pedágio de viagem/ })).toBeVisible();
 });
 

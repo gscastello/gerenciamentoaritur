@@ -2,12 +2,10 @@ import {
   BookOpen,
   Bot,
   CalendarPlus,
-  Check,
   ClipboardList,
   Copy,
   ExternalLink,
   Eye,
-  Inbox,
   MessageCircle,
   Save,
   UserCog,
@@ -15,6 +13,12 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import {
+  FILTROS_DA_FILA,
+  aguardandoDeVerdade,
+  contagemDaFila,
+  filaDeConversas,
+} from "../../domain/filaDeAtendimento.js";
 import {
   anotacaoDaEncomenda,
   embarqueDoRascunho,
@@ -26,7 +30,7 @@ import { useBotKnowledge } from "../../hooks/useBotKnowledge.js";
 import { useRascunhosDeReserva } from "../../hooks/useRascunhosDeReserva.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
-import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
+import { FadeIn, Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import {
   C,
   Card,
@@ -45,11 +49,14 @@ import {
 // (conversas abertas e pendências), o que o bot está tratando e as perguntas
 // que ele não soube responder (pra cadastrar na base). O estado do Chatwoot
 // vem do espelho que a Edge Function `chatwoot-bot` grava no banco.
+//
+// Issue #360: a tela se divide em janelas (abas no topo, montadas pelo App):
+// Conversas (só a fila do WhatsApp), Para lançar (reservas preparadas pela IA),
+// Pendências (PendenciasTab) e Bot (modo e perguntas sem resposta).
 
 // Duração da saída antes de tirar o item da lista de verdade — precisa bater
 // com o `duration` do Presence (AGENTS.md §5).
 const SAIDA_MS = 200;
-const MAX_PENDENCIAS = 5;
 
 const MODOS = {
   ia: {
@@ -109,11 +116,6 @@ function nomesDaConversa(c) {
   };
 }
 
-function ordemDaFila(a, b) {
-  if (!!a.aguardando_equipe !== !!b.aguardando_equipe) return a.aguardando_equipe ? -1 : 1;
-  return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
-}
-
 function Chip({ children, cor, fundo }) {
   return (
     <span
@@ -128,13 +130,14 @@ function Chip({ children, cor, fundo }) {
 function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
   const n = nomesDaConversa(c);
   const comEquipe = c.status === "open";
+  const aguardando = aguardandoDeVerdade(c);
   const autor = { cliente: "Cliente", equipe: "Equipe", bot: "Bot" }[c.last_message_by];
   return (
     <div
       className="rounded-lg p-3 flex items-start justify-between gap-3"
       style={{
         background: C.panel2,
-        border: `1px solid ${c.aguardando_equipe ? C.amber : "transparent"}`,
+        border: `1px solid ${aguardando ? C.amber : "transparent"}`,
       }}
     >
       <div className="min-w-0">
@@ -142,7 +145,7 @@ function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
           <span className="text-sm font-medium" style={{ overflowWrap: "anywhere" }}>
             {n.principal}
           </span>
-          {c.aguardando_equipe && (
+          {aguardando && (
             <Chip cor={C.onBrand} fundo={C.amber}>
               Aguardando resposta
             </Chip>
@@ -411,16 +414,63 @@ function Secao({ icon: Icon, titulo, resumo, children }) {
   );
 }
 
-export default function AtendimentoTab({ pend, modoAtendimento, onNavigate, trips, onAgendar }) {
+const RESUMOS = {
+  conversas: "Só as conversas do WhatsApp, a mais recente primeiro.",
+  lancar: "Reservas que a IA preparou lendo as conversas. Confira e lance.",
+  bot: "Como o bot está atendendo e as perguntas que ele não soube responder.",
+};
+
+function FiltroDaFila({ filtro, onFiltro, contagem }) {
+  return (
+    <div
+      className="flex flex-wrap gap-1.5 mb-3"
+      role="tablist"
+      aria-label="Filtrar conversas"
+    >
+      {FILTROS_DA_FILA.map((f) => {
+        const ativo = filtro === f.id;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            role="tab"
+            aria-selected={ativo}
+            onClick={() => onFiltro(f.id)}
+            className="btn-press shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
+            style={{
+              background: ativo ? C.amber : C.panel2,
+              color: ativo ? C.onBrand : C.inkSoft,
+              border: `1px solid ${ativo ? C.amber : C.border}`,
+            }}
+          >
+            {f.label} <span style={{ opacity: 0.75 }}>{contagem[f.id] ?? 0}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * `vista`: "conversas" | "lancar" | "bot" (issue #360). As abas no topo (e a de
+ * Pendências, que é a PendenciasTab) são montadas pelo App.
+ */
+export default function AtendimentoTab({
+  vista = "conversas",
+  modoAtendimento,
+  onNavigate,
+  trips,
+  onAgendar,
+}) {
   const at = useAtendimento();
-  const rasc = useRascunhosDeReserva();
+  const rasc = useRascunhosDeReserva({ enabled: vista === "lancar" });
   const kb = useBotKnowledge();
   const cfg = useSettings();
   const [erro, setErro] = useState("");
+  const [filtro, setFiltro] = useState("todas");
   const aoErrar = (msg) => (e) => setErro(mensagemAmigavel(e, msg));
 
   const perguntasSaida = useSaida(at.resolverPergunta, aoErrar("Não foi possível dispensar."));
-  const pendenciasSaida = useSaida(pend.resolver, aoErrar("Não foi possível resolver."));
   const rascunhosSaida = useSaida(rasc.descartar, aoErrar("Não foi possível descartar."));
   const [copiado, setCopiado] = useState("");
   const copiarAnotacao = async (r) => {
@@ -445,18 +495,15 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate, trip
   };
 
   const modo = MODOS[modoAtendimento] || MODOS.manual;
-  const fila = [...at.conversas].sort(ordemDaFila);
-  const aguardando = fila.filter((c) => c.aguardando_equipe).length;
-  const comEquipe = fila.filter((c) => c.status === "open").length;
-  const comBot = fila.filter((c) => c.status === "pending").length;
-  const pendencias = (pend.pendencias || []).slice(0, MAX_PENDENCIAS);
+  const fila = filaDeConversas(at.conversas, filtro);
+  const contagem = contagemDaFila(at.conversas);
   const chatwootUrl = cfg.chatwootUrl;
 
   return (
     <div>
       <Header
         title="Atendimento WhatsApp"
-        subtitle="Conversas com a equipe e com o bot, pendências e perguntas que o bot não soube responder."
+        subtitle={RESUMOS[vista] ?? RESUMOS.conversas}
         right={
           chatwootUrl && (
             <a
@@ -474,227 +521,171 @@ export default function AtendimentoTab({ pend, modoAtendimento, onNavigate, trip
       <div className="px-6 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
 
-        <Card>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-start gap-3 min-w-0">
-              <modo.icon size={18} style={{ color: C.amber, marginTop: 2 }} />
-              <div className="min-w-0">
-                <div className="text-sm font-semibold">Bot: {modo.label}</div>
-                <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
-                  {modo.desc}
-                </div>
+        {vista === "conversas" && (
+          <Secao
+            icon={MessageCircle}
+            titulo="Conversas"
+            resumo="A mais recente primeiro. “Aguardando resposta” = o cliente escreveu por último nas últimas 48 h."
+          >
+            <FiltroDaFila filtro={filtro} onFiltro={setFiltro} contagem={contagem} />
+            {at.errorConversas && (
+              <ErrorBanner onRetry={at.recarregarConversas} className="mb-3">
+                {mensagemAmigavel(at.errorConversas, "Não foi possível carregar as conversas.")}
+              </ErrorBanner>
+            )}
+            {at.loading && at.conversas.length === 0 && (
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} height={72} rounded={10} />
+                ))}
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigate({ tab: "sistema" })}
-              className="btn-press text-xs px-3 py-1.5 rounded-md"
-              style={{ background: C.panel2, color: C.inkSoft, border: `1px solid ${C.border}` }}
-            >
-              Alterar modo, base e estilo
-            </button>
-          </div>
-        </Card>
-
-        <Secao
-          icon={ClipboardList}
-          titulo="Reservas prontas para lançar"
-          resumo="A IA leu as conversas e preparou estas reservas (o cliente já mandou a data e o endereço). Confira e lance: preço e vagas saem do app como sempre."
-        >
-          {rasc.error && (
-            <ErrorBanner onRetry={rasc.recarregar} className="mb-3">
-              {mensagemAmigavel(rasc.error, "Não foi possível carregar as reservas preparadas.")}
-            </ErrorBanner>
-          )}
-          {rasc.loading && rasc.rascunhos.length === 0 && (
-            <div className="space-y-2">
-              {[0, 1].map((i) => (
-                <Skeleton key={i} height={84} rounded={10} />
+            )}
+            {!at.loading && !at.errorConversas && fila.length === 0 && (
+              <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
+                {filtro === "todas"
+                  ? "Nenhuma conversa em andamento."
+                  : "Nenhuma conversa neste filtro."}
+              </div>
+            )}
+            <div className="space-y-2" data-testid="fila-de-conversas">
+              {fila.map((c) => (
+                <FadeIn key={c.conversation_id}>
+                  <ConversaItem
+                    c={c}
+                    chatwootUrl={chatwootUrl}
+                    onVerCadastro={(conv) =>
+                      onNavigate({
+                        tab: "passageiros",
+                        deepLink: { kind: "passageiro", termo: conv.nome_cadastro || conv.phone },
+                      })
+                    }
+                  />
+                </FadeIn>
               ))}
             </div>
-          )}
-          {!rasc.loading && !rasc.error && rasc.rascunhos.length === 0 && (
-            <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma reserva preparada agora. Elas aparecem aqui quando o cliente manda a data e o
-              endereço na conversa.
-            </div>
-          )}
-          {copiado && (
-            <output className="block text-[11px] mb-2" style={{ color: C.inkSoft }}>
-              Anotação copiada: cole na caixinha do ponto, na Agenda.
-            </output>
-          )}
-          <div className="space-y-2">
-            {rasc.rascunhos.map((r) => (
-              <Presence
-                key={r.id}
-                when={!rascunhosSaida.saindo.has(r.id)}
-                duration={SAIDA_MS}
-                {...fadeScale}
-              >
-                <RascunhoItem
-                  r={r}
-                  trips={trips}
-                  chatwootUrl={chatwootUrl}
-                  onLancar={onAgendar ? (x) => onAgendar(inicialDoRascunho(x, trips)) : null}
-                  onDescartar={rascunhosSaida.sair}
-                  onCopiar={copiarAnotacao}
-                />
-              </Presence>
-            ))}
-          </div>
-        </Secao>
+          </Secao>
+        )}
 
-        <Secao
-          icon={MessageCircle}
-          titulo="Conversas"
-          resumo={
-            at.loading && at.conversas.length === 0
-              ? null
-              : `${aguardando} aguardando resposta · ${comEquipe} com a equipe · ${comBot} com o bot`
-          }
-        >
-          {at.errorConversas && (
-            <ErrorBanner onRetry={at.recarregarConversas} className="mb-3">
-              {mensagemAmigavel(at.errorConversas, "Não foi possível carregar as conversas.")}
-            </ErrorBanner>
-          )}
-          {at.loading && at.conversas.length === 0 && (
+        {vista === "lancar" && (
+          <Secao
+            icon={ClipboardList}
+            titulo="Reservas prontas para lançar"
+            resumo="A IA leu as conversas e preparou estas reservas (o cliente já mandou a data e o endereço). Confira e lance: preço e vagas saem do app como sempre."
+          >
+            {rasc.error && (
+              <ErrorBanner onRetry={rasc.recarregar} className="mb-3">
+                {mensagemAmigavel(rasc.error, "Não foi possível carregar as reservas preparadas.")}
+              </ErrorBanner>
+            )}
+            {rasc.loading && rasc.rascunhos.length === 0 && (
+              <div className="space-y-2">
+                {[0, 1].map((i) => (
+                  <Skeleton key={i} height={84} rounded={10} />
+                ))}
+              </div>
+            )}
+            {!rasc.loading && !rasc.error && rasc.rascunhos.length === 0 && (
+              <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
+                Nenhuma reserva preparada agora. Elas aparecem aqui quando o cliente manda a data e
+                o endereço na conversa.
+              </div>
+            )}
+            {copiado && (
+              <output className="block text-[11px] mb-2" style={{ color: C.inkSoft }}>
+                Anotação copiada: cole na caixinha do ponto, na Agenda.
+              </output>
+            )}
             <div className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} height={72} rounded={10} />
-              ))}
-            </div>
-          )}
-          {!at.loading && !at.errorConversas && fila.length === 0 && (
-            <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma conversa em andamento. A fila aparece assim que o Agent Bot do Chatwoot
-              estiver ligado à caixa do WhatsApp.
-            </div>
-          )}
-          <div className="space-y-2">
-            {fila.map((c) => (
-              <ConversaItem
-                key={c.conversation_id}
-                c={c}
-                chatwootUrl={chatwootUrl}
-                onVerCadastro={(conv) =>
-                  onNavigate({
-                    tab: "passageiros",
-                    deepLink: { kind: "passageiro", termo: conv.nome_cadastro || conv.phone },
-                  })
-                }
-              />
-            ))}
-          </div>
-        </Secao>
-
-        <Secao
-          icon={Inbox}
-          titulo="Pendências abertas"
-          resumo={`${pend.total} no total — transferências do bot e as abertas à mão.`}
-        >
-          {pend.error && (
-            <ErrorBanner onRetry={pend.recarregar} className="mb-3">
-              {mensagemAmigavel(pend.error, "Não foi possível carregar as pendências.")}
-            </ErrorBanner>
-          )}
-          {pend.loading && pend.pendencias.length === 0 && (
-            <div className="space-y-2">
-              {[0, 1].map((i) => (
-                <Skeleton key={i} height={56} rounded={10} />
-              ))}
-            </div>
-          )}
-          {!pend.loading && !pend.error && pend.pendencias.length === 0 && (
-            <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma pendência aberta.
-            </div>
-          )}
-          <div className="space-y-2">
-            {pendencias.map((p) => (
-              <Presence
-                key={p.id}
-                when={!pendenciasSaida.saindo.has(p.id)}
-                duration={SAIDA_MS}
-                {...fadeScale}
-              >
-                <div
-                  className="rounded-lg p-3 flex items-start justify-between gap-3"
-                  style={{ background: C.panel2 }}
+              {rasc.rascunhos.map((r) => (
+                <Presence
+                  key={r.id}
+                  when={!rascunhosSaida.saindo.has(r.id)}
+                  duration={SAIDA_MS}
+                  {...fadeScale}
                 >
+                  <RascunhoItem
+                    r={r}
+                    trips={trips}
+                    chatwootUrl={chatwootUrl}
+                    onLancar={onAgendar ? (x) => onAgendar(inicialDoRascunho(x, trips)) : null}
+                    onDescartar={rascunhosSaida.sair}
+                    onCopiar={copiarAnotacao}
+                  />
+                </Presence>
+              ))}
+            </div>
+          </Secao>
+        )}
+
+        {vista === "bot" && (
+          <>
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0">
+                  <modo.icon size={18} style={{ color: C.amber, marginTop: 2 }} />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium" style={{ overflowWrap: "anywhere" }}>
-                      {p.assunto}
-                    </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
-                      {p.cliente || p.phone || "sem identificação"} · {tempoRelativo(p.created_at)}
+                    <div className="text-sm font-semibold">Bot: {modo.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
+                      {modo.desc}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => pendenciasSaida.sair(p.id)}
-                    aria-label={`Resolver pendência: ${p.assunto}`}
-                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold shrink-0"
-                    style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
-                  >
-                    <Check size={13} /> Resolver
-                  </button>
                 </div>
-              </Presence>
-            ))}
-          </div>
-          {pend.total > MAX_PENDENCIAS && (
-            <button
-              type="button"
-              onClick={() => onNavigate({ tab: "pendencias" })}
-              className="btn-press mt-3 text-xs px-3 py-1.5 rounded-md"
-              style={{ background: C.panel2, color: C.inkSoft }}
-            >
-              Ver todas as {pend.total} pendências
-            </button>
-          )}
-        </Secao>
+                <button
+                  type="button"
+                  onClick={() => onNavigate({ tab: "sistema" })}
+                  className="btn-press text-xs px-3 py-1.5 rounded-md"
+                  style={{
+                    background: C.panel2,
+                    color: C.inkSoft,
+                    border: `1px solid ${C.border}`,
+                  }}
+                >
+                  Alterar modo, base e estilo
+                </button>
+              </div>
+            </Card>
 
-        <Secao
-          icon={BookOpen}
-          titulo="Perguntas que o bot não soube responder"
-          resumo="Cadastre a resposta na base e o bot passa a responder sozinho da próxima vez."
-        >
-          {at.errorPerguntas && (
-            <ErrorBanner onRetry={at.recarregarPerguntas} className="mb-3">
-              {mensagemAmigavel(at.errorPerguntas, "Não foi possível carregar as perguntas.")}
-            </ErrorBanner>
-          )}
-          {at.loading && at.perguntas.length === 0 && (
-            <div className="space-y-2">
-              {[0, 1].map((i) => (
-                <Skeleton key={i} height={56} rounded={10} />
-              ))}
-            </div>
-          )}
-          {!at.loading && !at.errorPerguntas && at.perguntas.length === 0 && (
-            <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma pergunta pendente.
-            </div>
-          )}
-          <div className="space-y-2">
-            {at.perguntas.map((p) => (
-              <Presence
-                key={p.id}
-                when={!perguntasSaida.saindo.has(p.id)}
-                duration={SAIDA_MS}
-                {...fadeScale}
-              >
-                <PerguntaItem
-                  p={p}
-                  onCadastrar={cadastrarResposta}
-                  onDispensar={perguntasSaida.sair}
-                />
-              </Presence>
-            ))}
-          </div>
-        </Secao>
+            <Secao
+              icon={BookOpen}
+              titulo="Perguntas que o bot não soube responder"
+              resumo="Cadastre a resposta na base e o bot passa a responder sozinho da próxima vez."
+            >
+              {at.errorPerguntas && (
+                <ErrorBanner onRetry={at.recarregarPerguntas} className="mb-3">
+                  {mensagemAmigavel(at.errorPerguntas, "Não foi possível carregar as perguntas.")}
+                </ErrorBanner>
+              )}
+              {at.loading && at.perguntas.length === 0 && (
+                <div className="space-y-2">
+                  {[0, 1].map((i) => (
+                    <Skeleton key={i} height={56} rounded={10} />
+                  ))}
+                </div>
+              )}
+              {!at.loading && !at.errorPerguntas && at.perguntas.length === 0 && (
+                <div className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
+                  Nenhuma pergunta pendente.
+                </div>
+              )}
+              <div className="space-y-2">
+                {at.perguntas.map((p) => (
+                  <Presence
+                    key={p.id}
+                    when={!perguntasSaida.saindo.has(p.id)}
+                    duration={SAIDA_MS}
+                    {...fadeScale}
+                  >
+                    <PerguntaItem
+                      p={p}
+                      onCadastrar={cadastrarResposta}
+                      onDispensar={perguntasSaida.sair}
+                    />
+                  </Presence>
+                ))}
+              </div>
+            </Secao>
+          </>
+        )}
       </div>
     </div>
   );
