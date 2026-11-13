@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Reservas preparadas pela IA (issue #254): o bot lê a conversa e, quando o
@@ -52,13 +53,8 @@ const RASCUNHOS = [
 
 async function abrirAtendimento(page) {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  const aba = page.getByRole("button", { name: /^Atendimento$/ });
-  if ((await aba.count()) === 0) await page.getByRole("button", { name: "Mais" }).click();
-  await page
-    .getByRole("button", { name: /^Atendimento$/ })
-    .first()
-    .click();
+  // reservas preparadas ficam na aba "Para lançar" do Atendimento (issue #360)
+  await abrirTela(page, "para_lancar");
   await expect(page.getByText("Reservas prontas para lançar")).toBeVisible();
 }
 

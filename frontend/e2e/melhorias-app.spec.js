@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #192: telefone secundário, cidades de desembarque (revisão),
@@ -183,12 +184,7 @@ test("Pendências: Limpar todas resolve as abertas", async ({ page }) => {
   page.on("dialog", (d) => d.accept());
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  let aba = page.getByRole("button", { name: "Pendências" });
-  if ((await aba.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-    aba = page.getByRole("button", { name: "Pendências" });
-  }
-  await aba.first().click();
+  await abrirTela(page, "pendencias");
   await expect(page.getByText("Pendência um")).toBeVisible();
 
   await page.getByRole("button", { name: /Limpar todas \(2\)/ }).click();
