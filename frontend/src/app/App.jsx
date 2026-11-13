@@ -54,6 +54,7 @@ const GestaoTab = React.lazy(() => import("./tabs/GestaoTab.jsx"));
 const SistemaTab = React.lazy(() => import("./tabs/SistemaTab.jsx"));
 const AtendimentoTab = React.lazy(() => import("./tabs/AtendimentoTab.jsx"));
 const AgendaTab = React.lazy(() => import("./tabs/AgendaTab.jsx"));
+const VencimentosTab = React.lazy(() => import("./tabs/VencimentosTab.jsx"));
 const NovaReservaModal = React.lazy(() =>
   import("./tabs/AgendaTab.jsx").then((m) => ({ default: m.NovaReservaModal })),
 );
@@ -379,6 +380,11 @@ const DESTINOS_BUSCA = [
     termos: "clientes histórico contatos telefone",
   },
   { tab: "operacao", label: "Operação — combustível", termos: "abastecimento km consumo veículo" },
+  {
+    tab: "vencimentos",
+    label: "Vencimentos e imposto (DAS)",
+    termos: "imposto das simples ipva seguro licenciamento vistoria parcela cnh vencimento",
+  },
   {
     tab: "operacao",
     label: "Manutenção preventiva",
@@ -774,6 +780,7 @@ const TAB_ROLES = {
   financeiro: ["admin"],
   gestao: ["admin"],
   operacao: ["admin"],
+  vencimentos: ["admin"],
   dashboard: ["admin"],
   sistema: ["admin"],
 };
@@ -1421,6 +1428,7 @@ function AppInner() {
                       )}
                       {tab === "gestao" && <GestaoTab deepLink={deepLink} />}
                       {tab === "operacao" && <OperacaoTab />}
+                      {tab === "vencimentos" && <VencimentosTab />}
                       {tab === "dashboard" && (
                         <DashboardTab
                           reservas={reservas}

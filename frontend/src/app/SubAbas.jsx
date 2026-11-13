@@ -15,6 +15,7 @@ const GRUPOS_DE_TELAS = [
       { id: "financeiro", label: "Financeiro" },
       { id: "gestao", label: "Gestão" },
       { id: "operacao", label: "Operação" },
+      { id: "vencimentos", label: "Vencimentos" },
     ],
   },
   {
@@ -58,7 +59,8 @@ export function SubAbas({ telas, ativa, onChange, badges = {} }) {
               background: sel ? C.brand : C.panel2,
               color: sel ? C.onBrand : C.inkSoft,
               border: `1px solid ${sel ? C.brand : C.border}`,
-              transition: "background 120ms var(--ease-out-quart), color 120ms var(--ease-out-quart)",
+              transition:
+                "background 120ms var(--ease-out-quart), color 120ms var(--ease-out-quart)",
             }}
           >
             {t.label}

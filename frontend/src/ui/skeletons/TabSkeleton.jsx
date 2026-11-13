@@ -190,6 +190,7 @@ const MAP = {
   passageiros: PassageirosSkel,
   financeiro: FinanceiroSkel,
   gestao: GestaoSkel,
+  vencimentos: GestaoSkel,
   operacao: OperacaoSkel,
   dashboard: DashboardSkel,
   sistema: SistemaSkel,
