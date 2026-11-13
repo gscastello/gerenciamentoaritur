@@ -8,6 +8,7 @@ const TELAS = {
   financeiro: { menu: "Gestão", aba: "Financeiro" },
   gestao: { menu: "Gestão", aba: "Gestão" },
   operacao: { menu: "Gestão", aba: "Operação" },
+  vencimentos: { menu: "Gestão", aba: "Vencimentos" },
   atendimento: { menu: "Atendimento", aba: "Conversas" },
   para_lancar: { menu: "Atendimento", aba: "Para lançar" },
   pendencias: { menu: "Atendimento", aba: "Pendências" },

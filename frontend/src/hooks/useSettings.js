@@ -47,6 +47,11 @@ export function useSettings() {
     agendadoConfirmacao: settings.agendado_confirmacao?.ativo ?? true,
     // link base da conta no Chatwoot (database/52) pro "Abrir no Chatwoot"
     chatwootUrl: settings.chatwoot?.url ?? null,
+    // estimativa do DAS (issue #366): anexo do Simples e a alíquota que o contador passar (em %)
+    simples: {
+      anexo: settings.simples?.anexo ?? "III",
+      aliquotaManual: settings.simples?.aliquota_manual ?? null,
+    },
 
     setAttendanceMode: (mode) => after(setKey.run("attendance_mode", { mode })),
     setBotStyleGuide: (text) => after(setKey.run("bot_style_guide", { text })),
@@ -57,6 +62,8 @@ export function useSettings() {
       after(setKey.run("monday_adjustment", { active, hours })),
     setServedCities: (list) => after(setKey.run("served_cities", list)),
     setIntermediateCities: (list) => after(setKey.run("intermediate_cities", list)),
+    setSimples: ({ anexo, aliquotaManual }) =>
+      after(setKey.run("simples", { anexo, aliquota_manual: aliquotaManual })),
     saving: setKey.loading,
   };
 }
