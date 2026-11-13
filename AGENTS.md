@@ -159,6 +159,10 @@ Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda nest
 vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
 instruções na internet a cada uso.
 
+**MCP do shadcn/ui** (issue #379, `.mcp.json`): servidor oficial `npx shadcn@4.23.0 mcp` (versão fixa; `cmd /c`
+porque a máquina do dono é Windows), só para **consultar** componentes e exemplos. O app não usa shadcn/ui: o padrão
+continua sendo `ui/` e `ui/motion/` (§5). Rodar `init_project` ou trazer componente de lá é mudança à parte, com issue.
+
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
 > para services/hooks (issue #10). Todo arquivo novo entra normal.
