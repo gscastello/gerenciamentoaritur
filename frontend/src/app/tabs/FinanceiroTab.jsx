@@ -50,6 +50,7 @@ import {
   useCategorias,
   useDeepLinkSubview,
 } from "../tabShared.jsx";
+import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
 export default function FinanceiroTab({ pix, deepLink }) {
   const [subview, setSubview] = useState("lancamentos");
@@ -398,6 +399,8 @@ export default function FinanceiroTab({ pix, deepLink }) {
               </div>
               <Card>
                 <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
+                {/* issue #362: a foto da nota preenche valor, data e categoria */}
+                <LancarPorFoto destino="despesa" />
                 <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
                   Despesa rápida — escolhe a categoria e só falta o valor
                 </div>
