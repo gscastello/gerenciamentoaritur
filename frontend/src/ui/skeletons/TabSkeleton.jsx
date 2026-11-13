@@ -191,6 +191,7 @@ const MAP = {
   financeiro: FinanceiroSkel,
   gestao: GestaoSkel,
   vencimentos: GestaoSkel,
+  extrato: GestaoSkel,
   operacao: OperacaoSkel,
   dashboard: DashboardSkel,
   sistema: SistemaSkel,

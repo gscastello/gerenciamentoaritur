@@ -16,6 +16,7 @@ const GRUPOS_DE_TELAS = [
       { id: "gestao", label: "Gestão" },
       { id: "operacao", label: "Operação" },
       { id: "vencimentos", label: "Vencimentos" },
+      { id: "extrato", label: "Extrato" },
     ],
   },
   {
