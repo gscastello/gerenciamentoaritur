@@ -163,6 +163,13 @@ select 'DAS — Simples Nacional', 'imposto',
        'mensal', 5, 'Valor estimado na tela Vencimentos; o contador confirma.'
 where not exists (select 1 from vencimentos where categoria = 'imposto' and titulo like 'DAS%' and deleted_at is null);
 
+-- Tipos de aviso do sino: 'vencimento' (e os da frota e do fechamento do mês,
+-- issues #365 e #369) precisam estar na lista, senão o insert falha.
+alter table public.app_notifications drop constraint if exists app_notifications_kind_check;
+alter table public.app_notifications add constraint app_notifications_kind_check check (kind = any (array[
+  'lotacao', 'cancelamento', 'mudanca_embarque', 'mudanca_desembarque', 'pendencia',
+  'vencimento', 'consumo', 'manutencao', 'fechamento']));
+
 -- Aviso de vencimento mostra valores da empresa: só admin e financeiro veem.
 drop policy if exists app_notifications_select on public.app_notifications;
 create policy app_notifications_select on public.app_notifications for select to authenticated
