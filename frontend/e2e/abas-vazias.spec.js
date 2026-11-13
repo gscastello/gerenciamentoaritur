@@ -14,6 +14,7 @@ const TELAS_DE_GRUPO = [
   "operacao",
   "vencimentos",
   "extrato",
+  "fechamento",
   "atendimento",
   "para_lancar",
   "pendencias",
