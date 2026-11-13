@@ -21,6 +21,8 @@ test("calendário de Lançamentos continua com células quadradas e compactas de
   page,
 }) => {
   await abrirFinanceiro(page);
+  // o calendário abre ao tocar no mês (crítica de design, issue #393)
+  await page.getByRole("button", { name: /abrir o calendário/ }).click();
   const dia15 = page.getByRole("button", { name: "15", exact: true });
   await expect(dia15).toBeVisible();
 

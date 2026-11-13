@@ -29,6 +29,7 @@ export default defineConfig({
         "brand/emblema-at.webp",
         "brand/logo-fundo-escuro.webp",
         "brand/capa-inicio.webp",
+        "brand/login-onibus.webp",
       ],
       manifest: {
         name: "Gestão AriTur",

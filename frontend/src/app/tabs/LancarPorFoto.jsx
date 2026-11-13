@@ -87,10 +87,11 @@ export function LancarPorFoto({ destino = "despesa" }) {
       {!form && (
         <button
           type="button"
+          id="lancar-por-foto"
           onClick={() => inputRef.current?.click()}
           disabled={foto.lendo}
           className="btn-press w-full flex items-center justify-center gap-2 text-sm px-3 py-2.5 rounded-lg font-semibold disabled:opacity-60"
-          style={{ background: C.amberSoft, color: C.amber, border: `1px dashed ${C.amber}` }}
+          style={{ background: C.panel2, color: C.ink, border: `1px dashed ${C.inkFaint}` }}
         >
           <Camera size={16} /> {foto.lendo ? "Lendo a nota…" : "Lançar por foto da nota"}
         </button>

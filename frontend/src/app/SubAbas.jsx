@@ -40,7 +40,7 @@ export function SubAbas({ telas, ativa, onChange, badges = {} }) {
   if (!telas || telas.length < 2) return null;
   return (
     <div
-      className="px-4 md:px-10 pt-4 flex flex-wrap gap-1.5"
+      className="px-3.5 md:px-10 pt-3 flex gap-1 overflow-x-auto"
       role="tablist"
       aria-label="Telas"
       data-sem-puxao
@@ -55,24 +55,18 @@ export function SubAbas({ telas, ativa, onChange, badges = {} }) {
             role="tab"
             aria-selected={sel}
             onClick={() => onChange(t.id)}
-            className="btn-press shrink-0 flex items-center gap-1.5 text-xs md:text-sm px-3 py-1.5 md:px-3.5 md:py-2 rounded-lg font-medium"
+            className="btn-press shrink-0 flex items-center gap-1.5 text-[13px] md:text-sm px-3 min-h-[40px] md:px-3.5 rounded-lg font-semibold"
             style={{
-              background: sel ? C.brand : C.panel2,
-              color: sel ? C.onBrand : C.inkSoft,
-              border: `1px solid ${sel ? C.brand : C.border}`,
+              background: sel ? C.panel2 : "transparent",
+              color: sel ? C.ink : C.inkSoft,
+              border: `1px solid ${sel ? C.border : "transparent"}`,
               transition:
                 "background 120ms var(--ease-out-quart), color 120ms var(--ease-out-quart)",
             }}
           >
             {t.label}
             {badge > 0 && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                style={{
-                  background: sel ? "rgba(255,255,255,.22)" : C.panel,
-                  color: sel ? C.onBrand : C.ink,
-                }}
-              >
+              <span className="text-[11px] font-semibold" style={{ color: C.inkFaint }}>
                 {badge}
               </span>
             )}

@@ -1,8 +1,5 @@
 import {
   AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Bus,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -11,6 +8,7 @@ import {
   Hourglass,
   Megaphone,
   MessageCircle,
+  MoreHorizontal,
   NotebookPen,
   Package,
   Pencil,
@@ -27,6 +25,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   detalheDoPonto,
   pontoSoNome,
@@ -68,13 +67,12 @@ import {
   BotaoAgendar,
   C,
   Card,
-  FUNDO_CARTAO,
   Field,
   Header,
   IDA_ORDEM_SECOES,
-  MiniStat,
   OCUPA_VAGA,
   Pill,
+  STATUS_META,
   Select,
   SeloCidadeIntermediaria,
   StatusPill,
@@ -143,6 +141,17 @@ export default function AgendaTab({
     data === todayStr() && horaOperacao() >= 9 ? "volta" : "ida",
   );
   const sentidoAplicado = useRef(null);
+  // hora principal de cada viagem: Ida = saída da Rodoviária; Volta = primeiro ponto
+  const horaDaViagem = (dir) => {
+    const pontos = trips[dir]?.pontos || [];
+    if (dir === "ida")
+      return shiftHour(
+        pontos.find((p) => p.id === "rodoviaria")?.horaBase || "05:40",
+        isMonday(data) && segundaAtiva,
+        segundaHoras,
+      );
+    return ordenarPontos(pontos, "volta")[0]?.horaBase || "";
+  };
   useEffect(() => {
     if (deepLink?.sentido && deepLink.at !== sentidoAplicado.current) {
       sentidoAplicado.current = deepLink.at;
@@ -427,13 +436,47 @@ export default function AgendaTab({
         title="Agenda"
         subtitle="Painel operacional do dia — capacidade, confirmados, pendentes, vagas e embarcados."
         right={
-          <div className="flex items-center gap-2">
-            <TextInput
-              type="date"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              className="w-auto"
-            />
+          <div className="flex items-center gap-1.5 w-full md:w-auto">
+            {/* data com setas (crítica de design, issue #393): anda dia a dia sem abrir o calendário */}
+            <button
+              type="button"
+              onClick={() => setData(deslocarDia(data, -1))}
+              aria-label="Dia anterior"
+              className="btn-press w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+            >
+              <ChevronLeft size={19} />
+            </button>
+            <div
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 h-11 rounded-xl border px-2"
+              style={{ background: C.panel, borderColor: C.border }}
+              data-testid="dia-da-agenda"
+            >
+              <span className="text-sm font-semibold capitalize" style={{ color: C.ink }}>
+                {data === todayStr()
+                  ? "Hoje"
+                  : data === deslocarDia(todayStr(), 1)
+                    ? "Amanhã"
+                    : diaSemana(data).slice(0, 3)}
+              </span>
+              <input
+                type="date"
+                value={data}
+                onChange={(e) => e.target.value && setData(e.target.value)}
+                aria-label="Dia da Agenda"
+                className="bg-transparent text-sm font-medium outline-none min-w-0"
+                style={{ color: C.inkSoft, colorScheme: "dark" }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setData(deslocarDia(data, 1))}
+              aria-label="Próximo dia"
+              className="btn-press w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+            >
+              <ChevronRight size={19} />
+            </button>
             {onAgendar && (
               <span className="hidden sm:block">
                 <BotaoAgendar onClick={onAgendar} />
@@ -442,115 +485,16 @@ export default function AgendaTab({
           </div>
         }
       />
-      <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
-        <div
-          className="cartao-at relative overflow-hidden rounded-2xl border p-4 md:p-5"
-          style={{ background: FUNDO_CARTAO, borderColor: C.border }}
-        >
-          <div className="relative">
-            {/* Dia em destaque, centralizado — é em torno dele que toda a
-                tela opera, então vira o elemento visual dominante, com
-                setas pra andar dia a dia sem precisar abrir o calendário. */}
-            <div className="flex items-center justify-center gap-3 md:gap-6">
-              <button
-                type="button"
-                onClick={() => setData(deslocarDia(data, -1))}
-                aria-label="Dia anterior"
-                className="btn-press rounded-full shrink-0 flex items-center justify-center"
-                style={{ background: C.panel2, color: C.ink, width: 44, height: 44 }}
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <div className="text-center min-w-0">
-                {data === todayStr() ? (
-                  <div
-                    className="text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ color: C.inkSoft }}
-                  >
-                    Hoje
-                  </div>
-                ) : data === deslocarDia(todayStr(), 1) ? (
-                  <div
-                    className="text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ color: C.inkSoft }}
-                  >
-                    Amanhã
-                  </div>
-                ) : null}
-                <div
-                  className="capitalize truncate"
-                  style={{
-                    fontWeight: 800,
-                    fontSize: "1.7rem",
-                    lineHeight: 1.1,
-                    color: "#fff",
-                  }}
-                >
-                  {diaSemana(data)}
-                </div>
-                <div className="text-sm" style={{ color: C.inkSoft }}>
-                  {fmtDate(data)}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setData(deslocarDia(data, 1))}
-                aria-label="Próximo dia"
-                className="btn-press rounded-full shrink-0 flex items-center justify-center"
-                style={{ background: C.panel2, color: C.ink, width: 44, height: 44 }}
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
-              <SeletorSentido
-                sentido={sentido}
-                onChange={setSentido}
-                paxIda={paxIda}
-                paxVolta={paxVolta}
-                capacidade={capacidade}
-              />
-              <div className="flex gap-4">
-                <div>
-                  <div
-                    className="text-[10px] uppercase tracking-wide"
-                    style={{ color: C.inkFaint }}
-                  >
-                    Pendentes
-                  </div>
-                  <div
-                    className="font-bold"
-                    style={{
-                      color: "#fff",
-                      fontSize: "1.1rem",
-                    }}
-                  >
-                    {pendentesDoDia.length}
-                  </div>
-                </div>
-                {esperaTodos.length > 0 && (
-                  <div>
-                    <div
-                      className="text-[10px] uppercase tracking-wide"
-                      style={{ color: C.inkFaint }}
-                    >
-                      Na espera
-                    </div>
-                    <div
-                      className="font-bold"
-                      style={{
-                        color: "#fff",
-                        fontSize: "1.1rem",
-                      }}
-                    >
-                      {esperaTodos.length}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
+        <SeletorSentido
+          sentido={sentido}
+          onChange={setSentido}
+          paxIda={paxIda}
+          paxVolta={paxVolta}
+          capacidade={capacidade}
+          horaIda={horaDaViagem("ida")}
+          horaVolta={horaDaViagem("volta")}
+        />
         <AtalhosDosPontos trips={trips} doDia={doDia} sentido={sentido} onSentido={setSentido} />
         {segunda && (
           <div
@@ -738,7 +682,7 @@ export default function AgendaTab({
               type="button"
               onClick={() => setEncomendaModal({})}
               className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
-              style={{ background: C.amberSoft, color: C.amber }}
+              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
             >
               <Plus size={13} /> Nova
             </button>
@@ -905,67 +849,121 @@ function GruposDeBusca({ itens, trips }) {
 // no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
 // comprovante e localização saíram — pagamento/comprovante agora ficam
 // dentro de "Editar reserva".
-function QuickActions({ r, onStatus, onEditar, onExtra, textoCopia }) {
-  const tel = digitos(r.telefone);
-  const classeAcao =
-    "btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium";
-  const estiloAcao = { background: C.panel2, color: C.inkSoft };
-  const btn = (Icon, label, onClick) => (
-    <button type="button" onClick={onClick} className={classeAcao} style={estiloAcao}>
-      <Icon size={13} /> <span>{label}</span>
+// Menu "⋯" da linha (crítica de design, issue #393): as ações raras saem do caminho do dedo.
+// Abre de baixo, com itens de 48 px; Cancelar fica por último, em vermelho de texto.
+function AcoesDaReserva({ r, aberto, onFechar, onStatus, onEditar, onExtra, textoCopia }) {
+  const [copiado, setCopiado] = useState("");
+  const tel2 = digitos(r.telefone2);
+  if (!aberto) return null;
+  const item = (Icon, rotulo, onClick, perigo = false) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="btn-press w-full flex items-center gap-3 min-h-[48px] px-3 rounded-xl text-left text-[15px]"
+      style={{ color: perigo ? C.brandText : C.ink }}
+    >
+      <Icon size={18} style={{ color: perigo ? C.brandText : C.inkSoft }} />
+      {rotulo}
     </button>
   );
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {tel && (
-        <a
-          href={`https://wa.me/55${tel}`}
-          target="_blank"
-          rel="noreferrer"
-          className={classeAcao}
-          style={estiloAcao}
-        >
-          <MessageCircle size={13} /> <span>WhatsApp</span>
-        </a>
-      )}
-      {textoCopia && (
-        <BotaoCopiar
-          texto={textoCopia}
-          label="Copiar endereço + contato"
-          title="Copia o endereço e o telefone"
-        />
-      )}
-      {btn(Pencil, "Editar", () => onEditar(r))}
-      {onExtra &&
-        r.tipo === "passagem" &&
-        r.status !== "cancelada" &&
-        btn(Users, ehExtra(r) ? "Voltar às vagas" : "Tornar extra", () => onExtra(r, !ehExtra(r)))}
-      {r.status !== "cancelada" && btn(X, "Cancelar", () => onStatus(r.id, "cancelada"))}
-    </div>
+  const fechar = () => {
+    setCopiado("");
+    onFechar();
+  };
+  // portal: o conteúdo da tela entra com transform (stagger), que prenderia o "fixed" na seção
+  return createPortal(
+    <div
+      className="fixed inset-0 z-40 anim-fadeIn"
+      style={{ background: "rgba(0,0,0,.55)" }}
+      onClick={fechar}
+      onKeyDown={(e) => e.key === "Escape" && fechar()}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Ações de ${r.nome || "reserva"}`}
+        className="absolute left-2 right-2 md:left-1/2 md:right-auto md:w-[380px] md:-translate-x-1/2 rounded-3xl border p-2 anim-slideDown"
+        style={{
+          bottom: "max(8px, env(safe-area-inset-bottom))",
+          background: C.panel,
+          borderColor: C.border,
+          boxShadow: "0 24px 48px -16px #000",
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <div className="w-9 h-1 rounded-full mx-auto mt-1 mb-2" style={{ background: C.border }} />
+        <div className="px-3 pb-2">
+          <div className="text-[15px] font-semibold truncate" style={{ color: C.ink }}>
+            {r.nome || r.telefone || "Reserva"}
+          </div>
+          <div className="text-xs truncate" style={{ color: C.inkFaint }}>
+            {r.tipo === "encomenda" ? "Encomenda" : `${r.quantidade}P`} ·{" "}
+            {r.telefone || "sem telefone"}
+          </div>
+        </div>
+        {item(Pencil, "Editar", () => {
+          fechar();
+          onEditar(r);
+        })}
+        {textoCopia &&
+          item(
+            copiado === "ok" ? Check : Copy,
+            copiado === "ok"
+              ? "Copiado"
+              : copiado === "erro"
+                ? "Não copiou"
+                : "Copiar endereço + contato",
+            async () => {
+              const ok = await copiarTexto(textoCopia);
+              setCopiado(ok ? "ok" : "erro");
+              setTimeout(fechar, 900);
+            },
+          )}
+        {tel2 &&
+          item(PhoneCall, `Ligar no 2º telefone (${r.telefone2})`, () => {
+            window.location.href = `tel:${tel2}`;
+            fechar();
+          })}
+        {onExtra &&
+          r.tipo === "passagem" &&
+          r.status !== "cancelada" &&
+          item(Users, ehExtra(r) ? "Voltar às vagas" : "Tornar extra", () => {
+            fechar();
+            onExtra(r, !ehExtra(r));
+          })}
+        {r.status !== "cancelada" &&
+          item(
+            X,
+            r.tipo === "encomenda" ? "Cancelar encomenda" : "Cancelar reserva",
+            () => {
+              fechar();
+              onStatus(r.id, "cancelada");
+            },
+            true,
+          )}
+      </div>
+    </div>,
+    document.body,
   );
 }
+
+// Uma linha por passageiro (crítica de design, issue #393): ~52 px em vez de um cartão de
+// ~150 px com 5 botões. O endereço de embarque continua em primeiro (é o que o motorista
+// procura); embaixo, o nome, o valor e o que for exceção. Ligar e WhatsApp em ícones de 44 px;
+// o resto no "⋯". Status por texto e ícone, sem cor — o laranja fica só para quem desce numa
+// cidade do caminho (pedido do dono).
 function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
-  const marcado = r.status === "embarcado" || r.status === "nao_compareceu";
-  // Encomenda usa a mesma linha da passagem, trocando "NP" por "ENC" e
-  // "embarque" por "entrega" (nunca ocupa vaga). O endereço em destaque é onde
-  // buscar; a entrega aparece embaixo, ou "a definir" (issue #246).
+  const [menu, setMenu] = useState(false);
+  const embarcado = r.status === "embarcado";
+  const marcado = embarcado || r.status === "nao_compareceu";
   const ehEnc = r.tipo === "encomenda";
-  // O endereço é o que o motorista precisa: vem em destaque e o nome em
-  // segundo plano. Ponto fixo (Rodoviária/Retorno/Posto Carone) e Volta não
-  // repetem o nome do ponto — o título da seção já diz; só aparece o detalhe
-  // que o passageiro informou. Sem detalhe, o nome passa a ser a linha
-  // principal (é só o que há para mostrar).
-  const endereco = pontoSoNome(r)
-    ? detalheDoPonto(r)
-    : enderecoEmbarque(r, trips) || "endereço não informado";
+  const endereco = pontoSoNome(r) ? detalheDoPonto(r) : enderecoEmbarque(r, trips) || "";
   const tel = digitos(r.telefone);
-  const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
-  const tel2 = digitos(r.telefone2);
   const ehBusca = r.pontoId === "busca";
   const modoBusca = ehBusca ? BUSCA_MODOS[responsavelDaBusca(r)] : null;
-  const corBusca = modoBusca?.cor ?? null;
   const cidadeIntermediaria = useCidadeIntermediaria(r);
-  // texto para repassar ao taxista: endereço + contato (só em "Buscar em casa")
   const textoCopia = ehBusca
     ? textoParaTaxista({
         endereco: enderecoEmbarque(r, trips),
@@ -976,154 +974,143 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
     : null;
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
-  const nome = (principal) => (
-    <span
-      className={principal ? "text-[15px] font-bold leading-snug" : "text-[13px] font-semibold"}
-      style={{
-        color: principal ? corTexto : marcado ? C.inkFaint : C.inkSoft,
-        textDecoration: riscado,
-        overflowWrap: "anywhere",
-      }}
-    >
-      {ehEnc ? "contato: " : ""}
-      {r.nome || (ehEnc ? r.telefone : "") || "—"}
-    </span>
-  );
-  const quantidade = (
-    <span className="text-[13px] font-bold shrink-0" style={{ color: corTexto }}>
-      {ehEnc ? (
-        <>
-          <Package size={12} className="inline mr-0.5" aria-hidden="true" />
-          ENC
-        </>
-      ) : (
-        `${r.quantidade}P`
-      )}
-    </span>
-  );
-  const chipTel = (numero, digitosTel, rotulo) => (
-    <a
-      href={`tel:${digitosTel}`}
-      className="btn-press inline-flex items-center gap-1.5 text-[13px] font-medium px-2.5 py-1 rounded-md"
-      style={{ background: C.panel2, color: C.ink }}
-    >
-      <PhoneCall size={13} /> {rotulo ? <span style={{ color: C.inkFaint }}>{rotulo}</span> : null}
-      {numero}
-    </a>
-  );
+  const nome = r.nome || (ehEnc ? r.telefone : "") || "—";
+  const principal = endereco || (ehEnc ? `contato: ${nome}` : nome);
+  const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
+  // o que vem embaixo, separado por " · "
+  const detalhes = [
+    endereco ? (ehEnc ? `contato: ${nome}` : nome) : null,
+    ehEnc ? resumoDaEncomenda(r) : r.pago ? "✓ Pago" : r.valorTotal ? fmtBRL(r.valorTotal) : null,
+    pagamentoEmDestaque && !r.pago ? rotuloPagamento(r.pagamento) : null,
+    r.desembarque ? `desce: ${r.desembarque}` : null,
+    r.status !== "confirmada" && !(ehEnc && embarcado)
+      ? `${STATUS_META[r.status]?.emoji || ""} ${STATUS_META[r.status]?.label || r.status}`
+      : ehEnc && embarcado
+        ? "✓ Entregue"
+        : null,
+  ].filter(Boolean);
+  const icone = "btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0";
   return (
     <div
-      className="row-hover rounded-md px-2 py-2"
+      className="row-hover grid items-center gap-1 py-1.5 pr-0.5 border-b"
+      data-testid="linha-reserva"
       style={{
-        background: cidadeIntermediaria ? C.rotaSoft : corBusca ? `${corBusca}14` : C.panel,
-        borderLeft: cidadeIntermediaria
-          ? `3px solid ${C.rota}`
-          : corBusca
-            ? `3px solid ${corBusca}`
-            : undefined,
+        gridTemplateColumns: "44px minmax(0,1fr) auto",
+        borderColor: C.panel2,
+        background: cidadeIntermediaria
+          ? C.rotaSoft
+          : modoBusca
+            ? `${modoBusca.cor}14`
+            : "transparent",
       }}
     >
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          aria-label={
-            ehEnc
-              ? r.status === "embarcado"
-                ? "Desmarcar entrega"
-                : "Marcar entrega"
-              : r.status === "embarcado"
-                ? "Desmarcar embarque"
-                : "Marcar embarque"
-          }
-          onClick={() => onStatus(r.id, r.status === "embarcado" ? "confirmada" : "embarcado")}
-          className="check-fast shrink-0 mt-0.5 w-[15px] h-[15px] rounded-[4px] border flex items-center justify-center"
+      <button
+        type="button"
+        aria-label={
+          ehEnc
+            ? embarcado
+              ? "Desmarcar entrega"
+              : "Marcar entrega"
+            : embarcado
+              ? "Desmarcar embarque"
+              : "Marcar embarque"
+        }
+        aria-pressed={embarcado}
+        onClick={() => onStatus(r.id, embarcado ? "confirmada" : "embarcado")}
+        className="check-fast w-11 h-11 flex items-center justify-center"
+      >
+        <span
+          className="w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center"
           style={{
-            borderColor: r.status === "embarcado" ? C.ink : C.inkFaint,
-            background: r.status === "embarcado" ? C.ink : "transparent",
+            borderColor: embarcado ? C.ink : C.inkFaint,
+            background: embarcado ? C.ink : "transparent",
           }}
         >
-          {r.status === "embarcado" && <Check size={11} color={C.panel} strokeWidth={3} />}
-        </button>
-        <div className="min-w-0 flex-1">
-          {endereco ? (
-            <>
-              <div className="flex items-baseline gap-2">
-                {quantidade}
-                <span
-                  className="text-[15px] font-bold leading-snug"
-                  style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
-                >
-                  {endereco}
-                </span>
-              </div>
-              <div className="mt-0.5">{nome(false)}</div>
-            </>
-          ) : (
-            <div className="flex items-baseline gap-2">
-              {quantidade}
-              {nome(true)}
-            </div>
-          )}
-          {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
-          {ehEnc ? (
-            <div
-              className="text-[11px] mt-0.5"
-              style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
-            >
-              {resumoDaEncomenda(r)}
-              {r.valorTotal ? ` · ${fmtBRL(r.valorTotal)}` : ""}
-            </div>
-          ) : (
-            (r.desembarque || pagamentoEmDestaque) && (
-              <div
-                className="text-[11px] mt-0.5"
-                style={{ color: C.inkFaint, overflowWrap: "anywhere" }}
-              >
-                {r.desembarque ? `desembarque: ${r.desembarque}` : ""}
-                {r.desembarque && pagamentoEmDestaque ? " · " : ""}
-                {pagamentoEmDestaque ? rotuloPagamento(r.pagamento) : ""}
-              </div>
-            )
-          )}
-          {(tel || tel2) && (
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              {tel && chipTel(r.telefone, tel)}
-              {tel2 && chipTel(r.telefone2, tel2, "2º")}
-            </div>
-          )}
-          <div
-            className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap"
-            style={{ color: C.inkFaint }}
+          {embarcado && <Check size={13} color={C.bg} strokeWidth={3} />}
+        </span>
+      </button>
+      <div className="min-w-0 py-0.5">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-[13px] font-bold shrink-0" style={{ color: corTexto }}>
+            {ehEnc ? "ENC" : `${r.quantidade}P`}
+          </span>
+          <span
+            className="text-[15px] font-semibold leading-snug line-clamp-2"
+            style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
           >
-            {ehEnc && r.status === "embarcado" ? (
-              <Pill color={C.green}>✓ Entregue</Pill>
-            ) : (
-              <StatusPill status={r.status} />
+            {principal}
+          </span>
+        </div>
+        {(detalhes.length > 0 || modoBusca) && (
+          <div
+            className="text-[12.5px] leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5"
+            style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
+          >
+            {detalhes.map((d, i) => (
+              <span
+                key={d}
+                className={d === "✓ Pago" ? "font-semibold" : ""}
+                style={d === "✓ Pago" ? { color: C.ink } : undefined}
+              >
+                {i > 0 ? "· " : ""}
+                {d}
+              </span>
+            ))}
+            {modoBusca && (
+              <span
+                className="inline-flex items-center gap-1 font-semibold"
+                style={{ color: modoBusca.cor }}
+              >
+                · <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
+              </span>
             )}
           </div>
-          {modoBusca && (
-            <span
-              className="inline-flex items-center gap-1 mt-1.5 rounded-full text-[11px] font-semibold px-2 py-0.5"
-              style={{
-                background: `${modoBusca.cor}22`,
-                color: modoBusca.cor,
-                border: `1px solid ${modoBusca.cor}66`,
-              }}
-            >
-              <modoBusca.Icon size={11} /> {modoBusca.label}
-            </span>
-          )}
-        </div>
+        )}
+        {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
       </div>
-      <div className="mt-2 pl-6">
-        <QuickActions
-          r={r}
-          onStatus={onStatus}
-          onEditar={onEditar}
-          onExtra={onExtra}
-          textoCopia={textoCopia}
-        />
+      <div className="flex items-center">
+        {tel && (
+          <a
+            href={`tel:${tel}`}
+            aria-label={`Ligar para ${nome} (${r.telefone})`}
+            className={icone}
+            style={{ color: C.inkSoft }}
+          >
+            <PhoneCall size={18} />
+          </a>
+        )}
+        {tel && (
+          <a
+            href={`https://wa.me/55${tel}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`WhatsApp de ${nome}`}
+            className={icone}
+            style={{ color: C.inkSoft }}
+          >
+            <MessageCircle size={18} />
+          </a>
+        )}
+        <button
+          type="button"
+          aria-label={`Mais ações de ${nome}`}
+          aria-haspopup="dialog"
+          onClick={() => setMenu(true)}
+          className={icone}
+          style={{ color: C.inkSoft }}
+        >
+          <MoreHorizontal size={19} />
+        </button>
       </div>
+      <AcoesDaReserva
+        r={r}
+        aberto={menu}
+        onFechar={() => setMenu(false)}
+        onStatus={onStatus}
+        onEditar={onEditar}
+        onExtra={onExtra}
+        textoCopia={textoCopia}
+      />
     </div>
   );
 }
@@ -1132,6 +1119,8 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
 // abrir modal — domain/anotacaoRapida.js reconhece o formato. `onSalvar`
 // devolve `{ ok, erro? }` (vem de AgendaTab.criarViaAnotacao).
 function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
+  // crítica de design (issue #393): uma linha discreta que abre o campo só quando tocada
+  const [aberta, setAberta] = useState(false);
   const [texto, setTexto] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -1146,11 +1135,23 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
     else setErro(r?.erro || "Não foi possível criar a reserva.");
   };
 
+  if (!aberta)
+    return (
+      <button
+        type="button"
+        onClick={() => setAberta(true)}
+        className="btn-press flex items-center gap-2 min-h-[44px] px-1 text-[13px]"
+        style={{ color: C.inkFaint }}
+      >
+        <NotebookPen size={15} /> Anotar em {nomePonto}
+      </button>
+    );
   return (
-    <div className="mb-1.5">
+    <div className="my-1.5 anim-fadeIn">
       <div className="flex items-center gap-1.5">
         <NotebookPen size={13} className="shrink-0" style={{ color: C.inkFaint }} />
         <TextInput
+          autoFocus
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);
@@ -1228,7 +1229,7 @@ function AtalhosDosPontos({ trips, doDia, sentido, onSentido }) {
       {["ida", "volta"].map((direcao) => {
         const viagem = trips[direcao];
         if (!viagem?.pontos?.length) return null;
-        const cor = direcao === "ida" ? C.brand : C.blue;
+        const cor = C.inkSoft;
         const rotulo = direcao === "ida" ? "Ida" : "Volta";
         return (
           <div key={direcao} className="flex items-center gap-1.5 overflow-x-auto pb-0.5 min-w-0">
@@ -1266,7 +1267,8 @@ function AtalhosDosPontos({ trips, doDia, sentido, onSentido }) {
                   <span
                     className="text-[11px]"
                     style={{
-                      color: qtd > 0 ? cor : C.inkFaint,
+                      color: qtd > 0 ? C.ink : C.inkFaint,
+                      fontWeight: qtd > 0 ? 700 : 400,
                     }}
                   >
                     {qtd}
@@ -1290,22 +1292,24 @@ function resumoDoPonto(itens, encomendas) {
   if (encomendas.length > 0) partes.push(`${encomendas.length} encomenda(s)`);
   return partes.length > 0 ? partes.join(" · ") : "sem reservas";
 }
-// Seletor Ida/Volta (issue #391): só o texto, com um traço vermelho embaixo do escolhido.
-function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade }) {
+// Seletor Ida/Volta (crítica de design, issue #393): as duas viagens lado a lado, com a hora e
+// as vagas; a escolhida fica em painel com um traço vermelho embaixo. Uma viagem por vez.
+function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade, horaIda, horaVolta }) {
   const itens = [
-    { id: "ida", rotulo: "Ida", pax: paxIda },
-    { id: "volta", rotulo: "Volta", pax: paxVolta },
+    { id: "ida", rotulo: "Ida", hora: horaIda, pax: paxIda },
+    { id: "volta", rotulo: "Volta", hora: horaVolta, pax: paxVolta },
   ];
   return (
     <div
       role="tablist"
       aria-label="Viagem"
       data-testid="seletor-sentido"
-      className="relative grid grid-cols-2 w-full max-w-md"
-      style={{ boxShadow: `inset 0 -1px 0 0 ${C.border}` }}
+      className="grid grid-cols-2 gap-1 p-1 rounded-xl border w-full md:max-w-md"
+      style={{ background: C.panel, borderColor: C.border }}
     >
       {itens.map((it) => {
         const ativo = sentido === it.id;
+        const vagas = Math.max(0, capacidade - it.pax);
         return (
           <button
             key={it.id}
@@ -1313,128 +1317,28 @@ function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade }) {
             role="tab"
             aria-selected={ativo}
             onClick={() => onChange(it.id)}
-            className="btn-press text-left px-2.5 pt-1.5 pb-3 min-h-[56px]"
+            className="btn-press text-left rounded-lg px-3 py-2 min-h-[52px]"
+            style={{
+              background: ativo ? C.panel2 : "transparent",
+              boxShadow: ativo
+                ? `inset 0 0 0 1px ${C.border}, inset 0 -2px 0 0 ${C.brand}`
+                : "none",
+              transition: "background-color .2s ease, box-shadow .2s ease",
+            }}
           >
             <span
-              className="block text-[15px] font-bold"
-              style={{ color: ativo ? C.ink : C.inkSoft, letterSpacing: "-.01em" }}
+              className="block text-[14px] font-bold"
+              style={{ color: ativo ? C.ink : C.inkSoft }}
             >
               {it.rotulo}
+              {it.hora ? ` · ${it.hora}` : ""}
             </span>
-            <span className="block text-xs" style={{ color: ativo ? C.inkSoft : C.inkFaint }}>
-              {it.pax} de {capacidade} lugares
+            <span className="block text-xs" style={{ color: C.inkFaint }}>
+              {it.pax}/{capacidade} · {vagas} {vagas === 1 ? "vaga" : "vagas"}
             </span>
           </button>
         );
       })}
-      <span
-        aria-hidden="true"
-        className="seletor-at-traco absolute bottom-0 h-0.5 rounded-full"
-        style={{
-          width: 64,
-          background: C.brand,
-          left: sentido === "volta" ? "calc(50% + 10px)" : "10px",
-        }}
-      />
-    </div>
-  );
-}
-
-// Mapa dos lugares (issue #391), no lugar da barra de lotação: fileiras de 2 + corredor + 2
-// e a última fileira inteira. Confirmados acesos, pedidos pendentes riscados, livres vazios.
-export function MapaDosLugares({ capacidade, confirmados, pendentes, direcao }) {
-  const total = Math.max(0, capacidade || 0);
-  const acesos = Math.min(confirmados, total);
-  const riscados = Math.min(pendentes, Math.max(0, total - acesos));
-  const fileiras = [];
-  let n = 0;
-  while (n < total) {
-    const resto = total - n;
-    // última fileira: até 5 lugares sem corredor (como o fundo da van)
-    const tam = resto <= 5 && resto !== 4 ? resto : 4;
-    fileiras.push(Array.from({ length: tam }, (_, k) => n + k));
-    n += tam;
-  }
-  const estado = (i) => (i < acesos ? "o" : i < acesos + riscados ? "p" : "l");
-  const fundo = (e) =>
-    e === "o"
-      ? C.ink
-      : e === "p"
-        ? `repeating-linear-gradient(135deg, ${C.ink} 0 1.5px, transparent 1.5px 4px)`
-        : "transparent";
-  const borda = (e) => (e === "o" ? "none" : `inset 0 0 0 1.5px ${e === "p" ? C.ink : "#3a3c43"}`);
-  const lugar = (i) => {
-    const e = estado(i);
-    return (
-      <i
-        key={i}
-        className="lugar-at block rounded-[4px_4px_3px_3px]"
-        data-ocupado={e === "o" ? "1" : "0"}
-        style={{
-          width: 13,
-          height: 13,
-          background: fundo(e),
-          boxShadow: borda(e),
-          animationDelay: e === "o" ? `${Math.min(i, 30) * 14}ms` : undefined,
-        }}
-      />
-    );
-  };
-  return (
-    <div
-      className="flex items-center gap-4"
-      data-testid={`mapa-lugares-${direcao}`}
-      role="img"
-      aria-label={`${acesos} de ${total} lugares ocupados, ${riscados} pendentes, ${Math.max(0, total - acesos)} livres`}
-    >
-      <div
-        className="relative shrink-0 rounded-[24px_24px_14px_14px] px-3 pt-4 pb-3 grid gap-[5px]"
-        style={{ background: "#000", boxShadow: `inset 0 0 0 1px ${C.border}` }}
-      >
-        <span
-          aria-hidden="true"
-          className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-7 rounded"
-          style={{ background: C.border }}
-        />
-        {fileiras.map((f) => (
-          <div key={f[0]} className="flex gap-[5px]">
-            {f.length === 4 ? (
-              <>
-                {lugar(f[0])}
-                {lugar(f[1])}
-                <span className="w-2" />
-                {lugar(f[2])}
-                {lugar(f[3])}
-              </>
-            ) : (
-              f.map(lugar)
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="min-w-0 space-y-2">
-        <div>
-          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-.035em", lineHeight: 1 }}>
-            {acesos}
-          </div>
-          <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
-            de {total} lugares ocupados
-          </div>
-        </div>
-        {[
-          ["o", "confirmado"],
-          ["p", "pendente"],
-          ["l", "livre"],
-        ].map(([e, t]) => (
-          <div key={e} className="flex items-center gap-2 text-xs" style={{ color: C.inkSoft }}>
-            <i
-              className="block rounded-[3px] shrink-0"
-              style={{ width: 11, height: 11, background: fundo(e), boxShadow: borda(e) }}
-            />
-            {t}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1474,7 +1378,9 @@ function ViagemOperacional({
   const embarcados = doGrupo
     .filter((r) => r.status === "embarcado")
     .reduce((s, r) => s + r.quantidade, 0);
-  const vagas = Math.max(0, capacidade - confirmados);
+  const pagosQtd = doGrupo
+    .filter((r) => r.pago && r.status !== "cancelada" && r.status !== "espera")
+    .reduce((s, r) => s + r.quantidade, 0);
   // Passagens extras (fora das vagas): seção própria, não entram nos pontos.
   const extras = doGrupo.filter(
     (r) => ehExtra(r) && r.status !== "cancelada" && r.status !== "espera",
@@ -1482,15 +1388,6 @@ function ViagemOperacional({
   const extrasQtd = extras
     .filter((r) => OCUPA_VAGA.includes(r.status))
     .reduce((s, r) => s + r.quantidade, 0);
-  const horaPrincipal =
-    direcao === "ida"
-      ? shiftHour(
-          viagem.pontos.find((p) => p.id === "rodoviaria")?.horaBase || "05:40",
-          segunda,
-          segundaHoras,
-        )
-      : viagem.pontos.map((p) => p.horaBase).join(" / ");
-  const Icon = direcao === "ida" ? ArrowRight : ArrowLeft;
 
   // já contém todos os pontos (os que não estão na ordem fixa vão para o fim).
   const pontosOrdenados = ordenarPontos(viagem.pontos, direcao);
@@ -1523,27 +1420,10 @@ function ViagemOperacional({
     );
 
   return (
-    <Card className="relative overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-            style={{
-              background: direcao === "ida" ? C.amberSoft : C.blueSoft,
-              border: `1px solid ${direcao === "ida" ? C.brandDim : C.blue}44`,
-            }}
-          >
-            <Icon size={18} style={{ color: direcao === "ida" ? C.brand : C.blue }} />
-          </div>
-          <div>
-            <div className="text-sm font-bold flex items-center gap-1.5">
-              <Bus size={14} style={{ color: C.brand }} /> {viagem.nome}
-              <span style={{ color: C.inkSoft, fontWeight: 500 }}>· {horaPrincipal}</span>
-            </div>
-            <div className="text-xs" style={{ color: C.inkSoft }}>
-              {viagem.label}
-            </div>
-          </div>
+    <section className="relative" aria-label={`Viagem de ${viagem.nome}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="text-xs min-w-0" style={{ color: C.inkFaint }}>
+          {viagem.label}
         </div>
         <div className="flex items-center gap-2">
           {viagemConcluida ? (
@@ -1556,18 +1436,18 @@ function ViagemOperacional({
           ) : !viagemAtiva ? (
             <button
               onClick={iniciarViagem}
-              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg"
-              style={{ background: C.greenSoft, color: C.green }}
+              className="btn-press flex items-center gap-1.5 text-[13px] font-semibold px-3 min-h-[40px] rounded-lg border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
             >
-              <PlayCircle size={13} /> Iniciar viagem
+              <PlayCircle size={15} /> Iniciar viagem
             </button>
           ) : (
             <button
               onClick={finalizarViagem}
-              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg"
-              style={{ background: C.redSoft, color: C.red }}
+              className="btn-press flex items-center gap-1.5 text-[13px] font-semibold px-3 min-h-[40px] rounded-lg border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
             >
-              <StopCircle size={13} /> Finalizar viagem
+              <StopCircle size={15} /> Finalizar viagem
             </button>
           )}
         </div>
@@ -1592,23 +1472,46 @@ function ViagemOperacional({
           {viagemConcluida.end_km ? ` · km chegada ${viagemConcluida.end_km}` : ""}
         </div>
       )}
-      <div className="rounded-xl px-3 py-3 mb-4" style={{ background: C.panel2 }}>
-        <MapaDosLugares
-          capacidade={capacidade}
-          confirmados={confirmados}
-          pendentes={pendentesQtd}
-          direcao={direcao}
-        />
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
-          <MiniStat label="Capacidade" value={capacidade} />
-          <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
-          <MiniStat label="Pendentes" value={pendentesQtd} cor={C.warn} />
-          <MiniStat label="Vagas" value={vagas} cor={vagas === 0 ? C.red : C.ink} />
-          <MiniStat label="Embarcados" value={embarcados} cor={C.blue} />
-          {extrasQtd > 0 && <MiniStat label="Extras" value={extrasQtd} cor={C.purple} />}
+      {/* lotação (crítica de design, issue #393): barra fina neutra e quatro números */}
+      <div className="mb-3" data-testid={`lotacao-${direcao}`}>
+        <div
+          className="h-1 rounded-full overflow-hidden"
+          style={{ background: C.panel2 }}
+          role="img"
+          aria-label={`Lotação da ${direcao === "ida" ? "Ida" : "Volta"}: ${confirmados} de ${capacidade}`}
+        >
+          <div
+            className="bar-fill h-full rounded-full"
+            style={{
+              width: `${capacidade ? Math.min(100, (confirmados / capacidade) * 100) : 0}%`,
+              background: C.inkSoft,
+            }}
+          />
         </div>
+        <div className="grid grid-cols-4 gap-1.5 mt-2">
+          {[
+            ["Confirm.", confirmados],
+            ["Pend.", pendentesQtd],
+            ["Embarc.", embarcados],
+            ["Pagos", pagosQtd],
+          ].map(([rotulo, n]) => (
+            <div key={rotulo} className="rounded-lg px-2 py-1.5" style={{ background: C.panel }}>
+              <div className="text-[15px] font-bold leading-tight" style={{ color: C.ink }}>
+                {n}
+              </div>
+              <div className="text-[10px] uppercase tracking-[.06em]" style={{ color: C.inkFaint }}>
+                {rotulo}
+              </div>
+            </div>
+          ))}
+        </div>
+        {extrasQtd > 0 && (
+          <div className="text-xs mt-1.5" style={{ color: C.inkFaint }}>
+            + {extrasQtd} extra(s) fora das vagas
+          </div>
+        )}
       </div>
-      <div className="space-y-3">
+      <div className="space-y-1">
         {pontosOrdenados.map((p) => {
           const hora = shiftHour(p.horaBase, direcao === "ida" && segunda, segundaHoras);
           const doPonto = doGrupo.filter(
@@ -1627,17 +1530,14 @@ function ViagemOperacional({
             <div key={p.id}>
               <div
                 id={`ponto-${direcao}-${p.id}`}
-                className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 scroll-mt-24"
-                style={{
-                  background: `${C.brand}1F`,
-                  borderLeft: `4px solid ${C.brand}`,
-                }}
+                className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 pb-1 border-t scroll-mt-24"
+                style={{ borderColor: C.panel2 }}
               >
-                <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
+                <span className="text-[13px] font-semibold" style={{ color: C.inkSoft }}>
                   {hora}
                 </span>
-                <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
-                  {p.nome.toUpperCase()}
+                <span className="text-[14px] font-bold" style={{ color: C.ink }}>
+                  {p.nome}
                 </span>
                 {ehBusca && !editando && <GruposDeBusca itens={itens} trips={trips} />}
                 {ehBusca && !editando && itens.length > 0 && onSalvarBusca && (
@@ -1676,7 +1576,7 @@ function ViagemOperacional({
                   Sem reservas.
                 </div>
               ) : (
-                <div className="space-y-1.5 mb-1.5">
+                <div className="mb-0.5">
                   {[...itens, ...encDoPonto].map((r) => (
                     <LinhaOperacional
                       key={r.id}
@@ -1701,11 +1601,11 @@ function ViagemOperacional({
         {encSemPonto.length > 0 && (
           <div>
             <div
-              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
-              style={{ background: `${C.brand}1F`, borderLeft: `4px solid ${C.brand}` }}
+              className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 pb-1 border-t"
+              style={{ borderColor: C.panel2 }}
             >
-              <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
-                ENCOMENDAS
+              <span className="text-[14px] font-bold" style={{ color: C.ink }}>
+                Encomendas
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                 {encSemPonto.length} encomenda(s) · sem ponto de embarque
@@ -1727,10 +1627,10 @@ function ViagemOperacional({
         {onNovoExtra && (
           <div>
             <div
-              className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
-              style={{ background: `${C.purple}1F`, borderLeft: `4px solid ${C.purple}` }}
+              className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 pb-1 border-t"
+              style={{ borderColor: C.panel2 }}
             >
-              <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
+              <span className="text-[14px] font-bold" style={{ color: C.ink }}>
                 EXTRAS
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
@@ -1769,7 +1669,7 @@ function ViagemOperacional({
           </div>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 // Fase 1 (issue #10): a edição foi enxugada para o que o banco aceita com

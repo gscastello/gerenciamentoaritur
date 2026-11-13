@@ -92,9 +92,13 @@ const itemEditor = (page, nome) => page.locator("li", { hasText: nome });
 test("Buscar em casa: copia endereço + contato da reserva", async ({ page }) => {
   await abrir(page);
   await linha(page, "Ana Taxi")
+    .getByRole("button", { name: /^Mais ações/ })
+    .click();
+  await page
+    .getByRole("dialog")
     .getByRole("button", { name: /Copiar endereço \+ contato/ })
     .click();
-  await expect(linha(page, "Ana Taxi").getByText("Copiado")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Copiado")).toBeVisible();
   const copiado = await page.evaluate(() => window.__copiado);
   expect(copiado).toContain("Cohatrac");
   expect(copiado).toContain("Rua 7");
@@ -105,9 +109,14 @@ test("Buscar em casa: copia endereço + contato da reserva", async ({ page }) =>
 test("só Buscar em casa tem copiar e o botão EDITAR", async ({ page }) => {
   await abrir(page);
   await expect(linha(page, "Rita Rodoviaria")).toBeVisible();
+  await linha(page, "Rita Rodoviaria")
+    .getByRole("button", { name: /^Mais ações/ })
+    .click();
   await expect(
-    linha(page, "Rita Rodoviaria").getByRole("button", { name: /Copiar endereço/ }),
+    page.getByRole("dialog").getByRole("button", { name: /Copiar endereço/ }),
   ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
   // um único EDITAR: o da seção Buscar em casa
   await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toHaveCount(1);
 });
@@ -201,7 +210,8 @@ test("EDITAR: Agrupar por quem busca junta Táxi, Gustavo, Maurício e Ari", asy
 
 test("cada grupo tem a sua cor e o cabeçalho copia a lista do grupo", async ({ page }) => {
   await abrir(page);
-  const cor = (nome) => linha(page, nome).evaluate((el) => getComputedStyle(el).borderLeftColor);
+  // a cor do grupo vai no fundo da linha (sem filete grosso na lateral, crítica de design #393)
+  const cor = (nome) => linha(page, nome).evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(await cor("Ana Taxi")).not.toBe(await cor("Caio Gustavo"));
 
   const copiarTaxi = page.getByRole("button", { name: "Táxi 2" });

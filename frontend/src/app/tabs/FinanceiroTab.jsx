@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Camera,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -32,7 +33,6 @@ import {
   CATEGORIAS_RECEITA,
   Card,
   Header,
-  HeroFX,
   MESES_PT,
   PIX_KEY,
   Pill,
@@ -52,11 +52,13 @@ import {
 } from "../tabShared.jsx";
 import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
-export default function FinanceiroTab({ pix, deepLink }) {
+export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
   const [subview, setSubview] = useState("lancamentos");
   useDeepLinkSubview(deepLink, setSubview);
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
+  // crítica de design (issue #393): o calendário grande vira a lista do dia; ele abre ao tocar no mês
+  const [calAberto, setCalAberto] = useState(false);
   const [novo, setNovo] = useState({
     tipo: "receita",
     categoria: "passagem",
@@ -223,150 +225,209 @@ export default function FinanceiroTab({ pix, deepLink }) {
       {subview === "contas_receber" && <ContasReceberView pix={pix} />}
       {subview === "relatorio" && <RelatorioFinanceiroView />}
       {subview === "lancamentos" && (
-        <div className="px-6 md:px-10 pb-10 space-y-5">
+        <div className="px-3.5 md:px-10 pb-10 space-y-4">
+          <div className="flex items-center justify-between gap-2 md:max-w-md">
+            <button
+              type="button"
+              onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
+              aria-label="Mês anterior"
+              className="btn-press w-11 h-11 rounded-xl flex items-center justify-center border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalAberto((v) => !v)}
+              aria-expanded={calAberto}
+              aria-label={`${MESES_PT[mes]} de ${ano} — ${calAberto ? "fechar" : "abrir"} o calendário`}
+              className="btn-press flex-1 min-h-[44px] rounded-xl capitalize text-[16px] font-bold"
+              style={{ color: C.ink }}
+            >
+              {MESES_PT[mes]} <span style={{ fontWeight: 500, color: C.inkSoft }}>{ano}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
+              aria-label="Próximo mês"
+              className="btn-press w-11 h-11 rounded-xl flex items-center justify-center border"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          {/* resultado do mês primeiro (crítica de design, issue #393): o número maior, uma barra
+              neutra de quanto das receitas foi em despesa e a curva do logo, fina, no canto */}
           <div
-            className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
-            style={{ borderColor: C.brandDim }}
+            className="relative overflow-hidden rounded-xl border p-4 md:max-w-md"
+            style={{ background: C.panel, borderColor: C.border }}
+            data-testid="resultado-do-mes"
           >
-            <HeroFX />
-            <div className="relative flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
-                className="btn-press p-1.5 rounded-lg"
-                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div
-                className="capitalize text-center min-w-[130px]"
-                style={{
-                  fontWeight: 700,
-                  fontSize: "1.15rem",
-                  color: "#fff",
-                }}
-              >
-                {MESES_PT[mes]} <span style={{ fontWeight: 400, opacity: 0.7 }}>{ano}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
-                className="btn-press p-1.5 rounded-lg"
-                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
-              >
-                <ChevronRight size={16} />
-              </button>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 120 60"
+              fill="none"
+              className="absolute pointer-events-none"
+              style={{ right: -10, top: -6, width: 120, height: 60 }}
+            >
+              <path
+                d="M2 56 C 40 50, 70 30, 118 4"
+                stroke={C.brand}
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M14 58 C 50 52, 80 34, 118 14"
+                stroke={C.brand}
+                strokeOpacity=".35"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="text-[11px] uppercase tracking-[.06em]" style={{ color: C.inkFaint }}>
+              Resultado do mês
             </div>
-            <div className="relative flex flex-wrap gap-5">
+            <div
+              className="mt-0.5"
+              style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.02em", color: C.ink }}
+            >
+              {fmtBRL(resultadoMes)}
+            </div>
+            <div
+              className="h-1.5 rounded-full overflow-hidden mt-2.5"
+              style={{ background: C.panel2 }}
+              role="img"
+              aria-label={`Despesas são ${receitaMes > 0 ? Math.round((despesaMes / receitaMes) * 100) : 0}% das receitas`}
+            >
+              <div
+                className="bar-fill h-full rounded-full"
+                style={{
+                  width: `${receitaMes > 0 ? Math.min(100, (despesaMes / receitaMes) * 100) : 0}%`,
+                  background: C.inkSoft,
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
+                  className="text-[11px] uppercase tracking-[.06em]"
+                  style={{ color: C.inkFaint }}
                 >
                   Receitas
                 </div>
-                <div
-                  style={{
-                    color: "#fff",
-                    fontWeight: 700,
-                  }}
-                >
+                <div className="text-[15px] font-semibold" style={{ color: C.ink }}>
                   {fmtBRL(receitaMes)}
                 </div>
               </div>
               <div>
                 <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
+                  className="text-[11px] uppercase tracking-[.06em]"
+                  style={{ color: C.inkFaint }}
                 >
                   Despesas
                 </div>
-                <div
-                  style={{
-                    color: "rgba(255,255,255,.72)",
-                    fontWeight: 700,
-                  }}
-                >
+                <div className="text-[15px] font-semibold" style={{ color: C.inkSoft }}>
                   {fmtBRL(despesaMes)}
-                </div>
-              </div>
-              <div>
-                <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
-                >
-                  Resultado do mês
-                </div>
-                <div
-                  style={{
-                    color: "#fff",
-                    fontWeight: 800,
-                    fontSize: "1.1rem",
-                  }}
-                >
-                  {fmtBRL(resultadoMes)}
                 </div>
               </div>
             </div>
           </div>
-          <div className="grid lg:grid-cols-[340px_1fr] gap-6">
-            <Card className="anim-fadeUp">
-              {/* Colunas com largura FIXA (não 1fr) — Safari/iOS tem um bug
+          {/* atalhos do que é novo: lançar por foto, fechamento e extrato, a um toque */}
+          <div
+            className="grid gap-2 md:max-w-md"
+            style={{ gridTemplateColumns: `repeat(${1 + atalhos.length}, minmax(0,1fr))` }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                document.getElementById("financeiro-lancar")?.scrollIntoView({ block: "start" });
+                document.getElementById("lancar-por-foto")?.click();
+              }}
+              className="btn-press toque-at flex flex-col items-start gap-1.5 rounded-xl border p-2.5 min-h-[64px] text-left text-[12.5px] font-semibold"
+              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+            >
+              <Camera size={17} style={{ color: C.inkSoft }} /> Lançar por foto
+            </button>
+            {atalhos.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={a.onClick}
+                className="btn-press toque-at flex flex-col items-start gap-1.5 rounded-xl border p-2.5 min-h-[64px] text-left text-[12.5px] font-semibold"
+                style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+              >
+                <a.Icon size={17} style={{ color: C.inkSoft }} /> {a.label}
+              </button>
+            ))}
+          </div>
+          <div className={calAberto ? "grid lg:grid-cols-[340px_1fr] gap-6" : "space-y-5"}>
+            {calAberto && (
+              <Card className="anim-fadeUp">
+                {/* Colunas com largura FIXA (não 1fr) — Safari/iOS tem um bug
                   conhecido de `aspect-ratio` dentro de grid com colunas
                   fluidas: em vez de manter a célula quadrada, ele deixa a
                   linha gigante/desproporcional (relatado pelo dono no
                   celular; não reproduz no Chromium, mas o fix não usa mais
                   aspect-ratio em grid nenhum, então o bug não tem como
                   acontecer independente da causa exata). */}
-              <div
-                className="grid gap-1 text-center text-[10px] mb-1 justify-center"
-                style={{ color: C.inkFaint, gridTemplateColumns: "repeat(7, 40px)" }}
-              >
-                {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
-                  <div key={i}>{d}</div>
-                ))}
-              </div>
-              {/* touch-action:manipulation no wrapper (não só nos botões)
+                <div
+                  className="grid gap-1 text-center text-[10px] mb-1 justify-center"
+                  style={{ color: C.inkFaint, gridTemplateColumns: "repeat(7, 40px)" }}
+                >
+                  {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
+                    <div key={i}>{d}</div>
+                  ))}
+                </div>
+                {/* touch-action:manipulation no wrapper (não só nos botões)
                   evita que um toque que caia no gap entre células — muito
                   provável em células pequenas — seja lido como o primeiro
                   toque de um double-tap-zoom do Safari/iOS. */}
-              <div
-                className="grid gap-1 justify-center"
-                style={{ gridTemplateColumns: "repeat(7, 40px)", touchAction: "manipulation" }}
-              >
-                {cells.map((d, i) => {
-                  if (!d) return <div key={i} style={{ width: 40, height: 40 }} />;
-                  const { ds, lucro, temMovimento } = lucroPorDia(d);
-                  const sel = ds === diaSel;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setDiaSel(ds)}
-                      className="btn-press rounded-lg flex flex-col items-center justify-center text-xs"
-                      style={{
-                        width: 40,
-                        height: 40,
-                        background: sel ? C.amber : C.panel2,
-                        color: sel ? C.onBrand : C.ink,
-                        border:
-                          ds === todayStr() && !sel
-                            ? `1px solid ${C.amber}`
-                            : "1px solid transparent",
-                      }}
-                    >
-                      {d}
-                      {temMovimento && (
-                        <span
-                          className="w-1 h-1 rounded-full mt-0.5"
-                          style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
+                <div
+                  className="grid gap-1 justify-center"
+                  style={{ gridTemplateColumns: "repeat(7, 40px)", touchAction: "manipulation" }}
+                >
+                  {cells.map((d, i) => {
+                    if (!d) return <div key={i} style={{ width: 40, height: 40 }} />;
+                    const { ds, lucro, temMovimento } = lucroPorDia(d);
+                    const sel = ds === diaSel;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setDiaSel(ds)}
+                        className="btn-press rounded-lg flex flex-col items-center justify-center text-xs"
+                        style={{
+                          width: 40,
+                          height: 40,
+                          background: sel ? C.brand : C.panel2,
+                          color: sel ? C.onBrand : C.ink,
+                          border:
+                            ds === todayStr() && !sel
+                              ? `1px solid ${C.inkSoft}`
+                              : "1px solid transparent",
+                        }}
+                      >
+                        {d}
+                        {temMovimento && (
+                          <span
+                            className="w-1 h-1 rounded-full mt-0.5"
+                            style={{ background: sel ? C.onBrand : lucro >= 0 ? C.green : C.red }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
             <div className="space-y-5">
+              <div className="flex items-center gap-2" data-testid="dia-do-financeiro">
+                <span className="text-[15px] font-bold" style={{ color: C.ink }}>
+                  {diaSel === todayStr() ? "Hoje" : fmtDate(diaSel)}
+                </span>
+                <span className="text-xs" style={{ color: C.inkFaint }}>
+                  {doDia.length} {doDia.length === 1 ? "lançamento" : "lançamentos"}
+                </span>
+              </div>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                 <StatCard
                   label={`Faturamento ${fmtDate(diaSel)}`}
@@ -394,7 +455,9 @@ export default function FinanceiroTab({ pix, deepLink }) {
                 />
               </div>
               <Card>
-                <div className="text-sm font-semibold mb-3">Lançar em {fmtDate(diaSel)}</div>
+                <div id="financeiro-lancar" className="text-sm font-semibold mb-3 scroll-mt-24">
+                  Lançar em {fmtDate(diaSel)}
+                </div>
                 {/* issue #362: a foto da nota preenche valor, data e categoria */}
                 <LancarPorFoto destino="despesa" />
                 <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
@@ -414,10 +477,10 @@ export default function FinanceiroTab({ pix, deepLink }) {
                         }}
                         className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
                         style={{
-                          background: ativo ? C.amberSoft : C.panel2,
-                          color: ativo ? C.amber : C.inkSoft,
+                          background: ativo ? C.panel2 : "transparent",
+                          color: ativo ? C.ink : C.inkSoft,
                           fontWeight: ativo ? 600 : 500,
-                          border: `1px solid ${ativo ? C.amber : C.border}`,
+                          border: `1px solid ${ativo ? C.inkSoft : C.border}`,
                         }}
                       >
                         <Icon size={13} />
@@ -618,11 +681,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           >
                             {f.tipo}
                           </Pill>
-                          <span
-                            className="font-semibold"
-                          >
-                            {fmtBRL(f.valor)}
-                          </span>
+                          <span className="font-semibold">{fmtBRL(f.valor)}</span>
                         </div>
                         <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
                           {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
@@ -780,11 +839,7 @@ export default function FinanceiroTab({ pix, deepLink }) {
                           <td className="px-4 py-2 text-xs" style={{ color: C.inkSoft }}>
                             {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
                           </td>
-                          <td
-                            className="px-4 py-2"
-                          >
-                            {fmtBRL(f.valor)}
-                          </td>
+                          <td className="px-4 py-2">{fmtBRL(f.valor)}</td>
                           <td className="px-4 py-2" style={{ color: C.inkSoft }}>
                             {f.descricao}
                             {f.auto ? (
@@ -1064,17 +1119,13 @@ function RelatorioFinanceiroView() {
                   <div className="text-xs font-medium mb-1.5" style={{ color: C.inkFaint }}>
                     {rotuloPeriodoRelatorio(l.periodo, gran)}
                   </div>
-                  <div
-                    className="flex items-center justify-between"
-                  >
+                  <div className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: C.inkSoft }}>
                       Faturamento
                     </span>
                     {fmtBRL(l.faturamento)}
                   </div>
-                  <div
-                    className="flex items-center justify-between"
-                  >
+                  <div className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: C.inkSoft }}>
                       Despesa
                     </span>
@@ -1204,11 +1255,7 @@ function ContasReceberView({ pix }) {
                           {c.telefone}
                         </div>
                       </td>
-                      <td
-                        className="px-4 py-2"
-                      >
-                        {fmtBRL(c.valor_devido)}
-                      </td>
+                      <td className="px-4 py-2">{fmtBRL(c.valor_devido)}</td>
                       <td className="px-4 py-2" style={{ color: C.inkSoft }}>
                         {c.vencimento ? fmtDate(c.vencimento) : "—"}
                       </td>

@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarPlus,
   ClipboardList,
+  Clock,
   Copy,
   ExternalLink,
   Eye,
@@ -127,80 +128,112 @@ function Chip({ children, cor, fundo }) {
   );
 }
 
+// Conversa no formato que todo mundo conhece (crítica de design, issue #393): iniciais, nome,
+// prévia e hora à direita. "Aguardando resposta" em branco forte com relógio; "Com o bot" e
+// "Com a equipe" em cinza; "sem cadastro" com borda tracejada. Sem etiqueta vermelha.
+function iniciais(nome) {
+  const partes = String(nome || "")
+    .replace(/[^\p{L}\s]/gu, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (partes.length === 0) return "#";
+  return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
+}
 function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
   const n = nomesDaConversa(c);
   const comEquipe = c.status === "open";
   const aguardando = aguardandoDeVerdade(c);
   const autor = { cliente: "Cliente", equipe: "Equipe", bot: "Bot" }[c.last_message_by];
+  const link =
+    chatwootUrl && c.chatwoot_conversation_id
+      ? `${chatwootUrl}/conversations/${c.chatwoot_conversation_id}`
+      : null;
   return (
     <div
-      className="rounded-lg p-3 flex items-start justify-between gap-3"
-      style={{
-        background: C.panel2,
-        border: `1px solid ${aguardando ? C.amber : "transparent"}`,
-      }}
+      className="row-hover grid gap-3 py-2.5 border-b"
+      style={{ gridTemplateColumns: "40px minmax(0,1fr) auto", borderColor: C.panel2 }}
     >
+      <span
+        aria-hidden="true"
+        className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold"
+        style={{ background: C.panel2, color: C.inkSoft }}
+      >
+        {iniciais(n.principal)}
+      </span>
       <div className="min-w-0">
-        <div className="flex items-center flex-wrap gap-1.5">
-          <span className="text-sm font-medium" style={{ overflowWrap: "anywhere" }}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className="text-sm font-medium truncate"
+            style={{ fontSize: 15, fontWeight: 600, color: C.ink }}
+          >
             {n.principal}
           </span>
-          {aguardando && (
-            <Chip cor={C.onBrand} fundo={C.amber}>
-              Aguardando resposta
-            </Chip>
-          )}
-          <Chip cor={comEquipe ? C.amber : C.inkSoft} fundo={comEquipe ? C.amberSoft : C.panel}>
-            {comEquipe ? "Com a equipe" : "Com o bot"}
-          </Chip>
           {n.semCadastro && (
-            <Chip cor={C.inkSoft} fundo={C.panel}>
+            <span
+              className="text-[11px] px-1.5 rounded shrink-0"
+              style={{ border: `1px dashed ${C.inkFaint}`, color: C.inkSoft }}
+            >
               sem cadastro
-            </Chip>
+            </span>
           )}
+        </div>
+        {c.previa && (
+          <div className="text-[13px] truncate" style={{ color: C.inkSoft }} title={c.previa}>
+            {autor && <span style={{ color: C.ink }}>{autor}: </span>}
+            {c.previa}
+          </div>
+        )}
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs">
+          {aguardando ? (
+            <span className="inline-flex items-center gap-1 font-semibold" style={{ color: C.ink }}>
+              <Clock size={13} />
+              <span>Aguardando resposta</span>
+            </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1" style={{ color: C.inkFaint }}>
+            {comEquipe ? <Users size={12} /> : <Bot size={12} />}
+            <span>{comEquipe ? "Com a equipe" : "Com o bot"}</span>
+          </span>
         </div>
         <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
           {fmtTelefone(c.phone)}
           {n.perfil && <> · perfil do WhatsApp: {n.perfil}</>}
         </div>
-        {c.previa && (
-          <div
-            className="text-xs mt-1"
-            style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
-            title={c.previa}
-          >
-            {autor && <b style={{ color: C.ink }}>{autor}: </b>}
-            {c.previa}
-          </div>
-        )}
-        {c.last_message_at && (
-          <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
-            {tempoRelativo(c.last_message_at)}
-          </div>
-        )}
       </div>
-      <div className="flex flex-col items-end gap-1.5 shrink-0">
-        {chatwootUrl && c.chatwoot_conversation_id && (
-          <a
-            href={`${chatwootUrl}/conversations/${c.chatwoot_conversation_id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-medium"
-            style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
-          >
-            <ExternalLink size={12} /> Abrir no Chatwoot
-          </a>
+      <div className="flex flex-col items-end gap-0.5">
+        {c.last_message_at && (
+          <span className="text-xs" style={{ color: C.inkFaint }}>
+            {tempoRelativo(c.last_message_at)}
+          </span>
         )}
-        {c.customer_id && (
-          <button
-            type="button"
-            onClick={() => onVerCadastro(c)}
-            className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
-            style={{ background: C.panel, color: C.inkSoft }}
-          >
-            <Users size={12} /> Ver cadastro
-          </button>
-        )}
+        <div className="flex">
+          {c.customer_id && (
+            <button
+              type="button"
+              onClick={() => onVerCadastro(c)}
+              aria-label="Ver cadastro"
+              title="Ver cadastro"
+              className="btn-press w-11 h-11 rounded-xl flex items-center justify-center"
+              style={{ color: C.inkSoft }}
+            >
+              <Users size={17} />
+            </button>
+          )}
+          {link && (
+            <a
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Abrir no Chatwoot"
+              title="Abrir no Chatwoot"
+              className="btn-press w-11 h-11 rounded-xl flex items-center justify-center"
+              style={{ color: C.inkSoft }}
+            >
+              <ExternalLink size={17} />
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -398,19 +431,23 @@ function PerguntaItem({ p, onCadastrar, onDispensar }) {
   );
 }
 
+// Seção sem cartão em volta (crítica de design, issue #393): um título curto e a lista logo
+// abaixo; a explicação fica pequena, em cinza.
 function Secao({ icon: Icon, titulo, resumo, children }) {
   return (
-    <Card>
-      <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Icon size={16} style={{ color: C.amber }} /> {titulo}
-      </div>
+    <section>
+      {titulo && (
+        <h2 className="text-[15px] font-bold mb-1 flex items-center gap-2" style={{ color: C.ink }}>
+          <Icon size={16} style={{ color: C.inkSoft }} /> {titulo}
+        </h2>
+      )}
       {resumo && (
-        <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+        <p className="text-xs mb-3" style={{ color: C.inkFaint }}>
           {resumo}
         </p>
       )}
       {children}
-    </Card>
+    </section>
   );
 }
 
@@ -422,11 +459,7 @@ const RESUMOS = {
 
 function FiltroDaFila({ filtro, onFiltro, contagem }) {
   return (
-    <div
-      className="flex flex-wrap gap-1.5 mb-3"
-      role="tablist"
-      aria-label="Filtrar conversas"
-    >
+    <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Filtrar conversas">
       {FILTROS_DA_FILA.map((f) => {
         const ativo = filtro === f.id;
         return (
@@ -436,11 +469,12 @@ function FiltroDaFila({ filtro, onFiltro, contagem }) {
             role="tab"
             aria-selected={ativo}
             onClick={() => onFiltro(f.id)}
-            className="btn-press shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
+            className="btn-press shrink-0 text-[13px] px-3 min-h-[36px] rounded-full"
             style={{
-              background: ativo ? C.amber : C.panel2,
-              color: ativo ? C.onBrand : C.inkSoft,
-              border: `1px solid ${ativo ? C.amber : C.border}`,
+              background: "transparent",
+              color: ativo ? C.ink : C.inkSoft,
+              fontWeight: ativo ? 600 : 500,
+              border: `1px solid ${ativo ? C.inkSoft : C.border}`,
             }}
           >
             {f.label} <span style={{ opacity: 0.75 }}>{contagem[f.id] ?? 0}</span>
@@ -502,7 +536,7 @@ export default function AtendimentoTab({
   return (
     <div>
       <Header
-        title="Atendimento WhatsApp"
+        title="Atendimento"
         subtitle={RESUMOS[vista] ?? RESUMOS.conversas}
         right={
           chatwootUrl && (
@@ -510,23 +544,19 @@ export default function AtendimentoTab({
               href={chatwootUrl}
               target="_blank"
               rel="noreferrer"
-              className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium"
-              style={{ background: C.amber, color: C.onBrand }}
+              className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-lg font-medium border"
+              style={{ background: C.panel, color: C.ink, borderColor: C.border }}
             >
               <ExternalLink size={14} /> Abrir Chatwoot
             </a>
           )
         }
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4 stagger">
+      <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
 
         {vista === "conversas" && (
-          <Secao
-            icon={MessageCircle}
-            titulo="Conversas"
-            resumo="A mais recente primeiro. “Aguardando resposta” = o cliente escreveu por último nas últimas 48 h."
-          >
+          <Secao icon={MessageCircle}>
             <FiltroDaFila filtro={filtro} onFiltro={setFiltro} contagem={contagem} />
             {at.errorConversas && (
               <ErrorBanner onRetry={at.recarregarConversas} className="mb-3">
@@ -547,7 +577,7 @@ export default function AtendimentoTab({
                   : "Nenhuma conversa neste filtro."}
               </div>
             )}
-            <div className="space-y-2" data-testid="fila-de-conversas">
+            <div data-testid="fila-de-conversas">
               {fila.map((c) => (
                 <FadeIn key={c.conversation_id}>
                   <ConversaItem

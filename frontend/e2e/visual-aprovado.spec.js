@@ -4,7 +4,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 
 // Visual aprovado pelo dono (issue #391): topo com o AT, o nome da tela e o dia; barra de
 // baixo flutuante com a luz deslizando; Início com a capa, o financeiro, Ida e Volta
-// separadas e "Precisa de você"; Agenda com o seletor Ida/Volta e o mapa dos lugares.
+// separadas e "Precisa de você"; Agenda com o seletor Ida/Volta e a lotação (issue #393).
 
 test.describe("celular", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -62,19 +62,19 @@ test.describe("celular", () => {
       "aria-selected",
       "true",
     );
-    await expect(page.getByTestId("mapa-lugares-volta")).toBeVisible();
+    await expect(page.getByTestId("lotacao-volta")).toBeVisible();
   });
 
-  test("Agenda: o seletor troca a viagem e o mapa dos lugares", async ({ page }) => {
+  test("Agenda: o seletor troca a viagem e a lotação", async ({ page }) => {
     await mockSupabase(page, { role: "admin" });
     await page.goto("/");
     const seletor = page.getByTestId("seletor-sentido");
     await seletor.getByRole("tab", { name: /Ida/ }).click();
-    await expect(page.getByTestId("mapa-lugares-ida")).toBeVisible();
-    await expect(page.getByTestId("mapa-lugares-volta")).toHaveCount(0);
+    await expect(page.getByTestId("lotacao-ida")).toBeVisible();
+    await expect(page.getByTestId("lotacao-volta")).toHaveCount(0);
     await seletor.getByRole("tab", { name: /Volta/ }).click();
-    await expect(page.getByTestId("mapa-lugares-volta")).toBeVisible();
-    await expect(page.getByTestId("mapa-lugares-ida")).toHaveCount(0);
+    await expect(page.getByTestId("lotacao-volta")).toBeVisible();
+    await expect(page.getByTestId("lotacao-ida")).toHaveCount(0);
   });
 
   for (const largura of [320, 360, 390, 430]) {
@@ -103,11 +103,18 @@ test.describe("celular", () => {
 test.describe("reduzir movimento", () => {
   test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
-  test("os lugares da van acendem sem animação", async ({ page }) => {
+  test("a barra de baixo troca de forma sem animação", async ({ page }) => {
     await mockSupabase(page, { role: "admin" });
     await page.goto("/");
-    const lugar = page.locator('.lugar-at[data-ocupado="1"]').first();
-    if ((await lugar.count()) === 0) test.skip(true, "sem reserva ocupando lugar no dia");
-    expect(await lugar.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+    const barra = page.getByTestId("barra-de-baixo");
+    await expect(barra).toBeVisible();
+    const duracao = await barra.evaluate((el) =>
+      Math.max(
+        ...getComputedStyle(el)
+          .transitionDuration.split(",")
+          .map((t) => Number.parseFloat(t)),
+      ),
+    );
+    expect(duracao).toBeLessThan(0.01);
   });
 });

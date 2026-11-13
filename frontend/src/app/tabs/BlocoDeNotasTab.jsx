@@ -154,7 +154,10 @@ export default function BlocoDeNotasTab() {
         )}
         {saveError && (
           <ErrorBanner className="mb-3">
-            {mensagemAmigavel(saveError, "Não foi possível salvar uma das notas — tente editar de novo.")}
+            {mensagemAmigavel(
+              saveError,
+              "Não foi possível salvar uma das notas — tente editar de novo.",
+            )}
           </ErrorBanner>
         )}
 
@@ -191,7 +194,12 @@ export default function BlocoDeNotasTab() {
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
           >
             {notes.map((nota) => (
-              <Presence key={nota.id} when={!saindo.has(nota.id)} duration={SAIDA_MS} {...fadeScale}>
+              <Presence
+                key={nota.id}
+                when={!saindo.has(nota.id)}
+                duration={SAIDA_MS}
+                {...fadeScale}
+              >
                 <NotaCard
                   nota={nota}
                   onChange={scheduleSave}
