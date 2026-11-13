@@ -169,3 +169,38 @@ Deno.test("#343: correção do cliente depois da reserva é aplicada mesmo com c
   );
   assertEquals(dia.correcoes.length, 0);
 });
+
+Deno.test("#377: prova que junta a pergunta da equipe e a resposta do cliente corrige o dia", async () => {
+  const { horaDaEvidencia, partesDaEvidencia } = await import("./revisaoPura.ts");
+  // caso real: Agendado lançou sexta (13/11); a equipe perguntou o dia e o cliente disse "Sábado"
+  const ida = { ...base, id: "r5", data: "2026-11-13", ponto: "busca", bairro: "Paço", criada_em: "2026-11-12T16:40:59Z" };
+  const falas = [
+    { em: "2026-11-12T16:40:10Z", texto: "Agendado ☑️" },
+    { em: "2026-11-12T16:40:40Z", texto: "Qual dia mesmo da sua viagem?" },
+    { em: "2026-11-12T16:41:20Z", texto: "Sábado" },
+    { em: "2026-11-12T16:41:50Z", texto: "ok vou corrigir" },
+  ];
+  // a conversa que o revisor manda tem a hora e quem falou em cada linha
+  const conv = `[12/11 13:40] EQUIPE: Agendado ☑️
+[12/11 13:40] EQUIPE: Qual dia mesmo da sua viagem?
+[12/11 13:41] CLIENTE: Sábado
+[12/11 13:41] EQUIPE: ok vou corrigir`;
+  const prova = "EQUIPE: Qual dia mesmo da sua viagem? / CLIENTE: Sábado";
+  assertEquals(partesDaEvidencia(prova), ["qual dia mesmo da sua viagem", "sabado"]);
+  assertEquals(evidenciaNaConversa(prova, conv), true);
+  assertEquals(horaDaEvidencia(prova, falas), "2026-11-12T16:41:20Z"); // a hora da resposta
+  const r = decidirRevisao(
+    achadosValidos([
+      { reserva_id: "r5", campo: "data", valor_atual: "2026-11-13", valor_correto: "2026-11-14", evidencia: prova, certeza: "alta", quem_errou: "bot" },
+    ]),
+    { reservas: [ida], conversa: conv, hoje: "2026-11-12", pontos, falas, horaAgora: "13:45" },
+  );
+  assertEquals(r.correcoes.length, 1);
+  assertEquals(r.correcoes[0].data, "2026-11-14");
+  // uma parte que não está na conversa derruba a prova inteira
+  assertEquals(evidenciaNaConversa("EQUIPE: Qual dia mesmo da sua viagem? / CLIENTE: Domingo", conv), false);
+  // data com barra não é separador; hora/rótulo saem; partes curtas demais são ignoradas
+  assertEquals(partesDaEvidencia("[12/11 13:41] CLIENTE: dia 14/11 | ok"), ["dia 14 11"]);
+  assertEquals(partesDaEvidencia("oi / ok"), []);
+  assertEquals(evidenciaNaConversa("oi / ok", conv), false);
+});

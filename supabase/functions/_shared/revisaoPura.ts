@@ -16,10 +16,26 @@ import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 /** Uma fala da conversa (cliente ou equipe) com a hora em que foi escrita. */
 export type FalaDaRevisao = { em: string; texto: string };
 
-/** Quando foi escrita a fala mais recente que contém a evidência (null se não achou). */
+/**
+ * A prova pode juntar várias falas ("EQUIPE: Qual dia mesmo da sua viagem? / CLIENTE: Sábado",
+ * issue #377): separa nas partes (" / ", quebra de linha, "|", "…") e tira a hora e o rótulo de
+ * quem falou. "14/11" (sem espaço) não é separador. Partes com menos de 3 letras são ignoradas.
+ */
+export function partesDaEvidencia(evidencia: string | null | undefined): string[] {
+  return String(evidencia ?? "")
+    .split(/\s+\/\s+|\n|\s*\|\s*|…|\.{3}/)
+    .map((p) => p.replace(/^\s*(\[[^\]]*\]\s*)?(cliente|equipe|bot)\s*:\s*/i, ""))
+    .map((p) => normalizarTexto(p))
+    .filter((p) => p.replace(/\s/g, "").length >= 3);
+}
+
+/**
+ * Quando foi escrita a prova (null se não achou): a fala mais recente que contém a ÚLTIMA parte —
+ * numa prova "pergunta / resposta", vale a hora da resposta.
+ */
 export function horaDaEvidencia(evidencia: string, falas: FalaDaRevisao[]): string | null {
-  const e = normalizarTexto(evidencia);
-  if (e.replace(/\s/g, "").length < 3) return null;
+  const e = partesDaEvidencia(evidencia).at(-1);
+  if (!e) return null;
   let achada: string | null = null;
   for (const f of falas) if (` ${normalizarTexto(f.texto)} `.includes(e) && (!achada || f.em > achada)) achada = f.em;
   return achada;
@@ -88,11 +104,15 @@ const txt = (v: unknown, max = 200): string | null => {
 };
 const mesmo = (a: unknown, b: unknown) => normalizarTexto(String(a ?? "")) === normalizarTexto(String(b ?? ""));
 
-/** A frase citada está mesmo na conversa (sem acento/caixa/pontuação; pelo menos 3 letras)? */
+/**
+ * A frase citada está mesmo na conversa (sem acento/caixa/pontuação; pelo menos 3 letras)?
+ * Prova com várias falas: TODAS as partes têm de estar na conversa (issue #377).
+ */
 export function evidenciaNaConversa(evidencia: string | null | undefined, conversa: string): boolean {
-  const e = normalizarTexto(String(evidencia ?? ""));
-  if (e.replace(/\s/g, "").length < 3) return false;
-  return ` ${normalizarTexto(conversa)} `.includes(e);
+  const partes = partesDaEvidencia(evidencia);
+  if (partes.length === 0) return false;
+  const c = ` ${normalizarTexto(conversa)} `;
+  return partes.every((p) => c.includes(p));
 }
 
 /** Converte o que o modelo devolveu em achados válidos (descarta o que vier torto). */
