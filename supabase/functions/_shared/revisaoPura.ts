@@ -71,6 +71,49 @@ export const CAMPOS_DA_REVISAO = [
 ] as const;
 export type CampoDaRevisao = (typeof CAMPOS_DA_REVISAO)[number];
 
+/** Colunas da reserva que correspondem a cada campo da revisão (para ler a auditoria). */
+const COLUNAS_DO_CAMPO: Record<string, CampoDaRevisao[]> = {
+  trip_id: ["data", "sentido"],
+  route_point_id: ["ponto"],
+  quantity: ["quantidade"],
+  pickup_neighborhood: ["bairro"],
+  pickup_detail: ["embarque"],
+  street: ["embarque"],
+  reference_point: ["embarque"],
+  dropoff_location: ["desembarque"],
+  dropoff_area: ["desembarque"],
+  dropoff_detail: ["desembarque"],
+  type: ["tipo"],
+};
+
+/** Uma linha de audit_logs de uma reserva. */
+export type MudancaAuditada = {
+  before_data?: Record<string, unknown> | null;
+  after_data?: Record<string, unknown> | null;
+  performed_by?: string | null;
+  performed_at: string;
+};
+
+/**
+ * Quando uma PESSOA (equipe ou Assistente — qualquer ator que não seja o bot) mudou
+ * cada campo da reserva pela última vez (issue #389). O que a pessoa mudou vence o que
+ * o cliente escreveu antes: o revisor não desfaz.
+ */
+export function camposMudadosPelaEquipe(
+  logs: MudancaAuditada[],
+  botId: string | null,
+): Partial<Record<CampoDaRevisao, string>> {
+  const out: Partial<Record<CampoDaRevisao, string>> = {};
+  for (const l of logs ?? []) {
+    if (!l.performed_by || l.performed_by === botId || !l.before_data || !l.after_data) continue;
+    for (const [coluna, campos] of Object.entries(COLUNAS_DO_CAMPO)) {
+      if (JSON.stringify(l.before_data[coluna] ?? null) === JSON.stringify(l.after_data[coluna] ?? null)) continue;
+      for (const c of campos) if (!out[c] || l.performed_at > (out[c] as string)) out[c] = l.performed_at;
+    }
+  }
+  return out;
+}
+
 /** Campos que o revisor corrige sozinho (com evidência e certeza alta). */
 const CORRIGE_SOZINHO: CampoDaRevisao[] = ["data", "sentido", "ponto", "bairro", "embarque", "desembarque", "quantidade"];
 
@@ -156,6 +199,8 @@ export function decidirRevisao(
     falas?: FalaDaRevisao[];
     /** "HH:MM" em São Luís: viagem que já saiu não é mexida */
     horaAgora?: string | null;
+    /** por reserva, quando uma pessoa mudou cada campo (camposMudadosPelaEquipe) — issue #389 */
+    mudancasDaEquipe?: Record<string, Partial<Record<CampoDaRevisao, string>>>;
   },
 ): { correcoes: Correcao[]; pendencias: Achado[]; descartados: Achado[] } {
   const porId = new Map(ctx.reservas.map((r) => [r.id, r]));
@@ -183,6 +228,14 @@ export function decidirRevisao(
       continue;
     }
     const hora = ctx.falas ? horaDaEvidencia(a.evidencia, ctx.falas) : null;
+    // a equipe (ou o Assistente) mudou este campo à mão: vence o que o cliente escreveu ANTES.
+    // Só se o cliente escreveu DEPOIS da mudança vira pendência; o revisor nunca desfaz sozinho (#389)
+    const mudouEm = ctx.mudancasDaEquipe?.[r.id]?.[a.campo];
+    if (mudouEm) {
+      if (hora && Date.parse(hora) > Date.parse(mudouEm)) pendencias.push(a);
+      else descartados.push(a);
+      continue;
+    }
     // o cliente (ou a equipe) corrigiu DEPOIS de a reserva ser criada: é a confirmação (issue #343)
     const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     const mudaAViagem = a.campo === "data" || a.campo === "sentido";

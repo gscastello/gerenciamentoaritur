@@ -170,6 +170,41 @@ Deno.test("#343: correção do cliente depois da reserva é aplicada mesmo com c
   assertEquals(dia.correcoes.length, 0);
 });
 
+Deno.test("#389: o que a equipe mudou à mão vence a conversa anterior; cliente depois vira pendência", async () => {
+  const { camposMudadosPelaEquipe } = await import("./revisaoPura.ts");
+  const BOT = "bot-id";
+  // caso real: 4 passageiras no mesmo embarque; pelo Assistente o dono tirou uma (4 → 3)
+  const logs = [
+    { performed_by: BOT, performed_at: "2026-11-13T10:00:00Z", before_data: { quantity: 1 }, after_data: { quantity: 4 } },
+    { performed_by: "dono", performed_at: "2026-11-13T12:00:00Z", before_data: { quantity: 4, pickup_detail: "Piralanches" }, after_data: { quantity: 3, pickup_detail: "Piralanches" } },
+    { performed_by: null, performed_at: "2026-11-13T12:05:00Z", before_data: { trip_id: "a" }, after_data: { trip_id: "b" } },
+  ];
+  const mudou = camposMudadosPelaEquipe(logs, BOT);
+  assertEquals(mudou, { quantidade: "2026-11-13T12:00:00Z" }); // o bot e o ator vazio não contam; embarque não mudou
+
+  const r = { ...base, id: "r1", quantidade: 3, criada_em: "2026-11-13T10:00:00Z" };
+  const falas = [{ em: "2026-11-13T09:50:00Z", texto: "são 4 pessoas no Piralanches" }];
+  const ach = achadosValidos([
+    { reserva_id: "r1", campo: "quantidade", valor_atual: "3", valor_correto: "4", evidencia: "são 4 pessoas no Piralanches", certeza: "alta" },
+  ]);
+  const ctxEquipe = { reservas: [r], conversa: falas[0].texto, hoje: "2026-11-12", pontos, falas, horaAgora: "08:00", mudancasDaEquipe: { r1: mudou } };
+  const d = decidirRevisao(ach, ctxEquipe);
+  assertEquals(d.correcoes.length, 0); // não volta para 4
+  assertEquals(d.pendencias.length, 0);
+  assertEquals(d.descartados.length, 1);
+  // o cliente escreveu DEPOIS da mudança da equipe: pendência, nunca correção sozinha
+  const falasDepois = [...falas, { em: "2026-11-13T13:00:00Z", texto: "na verdade somos 4 no Piralanches" }];
+  const achDepois = achadosValidos([
+    { reserva_id: "r1", campo: "quantidade", valor_correto: "4", evidencia: "na verdade somos 4 no Piralanches", certeza: "alta" },
+  ]);
+  const d2 = decidirRevisao(achDepois, { ...ctxEquipe, falas: falasDepois, conversa: falasDepois.map((f) => f.texto).join("\n") });
+  assertEquals(d2.correcoes.length, 0);
+  assertEquals(d2.pendencias.length, 1);
+  // sem mudança da equipe nesse campo, o revisor segue corrigindo como antes
+  const d3 = decidirRevisao(ach, { ...ctxEquipe, mudancasDaEquipe: {} });
+  assertEquals(d3.correcoes[0]?.quantidade, 4);
+});
+
 Deno.test("#377: prova que junta a pergunta da equipe e a resposta do cliente corrige o dia", async () => {
   const { horaDaEvidencia, partesDaEvidencia } = await import("./revisaoPura.ts");
   // caso real: Agendado lançou sexta (13/11); a equipe perguntou o dia e o cliente disse "Sábado"

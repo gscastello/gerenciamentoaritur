@@ -159,6 +159,10 @@ Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda nest
 vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
 instruções na internet a cada uso.
 
+**MCP do shadcn/ui** (issue #379, `.mcp.json`): servidor oficial `npx shadcn@4.23.0 mcp` (versão fixa; `cmd /c`
+porque a máquina do dono é Windows), só para **consultar** componentes e exemplos. O app não usa shadcn/ui: o padrão
+continua sendo `ui/` e `ui/motion/` (§5). Rodar `init_project` ou trazer componente de lá é mudança à parte, com issue.
+
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
 > para services/hooks (issue #10). Todo arquivo novo entra normal.
@@ -386,6 +390,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o trecho LITERAL da conversa; o código só corrige sozinho o que tem essa prova e certeza alta, nos campos dia,
   sentido, ponto, bairro, embarque, desembarque e quantidade; tipo, nome e o resto viram pendência. Preço nunca vem
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
+  **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
+  o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
@@ -408,7 +414,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
   no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
   `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
-  mensagem ao cliente. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
+  mensagem ao cliente. **Números** (issue #367): uma conta só no banco, `rpc_numeros_do_financeiro(de, até)`
+  (`database/102`, admin/financeiro) — resultado e margem por mês e categoria, por sentido, ticket médio, margem
+  estimada por viagem (despesas rateadas pelas viagens que rodaram), custo por km e km/l, quem mais viaja, a receber e
+  o período anterior; o fechamento do mês usa a mesma. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
   conhecimento (`montarFatos`), as lições aprovadas, o cronograma e `CONHECIMENTO_DA_OPERACAO` (as regras do `/agendar`);
   e faz, sempre como proposta, o que o dono pede aqui: confere os "Agendado ☑️", lança/descarta reservas prontas,
   resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
