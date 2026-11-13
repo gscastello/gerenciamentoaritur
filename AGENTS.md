@@ -154,10 +154,26 @@ Hooks de git via **lefthook** (`lefthook.yml`), instalados por
 | `supabase-postgres-best-practices` | consultas, índices, RLS, migrações | supabase/agent-skills (MIT) |
 | `systematic-debugging` | achar a causa antes de corrigir | obra/superpowers (MIT) |
 | `verification-before-completion` | rodar e ler a verificação antes de dizer que terminou | obra/superpowers (MIT) |
+| `frontend-design` | direção visual intencional, sem cara de template | anthropics/claude-plugins-official (Apache-2.0) |
+| `impeccable` | criticar, auditar e polir telas (modo *Operate* nas telas do app; sem o launcher, que baixa binário) | pbakaus/impeccable (Apache-2.0) |
+| `make-interfaces-feel-better` | detalhes de polimento: sombras, ícones, tipografia, entrada/saída | jakubkrehel/make-interfaces-feel-better (MIT) |
+| `color-expert` | cor: paletas, rampas, contraste WCAG/APCA, espaços de cor | meodai/skill.color-expert (CC BY 4.0) |
+| `mobile-app-design` | convenções de toque e acessibilidade no celular (o app é PWA) | awesome-skills/mobile-app-design (MIT no README) |
+| `css-animation` | animações HTML/CSS de demonstração de uma função (walkthrough), fora do app | neonwatty/css-animation-skill (MIT) |
+| `design-brief` | brief de uma tela antes de construir (`.design/<feature>/`) | julianoczkowski/designer-skills (Apache-2.0) |
+| `ui-ux-pro-max` | base local de estilos, paletas, fontes e regras de UX (referência; a identidade AriTur fica) | nextlevelbuilder/ui-ux-pro-max-skill (MIT) |
+
+Design (issue #381): o sistema do app (`ui/`, `ui/motion/`, tokens `C`, §5) vence o que essas skills sugerirem;
+elas ajudam a decidir e a revisar, não a trocar a identidade. `taste-skill` (sites de marketing, 39 MB) ficou só na
+máquina do dono; `animate-skill` não entrou (sem licença); `canvas-design` já vem da Anthropic.
 
 Cada skill de fora traz `LICENSE` e `ORIGEM.md` (fonte, commit e o que muda neste projeto). Este AGENTS.md
 vence em caso de conflito. Skill nova só entra **lida antes**, com licença que permita copiar e sem buscar
 instruções na internet a cada uso.
+
+**MCP do shadcn/ui** (issue #379, `.mcp.json`): servidor oficial `npx shadcn@4.23.0 mcp` (versão fixa; `cmd /c`
+porque a máquina do dono é Windows), só para **consultar** componentes e exemplos. O app não usa shadcn/ui: o padrão
+continua sendo `ui/` e `ui/motion/` (§5). Rodar `init_project` ou trazer componente de lá é mudança à parte, com issue.
 
 > `src/app/App.jsx` (o protótipo) está **temporariamente fora** do Biome e
 > do Knip — é código denso legado que entra na régua durante a migração
@@ -245,6 +261,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
+- **Desembarque anotado na viagem** (issue #383, Lista do Dia → Desembarque, `database/106`): lista livre por dia e
+  sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
+  e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
+  `apagada`) — mesma regra de `domain/listaDesembarque.js`. Dois aparelhos na mesma viagem não se apagam.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
@@ -386,6 +406,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o trecho LITERAL da conversa; o código só corrige sozinho o que tem essa prova e certeza alta, nos campos dia,
   sentido, ponto, bairro, embarque, desembarque e quantidade; tipo, nome e o resto viram pendência. Preço nunca vem
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
+  **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
+  o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
@@ -408,7 +430,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   autoria = quem pediu) e **só propõe**: nada é gravado sem o toque em "Confirmar" no cartão, e o preço é recalculado
   no servidor pela tabela. Haiku 5.5 no simples, Sonnet 5.5 em números/explicações; uso por pedido em
   `assistente_uso` e teto mensal em `settings.assistant_budget` (US$). Não muda código, não publica, não manda
-  mensagem ao cliente. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
+  mensagem ao cliente. **Números** (issue #367): uma conta só no banco, `rpc_numeros_do_financeiro(de, até)`
+  (`database/102`, admin/financeiro) — resultado e margem por mês e categoria, por sentido, ticket médio, margem
+  estimada por viagem (despesas rateadas pelas viagens que rodaram), custo por km e km/l, quem mais viaja, a receber e
+  o período anterior; o fechamento do mês usa a mesma. **Sabe o que o Claude Code sabe** (issue #295): recebe os dados do sistema e a base de
   conhecimento (`montarFatos`), as lições aprovadas, o cronograma e `CONHECIMENTO_DA_OPERACAO` (as regras do `/agendar`);
   e faz, sempre como proposta, o que o dono pede aqui: confere os "Agendado ☑️", lança/descarta reservas prontas,
   resolve pendências, muda nome/telefone/valor do sócio/pagamento/pago, usa o endereço de costume. Regra nova de
@@ -437,7 +462,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   fica na lista com o motivo. Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
   vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
   costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. **"Hoje" dito pelo cliente nunca vira amanhã calado** (issue #307): se a viagem daquele sentido já saiu e o
-  destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente. Quando
+  destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente.
+  "Quero uma passagem para hoje" **sem sentido, embarque nem destino** depois que a viagem saiu é a outra de hoje
+  **só com o "Agendado ☑️" da equipe** (quem marcou conhece o cliente) **ou com o hábito do cliente** (costume no outro
+  sentido); o bot sozinho, nos outros casos, pergunta (dono, 13/11 — issue #387). E o **"Agendado ☑️" anterior fecha o pedido de antes**: o que veio antes dele (com mais de
+  6 h até o pedido novo) só entra como histórico, nunca vira reserva de novo (`inicioDoPedidoAtual`). Quando o Agendado
+  relê com o modelo capaz, **só lança o que a leitura final gravou** (`rascunhosDoAgendado`); rascunho que sobrou da
+  primeira leitura vira pendência `nao_confirmado`, nunca reserva sem as travas. Quando
   o cliente informa depois (outro dia, endereço, cidade), o bot completa a reserva (`extra_data.a_confirmar`).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
