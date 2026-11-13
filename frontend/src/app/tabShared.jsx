@@ -32,22 +32,32 @@ import { ehExtra } from "../domain/vagas.js";
  * without duplicating this code in every chunk.
  * ========================================================================== */
 
+// Letra única do app (issue #391): Inter, carregada no index.html.
+export const FONTE = "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif";
+// Visual aprovado pelo dono (issue #391, simulação "Painel de bordo" v16): preto de verdade
+// no fundo, cartões em grafite, branco "de farol" no texto e o vermelho da marca só no que
+// acende. Os ornamentos em vermelho escuro (`rubro`) enfeitam sem chamar atenção.
 export const C = {
-  bg: "#08090B",
-  panel: "#111214",
-  panel2: "#191A1D",
-  border: "#292A2E",
-  borderSoft: "#1E1F22",
-  ink: "#F2F3F5",
-  inkSoft: "#9CA0A8",
-  inkFaint: "#63666D",
+  bg: "#000000",
+  panel: "#111215",
+  panel2: "#191B20",
+  border: "#24262C",
+  borderSoft: "#1B1C20",
+  ink: "#F4F5F7",
+  inkSoft: "#A6AAB2",
+  // 6,1:1 sobre o cartão (o #63666D antigo ficava em 3,3:1, difícil de ler)
+  inkFaint: "#8A8E96",
   // vermelho da marca (era âmbar)
   amber: "#E4121F",
-  amberSoft: "#2A0E10",
+  amberSoft: "#2A0A0E",
   brand: "#E4121F",
   brandDim: "#A50D17",
   brandGlow: "rgba(228,18,31,0.35)",
   onBrand: "#FFFFFF",
+  // ornamentos em vermelho escuro (topo das telas, canto dos cartões, barra de baixo)
+  rubro: "#7A0B13",
+  rubro2: "#4A0A10",
+  rubro3: "#24080B",
   // Sinalização por cor foi removida do app (pedido do dono): status,
   // ocupação, direção etc. se distinguem por TEXTO e ÍCONE, não por cor.
   // Estes tokens semânticos agora apontam todos para a mesma escala de
@@ -103,6 +113,31 @@ const fmtHoraFuso = new Intl.DateTimeFormat("en-US", {
 // disso não sobra mais nenhum embarque pra "hoje", então a Agenda deve
 // abrir direto no dia seguinte em vez de mostrar um dia já encerrado.
 const HORA_FIM_OPERACAO_DIA = 14;
+// Hora de agora em São Luís (0–23) — para a saudação do topo.
+export const horaOperacao = () => Number(fmtHoraFuso.format(new Date()));
+export const saudacaoDoMomento = () => {
+  const h = horaOperacao();
+  return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+};
+// "Sexta, 14 de novembro" — o dia de São Luís, para o topo das telas.
+const fmtDiaLongo = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: FUSO_OPERACAO,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+export const diaPorExtenso = () => {
+  const t = fmtDiaLongo.format(new Date()).replace("-feira", "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+// Primeiro nome de quem está logado (o perfil às vezes guarda o e-mail).
+export function primeiroNome(profile) {
+  const raw = (profile?.name || "").trim();
+  if (!raw) return "equipe";
+  const base = raw.includes("@") ? raw.split("@")[0].replace(/[._-]+/g, " ") : raw;
+  const p = base.split(/\s+/)[0];
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
 export const diaAgendaPadrao = () =>
   dataOperacao(Number(fmtHoraFuso.format(new Date())) >= HORA_FIM_OPERACAO_DIA ? 1 : 0);
 export const fmtBRL = (n) =>
@@ -770,7 +805,6 @@ export function Header({ title, subtitle, right }) {
       <div>
         <h1
           style={{
-            fontFamily: "'Space Grotesk', sans-serif",
             fontWeight: 700,
             fontSize: "1.5rem",
             color: C.ink,
@@ -825,11 +859,14 @@ export function ErrorBanner({ children, onDismiss, onRetry, className = "" }) {
     </div>
   );
 }
+// Fundo do cartão: grafite com o canto de cima em vermelho escuro (ornamento do visual
+// aprovado, issue #391). O filete fino no alto vem da classe `cartao-at` (GlobalStyles).
+export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.22) 0%, rgba(122,11,19,0) 55%), ${C.panel}`;
 export function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`card-lift rounded-xl border p-5 ${className}`}
-      style={{ background: C.panel, borderColor: C.border, ...style }}
+      className={`card-lift cartao-at rounded-2xl border p-5 ${className}`}
+      style={{ background: FUNDO_CARTAO, borderColor: C.border, ...style }}
     >
       {children}
     </div>
@@ -874,7 +911,6 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
       <div
         className="truncate mt-1.5"
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 700,
           fontSize: "clamp(0.9rem, 2vw, 1.28rem)",
           fontVariantNumeric: "tabular-nums",
@@ -900,7 +936,6 @@ export function MiniStat({ label, value, cor }) {
       </div>
       <div
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 700,
           fontSize: "1.1rem",
           color: cor || C.ink,
@@ -932,7 +967,7 @@ export function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true
           </span>
           <span
             className="font-bold"
-            style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}
+            style={{ color: cor }}
           >
             {pct}%{lotado ? " · LOTADO" : ""}
           </span>
@@ -962,7 +997,6 @@ export function DirecaoDivisor({ label, cor }) {
           background: `${cor}1f`,
           color: cor,
           border: `1px solid ${cor}44`,
-          fontFamily: "'Space Grotesk', sans-serif",
         }}
       >
         {label}

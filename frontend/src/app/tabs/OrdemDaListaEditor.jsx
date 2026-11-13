@@ -113,7 +113,6 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar })
                   background: C.panel,
                   border: `1px solid ${C.border}`,
                   color: C.ink,
-                  fontFamily: "'JetBrains Mono', monospace",
                 }}
               />
               <span className="min-w-0 flex-1">

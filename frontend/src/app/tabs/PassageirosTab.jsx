@@ -133,7 +133,6 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
           <div className="relative">
             <div
               style={{
-                fontFamily: "'Space Grotesk', sans-serif",
                 fontWeight: 700,
                 fontSize: "1.2rem",
                 color: "#fff",
@@ -153,7 +152,7 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
               Valor gerado (carregado)
             </div>
             <div
-              style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}
+              style={{ color: "#fff", fontWeight: 700 }}
             >
               {fmtBRL(valorCarregado)}
             </div>
@@ -335,7 +334,6 @@ function PassageiroCard({
             style={{
               background: C.amberSoft,
               color: C.brand,
-              fontFamily: "'Space Grotesk', sans-serif",
               border: `1px solid ${C.brandDim}55`,
             }}
           >

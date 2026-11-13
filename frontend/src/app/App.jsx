@@ -64,10 +64,15 @@ import {
   C,
   CategoriasContext,
   DropoffContext,
+  FONTE,
   NotificacoesContext,
+  SinoNotificacoes,
   STATUS_META,
   dataOperacao,
+  diaPorExtenso,
   fmtDate,
+  primeiroNome,
+  saudacaoDoMomento,
   todayStr,
 } from "./tabShared.jsx";
 
@@ -88,13 +93,12 @@ class ErrorBoundary extends React.Component {
       return (
         <div
           className="min-h-screen w-full flex items-center justify-center p-6"
-          style={{ background: C.bg, color: C.ink, fontFamily: "'Inter', sans-serif" }}
+          style={{ background: C.bg, color: C.ink, fontFamily: FONTE }}
         >
           <div className="max-w-sm text-center">
             <AlertTriangle size={28} style={{ color: C.red, margin: "0 auto" }} />
             <div
               className="mt-3 font-semibold"
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
               Algo deu errado nesta tela
             </div>
@@ -127,6 +131,41 @@ function GlobalStyles() {
       @keyframes scaleIn { from { opacity:0; transform:scale(.94) translateZ(0);} to {opacity:1; transform:scale(1) translateZ(0);} }
       * { -webkit-tap-highlight-color: transparent; }
       html, body { -webkit-font-smoothing: antialiased; overscroll-behavior-y: contain; }
+      /* Letra única do app (issue #391): Inter, feita para tela; números de mesma largura
+         para horários e valores ficarem alinhados em coluna. */
+      body { font-family: ${FONTE}; font-variant-numeric: tabular-nums; }
+      /* ---- visual aprovado (issue #391) ---- */
+      /* filete vermelho escuro no alto de todo cartão */
+      :where(.cartao-at) { position: relative; }
+      .cartao-at::before { content:""; position:absolute; top:0; left:18px; right:18px; height:1px; pointer-events:none;
+        background: linear-gradient(90deg, rgba(122,11,19,0), ${C.rubro} 50%, rgba(122,11,19,0)); }
+      /* topo das telas no celular: brilho vermelho escuro e a faixa escura da plotagem embaixo */
+      .topo-at { background:
+          radial-gradient(120% 140% at 85% 0%, rgba(122,11,19,.55) 0%, rgba(74,10,16,.22) 45%, rgba(0,0,0,0) 78%),
+          #000; }
+      .topo-at::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:12px; pointer-events:none;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 20' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%237A0B13' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%234A0A10'/%3E%3Cstop offset='1' stop-color='%237A0B13'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 19 C150 18 280 12 400 1 L400 9 C280 18 150 20 0 20Z' fill='url(%23g)'/%3E%3Cpath d='M60 20 C190 19 300 14 400 6' fill='none' stroke='%23FFFFFF' stroke-opacity='.22' stroke-width='.8'/%3E%3Cpath d='M200 20 C290 19 350 16 400 13 L400 20Z' fill='%23000'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+      /* dois riscos inclinados (faixas da lateral do ônibus) antes do título de um bloco */
+      .riscos-at { display:inline-flex; gap:3px; margin-right:8px; flex-shrink:0; }
+      .riscos-at i { width:4px; height:12px; border-radius:1px; background:${C.rubro}; transform:skewX(-24deg); }
+      .riscos-at i + i { background:${C.rubro2}; }
+      /* barra de baixo flutuante: a luz vinho desliza até a tela tocada */
+      .barra-at { background: rgba(17,18,21,.9); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px -12px #000; }
+      .barra-at-luz { transition: transform .26s cubic-bezier(.2,0,0,1), opacity .2s ease;
+        background: linear-gradient(180deg, ${C.rubro2}, ${C.rubro3});
+        box-shadow: inset 0 0 0 1px rgba(122,11,19,.9), inset 0 -2px 0 0 ${C.rubro}; }
+      .barra-at-item { transition: color .16s ease, transform .12s cubic-bezier(.2,0,0,1); }
+      .barra-at-item:active { transform: scale(.92); }
+      /* cartão que leva a outra tela: afunda um pouco ao toque */
+      .toque-at { transition: transform .12s cubic-bezier(.2,0,0,1), border-color .18s ease, filter .12s ease; }
+      .toque-at:active { transform: scale(.97); filter: brightness(.96); }
+      /* seletor Ida/Volta da Agenda: só o texto e um traço vermelho embaixo do escolhido */
+      .seletor-at-traco { transition: transform .26s cubic-bezier(.2,0,0,1); }
+      /* lugar da van acendendo (mapa da Agenda) */
+      @keyframes lugarAcende { from { transform: scale(.6); opacity:.2; } to { transform: scale(1); opacity:1; } }
+      .lugar-at { transition: background-color .24s ease, box-shadow .24s ease; }
+      .lugar-at[data-ocupado="1"] { animation: lugarAcende .26s cubic-bezier(.16,1,.3,1) both; }
       button, a, select, input { touch-action: manipulation; }
       .anim-fadeUp { animation: fadeUp .32s cubic-bezier(.16,1,.3,1) both; will-change: transform, opacity; }
       .anim-fadeIn { animation: fadeIn .24s cubic-bezier(.16,1,.3,1) both; }
@@ -234,14 +273,14 @@ function GlobalStyles() {
          em will-change pode ficar presa no frame inicial (opacity:0) sem
          repintar, "sumindo" com o conteúdo real. animation:none remove
          de vez o risco — o elemento nasce no estado final, sem keyframe. */
-      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
         animation: none !important; will-change: auto !important; }
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
         html:not([data-motion]) :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark),
         html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
-        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
           animation: none !important; will-change: auto !important; }
       }
     `}</style>
@@ -249,99 +288,43 @@ function GlobalStyles() {
 }
 
 /* ===================== IDENTIDADE ARITUR =============================
- * Logo real da AriTur Transportes (arte enviada pelo dono, 2026-09-18):
- * monograma "AT" com a fita da rodovia, recortado com fundo transparente
- * em frontend/public/brand/ — ver PROCESSO em git log (logo-process.html,
- * removido depois de gerar os recortes). `mark-transparent.png` = só o
- * monograma (cabeçalhos, ícones); `full-transparent.png` = monograma +
- * "AriTur Transportes" + tagline (tela de login, onde há espaço).
+ * Artes oficiais enviadas pelo dono (2026-11-13, issue #391), em frontend/public/brand/:
+ * `emblema-at.webp` = só o AT da logo de fundo escuro (T prateado), para o topo das telas;
+ * `logo-fundo-escuro.webp` / `logo-fundo-claro.webp` = a logo inteira (AT, AriTur,
+ * TRANSPORTES e o slogan — o slogan já faz parte da logo, não repetir ao lado);
+ * `capa-inicio.webp` = a imagem do Início. Os PNG originais ficam junto, como matriz.
  */
-const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
-const MONO_T = "#DDDEE2";
-// proporção real de mark-transparent.png (1076×508) — mantém o aspecto ao
-// escalar só pela altura.
-const MARK_RATIO = 1076 / 508;
-
-// O T do monograma é preto: no fundo escuro do app ele sumia e só ficavam o A e
-// a fita. Num selo branco (como a logo pintada no ônibus branco) a arte original
-// aparece inteira em toda tela — issue #385, pedido do dono.
+// O AT direto no fundo escuro, sem o selo branco (pedido do dono na simulação v16).
 function AriturMark({ size = 42 }) {
-  const pad = Math.round(size * 0.14);
   return (
-    <span
+    <img
       data-testid="logo-aritur"
+      src="/brand/emblema-at.webp"
+      alt="AriTur"
+      width={size}
+      height={size}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
+        width: size,
+        height: size,
         flexShrink: 0,
-        background: "#fff",
-        borderRadius: Math.round(size * 0.28),
-        padding: `${pad}px ${Math.round(pad * 1.4)}px`,
-        boxShadow: "0 0 0 1px rgba(255,255,255,.08), 0 6px 18px -10px rgba(228,18,31,.6)",
+        display: "block",
+        objectFit: "contain",
+        filter: "drop-shadow(0 4px 10px rgba(0,0,0,.6))",
       }}
-    >
-      <img
-        src="/brand/mark-transparent.png"
-        alt="AriTur"
-        style={{
-          height: size - pad * 2,
-          width: (size - pad * 2) * MARK_RATIO,
-          display: "block",
-        }}
-      />
-    </span>
+    />
   );
 }
 
-function AriturLogo({ compact = false, tagline = false }) {
+// Lateral do computador: a logo inteira de fundo escuro (já traz o slogan).
+function AriturLogo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <AriturMark size={compact ? 30 : 44} />
-      <div className="leading-none">
-        <div
-          style={{
-            fontFamily: SERIF,
-            fontStyle: "italic",
-            fontWeight: 700,
-            fontSize: compact ? "1.2rem" : "1.65rem",
-            letterSpacing: "0.005em",
-            lineHeight: 1,
-          }}
-        >
-          <span style={{ color: C.brand }}>Ari</span>
-          <span style={{ color: MONO_T }}>Tur</span>
-        </div>
-        {!compact && (
-          <div
-            className="mt-1.5"
-            style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "0.58rem",
-              fontWeight: 600,
-              letterSpacing: "0.44em",
-              color: C.inkSoft,
-              paddingLeft: 2,
-            }}
-          >
-            TRANSPORTES
-          </div>
-        )}
-        {tagline && (
-          <div
-            className="mt-1.5"
-            style={{
-              fontFamily: SERIF,
-              fontStyle: "italic",
-              fontSize: "0.66rem",
-              color: C.inkFaint,
-            }}
-          >
-            Conectando destinos, cuidando de cada viagem
-          </div>
-        )}
-      </div>
-    </div>
+    <img
+      src="/brand/logo-fundo-escuro.webp"
+      alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+      width={560}
+      height={542}
+      style={{ width: 168, height: "auto", display: "block", margin: "0 auto" }}
+    />
   );
 }
 
@@ -804,7 +787,7 @@ const TAB_ROLES = {
 // (Dashboard, Agenda, Lista, Financeiro, Gestão), depois os cadastros, e o
 // fila de atendimento do WhatsApp ("Atendimento") por último.
 const NAV_ITENS = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
+  { id: "dashboard", label: "Início", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
   // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
@@ -958,8 +941,7 @@ function abaInicial() {
 }
 
 function AppInner() {
-  // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
-  // carregadas no index.html — valem também para a tela de login.
+  // A fonte (Inter) é carregada no index.html — vale também para a tela de login.
   const { profile, signOut } = useAuth();
   const role = profile?.role ?? null;
   // o app abre na Agenda (dono, 12/11 — issue #353); depois de "puxar para
@@ -1020,6 +1002,11 @@ function AppInner() {
   // tela dentro de um grupo acende o item do grupo no menu (issue #360)
   const grupoAtual = grupoDaTela(tab);
   const navAtiva = grupoAtual?.nav ?? tab;
+  // título do topo no celular (issue #391): saudação no Início, nome da tela nas outras
+  const tituloTopo =
+    tab === "dashboard"
+      ? `${saudacaoDoMomento()}, ${primeiroNome(profile)}`
+      : (NAV.find((n) => n.id === navAtiva)?.label ?? "AriTur");
 
   // Papel não enxerga a aba atual (ex.: motorista cai no app com "atendimento"
   // selecionado) → manda para a primeira aba que ele pode ver.
@@ -1105,7 +1092,7 @@ function AppInner() {
           <DropoffContext.Provider value={dropoff}>
             <div
               className="min-h-screen w-full flex relative"
-              style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
+              style={{ background: C.bg, fontFamily: FONTE, color: C.ink }}
             >
               <GlobalStyles />
               <VideoBackdrop variant="app" />
@@ -1189,13 +1176,13 @@ function AppInner() {
                   className="px-5 pt-6 pb-5 border-b relative"
                   style={{
                     borderColor: C.border,
-                    background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
+                    background:
+                      "radial-gradient(120% 120% at 85% 0%, rgba(122,11,19,.45) 0%, rgba(0,0,0,0) 70%)",
                   }}
                 >
                   <AriturLogo />
-                  <div className="aritur-road mt-3" style={{ width: 72 }} />
                   <div
-                    className="text-[11px] mt-2 flex items-center gap-1.5"
+                    className="text-[11px] mt-3 flex items-center justify-center gap-1.5"
                     style={{ color: C.inkFaint }}
                   >
                     <Wifi
@@ -1274,7 +1261,6 @@ function AppInner() {
                       style={{
                         background: C.brand,
                         color: "#fff",
-                        fontFamily: "'Space Grotesk', sans-serif",
                       }}
                     >
                       {(usuario || "?").slice(0, 2).toUpperCase()}
@@ -1303,7 +1289,7 @@ function AppInner() {
                   </div>
                   <div
                     className="mt-2.5 text-[10px] leading-snug"
-                    style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
+                    style={{ color: C.inkFaint }}
                   >
                     Mais que transporte, <span style={{ color: C.brand }}>conectamos pessoas.</span>
                   </div>
@@ -1324,29 +1310,42 @@ function AppInner() {
               />
 
               <div className="flex-1 min-w-0 pb-40 md:pb-0 overflow-x-hidden relative z-10">
-                <div
-                  className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
-                  style={{
-                    background: C.panel,
-                    borderColor: C.border,
-                    paddingTop: "max(0.6rem, env(safe-area-inset-top))",
-                  }}
+                {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
+                <header
+                  data-testid="topo-tela"
+                  className="md:hidden sticky top-0 z-20 topo-at flex items-center gap-3 pl-3 pr-3 pb-[18px]"
+                  style={{ paddingTop: "max(0.55rem, env(safe-area-inset-top))" }}
                 >
-                  <AriturLogo compact />
-                  <div className="flex items-center gap-2.5">
-                    <div className="aritur-road" style={{ width: 42 }} />
-                    <button
-                      type="button"
-                      onClick={signOut}
-                      className="btn-press rounded-lg p-1.5"
-                      style={{ color: C.inkFaint }}
-                      title="Sair da conta"
-                      aria-label="Sair da conta"
+                  <AriturMark size={46} />
+                  <div className="flex-1 min-w-0">
+                    <h1
+                      className="truncate"
+                      style={{
+                        fontSize: 19,
+                        fontWeight: 700,
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1.2,
+                        color: C.ink,
+                      }}
                     >
-                      <LogOut size={16} />
-                    </button>
+                      {tituloTopo}
+                    </h1>
+                    <p className="truncate text-xs" style={{ color: C.inkSoft }}>
+                      {diaPorExtenso()}
+                    </p>
                   </div>
-                </div>
+                  <SinoNotificacoes />
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    className="btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ color: C.inkSoft }}
+                    title="Sair da conta"
+                    aria-label="Sair da conta"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                </header>
                 <AvisoSemInternet
                   desde={R.offlineDesde}
                   cor={C.amber}

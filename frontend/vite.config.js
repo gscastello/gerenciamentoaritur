@@ -23,15 +23,21 @@ export default defineConfig({
       injectRegister: false,
       // o logo do topo entra também: sem ele, o app aberto sem internet (issue #355)
       // mostraria a imagem quebrada
-      includeAssets: ["icons/*.png", "brand/mark-transparent.png", "brand/logo-brilho.webp"],
+      includeAssets: [
+        "icons/*.png",
+        "brand/mark-transparent.png",
+        "brand/emblema-at.webp",
+        "brand/logo-fundo-escuro.webp",
+        "brand/capa-inicio.webp",
+      ],
       manifest: {
         name: "Gestão AriTur",
         short_name: "AriTur",
         description:
           "Painel operacional da AriTur Transportes — reservas, agenda, lista do dia e financeiro.",
         lang: "pt-BR",
-        theme_color: "#E4121F",
-        background_color: "#08090B",
+        theme_color: "#120406",
+        background_color: "#000000",
         display: "standalone",
         start_url: "/",
         scope: "/",

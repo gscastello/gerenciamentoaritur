@@ -313,7 +313,6 @@ export default function OperacaoTab() {
               <div>
                 <div
                   style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
                     fontWeight: 700,
                     fontSize: "1.15rem",
                     color: "#fff",

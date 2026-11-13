@@ -198,7 +198,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
               <div
                 className="capitalize"
                 style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
                   fontWeight: 700,
                   fontSize: "1.3rem",
                   color: "#fff",
@@ -222,7 +221,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
                   className="font-bold"
                   style={{
                     color: "#fff",
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontSize: "1.15rem",
                   }}
                 >
@@ -240,7 +238,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
                   className="font-bold"
                   style={{
                     color: "#fff",
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontSize: "1.15rem",
                   }}
                 >
@@ -456,7 +453,7 @@ function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe,
               <div className="flex items-start gap-2">
                 <span
                   className="tabular-nums shrink-0 mt-0.5 text-sm"
-                  style={{ color: C.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
+                  style={{ color: C.inkFaint }}
                 >
                   {idx + 1}.
                 </span>
@@ -649,7 +646,7 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
         <div className="flex items-baseline gap-2">
           <span
             className="text-[15px] font-bold shrink-0"
-            style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink }}
+            style={{ color: C.ink }}
           >
             {ehEnc ? (
               <>
@@ -759,7 +756,7 @@ function ReservaResumoModal({ r, trips, alvos, onClose, marcar, mover, remove })
         <div className="flex items-start justify-between gap-2 mb-3">
           <div>
             <div className="text-base font-bold" style={{ color: C.ink }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              <span>
                 {ehEnc ? "ENC" : `${r.quantidade}P`}
               </span>{" "}
               · {ehEnc ? "contato: " : ""}

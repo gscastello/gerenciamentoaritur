@@ -55,7 +55,7 @@ function HeroChip({ label, valor, moeda, Icon }) {
       </span>
       <span
         className="text-sm font-bold"
-        style={{ color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+        style={{ color: "#fff" }}
       >
         {txt}
       </span>
@@ -87,7 +87,7 @@ function HeroChipCap({ paxIda, paxVolta, capacidade }) {
       </span>
       <span
         className="text-sm font-bold"
-        style={{ color: lotIda ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+        style={{ color: lotIda ? C.red : "#fff" }}
       >
         {paxIda}/{capacidade}
       </span>
@@ -97,7 +97,7 @@ function HeroChipCap({ paxIda, paxVolta, capacidade }) {
       <span style={{ color: "rgba(255,255,255,.25)" }}>·</span>
       <span
         className="text-sm font-bold"
-        style={{ color: lotVolta ? C.red : "#fff", fontFamily: "'JetBrains Mono', monospace" }}
+        style={{ color: lotVolta ? C.red : "#fff" }}
       >
         {paxVolta}/{capacidade}
       </span>
@@ -124,7 +124,6 @@ function DashboardHero({ paxIda, paxVolta, capacidade, faturamento, pendencias }
           <h1
             className="hero-t hero-t-1"
             style={{
-              fontFamily: "'Space Grotesk', sans-serif",
               fontWeight: 700,
               fontSize: "1.7rem",
               color: "#fff",
@@ -139,7 +138,7 @@ function DashboardHero({ paxIda, paxVolta, capacidade, faturamento, pendencias }
           </p>
           <div
             className="hero-t hero-t-3 mt-2 inline-flex items-center gap-2 text-xs font-semibold"
-            style={{ color: "#fff", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}
+            style={{ color: "#fff", fontStyle: "italic" }}
           >
             <span className="aritur-road" style={{ width: 22 }} />
             Juntos, seguimos mais longe.
@@ -391,7 +390,6 @@ export default function DashboardTab({ reservas, capacidade, trips }) {
                 </div>
                 <div
                   style={{
-                    fontFamily: "'JetBrains Mono', monospace",
                     fontWeight: 600,
                     fontSize: "0.85rem",
                   }}

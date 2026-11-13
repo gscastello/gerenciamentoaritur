@@ -469,7 +469,6 @@ export default function AgendaTab({
                 <div
                   className="capitalize truncate"
                   style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
                     fontWeight: 800,
                     fontSize: "1.7rem",
                     lineHeight: 1.1,
@@ -509,7 +508,6 @@ export default function AgendaTab({
                     className="font-bold"
                     style={{
                       color: "#fff",
-                      fontFamily: "'JetBrains Mono', monospace",
                       fontSize: "1.1rem",
                     }}
                   >
@@ -528,7 +526,6 @@ export default function AgendaTab({
                       className="font-bold"
                       style={{
                         color: "#fff",
-                        fontFamily: "'JetBrains Mono', monospace",
                         fontSize: "1.1rem",
                       }}
                     >
@@ -981,7 +978,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const quantidade = (
     <span
       className="text-[13px] font-bold shrink-0"
-      style={{ fontFamily: "'JetBrains Mono', monospace", color: corTexto }}
+      style={{ color: corTexto }}
     >
       {ehEnc ? (
         <>
@@ -1253,7 +1250,6 @@ function AtalhosDosPontos({ trips, doDia }) {
                   <span
                     className="text-[11px]"
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
                       color: qtd > 0 ? cor : C.inkFaint,
                     }}
                   >
@@ -1381,7 +1377,6 @@ function ViagemOperacional({
           <div>
             <div
               className="text-sm font-bold flex items-center gap-1.5"
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
             >
               <Bus size={14} style={{ color: C.brand }} /> {viagem.nome}
               <span style={{ color: C.inkSoft, fontWeight: 500 }}>· {horaPrincipal}</span>
@@ -1476,13 +1471,13 @@ function ViagemOperacional({
               >
                 <span
                   className="text-[12px] font-medium"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", color: C.inkSoft }}
+                  style={{ color: C.inkSoft }}
                 >
                   {hora}
                 </span>
                 <span
                   className="text-[15px] font-bold tracking-wide"
-                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+                  style={{ color: C.ink }}
                 >
                   {p.nome.toUpperCase()}
                 </span>
@@ -1553,7 +1548,7 @@ function ViagemOperacional({
             >
               <span
                 className="text-[15px] font-bold tracking-wide"
-                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+                style={{ color: C.ink }}
               >
                 ENCOMENDAS
               </span>
@@ -1582,7 +1577,7 @@ function ViagemOperacional({
             >
               <span
                 className="text-[15px] font-bold tracking-wide"
-                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
+                style={{ color: C.ink }}
               >
                 EXTRAS
               </span>
@@ -1733,7 +1728,6 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
         <div className="flex items-center justify-between mb-4">
           <div
             className="font-semibold text-sm"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             Editar reserva
           </div>
@@ -2148,7 +2142,6 @@ export function NovaReservaModal({
         <div className="flex items-center justify-between mb-4">
           <div
             className="font-semibold text-sm"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             {extraInicial ? "Adicionar passagem extra" : "Agendar passagem"}
           </div>
@@ -2399,7 +2392,7 @@ export function NovaReservaModal({
           <span>
             {qtd}× {fmtDate(f.data)} · {f.direcao === "ida" ? "Ida" : "Volta"}
           </span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink }}>
+          <span style={{ color: C.ink }}>
             {fmtBRL(valorUnit * qtd)}
           </span>
         </div>
@@ -2584,7 +2577,6 @@ function NovaEncomendaModal({
         <div className="flex items-center justify-between mb-4">
           <div
             className="font-semibold text-sm flex items-center gap-1.5"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             <Package size={15} />{" "}
             {editar ? "Editar encomenda" : pendente ? "Agendar encomenda" : "Nova encomenda"}

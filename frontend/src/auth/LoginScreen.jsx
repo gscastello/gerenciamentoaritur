@@ -207,7 +207,6 @@ export function LoginScreen() {
               fontSize: "0.62rem",
               letterSpacing: "0.14em",
               color: C.inkFaint,
-              fontFamily: "'Space Grotesk', sans-serif",
             }}
           >
             MAIS QUE TRANSPORTE, <span style={{ color: C.brand }}>CONECTAMOS PESSOAS.</span>
