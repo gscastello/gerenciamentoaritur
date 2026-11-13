@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { abrirTela } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Aba Atendimento (issue #182): substitui o antigo simulador "Reservar". Fila
@@ -52,20 +53,22 @@ const PENDENCIA = {
 };
 
 const PERGUNTAS = [
-  { id: "q1", question: "Vocês aceitam animal de estimação?", reason: "fora da base", created_at: AGORA },
+  {
+    id: "q1",
+    question: "Vocês aceitam animal de estimação?",
+    reason: "fora da base",
+    created_at: AGORA,
+  },
 ];
 
-async function abrirAtendimento(page) {
-  await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  const aba = page.getByRole("button", { name: /^Atendimento$/ });
-  if ((await aba.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-  }
-  await page.getByRole("button", { name: /^Atendimento$/ }).first().click();
-  await expect(page.getByText("Atendimento WhatsApp")).toBeVisible();
+async function abrirAtendimento(page, tela = "atendimento") {
+  await abrirTela(page, tela);
+  if (tela !== "pendencias") await expect(page.getByText("Atendimento WhatsApp")).toBeVisible();
 }
 
-test("Atendimento: fila mostra o nome do cadastro ao lado do perfil do WhatsApp", async ({ page }) => {
+test("Atendimento: fila mostra o nome do cadastro ao lado do perfil do WhatsApp", async ({
+  page,
+}) => {
   await mockSupabase(page, { role: "admin", atendimento: CONVERSAS });
   await page.goto("/");
   await abrirAtendimento(page);
@@ -82,7 +85,9 @@ test("Atendimento: fila mostra o nome do cadastro ao lado do perfil do WhatsApp"
   await expect(page.getByText("+55 98 99999-0000")).toBeVisible();
   await expect(page.getByText("Com o bot", { exact: true })).toBeVisible();
 
-  await expect(page.getByText(/1 aguardando resposta · 1 com a equipe · 1 com o bot/)).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Aguardando 1" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Com a equipe 1" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Com o bot 1" })).toBeVisible();
 
   const link = page.getByRole("link", { name: "Abrir no Chatwoot" }).first();
   await expect(link).toHaveAttribute(
@@ -97,21 +102,25 @@ test("Atendimento: sem conversas mostra o aviso de fila vazia", async ({ page })
   await abrirAtendimento(page);
 
   await expect(page.getByText(/Nenhuma conversa em andamento/)).toBeVisible();
+  await page.getByRole("tab", { name: /^Pendências/ }).click();
   await expect(page.getByText("Nenhuma pendência aberta.")).toBeVisible();
+  await page.getByRole("tab", { name: /^Bot/ }).click();
   await expect(page.getByText("Nenhuma pergunta pendente.")).toBeVisible();
 });
 
 test("Atendimento: resolve uma pendência direto do painel", async ({ page }) => {
   await mockSupabase(page, { role: "atendente", pendencias: [PENDENCIA] });
   await page.goto("/");
-  await abrirAtendimento(page);
+  await abrirAtendimento(page, "pendencias");
 
   await expect(page.getByText("Cliente pediu atendente no WhatsApp")).toBeVisible();
-  await page.getByRole("button", { name: /Resolver pendência/ }).click();
+  await page.getByRole("button", { name: "Resolver", exact: true }).click();
   await expect(page.getByText("Cliente pediu atendente no WhatsApp")).toHaveCount(0);
 });
 
-test("Atendimento: cadastra a resposta de uma pergunta sem resposta na base do bot", async ({ page }) => {
+test("Atendimento: cadastra a resposta de uma pergunta sem resposta na base do bot", async ({
+  page,
+}) => {
   const criados = [];
   await mockSupabase(page, { role: "admin", botUnanswered: PERGUNTAS });
   page.on("request", (r) => {
@@ -120,12 +129,14 @@ test("Atendimento: cadastra a resposta de uma pergunta sem resposta na base do b
     }
   });
   await page.goto("/");
-  await abrirAtendimento(page);
+  await abrirAtendimento(page, "bot");
 
   await expect(page.getByText(/Vocês aceitam animal de estimação/)).toBeVisible();
   await page.getByRole("button", { name: "Cadastrar resposta" }).click();
   await page.getByLabel("Assunto").fill("Animais de estimação");
-  await page.getByLabel("O que o bot deve saber").fill("Pets pequenos viajam na caixa de transporte, sem custo.");
+  await page
+    .getByLabel("O que o bot deve saber")
+    .fill("Pets pequenos viajam na caixa de transporte, sem custo.");
   await page.getByRole("button", { name: "Salvar na base" }).click();
 
   await expect.poll(() => criados[0]?.title).toBe("Animais de estimação");
@@ -140,9 +151,44 @@ test("Atendimento: dispensa uma pergunta sem cadastrar nada", async ({ page }) =
     if (r.method() === "POST" && r.url().includes("/rest/v1/bot_knowledge")) criados.push(1);
   });
   await page.goto("/");
-  await abrirAtendimento(page);
+  await abrirAtendimento(page, "bot");
 
   await page.getByRole("button", { name: /Dispensar a pergunta/ }).click();
   await expect(page.getByText(/Vocês aceitam animal de estimação/)).toHaveCount(0);
   expect(criados).toHaveLength(0);
+});
+
+// Issue #360: conversa velha marcada como "aguardando" não sobe mais para o topo; a
+// janela de Conversas é só a fila, a mais recente primeiro, com filtros.
+test("Atendimento: conversas na ordem do WhatsApp; aguardando só vale nas últimas 48 h", async ({
+  page,
+}) => {
+  const velha = new Date(Date.now() - 20 * 86400000).toISOString();
+  const conversas = [
+    {
+      ...CONVERSAS[0],
+      conversation_id: "c-velha",
+      nome_cadastro: "Cliente de Outubro",
+      last_message_at: velha,
+    },
+    { ...CONVERSAS[1], conversation_id: "c-nova", nome_whatsapp: "Cliente de Agora" },
+  ];
+  await mockSupabase(page, { role: "admin", atendimento: conversas });
+  await page.goto("/");
+  await abrirAtendimento(page);
+
+  const fila = page.getByTestId("fila-de-conversas");
+  await expect(fila.getByText("Cliente de Agora")).toBeVisible();
+  const nomes = await fila.locator(".text-sm.font-medium").allInnerTexts();
+  expect(nomes.indexOf("Cliente de Agora")).toBeLessThan(nomes.indexOf("Cliente de Outubro"));
+  // a de 20 dias atrás não conta como aguardando
+  await expect(page.getByRole("tab", { name: "Aguardando 0" })).toBeVisible();
+  await expect(fila.getByText("Aguardando resposta", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: /^Com o bot/ }).click();
+  await expect(fila.getByText("Cliente de Agora")).toBeVisible();
+  await expect(fila.getByText("Cliente de Outubro")).toHaveCount(0);
+  // a janela de conversas é só a fila: nada de pendências nem perguntas aqui
+  await expect(page.getByText("Pendências abertas")).toHaveCount(0);
+  await expect(page.getByText("Perguntas que o bot não soube responder")).toHaveCount(0);
 });

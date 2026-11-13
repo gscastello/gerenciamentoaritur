@@ -182,6 +182,8 @@ const GestaoSkel = () => (
 
 const MAP = {
   atendimento: AtendimentoSkel,
+  para_lancar: AtendimentoSkel,
+  bot: AtendimentoSkel,
   agenda: AgendaSkel,
   lista: ListaSkel,
   bloco: BlocoSkel,
