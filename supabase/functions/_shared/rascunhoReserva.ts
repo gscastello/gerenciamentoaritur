@@ -57,6 +57,8 @@ import {
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
   juntarPedidosDaMesmaViagem,
+  inicioDoPedidoAtual,
+  rascunhosDoAgendado,
   deveRelerAgendado,
   deveLerDeNovoNoFim,
 } from "./rascunhoPuro.ts";
@@ -70,6 +72,7 @@ import {
   sugestoesRecusadas,
   datasConfirmadas,
   datasSemPedido,
+  sentidoEscrito,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -139,6 +142,9 @@ async function contexto() {
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
   };
 }
+
+const MOTIVO_NAO_CONFIRMADO =
+  "a leitura final do Agendado não confirmou esta viagem (veio de uma leitura anterior): confira se o cliente pediu";
 
 /** Modelo para reler o que o rápido não entendeu (issue #301). */
 const MODELO_CAPAZ = Deno.env.get("BOT_RASCUNHO_MODELO_CAPAZ") ?? "claude-sonnet-5-5";
@@ -267,7 +273,11 @@ async function lerEGravar(
   const hoje = diaCivil(agora);
   const horaAgora = fmtHoraSaoLuis.format(agora);
   const ctx = await contexto();
-  const limite = agora.getTime() - 72 * 3600 * 1000;
+  // o pedido atual: as últimas 72 h, a partir do "Agendado ☑️" anterior que já fechou o
+  // pedido de antes (issue #387 — o pedido antigo não pode virar reserva de novo)
+  const disparoEm = mensagens.find((m) => m.id === entrada.mensagemId)?.em ?? null;
+  const corte = inicioDoPedidoAtual(mensagens, disparoEm);
+  const limite = Math.max(agora.getTime() - 72 * 3600 * 1000, corte ? Date.parse(corte) + 1 : 0);
   const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= limite);
   // conversas anteriores: só para saber onde o cliente costuma embarcar e descer (issue #266)
   const anteriores = mensagens.filter((m) => new Date(m.em).getTime() < limite && m.quem !== "bot");
@@ -428,6 +438,8 @@ async function lerEGravar(
       horaAgora,
       // o cliente escreveu o dia de hoje: não vira amanhã calado (issue #307)
       hojeDito: datasEscritas(mensagensDoCliente).includes(hoje),
+      // "passagem para hoje" sem sentido depois que a viagem saiu = a outra de hoje (issue #387)
+      sentidoDito: sentidoEscrito(textosDoCliente),
       costume,
       agendado: opcoes.confirmadoPelaEquipe,
     });
@@ -655,8 +667,14 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       return;
     }
 
+    // só o que a leitura FINAL confirmou; o que sobrou de uma leitura anterior vira pendência (issue #387)
+    const { lancar, naoConfirmados } = rascunhosDoAgendado(prontos as Bloco[], lido.gravados);
+    for (const d of naoConfirmados) {
+      await anotarPendencia(d.id, MOTIVO_NAO_CONFIRMADO);
+      pendentes.push("nao_confirmado");
+    }
     const { data: bot } = await supabaseAdmin.from("users").select("id").eq("name", "Bot WhatsApp").maybeSingle();
-    for (const d of prontos as Bloco[]) {
+    for (const d of lancar) {
       const direcao = d.direction as "ida" | "volta";
       const encomenda = d.type === "encomenda";
       let ponto: Bloco | null = null;

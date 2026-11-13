@@ -878,3 +878,114 @@ Deno.test("#345: complemento (apto/bloco) completa o endereço, não substitui",
   const r = planejarAtualizacao(res, { reserva: 1, endereco: "Rua do Sol, 10" }, { hoje: "2026-11-12", pontos });
   assertEquals(r?.pickupDetail, "Rua do Sol, 10");
 });
+
+Deno.test("#387: 'quero uma passagem para hoje' depois que a Ida saiu é a Volta de hoje (cidade pelo costume)", () => {
+  const costume = { volta: { fonte: "historico", route_point_code: "pirapemas", route_point_name: "Pirapemas", detail: "Rua Eurico Ribeiro, casa amarela" } };
+  const r = validarPedidoExtraido(
+    { data: "2026-11-13", direcao: "ida", ponto: "busca" },
+    { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: null, costume, agendado: true },
+  );
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.rascunho.trip_date, "2026-11-13");
+  assertEquals(r.rascunho.direction, "volta");
+  assertEquals(r.rascunho.route_point_code, "pirapemas");
+  assert(r.rascunho.notes?.includes("sem dizer o sentido"));
+  // o bot sozinho (sem o Agendado da equipe): só com o hábito do cliente (costume na Volta)
+  const soBot = validarPedidoExtraido(
+    { data: "2026-11-13", direcao: "ida" },
+    { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: null, costume },
+  );
+  assert(soBot.ok && soBot.rascunho.direction === "volta");
+  // sem hábito e sem o Agendado da equipe: não decide (pergunta / equipe confere)
+  assertEquals(
+    validarPedidoExtraido(
+      { data: "2026-11-13", direcao: "ida" },
+      { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: null },
+    ),
+    { ok: false, motivo: "hoje_ja_saiu" },
+  );
+  // com o Agendado da equipe e sem hábito: é a Volta de hoje (a cidade fica para confirmar)
+  const agendadoSemHabito = validarPedidoExtraido(
+    { data: "2026-11-13", direcao: "ida" },
+    { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: null, agendado: true },
+  );
+  assert(agendadoSemHabito.ok && agendadoSemHabito.rascunho.direction === "volta");
+  // escreveu que é a Ida ("saindo de São Luís hoje"): não troca, a equipe confere
+  assertEquals(
+    validarPedidoExtraido(
+      { data: "2026-11-13", direcao: "ida" },
+      { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: "ida", costume },
+    ),
+    { ok: false, motivo: "hoje_ja_saiu" },
+  );
+  // disse onde embarca em São Luís: também não troca
+  assertEquals(
+    validarPedidoExtraido(
+      { data: "2026-11-13", direcao: "ida", ponto: "busca", bairro: "Turu" },
+      { ...ctx, hoje: "2026-11-13", horaAgora: "07:58", hojeDito: true, sentidoDito: null },
+    ),
+    { ok: false, motivo: "hoje_ja_saiu" },
+  );
+  // depois que a Volta também saiu: fica para a equipe
+  assertEquals(
+    validarPedidoExtraido(
+      { data: "2026-11-13", direcao: "ida" },
+      { ...ctx, hoje: "2026-11-13", horaAgora: "15:00", hojeDito: true, sentidoDito: null, costume },
+    ),
+    { ok: false, motivo: "hoje_ja_saiu" },
+  );
+});
+
+Deno.test("#387: o Agendado anterior fecha o pedido de antes; correção logo depois continua no mesmo pedido", async () => {
+  const { inicioDoPedidoAtual } = await import("./rascunhoPuro.ts");
+  const m = (quem: string, texto: string, em: string) => ({ quem, texto, em });
+  // caso real: pedido da Ida em 11/11 (lançado), pedido da Volta em 13/11
+  const conversa = [
+    m("cliente", "ainda têm vaga amanhã? De Slz pra Pirapemas", "2026-11-11T11:46:00Z"),
+    m("cliente", "Buscar em casa, Forquilha", "2026-11-11T12:15:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-11T12:32:00Z"),
+    m("cliente", "ainda têm vaga pra Slz amanhã?", "2026-11-13T11:20:00Z"),
+    m("cliente", "Reserva uma vaga pra mim, no Domingo", "2026-11-13T12:07:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-13T12:21:00Z"),
+    m("cliente", "Obrigada", "2026-11-13T12:21:30Z"),
+  ];
+  // disparo = o Agendado de 13/11: o pedido começa depois do de 11/11
+  assertEquals(inicioDoPedidoAtual(conversa, "2026-11-13T12:21:00Z"), "2026-11-11T12:32:00Z");
+  // correção 20 min depois de um Agendado + novo Agendado: é o mesmo pedido, sem corte
+  const correcao = [
+    m("cliente", "Quero ida amanhã, Cohatrac", "2026-11-13T10:00:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-13T10:05:00Z"),
+    m("cliente", "na verdade é no Turu", "2026-11-13T10:25:00Z"),
+    m("equipe", "Agendado ✅", "2026-11-13T10:26:00Z"),
+  ];
+  assertEquals(inicioDoPedidoAtual(correcao, "2026-11-13T10:26:00Z"), null);
+  // sem Agendado anterior, ou pergunta "está agendado?": sem corte
+  assertEquals(inicioDoPedidoAtual([m("cliente", "oi", "2026-11-13T10:00:00Z")], null), null);
+  assertEquals(
+    inicioDoPedidoAtual(
+      [m("equipe", "está agendado ☑️?", "2026-11-10T10:00:00Z"), m("cliente", "oi", "2026-11-13T10:00:00Z")],
+      null,
+    ),
+    null,
+  );
+  // leitura disparada por mensagem do cliente (sem Agendado): corta no último Agendado antigo
+  assertEquals(inicioDoPedidoAtual(conversa.slice(0, 5), "2026-11-13T12:07:00Z"), "2026-11-11T12:32:00Z");
+});
+
+Deno.test("#387: o Agendado só lança o que a leitura final confirmou; sobra da 1ª leitura vira pendência", async () => {
+  const { rascunhosDoAgendado, avisoDoAgendado } = await import("./rascunhoPuro.ts");
+  // caso real: 1ª leitura criou Ida (não bate com o cliente) e Volta; a releitura só gravou a Volta
+  const prontos = [
+    { id: "ida-1a-leitura", direction: "ida" },
+    { id: "volta", direction: "volta" },
+  ];
+  const r = rascunhosDoAgendado(prontos, ["volta"]);
+  assertEquals(r.lancar.map((d) => d.id), ["volta"]);
+  assertEquals(r.naoConfirmados.map((d) => d.id), ["ida-1a-leitura"]);
+  assertEquals(rascunhosDoAgendado(prontos, ["volta", "ida-1a-leitura"]).naoConfirmados, []);
+  assertEquals(rascunhosDoAgendado([], ["x"]), { lancar: [], naoConfirmados: [] });
+  const aviso = avisoDoAgendado({ lancadas: 1, pedidos: 1, motivos: [], pendentes: ["nao_confirmado"] });
+  assertEquals(aviso?.assunto, "Agendado ☑️ lançou só parte");
+  assertStringIncludes(aviso?.detalhe ?? "", "leitura final do Agendado não a confirmou");
+});
