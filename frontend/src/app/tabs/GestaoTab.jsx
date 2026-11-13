@@ -121,8 +121,7 @@ export default function GestaoTab({ deepLink }) {
   const combustivelTotal = porCategoria.combustivel || 0;
   const motoristaTotal = porCategoria.motorista || 0;
   const manutencaoTotal = porCategoria.manutencao || 0;
-  const outrasOperacao =
-    custoOperacao - combustivelTotal - motoristaTotal - manutencaoTotal;
+  const outrasOperacao = custoOperacao - combustivelTotal - motoristaTotal - manutencaoTotal;
 
   const run = async (fn, msgErro) => {
     setErro("");
@@ -339,9 +338,7 @@ function GestaoResultado({
                         style={{ color: v > 0 ? C.ink : C.inkFaint }}
                       >
                         <span>{c.label}</span>
-                        <span>
-                          {fmtBRL(v)}
-                        </span>
+                        <span>{fmtBRL(v)}</span>
                       </div>
                     );
                   })}
@@ -686,11 +683,7 @@ function GestaoRecorrentes({ rec, cats, run, onGerar }) {
                                   </div>
                                 )}
                               </td>
-                              <td
-                                className="px-3 py-2"
-                              >
-                                {fmtBRL(Number(t.amount))}
-                              </td>
+                              <td className="px-3 py-2">{fmtBRL(Number(t.amount))}</td>
                               <td className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>
                                 {quandoLanca(t)}
                               </td>
@@ -1046,10 +1039,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold">Custos empresariais lançados no mês</div>
-          <div
-            className="text-xs"
-            style={{ color: C.inkSoft }}
-          >
+          <div className="text-xs" style={{ color: C.inkSoft }}>
             {fmtBRL(totalMes)}
           </div>
         </div>
@@ -1126,9 +1116,7 @@ function GestaoLancamentos({ entries, fin, ano, mes, run, cats }) {
                     <td className="px-3 py-2" style={{ color: C.inkSoft }}>
                       {e.descricao || "—"}
                     </td>
-                    <td className="px-3 py-2">
-                      {fmtBRL(e.valor)}
-                    </td>
+                    <td className="px-3 py-2">{fmtBRL(e.valor)}</td>
                     <td className="px-3 py-2">
                       {e.deTemplate ? (
                         <span className="text-[10px]" style={{ color: C.blue }}>

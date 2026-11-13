@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { sairDaConta } from "./support/navegar.js";
+import { campoAnotar, sairDaConta } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Fluxos autenticados do app (issue #4). Sem projeto Supabase de teste
@@ -184,10 +184,10 @@ test("Agenda: criar a primeira reserva de uma janela vazia não desmonta a aba",
     .first()
     .click();
 
-  const rascunho = page.getByLabel("Anotar reserva — Rodoviária");
+  const rascunho = await campoAnotar(page, "Rodoviária");
   await rascunho.fill("rascunho que não pode sumir");
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await campo.fill("1P Cohatrac 98999998888");
   await campo.press("Enter");
 

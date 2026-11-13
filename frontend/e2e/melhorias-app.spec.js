@@ -67,9 +67,12 @@ test("Agenda: endereço em destaque, nome em segundo plano e telefone secundári
   // o endereço é maior que o nome
   expect(await tamanho(endereco)).toBeGreaterThan(await tamanho(nome));
 
-  // os dois telefones aparecem como links de ligação
-  await expect(linha.getByRole("link", { name: /98987654321/ })).toBeVisible();
-  await expect(linha.getByRole("link", { name: /2º.*98981110000/ })).toBeVisible();
+  // o principal é o ícone de ligar; o 2º telefone fica no menu "⋯" (issue #393)
+  await expect(linha.getByRole("link", { name: /98987654321/ }).first()).toBeVisible();
+  await linha.getByRole("button", { name: /^Mais ações/ }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: /2º.*98981110000/ }),
+  ).toBeVisible();
 });
 
 test("Agendar passagem: cidade que exige revisão nasce pendente e leva o telefone secundário", async ({

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { campoAnotar } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #216: o banco recusa a passagem quando o mesmo contato já tem reserva
@@ -64,7 +65,7 @@ test("duplicada: anotação rápida também pergunta antes de criar a segunda", 
     .first()
     .click();
   page.once("dialog", (d) => d.accept());
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await campo.fill("1P Cohatrac 98999998888");
   await campo.press("Enter");
 

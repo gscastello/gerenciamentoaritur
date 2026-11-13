@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { campoAnotar } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #258: microfone na anotação rápida (reconhecimento de voz do navegador)
@@ -50,7 +51,7 @@ test("Agenda: ditar a reserva preenche a anotação no formato rápido e cria ao
   });
   await abrirAgenda(page);
 
-  const campo = page.getByLabel("Anotar reserva — Buscar em Casa");
+  const campo = await campoAnotar(page, "Buscar em Casa");
   await page.getByRole("button", { name: "Ditar reserva — Buscar em Casa" }).click();
   await expect(campo).toHaveValue("2P Cohatrac 98 99999 8888 Maria");
   // nada é salvo sozinho: a pessoa confere e confirma
@@ -72,7 +73,7 @@ test("Agenda: navegador sem reconhecimento de voz não mostra o microfone", asyn
   });
   await mockSupabase(page, { role: "admin", occupancy: {} });
   await abrirAgenda(page);
-  await expect(page.getByLabel("Anotar reserva — Buscar em Casa")).toBeVisible();
+  await expect(await campoAnotar(page, "Buscar em Casa")).toBeVisible();
   await expect(page.getByRole("button", { name: /Ditar reserva/ })).toHaveCount(0);
 });
 

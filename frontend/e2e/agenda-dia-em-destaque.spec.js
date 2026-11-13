@@ -45,33 +45,36 @@ async function abrirAgenda(page) {
     .click();
 }
 
-test("Agenda: dia da semana e data ficam em destaque, centralizados", async ({ page }) => {
+const iso = (d) => d.toISOString().slice(0, 10);
+
+// Crítica de design (issue #393): o cartão grande do dia saiu; a data fica numa barra com
+// setas ("‹ Hoje 13/11 ›"), sem precisar abrir o calendário.
+test("Agenda: a barra do dia mostra o dia certo (Hoje/Amanhã) com a data", async ({ page }) => {
   await abrirAgenda(page);
-
   const alvo = diaEsperadoNoOpen();
-  const diaSemanaAlvo = diaDaSemana(alvo);
-
-  const tituloDia = page.getByText(diaSemanaAlvo, { exact: true });
-  await expect(tituloDia).toBeVisible();
-
-  const fontSize = await tituloDia.evaluate((el) =>
-    Number.parseFloat(getComputedStyle(el).fontSize),
-  );
-  expect(fontSize).toBeGreaterThanOrEqual(24); // bem maior que o texto normal (14px)
+  const barra = page.getByTestId("dia-da-agenda");
+  await expect(barra.getByLabel("Dia da Agenda")).toHaveValue(iso(alvo));
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
+  await expect(barra).toContainText(iso(alvo) === hoje ? "Hoje" : "Amanhã");
 });
 
 test("Agenda: setas avançam e voltam um dia por vez", async ({ page }) => {
   await abrirAgenda(page);
-
   const alvo = diaEsperadoNoOpen();
   const proximo = new Date(alvo);
   proximo.setUTCDate(proximo.getUTCDate() + 1);
-  const diaSemanaAlvo = diaDaSemana(alvo);
-  const diaSemanaProximo = diaDaSemana(proximo);
+  const campo = page.getByTestId("dia-da-agenda").getByLabel("Dia da Agenda");
 
   await page.getByRole("button", { name: "Próximo dia" }).click();
-  await expect(page.getByText(diaSemanaProximo, { exact: true })).toBeVisible();
-
+  await expect(campo).toHaveValue(iso(proximo));
   await page.getByRole("button", { name: "Dia anterior" }).click();
-  await expect(page.getByText(diaSemanaAlvo, { exact: true }).first()).toBeVisible();
+  await expect(campo).toHaveValue(iso(alvo));
+  // o dia da semana aparece quando não é hoje nem amanhã
+  await page.getByRole("button", { name: "Próximo dia" }).click();
+  await page.getByRole("button", { name: "Próximo dia" }).click();
+  const depois = new Date(alvo);
+  depois.setUTCDate(depois.getUTCDate() + 2);
+  await expect(page.getByTestId("dia-da-agenda")).toContainText(diaDaSemana(depois).slice(0, 3), {
+    ignoreCase: true,
+  });
 });

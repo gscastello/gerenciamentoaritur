@@ -17,7 +17,9 @@ test("a tela de login tem os campos de e-mail e senha", async ({ page }) => {
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
 
-test("a tela de login tem a opção de permanecer conectado, marcada por padrão", async ({ page }) => {
+test("a tela de login tem a opção de permanecer conectado, marcada por padrão", async ({
+  page,
+}) => {
   await page.goto("/");
   const checkbox = page.getByRole("checkbox", { name: "Permanecer conectado" });
   await expect(checkbox).toBeVisible();
@@ -31,12 +33,14 @@ test("viewport trava o zoom do navegador (app fixo, não página de conteúdo)",
   expect(content).toContain("user-scalable=no");
 });
 
-test("a tela de login tem o vídeo do ônibus AriTur de fundo", async ({ page }) => {
+// Crítica de design (issue #393): a foto vertical do ônibus enche o fundo do login.
+test("a tela de login tem a foto do ônibus AriTur de fundo", async ({ page }) => {
   await page.goto("/");
-  const video = page.locator("video[src='/media/aritur-hero.mp4']");
-  await expect(video).toHaveCount(1);
-  // os dois mp4 são servidos (não 404) e são leves
-  for (const src of ["/media/aritur-hero.mp4", "/media/aritur-bg.mp4"]) {
+  const foto = page.locator("img[src='/brand/login-onibus.webp']");
+  await expect(foto).toHaveCount(1);
+  await expect.poll(() => foto.evaluate((i) => i.complete && i.naturalWidth > 0)).toBe(true);
+  // o vídeo do fundo do Início continua servido (não 404) e leve
+  for (const src of ["/media/aritur-bg.mp4"]) {
     const resp = await page.request.get(src);
     expect(resp.ok()).toBe(true);
     expect(Number(resp.headers()["content-length"] || "0")).toBeLessThan(2_000_000);

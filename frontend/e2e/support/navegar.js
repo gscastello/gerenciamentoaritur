@@ -52,10 +52,36 @@ export async function escolherSentido(page, sentido) {
 /** "Sair da conta": na lateral do computador; no celular fica no "Mais" do topo (issue #391). */
 export async function sairDaConta(page) {
   const sair = page.getByRole("button", { name: "Sair da conta" }).filter({ visible: true });
-  if ((await sair.count()) === 0) await page.getByRole("button", { name: "Mais" }).click();
+  if ((await sair.count()) === 0)
+    await page.getByRole("button", { name: "Mais", exact: true }).click();
   await page
     .getByRole("button", { name: "Sair da conta" })
     .filter({ visible: true })
     .first()
     .click();
+}
+
+const PONTOS_DA_VOLTA = /pirapemas|cantanhede/i;
+
+/**
+ * Agenda (issue #393): o campo "Anotar" de cada ponto abre ao tocar em "Anotar em <ponto>".
+ * Escolhe a viagem do ponto no seletor, abre o campo se preciso e devolve o campo.
+ */
+export async function campoAnotar(page, ponto) {
+  const campo = page.getByLabel(`Anotar reserva — ${ponto}`);
+  if ((await campo.count()) > 0) return campo;
+  const abrir = page.getByRole("button", { name: `Anotar em ${ponto}` });
+  if ((await abrir.count()) === 0)
+    await escolherSentido(page, PONTOS_DA_VOLTA.test(ponto) ? "Volta" : "Ida");
+  await abrir.first().click();
+  return campo;
+}
+
+/** Agenda (issue #393): abre o menu "⋯" da linha da reserva de `nome` e toca em `acao`. */
+export async function acaoDaReserva(page, nome, acao) {
+  await page
+    .getByRole("button", { name: `Mais ações de ${nome}` })
+    .first()
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: acao }).click();
 }

@@ -47,7 +47,11 @@ test("Agenda: editar reserva salva numa chamada e fecha o modal", async ({ page 
   // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
   // reserva em vez de depender do default.
   await page.locator('input[type="date"]').first().fill(hoje);
-  await page.getByRole("button", { name: "Editar" }).first().click();
+  await page
+    .getByRole("button", { name: /^Mais ações/ })
+    .first()
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Editar" }).click();
 
   await expect(page.getByText("Editar reserva")).toBeVisible();
   await page.getByLabel("Local de desembarque").fill("Cohab Anil, rua 3");

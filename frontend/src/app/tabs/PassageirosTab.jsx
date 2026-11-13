@@ -5,7 +5,6 @@ import { primeiroErro, validarNome, validarTelefone } from "../../domain/validac
 import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
-import EnderecoDeCostume from "./EnderecoDeCostume.jsx";
 import {
   C,
   Card,
@@ -24,6 +23,7 @@ import {
   inputCls,
   inputStyle,
 } from "../tabShared.jsx";
+import EnderecoDeCostume from "./EnderecoDeCostume.jsx";
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
 // Endereços mais usados pelo passageiro numa direção — a mudança de
@@ -151,11 +151,7 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
             >
               Valor gerado (carregado)
             </div>
-            <div
-              style={{ color: "#fff", fontWeight: 700 }}
-            >
-              {fmtBRL(valorCarregado)}
-            </div>
+            <div style={{ color: "#fff", fontWeight: 700 }}>{fmtBRL(valorCarregado)}</div>
           </div>
         </div>
         <div className="relative max-w-sm mb-4">
