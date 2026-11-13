@@ -612,6 +612,8 @@ const NOTIF_META = {
   mudanca_desembarque: { label: "Mudança de desembarque", Icon: MapPin },
   pendencia: { label: "Pendência", Icon: Inbox },
   vencimento: { label: "Vencimento", Icon: CalendarClock },
+  consumo: { label: "Consumo", Icon: Fuel },
+  manutencao: { label: "Manutenção", Icon: Wrench },
 };
 export function tempoRelativo(iso) {
   const ms = Date.now() - new Date(iso).getTime();

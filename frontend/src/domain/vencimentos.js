@@ -7,6 +7,7 @@ export const CATEGORIAS_DE_VENCIMENTO = [
   { id: "imposto", label: "Imposto" },
   { id: "veiculo", label: "Veículo (IPVA, licenciamento, vistoria)" },
   { id: "seguro", label: "Seguro" },
+  { id: "licenca", label: "Licença (ANTT, autorização, alvará)" },
   { id: "parcela", label: "Parcela / financiamento" },
   { id: "motorista", label: "Motorista" },
   { id: "outro", label: "Outro" },
