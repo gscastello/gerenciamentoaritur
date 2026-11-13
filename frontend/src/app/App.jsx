@@ -66,10 +66,15 @@ import {
   C,
   CategoriasContext,
   DropoffContext,
+  FONTE,
   NotificacoesContext,
   STATUS_META,
+  SinoNotificacoes,
   dataOperacao,
+  diaPorExtenso,
   fmtDate,
+  primeiroNome,
+  saudacaoDoMomento,
   todayStr,
 } from "./tabShared.jsx";
 
@@ -90,16 +95,11 @@ class ErrorBoundary extends React.Component {
       return (
         <div
           className="min-h-screen w-full flex items-center justify-center p-6"
-          style={{ background: C.bg, color: C.ink, fontFamily: "'Inter', sans-serif" }}
+          style={{ background: C.bg, color: C.ink, fontFamily: FONTE }}
         >
           <div className="max-w-sm text-center">
             <AlertTriangle size={28} style={{ color: C.red, margin: "0 auto" }} />
-            <div
-              className="mt-3 font-semibold"
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              Algo deu errado nesta tela
-            </div>
+            <div className="mt-3 font-semibold">Algo deu errado nesta tela</div>
             <p className="text-xs mt-2" style={{ color: C.inkSoft }}>
               Seus dados não foram perdidos — ficam salvos separadamente. Recarregue para continuar.
             </p>
@@ -129,6 +129,41 @@ function GlobalStyles() {
       @keyframes scaleIn { from { opacity:0; transform:scale(.94) translateZ(0);} to {opacity:1; transform:scale(1) translateZ(0);} }
       * { -webkit-tap-highlight-color: transparent; }
       html, body { -webkit-font-smoothing: antialiased; overscroll-behavior-y: contain; }
+      /* Letra única do app (issue #391): Inter, feita para tela; números de mesma largura
+         para horários e valores ficarem alinhados em coluna. */
+      body { font-family: ${FONTE}; font-variant-numeric: tabular-nums; }
+      /* ---- visual aprovado (issue #391) ---- */
+      /* filete vermelho escuro no alto de todo cartão */
+      :where(.cartao-at) { position: relative; }
+      .cartao-at::before { content:""; position:absolute; top:0; left:18px; right:18px; height:1px; pointer-events:none;
+        background: linear-gradient(90deg, rgba(122,11,19,0), ${C.rubro} 50%, rgba(122,11,19,0)); }
+      /* topo das telas no celular: brilho vermelho escuro e a faixa escura da plotagem embaixo */
+      .topo-at { background:
+          radial-gradient(120% 140% at 85% 0%, rgba(122,11,19,.55) 0%, rgba(74,10,16,.22) 45%, rgba(0,0,0,0) 78%),
+          #000; }
+      .topo-at::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:12px; pointer-events:none;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 20' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%237A0B13' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%234A0A10'/%3E%3Cstop offset='1' stop-color='%237A0B13'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 19 C150 18 280 12 400 1 L400 9 C280 18 150 20 0 20Z' fill='url(%23g)'/%3E%3Cpath d='M60 20 C190 19 300 14 400 6' fill='none' stroke='%23FFFFFF' stroke-opacity='.22' stroke-width='.8'/%3E%3Cpath d='M200 20 C290 19 350 16 400 13 L400 20Z' fill='%23000'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+      /* dois riscos inclinados (faixas da lateral do ônibus) antes do título de um bloco */
+      .riscos-at { display:inline-flex; gap:3px; margin-right:8px; flex-shrink:0; }
+      .riscos-at i { width:4px; height:12px; border-radius:1px; background:${C.rubro}; transform:skewX(-24deg); }
+      .riscos-at i + i { background:${C.rubro2}; }
+      /* barra de baixo flutuante: a luz vinho desliza até a tela tocada */
+      .barra-at { background: rgba(17,18,21,.9); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px -12px #000; }
+      .barra-at-luz { transition: transform .26s cubic-bezier(.2,0,0,1), opacity .2s ease;
+        background: linear-gradient(180deg, ${C.rubro2}, ${C.rubro3});
+        box-shadow: inset 0 0 0 1px rgba(122,11,19,.9), inset 0 -2px 0 0 ${C.rubro}; }
+      .barra-at-item { transition: color .16s ease, transform .12s cubic-bezier(.2,0,0,1); }
+      .barra-at-item:active { transform: scale(.92); }
+      /* cartão que leva a outra tela: afunda um pouco ao toque */
+      .toque-at { transition: transform .12s cubic-bezier(.2,0,0,1), border-color .18s ease, filter .12s ease; }
+      .toque-at:active { transform: scale(.97); filter: brightness(.96); }
+      /* seletor Ida/Volta da Agenda: só o texto e um traço vermelho embaixo do escolhido */
+      .seletor-at-traco { transition: left .26s cubic-bezier(.2,0,0,1); }
+      /* lugar da van acendendo (mapa da Agenda) */
+      @keyframes lugarAcende { from { transform: scale(.6); opacity:.2; } to { transform: scale(1); opacity:1; } }
+      .lugar-at { transition: background-color .24s ease, box-shadow .24s ease; }
+      .lugar-at[data-ocupado="1"] { animation: lugarAcende .26s cubic-bezier(.16,1,.3,1) both; }
       button, a, select, input { touch-action: manipulation; }
       .anim-fadeUp { animation: fadeUp .32s cubic-bezier(.16,1,.3,1) both; will-change: transform, opacity; }
       .anim-fadeIn { animation: fadeIn .24s cubic-bezier(.16,1,.3,1) both; }
@@ -207,6 +242,11 @@ function GlobalStyles() {
       .hero-fx-spark.s3 { bottom:34%; right:10%; animation-delay:3s; }
       .bus-drift { animation: busDrift 6.5s ease-in-out infinite; will-change: transform; }
 
+      /* issue #391: os cartões de destaque das telas ficam em grafite, com o canto vinho
+         (saem o vermelho cheio, a estrada e o ônibus animados por trás) */
+      .aritur-hero { background: radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.3) 0%, rgba(122,11,19,0) 55%), ${C.panel} !important;
+        border-color: ${C.border} !important; }
+      .aritur-hero::before, .aritur-hero::after, .hero-fx { display: none !important; }
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         /* Só em campo de formulário — cresce pra um alvo de toque melhor
@@ -236,14 +276,14 @@ function GlobalStyles() {
          em will-change pode ficar presa no frame inicial (opacity:0) sem
          repintar, "sumindo" com o conteúdo real. animation:none remove
          de vez o risco — o elemento nasce no estado final, sem keyframe. */
-      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+      html[data-motion="off"] :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
         animation: none !important; will-change: auto !important; }
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
         html:not([data-motion]) :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark),
         html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
-        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
+        html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *,.lugar-at) {
           animation: none !important; will-change: auto !important; }
       }
     `}</style>
@@ -251,99 +291,43 @@ function GlobalStyles() {
 }
 
 /* ===================== IDENTIDADE ARITUR =============================
- * Logo real da AriTur Transportes (arte enviada pelo dono, 2026-09-18):
- * monograma "AT" com a fita da rodovia, recortado com fundo transparente
- * em frontend/public/brand/ — ver PROCESSO em git log (logo-process.html,
- * removido depois de gerar os recortes). `mark-transparent.png` = só o
- * monograma (cabeçalhos, ícones); `full-transparent.png` = monograma +
- * "AriTur Transportes" + tagline (tela de login, onde há espaço).
+ * Artes oficiais enviadas pelo dono (2026-11-13, issue #391), em frontend/public/brand/:
+ * `emblema-at.webp` = só o AT da logo de fundo escuro (T prateado), para o topo das telas;
+ * `logo-fundo-escuro.webp` / `logo-fundo-claro.webp` = a logo inteira (AT, AriTur,
+ * TRANSPORTES e o slogan — o slogan já faz parte da logo, não repetir ao lado);
+ * `capa-inicio.webp` = a imagem do Início. Os PNG originais ficam junto, como matriz.
  */
-const SERIF = "'Fraunces', 'Times New Roman', Georgia, serif";
-const MONO_T = "#DDDEE2";
-// proporção real de mark-transparent.png (1076×508) — mantém o aspecto ao
-// escalar só pela altura.
-const MARK_RATIO = 1076 / 508;
-
-// O T do monograma é preto: no fundo escuro do app ele sumia e só ficavam o A e
-// a fita. Num selo branco (como a logo pintada no ônibus branco) a arte original
-// aparece inteira em toda tela — issue #385, pedido do dono.
+// O AT direto no fundo escuro, sem o selo branco (pedido do dono na simulação v16).
 function AriturMark({ size = 42 }) {
-  const pad = Math.round(size * 0.14);
   return (
-    <span
+    <img
       data-testid="logo-aritur"
+      src="/brand/emblema-at.webp"
+      alt="AriTur"
+      width={size}
+      height={size}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
+        width: size,
+        height: size,
         flexShrink: 0,
-        background: "#fff",
-        borderRadius: Math.round(size * 0.28),
-        padding: `${pad}px ${Math.round(pad * 1.4)}px`,
-        boxShadow: "0 0 0 1px rgba(255,255,255,.08), 0 6px 18px -10px rgba(228,18,31,.6)",
+        display: "block",
+        objectFit: "contain",
+        filter: "drop-shadow(0 4px 10px rgba(0,0,0,.6))",
       }}
-    >
-      <img
-        src="/brand/mark-transparent.png"
-        alt="AriTur"
-        style={{
-          height: size - pad * 2,
-          width: (size - pad * 2) * MARK_RATIO,
-          display: "block",
-        }}
-      />
-    </span>
+    />
   );
 }
 
-function AriturLogo({ compact = false, tagline = false }) {
+// Lateral do computador: a logo inteira de fundo escuro (já traz o slogan).
+function AriturLogo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <AriturMark size={compact ? 30 : 44} />
-      <div className="leading-none">
-        <div
-          style={{
-            fontFamily: SERIF,
-            fontStyle: "italic",
-            fontWeight: 700,
-            fontSize: compact ? "1.2rem" : "1.65rem",
-            letterSpacing: "0.005em",
-            lineHeight: 1,
-          }}
-        >
-          <span style={{ color: C.brand }}>Ari</span>
-          <span style={{ color: MONO_T }}>Tur</span>
-        </div>
-        {!compact && (
-          <div
-            className="mt-1.5"
-            style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "0.58rem",
-              fontWeight: 600,
-              letterSpacing: "0.44em",
-              color: C.inkSoft,
-              paddingLeft: 2,
-            }}
-          >
-            TRANSPORTES
-          </div>
-        )}
-        {tagline && (
-          <div
-            className="mt-1.5"
-            style={{
-              fontFamily: SERIF,
-              fontStyle: "italic",
-              fontSize: "0.66rem",
-              color: C.inkFaint,
-            }}
-          >
-            Conectando destinos, cuidando de cada viagem
-          </div>
-        )}
-      </div>
-    </div>
+    <img
+      src="/brand/logo-fundo-escuro.webp"
+      alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+      width={560}
+      height={542}
+      style={{ width: 168, height: "auto", display: "block", margin: "0 auto" }}
+    />
   );
 }
 
@@ -483,7 +467,7 @@ function QuickActionsFab({
           onClick={fechar}
         />
       )}
-      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6">
+      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[calc(92px+env(safe-area-inset-bottom))] md:bottom-6">
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
             {/* atalhos em todas as telas (dono, 12/11 — issue #353) */}
@@ -541,16 +525,23 @@ function QuickActionsFab({
           type="button"
           onClick={() => setAberto((v) => !v)}
           aria-label="Ações rápidas"
-          className="btn-press rounded-full flex items-center justify-center"
+          aria-expanded={aberto}
+          className="btn-press rounded-2xl flex items-center justify-center"
           style={{
-            width: 48,
-            height: 48,
-            background: C.amber,
+            width: 54,
+            height: 54,
+            background: C.brand,
             color: C.onBrand,
-            boxShadow: "0 4px 18px rgba(0,0,0,.45)",
+            boxShadow: "0 12px 28px -10px rgba(228,18,31,.85), inset 0 1px 0 rgba(255,255,255,.18)",
           }}
         >
-          {aberto ? <X size={20} /> : <Plus size={22} />}
+          <Plus
+            size={24}
+            style={{
+              transform: aberto ? "rotate(45deg)" : "none",
+              transition: "transform .22s cubic-bezier(.2,0,0,1)",
+            }}
+          />
         </button>
       </div>
     </>
@@ -818,7 +809,7 @@ const TAB_ROLES = {
 // (Dashboard, Agenda, Lista, Financeiro, Gestão), depois os cadastros, e o
 // fila de atendimento do WhatsApp ("Atendimento") por último.
 const NAV_ITENS = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, grupo: "Principal" },
+  { id: "dashboard", label: "Início", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
   // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
@@ -851,45 +842,70 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className={
         grande
-          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl"
-          : "tab-btn flex-1 flex flex-col items-center gap-0.5 py-2 min-w-0"
+          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl min-h-[64px]"
+          : "barra-at-item relative z-10 flex flex-col items-center justify-center gap-1 min-w-0 h-full"
       }
       style={
         grande
-          ? { background: active ? C.amberSoft : C.panel2, color: active ? C.amber : C.inkSoft }
-          : { color: active ? C.amber : C.inkFaint }
+          ? {
+              background: active ? C.rubro2 : C.panel2,
+              color: active ? C.ink : C.inkSoft,
+              boxShadow: active ? `inset 0 0 0 1px ${C.rubro}` : "none",
+            }
+          : { color: active ? C.ink : C.inkSoft }
       }
     >
-      <span className="relative flex items-center justify-center" style={{ minHeight: 20 }}>
-        <Icon size={grande ? 18 : 20} />
+      <span className="relative flex items-center justify-center" style={{ minHeight: 21 }}>
+        <Icon size={grande ? 19 : 21} style={{ color: active ? "#FF5260" : "currentColor" }} />
         {badge > 0 && (
           <span
-            className="absolute -top-1.5 -right-2.5 text-[8px] font-bold px-1 rounded-full"
-            style={{ background: C.purple, color: "#fff", pointerEvents: "none" }}
+            className="absolute -top-2 -right-3 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+            style={{
+              background: C.brand,
+              color: "#fff",
+              pointerEvents: "none",
+              boxShadow: "0 0 0 2px #111215",
+            }}
           >
-            {badge}
+            {badge > 99 ? "99+" : badge}
           </span>
         )}
       </span>
-      <span className={grande ? "text-[10px]" : "text-[9px] leading-none truncate max-w-full"}>
+      <span
+        className={grande
+            ? "text-[11px]"
+            : "text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"}
+        style={{ fontWeight: active ? 700 : 500 }}
+      >
         {n.label}
       </span>
     </button>
   );
 }
 
-function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) {
+// Barra de baixo flutuante (issue #391): cinco telas, a luz vinho desliza até a tocada. O resto
+// (Passageiros, Sistema, Assistente, Bloco de notas) e "Sair" ficam no botão "Mais" do topo.
+function MobileNav({
+  nav,
+  tab,
+  onSelect,
+  pendentesCount,
+  pendenciasCount = 0,
+  maisAberto,
+  setMaisAberto,
+  onSair,
+}) {
   const badgeDe = (id) =>
     id === "agenda" ? pendentesCount : id === "atendimento" ? pendenciasCount : 0;
-  const [maisAberto, setMaisAberto] = useState(false);
-  const LIMITE = 6;
+  const LIMITE = 5;
   let visiveis = nav;
   let extras = [];
   if (nav.length > LIMITE) {
-    visiveis = nav.slice(0, LIMITE - 1);
-    extras = nav.slice(LIMITE - 1);
+    visiveis = nav.slice(0, LIMITE);
+    extras = nav.slice(LIMITE);
     const ativoNosExtras = extras.find((n) => n.id === tab);
     if (ativoNosExtras) {
       const trocado = visiveis[visiveis.length - 1];
@@ -901,20 +917,26 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
     onSelect(id);
     setMaisAberto(false);
   };
+  const colunas = visiveis.length;
+  const indiceAtivo = visiveis.findIndex((n) => n.id === tab);
   return (
     <>
       {maisAberto && (
         <div
           className="md:hidden fixed inset-0 z-30 anim-fadeIn"
-          style={{ background: "rgba(0,0,0,.5)" }}
+          style={{ background: "rgba(0,0,0,.55)" }}
           onClick={() => setMaisAberto(false)}
         >
           <div
-            className="absolute left-0 right-0 bottom-0 rounded-t-2xl border-t p-3 pb-6 safe-bottom anim-slideDown"
-            style={{ background: C.panel, borderColor: C.border }}
+            className="absolute left-2 right-2 rounded-3xl border p-3 anim-slideDown"
+            style={{
+              top: "calc(76px + env(safe-area-inset-top))",
+              background: C.panel,
+              borderColor: C.border,
+              boxShadow: "0 24px 48px -16px #000",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-9 h-1 rounded-full mx-auto mb-3" style={{ background: C.border }} />
             <div className="grid grid-cols-4 gap-2">
               {extras.map((n) => (
                 <MobileNavItem
@@ -927,36 +949,48 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
                 />
               ))}
             </div>
+            <button
+              type="button"
+              onClick={onSair}
+              className="btn-press mt-2 w-full flex items-center justify-center gap-2 rounded-xl min-h-[48px] text-sm font-semibold"
+              style={{ background: C.panel2, color: C.inkSoft }}
+            >
+              <LogOut size={17} /> Sair da conta
+            </button>
           </div>
         </div>
       )}
-      <div
-        className="md:hidden safe-bottom fixed bottom-0 left-0 right-0 z-20 flex border-t"
-        style={{ background: C.panel, borderColor: C.border }}
+      <nav
+        aria-label="Menu"
+        data-testid="barra-de-baixo"
+        className="md:hidden fixed z-20 left-2.5 right-2.5 barra-at rounded-[22px] p-1.5"
+        style={{ bottom: "max(10px, env(safe-area-inset-bottom))", height: 68 }}
       >
-        {visiveis.map((n) => (
-          <MobileNavItem
-            key={n.id}
-            n={n}
-            active={tab === n.id}
-            badge={badgeDe(n.id)}
-            onClick={() => escolher(n.id)}
-          />
-        ))}
-        {extras.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setMaisAberto(true)}
-            className="tab-btn flex-1 flex flex-col items-center gap-0.5 py-2"
-            style={{ color: maisAberto ? C.amber : C.inkFaint }}
-          >
-            <span className="flex items-center justify-center" style={{ minHeight: 20 }}>
-              <MoreHorizontal size={20} />
-            </span>
-            <span className="text-[9px] leading-none">Mais</span>
-          </button>
-        )}
-      </div>
+        <div
+          className="relative h-full grid"
+          style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}
+        >
+          {indiceAtivo >= 0 && (
+            <span
+              aria-hidden="true"
+              className="barra-at-luz absolute top-0 bottom-0 left-0 rounded-2xl"
+              style={{
+                width: `${100 / colunas}%`,
+                transform: `translateX(${indiceAtivo * 100}%)`,
+              }}
+            />
+          )}
+          {visiveis.map((n) => (
+            <MobileNavItem
+              key={n.id}
+              n={n}
+              active={tab === n.id}
+              badge={badgeDe(n.id)}
+              onClick={() => escolher(n.id)}
+            />
+          ))}
+        </div>
+      </nav>
     </>
   );
 }
@@ -972,8 +1006,7 @@ function abaInicial() {
 }
 
 function AppInner() {
-  // As fontes (Space Grotesk / Fraunces / Inter / JetBrains Mono) são
-  // carregadas no index.html — valem também para a tela de login.
+  // A fonte (Inter) é carregada no index.html — vale também para a tela de login.
   const { profile, signOut } = useAuth();
   const role = profile?.role ?? null;
   // o app abre na Agenda (dono, 12/11 — issue #353); depois de "puxar para
@@ -987,6 +1020,8 @@ function AppInner() {
     }
   }, []);
   const [buscaAberta, setBuscaAberta] = useState(false);
+  // folha "Mais" do celular: aberta pelo botão do topo (issue #391)
+  const [maisAberto, setMaisAberto] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
   // preenchimento vindo do endereço de costume do passageiro (#228)
   const [agendarInicial, setAgendarInicial] = useState(null);
@@ -1034,6 +1069,11 @@ function AppInner() {
   // tela dentro de um grupo acende o item do grupo no menu (issue #360)
   const grupoAtual = grupoDaTela(tab);
   const navAtiva = grupoAtual?.nav ?? tab;
+  // título do topo no celular (issue #391): saudação no Início, nome da tela nas outras
+  const tituloTopo =
+    tab === "dashboard"
+      ? `${saudacaoDoMomento()}, ${primeiroNome(profile)}`
+      : (NAV.find((n) => n.id === navAtiva)?.label ?? "AriTur");
 
   // Papel não enxerga a aba atual (ex.: motorista cai no app com "atendimento"
   // selecionado) → manda para a primeira aba que ele pode ver.
@@ -1119,7 +1159,7 @@ function AppInner() {
           <DropoffContext.Provider value={dropoff}>
             <div
               className="min-h-screen w-full flex relative"
-              style={{ background: C.bg, fontFamily: "'Inter', sans-serif", color: C.ink }}
+              style={{ background: C.bg, fontFamily: FONTE, color: C.ink }}
             >
               <GlobalStyles />
               <VideoBackdrop variant="app" />
@@ -1203,13 +1243,13 @@ function AppInner() {
                   className="px-5 pt-6 pb-5 border-b relative"
                   style={{
                     borderColor: C.border,
-                    background: `linear-gradient(160deg, ${C.amberSoft} 0%, transparent 65%)`,
+                    background:
+                      "radial-gradient(120% 120% at 85% 0%, rgba(122,11,19,.45) 0%, rgba(0,0,0,0) 70%)",
                   }}
                 >
                   <AriturLogo />
-                  <div className="aritur-road mt-3" style={{ width: 72 }} />
                   <div
-                    className="text-[11px] mt-2 flex items-center gap-1.5"
+                    className="text-[11px] mt-3 flex items-center justify-center gap-1.5"
                     style={{ color: C.inkFaint }}
                   >
                     <Wifi
@@ -1288,7 +1328,6 @@ function AppInner() {
                       style={{
                         background: C.brand,
                         color: "#fff",
-                        fontFamily: "'Space Grotesk', sans-serif",
                       }}
                     >
                       {(usuario || "?").slice(0, 2).toUpperCase()}
@@ -1315,10 +1354,7 @@ function AppInner() {
                       <LogOut size={15} />
                     </button>
                   </div>
-                  <div
-                    className="mt-2.5 text-[10px] leading-snug"
-                    style={{ color: C.inkFaint, fontFamily: "'Space Grotesk', sans-serif" }}
-                  >
+                  <div className="mt-2.5 text-[10px] leading-snug" style={{ color: C.inkFaint }}>
                     Mais que transporte, <span style={{ color: C.brand }}>conectamos pessoas.</span>
                   </div>
                 </div>
@@ -1335,32 +1371,51 @@ function AppInner() {
                 onSelect={mudarAba}
                 pendentesCount={pendentesCount}
                 pendenciasCount={pendenciasCount}
+                maisAberto={maisAberto}
+                setMaisAberto={setMaisAberto}
+                onSair={signOut}
               />
 
-              <div className="flex-1 min-w-0 pb-40 md:pb-0 overflow-x-hidden relative z-10">
-                <div
-                  className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 border-b"
-                  style={{
-                    background: C.panel,
-                    borderColor: C.border,
-                    paddingTop: "max(0.6rem, env(safe-area-inset-top))",
-                  }}
+              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative z-10">
+                {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
+                <header
+                  data-testid="topo-tela"
+                  className="md:hidden sticky top-0 z-20 topo-at flex items-center gap-3 pl-3 pr-3 pb-[18px]"
+                  style={{ paddingTop: "max(0.55rem, env(safe-area-inset-top))" }}
                 >
-                  <AriturLogo compact />
-                  <div className="flex items-center gap-2.5">
-                    <div className="aritur-road" style={{ width: 42 }} />
-                    <button
-                      type="button"
-                      onClick={signOut}
-                      className="btn-press rounded-lg p-1.5"
-                      style={{ color: C.inkFaint }}
-                      title="Sair da conta"
-                      aria-label="Sair da conta"
+                  <AriturMark size={46} />
+                  <div className="flex-1 min-w-0">
+                    <h1
+                      className="truncate"
+                      style={{
+                        fontSize: 19,
+                        fontWeight: 700,
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1.2,
+                        color: C.ink,
+                      }}
                     >
-                      <LogOut size={16} />
-                    </button>
+                      {tituloTopo}
+                    </h1>
+                    <p className="truncate text-xs" style={{ color: C.inkSoft }}>
+                      {diaPorExtenso()}
+                    </p>
                   </div>
-                </div>
+                  <SinoNotificacoes />
+                  <button
+                    type="button"
+                    onClick={() => setMaisAberto((v) => !v)}
+                    aria-expanded={maisAberto}
+                    className="btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                    style={{
+                      color: maisAberto ? C.ink : C.inkSoft,
+                      background: maisAberto ? C.panel2 : "transparent",
+                    }}
+                    aria-label="Mais"
+                  >
+                    <MoreHorizontal size={20} />
+                  </button>
+                </header>
                 <AvisoSemInternet
                   desde={R.offlineDesde}
                   cor={C.amber}
@@ -1464,8 +1519,8 @@ function AppInner() {
                           reservas={reservas}
                           capacidade={capacidadeAtiva}
                           trips={trips}
-                          segundaAtiva={cfg.segundaAtiva}
-                          segundaHoras={cfg.segundaHoras}
+                          pendencias={pendenciasCount}
+                          onIr={irParaBusca}
                         />
                       )}
                       {tab === "sistema" && (

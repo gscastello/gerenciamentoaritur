@@ -11,7 +11,7 @@ import { Skeleton } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 import { LoginScreen } from "./LoginScreen.jsx";
 
-const C = { bg: "#0E1116", ink: "#ECEEF2", inkSoft: "#8B93A3", amber: "#E8A33D" };
+const C = { bg: "#000000", ink: "#F4F5F7", inkSoft: "#A6AAB2", amber: "#E4121F" };
 
 export function AuthGate({ children }) {
   const { loading, isAuthenticated, profile, signOut } = useAuth();
@@ -95,11 +95,12 @@ export function AuthGate({ children }) {
             onClick={signOut}
             style={{
               marginTop: 16,
-              padding: "8px 16px",
+              padding: "0 20px",
+              minHeight: 44,
               borderRadius: 10,
               border: "none",
               background: C.amber,
-              color: "#20180A",
+              color: "#FFFFFF",
               fontWeight: 600,
               cursor: "pointer",
             }}

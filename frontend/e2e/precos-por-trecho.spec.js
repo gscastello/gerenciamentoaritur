@@ -34,7 +34,7 @@ async function abrirSistema(page, rpc) {
     return route.fulfill({ json: { success: true }, status: 200 });
   });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) await page.getByRole("button", { name: "Mais" }).click();
   await page.getByRole("button", { name: /^Sistema$/ }).click();

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { escolherSentido } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Anotação manual de endereço (pedido do usuário, 2026-09-17): tanto ao
@@ -29,7 +30,10 @@ test("Agendar passagem: anotação escrita à mão vai pro pickup_detail", async
   await page.getByLabel("Telefone (ou nome)").fill("98999990000");
   await page.getByLabel(/Anotação/).fill("perto do posto, portão azul");
 
-  await page.locator("div.anim-pop").getByRole("button", { name: /^Agendar$/ }).click();
+  await page
+    .locator("div.anim-pop")
+    .getByRole("button", { name: /^Agendar$/ })
+    .click();
 
   await expect.poll(() => corpo?.p_pickup_detail).toBe("perto do posto, portão azul");
   expect(corpo.p_street).toBeNull();
@@ -71,6 +75,7 @@ test("Agenda: editar reserva reescrevendo o endereço à mão", async ({ page })
   });
 
   await page.goto("/");
+  await escolherSentido(page, "Volta");
   await page
     .getByRole("button", { name: /^Agenda$/ })
     .first()

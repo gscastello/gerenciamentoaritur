@@ -220,6 +220,14 @@ Tompkins — experimentação pontual). O sistema reutilizável está em
 Tokens: duração `fast 120ms` / `base 240ms` / `slow 360ms`; easing de
 entrada `--ease-out-quart`, de saída `--ease-in`.
 
+**Visual aprovado pelo dono** (issue #391, simulação "Painel de bordo" v16): letra única **Inter** (números de
+largura fixa); cores em `C` (`tabShared.jsx`) — preto no fundo, cartões grafite com o canto e o filete em vermelho
+escuro (`Card`/`FUNDO_CARTAO`, classe `cartao-at`), vermelho da marca só no que acende. No celular, o topo do app
+mostra o AT (`/brand/emblema-at.webp`, sem selo branco), o nome da tela e o dia, o sino e o "Mais" (telas extras e
+Sair); cada tela mostra ali só os seus controles. Barra de baixo flutuante com cinco telas e a luz vinho deslizando.
+Artes oficiais em `frontend/public/brand/` (logo para fundo claro e escuro — o slogan já faz parte dela —, AT e a
+capa do Início). Toque em todo botão (`btn-press`/`toque-at`), nada sai da tela de 320 a 430 px.
+
 ### Checklist obrigatório por tela (nova ou alterada)
 
 - [ ] **Skeleton** no formato do conteúdo real enquanto carrega — nunca

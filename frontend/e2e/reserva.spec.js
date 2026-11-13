@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { sairDaConta } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Fluxos autenticados do app (issue #4). Sem projeto Supabase de teste
@@ -18,7 +19,7 @@ test("botão Sair desloga e volta pra tela de login", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Atendimento/ }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Sair da conta" }).first().click();
+  await sairDaConta(page);
 
   await expect(page.getByRole("button", { name: "Entrar" })).toBeVisible();
   await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -32,7 +33,7 @@ test("admin abre a aba Sistema e as telas de configuração renderizam", async (
   await page.goto("/");
 
   // espera o app sair do login e montar a navegação
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
 
   // no mobile a barra inferior só mostra 4 itens + "Mais"; no desktop a
   // sidebar mostra tudo

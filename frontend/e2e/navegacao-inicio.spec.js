@@ -19,11 +19,11 @@ test("barra do celular: Atendimento no lugar do Bloco de notas", async ({ page }
   test.skip(info.project.name !== "mobile", "barra de baixo só existe no celular");
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
-  const barra = page.locator("div.fixed.bottom-0");
+  const barra = page.getByTestId("barra-de-baixo");
   await expect(barra.getByRole("button", { name: /Atendimento/ })).toBeVisible();
   await expect(barra.getByRole("button", { name: /Bloco de notas/ })).toHaveCount(0);
-  // o Bloco continua em "Mais"
-  await barra.getByRole("button", { name: "Mais" }).click();
+  // o Bloco continua em "Mais" (botão do topo, issue #391)
+  await page.getByRole("button", { name: "Mais" }).click();
   await expect(page.getByRole("button", { name: /Bloco de notas/ }).first()).toBeVisible();
 });
 
@@ -36,7 +36,11 @@ test("ações rápidas levam ao Assistente e às Pendências", async ({ page }) 
     .locator("..")
     .getByRole("button", { name: /^Pendências/ })
     .click();
-  await expect(page.getByRole("heading", { name: /Pendências/ }).first()).toBeVisible();
+  // no celular o topo mostra o grupo (Atendimento) e a aba Pendências fica marcada
+  await expect(page.getByRole("tab", { name: /^Pendências/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await fab.click();
   await fab.locator("..").getByRole("button", { name: "Assistente" }).click();
   await expect(page.getByRole("heading", { name: /Assistente/ }).first()).toBeVisible();

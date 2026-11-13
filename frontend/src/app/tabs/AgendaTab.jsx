@@ -67,11 +67,10 @@ import {
   BUSCA_MODOS,
   BotaoAgendar,
   C,
-  CapacidadeBar,
   Card,
+  FUNDO_CARTAO,
   Field,
   Header,
-  HeroFX,
   IDA_ORDEM_SECOES,
   MiniStat,
   OCUPA_VAGA,
@@ -91,6 +90,7 @@ import {
   fmtBRL,
   fmtDate,
   fmtHora,
+  horaOperacao,
   isMonday,
   labelLocal,
   linhaReserva,
@@ -137,6 +137,18 @@ export default function AgendaTab({
 }) {
   const [data, setData] = useState(diaAgendaPadrao());
   useDeepLinkData(deepLink, setData);
+  // Seletor Ida/Volta (issue #391): uma viagem por vez. Abre na que ainda vai sair —
+  // hoje depois das 9h (a Ida já chegou) é a Volta; o Início escolhe pelo cartão tocado.
+  const [sentido, setSentido] = useState(() =>
+    data === todayStr() && horaOperacao() >= 9 ? "volta" : "ida",
+  );
+  const sentidoAplicado = useRef(null);
+  useEffect(() => {
+    if (deepLink?.sentido && deepLink.at !== sentidoAplicado.current) {
+      sentidoAplicado.current = deepLink.at;
+      setSentido(deepLink.sentido);
+    }
+  }, [deepLink]);
   const [editando, setEditando] = useState(null);
   const [encomendaModal, setEncomendaModal] = useState(null); // null = fechado; {} = nova; {pendente:r} = agendando uma pendente
   const [acaoErro, setAcaoErro] = useState("");
@@ -432,10 +444,9 @@ export default function AgendaTab({
       />
       <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
         <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
-          style={{ borderColor: C.brandDim }}
+          className="cartao-at relative overflow-hidden rounded-2xl border p-4 md:p-5"
+          style={{ background: FUNDO_CARTAO, borderColor: C.border }}
         >
-          <HeroFX />
           <div className="relative">
             {/* Dia em destaque, centralizado — é em torno dele que toda a
                 tela opera, então vira o elemento visual dominante, com
@@ -445,8 +456,8 @@ export default function AgendaTab({
                 type="button"
                 onClick={() => setData(deslocarDia(data, -1))}
                 aria-label="Dia anterior"
-                className="btn-press p-2 rounded-full shrink-0"
-                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
+                className="btn-press rounded-full shrink-0 flex items-center justify-center"
+                style={{ background: C.panel2, color: C.ink, width: 44, height: 44 }}
               >
                 <ChevronLeft size={20} />
               </button>
@@ -454,14 +465,14 @@ export default function AgendaTab({
                 {data === todayStr() ? (
                   <div
                     className="text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ color: "rgba(255,255,255,.75)" }}
+                    style={{ color: C.inkSoft }}
                   >
                     Hoje
                   </div>
                 ) : data === deslocarDia(todayStr(), 1) ? (
                   <div
                     className="text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ color: "rgba(255,255,255,.75)" }}
+                    style={{ color: C.inkSoft }}
                   >
                     Amanhã
                   </div>
@@ -469,7 +480,6 @@ export default function AgendaTab({
                 <div
                   className="capitalize truncate"
                   style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
                     fontWeight: 800,
                     fontSize: "1.7rem",
                     lineHeight: 1.1,
@@ -478,7 +488,7 @@ export default function AgendaTab({
                 >
                   {diaSemana(data)}
                 </div>
-                <div className="text-sm" style={{ color: "rgba(255,255,255,.75)" }}>
+                <div className="text-sm" style={{ color: C.inkSoft }}>
                   {fmtDate(data)}
                 </div>
               </div>
@@ -486,22 +496,25 @@ export default function AgendaTab({
                 type="button"
                 onClick={() => setData(deslocarDia(data, 1))}
                 aria-label="Próximo dia"
-                className="btn-press p-2 rounded-full shrink-0"
-                style={{ background: "rgba(0,0,0,.3)", color: "#fff" }}
+                className="btn-press rounded-full shrink-0 flex items-center justify-center"
+                style={{ background: C.panel2, color: C.ink, width: 44, height: 44 }}
               >
                 <ChevronRight size={20} />
               </button>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
-              <div className="min-w-[200px] flex-1 max-w-xs space-y-2">
-                <CapacidadeBar prefixo="IDA" ocupados={paxIda} total={capacidade} altura={8} />
-                <CapacidadeBar prefixo="VOLTA" ocupados={paxVolta} total={capacidade} altura={8} />
-              </div>
+              <SeletorSentido
+                sentido={sentido}
+                onChange={setSentido}
+                paxIda={paxIda}
+                paxVolta={paxVolta}
+                capacidade={capacidade}
+              />
               <div className="flex gap-4">
                 <div>
                   <div
                     className="text-[10px] uppercase tracking-wide"
-                    style={{ color: "rgba(255,255,255,.6)" }}
+                    style={{ color: C.inkFaint }}
                   >
                     Pendentes
                   </div>
@@ -509,7 +522,6 @@ export default function AgendaTab({
                     className="font-bold"
                     style={{
                       color: "#fff",
-                      fontFamily: "'JetBrains Mono', monospace",
                       fontSize: "1.1rem",
                     }}
                   >
@@ -520,7 +532,7 @@ export default function AgendaTab({
                   <div>
                     <div
                       className="text-[10px] uppercase tracking-wide"
-                      style={{ color: "rgba(255,255,255,.6)" }}
+                      style={{ color: C.inkFaint }}
                     >
                       Na espera
                     </div>
@@ -528,7 +540,6 @@ export default function AgendaTab({
                       className="font-bold"
                       style={{
                         color: "#fff",
-                        fontFamily: "'JetBrains Mono', monospace",
                         fontSize: "1.1rem",
                       }}
                     >
@@ -540,7 +551,7 @@ export default function AgendaTab({
             </div>
           </div>
         </div>
-        <AtalhosDosPontos trips={trips} doDia={doDia} />
+        <AtalhosDosPontos trips={trips} doDia={doDia} sentido={sentido} onSentido={setSentido} />
         {segunda && (
           <div
             className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
@@ -739,7 +750,7 @@ export default function AgendaTab({
           </p>
         </Card>
 
-        {["ida", "volta"].map((dir) => (
+        {[sentido].map((dir) => (
           <ViagemOperacional
             key={dir}
             direcao={dir}
@@ -979,10 +990,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
     </span>
   );
   const quantidade = (
-    <span
-      className="text-[13px] font-bold shrink-0"
-      style={{ fontFamily: "'JetBrains Mono', monospace", color: corTexto }}
-    >
+    <span className="text-[13px] font-bold shrink-0" style={{ color: corTexto }}>
       {ehEnc ? (
         <>
           <Package size={12} className="inline mr-0.5" aria-hidden="true" />
@@ -1199,12 +1207,18 @@ function ordenarPontos(pontos, direcao) {
 
 // Atalhos no topo da Agenda (issue #258): um botão por ponto de embarque, Ida e
 // Volta, com as passagens do dia. O toque rola até o ponto.
-function AtalhosDosPontos({ trips, doDia }) {
+function AtalhosDosPontos({ trips, doDia, sentido, onSentido }) {
   const reduzido = useReducedMotion();
-  const ir = (direcao, id) =>
+  const rolar = (direcao, id) =>
     document
       .getElementById(`ponto-${direcao}-${id}`)
       ?.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "start" });
+  // ponto da outra viagem: troca o seletor Ida/Volta e rola depois que ela aparece (issue #391)
+  const ir = (direcao, id) => {
+    if (direcao === sentido || !onSentido) return rolar(direcao, id);
+    onSentido(direcao);
+    requestAnimationFrame(() => requestAnimationFrame(() => rolar(direcao, id)));
+  };
   return (
     <nav
       aria-label="Ir para o ponto de embarque"
@@ -1246,14 +1260,12 @@ function AtalhosDosPontos({ trips, doDia }) {
                     background: C.panel2,
                     color: C.ink,
                     border: `1px solid ${C.border}`,
-                    borderLeft: `3px solid ${cor}`,
                   }}
                 >
                   {p.nome}
                   <span
                     className="text-[11px]"
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
                       color: qtd > 0 ? cor : C.inkFaint,
                     }}
                   >
@@ -1278,6 +1290,155 @@ function resumoDoPonto(itens, encomendas) {
   if (encomendas.length > 0) partes.push(`${encomendas.length} encomenda(s)`);
   return partes.length > 0 ? partes.join(" · ") : "sem reservas";
 }
+// Seletor Ida/Volta (issue #391): só o texto, com um traço vermelho embaixo do escolhido.
+function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade }) {
+  const itens = [
+    { id: "ida", rotulo: "Ida", pax: paxIda },
+    { id: "volta", rotulo: "Volta", pax: paxVolta },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Viagem"
+      data-testid="seletor-sentido"
+      className="relative grid grid-cols-2 w-full max-w-md"
+      style={{ boxShadow: `inset 0 -1px 0 0 ${C.border}` }}
+    >
+      {itens.map((it) => {
+        const ativo = sentido === it.id;
+        return (
+          <button
+            key={it.id}
+            type="button"
+            role="tab"
+            aria-selected={ativo}
+            onClick={() => onChange(it.id)}
+            className="btn-press text-left px-2.5 pt-1.5 pb-3 min-h-[56px]"
+          >
+            <span
+              className="block text-[15px] font-bold"
+              style={{ color: ativo ? C.ink : C.inkSoft, letterSpacing: "-.01em" }}
+            >
+              {it.rotulo}
+            </span>
+            <span className="block text-xs" style={{ color: ativo ? C.inkSoft : C.inkFaint }}>
+              {it.pax} de {capacidade} lugares
+            </span>
+          </button>
+        );
+      })}
+      <span
+        aria-hidden="true"
+        className="seletor-at-traco absolute bottom-0 h-0.5 rounded-full"
+        style={{
+          width: 64,
+          background: C.brand,
+          left: sentido === "volta" ? "calc(50% + 10px)" : "10px",
+        }}
+      />
+    </div>
+  );
+}
+
+// Mapa dos lugares (issue #391), no lugar da barra de lotação: fileiras de 2 + corredor + 2
+// e a última fileira inteira. Confirmados acesos, pedidos pendentes riscados, livres vazios.
+export function MapaDosLugares({ capacidade, confirmados, pendentes, direcao }) {
+  const total = Math.max(0, capacidade || 0);
+  const acesos = Math.min(confirmados, total);
+  const riscados = Math.min(pendentes, Math.max(0, total - acesos));
+  const fileiras = [];
+  let n = 0;
+  while (n < total) {
+    const resto = total - n;
+    // última fileira: até 5 lugares sem corredor (como o fundo da van)
+    const tam = resto <= 5 && resto !== 4 ? resto : 4;
+    fileiras.push(Array.from({ length: tam }, (_, k) => n + k));
+    n += tam;
+  }
+  const estado = (i) => (i < acesos ? "o" : i < acesos + riscados ? "p" : "l");
+  const fundo = (e) =>
+    e === "o"
+      ? C.ink
+      : e === "p"
+        ? `repeating-linear-gradient(135deg, ${C.ink} 0 1.5px, transparent 1.5px 4px)`
+        : "transparent";
+  const borda = (e) => (e === "o" ? "none" : `inset 0 0 0 1.5px ${e === "p" ? C.ink : "#3a3c43"}`);
+  const lugar = (i) => {
+    const e = estado(i);
+    return (
+      <i
+        key={i}
+        className="lugar-at block rounded-[4px_4px_3px_3px]"
+        data-ocupado={e === "o" ? "1" : "0"}
+        style={{
+          width: 13,
+          height: 13,
+          background: fundo(e),
+          boxShadow: borda(e),
+          animationDelay: e === "o" ? `${Math.min(i, 30) * 14}ms` : undefined,
+        }}
+      />
+    );
+  };
+  return (
+    <div
+      className="flex items-center gap-4"
+      data-testid={`mapa-lugares-${direcao}`}
+      role="img"
+      aria-label={`${acesos} de ${total} lugares ocupados, ${riscados} pendentes, ${Math.max(0, total - acesos)} livres`}
+    >
+      <div
+        className="relative shrink-0 rounded-[24px_24px_14px_14px] px-3 pt-4 pb-3 grid gap-[5px]"
+        style={{ background: "#000", boxShadow: `inset 0 0 0 1px ${C.border}` }}
+      >
+        <span
+          aria-hidden="true"
+          className="absolute top-1.5 left-1/2 -translate-x-1/2 h-[3px] w-7 rounded"
+          style={{ background: C.border }}
+        />
+        {fileiras.map((f) => (
+          <div key={f[0]} className="flex gap-[5px]">
+            {f.length === 4 ? (
+              <>
+                {lugar(f[0])}
+                {lugar(f[1])}
+                <span className="w-2" />
+                {lugar(f[2])}
+                {lugar(f[3])}
+              </>
+            ) : (
+              f.map(lugar)
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="min-w-0 space-y-2">
+        <div>
+          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-.035em", lineHeight: 1 }}>
+            {acesos}
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
+            de {total} lugares ocupados
+          </div>
+        </div>
+        {[
+          ["o", "confirmado"],
+          ["p", "pendente"],
+          ["l", "livre"],
+        ].map(([e, t]) => (
+          <div key={e} className="flex items-center gap-2 text-xs" style={{ color: C.inkSoft }}>
+            <i
+              className="block rounded-[3px] shrink-0"
+              style={{ width: 11, height: 11, background: fundo(e), boxShadow: borda(e) }}
+            />
+            {t}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ViagemOperacional({
   direcao,
   segunda,
@@ -1363,10 +1524,6 @@ function ViagemOperacional({
 
   return (
     <Card className="relative overflow-hidden">
-      <span
-        className="absolute left-0 top-0 bottom-0"
-        style={{ width: 3, background: direcao === "ida" ? C.brand : C.blue, opacity: 0.85 }}
-      />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div
@@ -1379,10 +1536,7 @@ function ViagemOperacional({
             <Icon size={18} style={{ color: direcao === "ida" ? C.brand : C.blue }} />
           </div>
           <div>
-            <div
-              className="text-sm font-bold flex items-center gap-1.5"
-              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-            >
+            <div className="text-sm font-bold flex items-center gap-1.5">
               <Bus size={14} style={{ color: C.brand }} /> {viagem.nome}
               <span style={{ color: C.inkSoft, fontWeight: 500 }}>· {horaPrincipal}</span>
             </div>
@@ -1439,7 +1593,12 @@ function ViagemOperacional({
         </div>
       )}
       <div className="rounded-xl px-3 py-3 mb-4" style={{ background: C.panel2 }}>
-        <CapacidadeBar ocupados={confirmados} total={capacidade} altura={9} />
+        <MapaDosLugares
+          capacidade={capacidade}
+          confirmados={confirmados}
+          pendentes={pendentesQtd}
+          direcao={direcao}
+        />
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
           <MiniStat label="Capacidade" value={capacidade} />
           <MiniStat label="Confirmados" value={confirmados} cor={C.green} />
@@ -1474,16 +1633,10 @@ function ViagemOperacional({
                   borderLeft: `4px solid ${C.brand}`,
                 }}
               >
-                <span
-                  className="text-[12px] font-medium"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", color: C.inkSoft }}
-                >
+                <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                   {hora}
                 </span>
-                <span
-                  className="text-[15px] font-bold tracking-wide"
-                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
-                >
+                <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
                   {p.nome.toUpperCase()}
                 </span>
                 {ehBusca && !editando && <GruposDeBusca itens={itens} trips={trips} />}
@@ -1551,10 +1704,7 @@ function ViagemOperacional({
               className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
               style={{ background: `${C.brand}1F`, borderLeft: `4px solid ${C.brand}` }}
             >
-              <span
-                className="text-[15px] font-bold tracking-wide"
-                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
-              >
+              <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
                 ENCOMENDAS
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
@@ -1580,10 +1730,7 @@ function ViagemOperacional({
               className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2"
               style={{ background: `${C.purple}1F`, borderLeft: `4px solid ${C.purple}` }}
             >
-              <span
-                className="text-[15px] font-bold tracking-wide"
-                style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.ink }}
-              >
+              <span className="text-[15px] font-bold tracking-wide" style={{ color: C.ink }}>
                 EXTRAS
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
@@ -1731,12 +1878,7 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <div
-            className="font-semibold text-sm"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
-            Editar reserva
-          </div>
+          <div className="font-semibold text-sm">Editar reserva</div>
           <button type="button" onClick={onClose}>
             <X size={16} style={{ color: C.inkSoft }} />
           </button>
@@ -2146,10 +2288,7 @@ export function NovaReservaModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <div
-            className="font-semibold text-sm"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
+          <div className="font-semibold text-sm">
             {extraInicial ? "Adicionar passagem extra" : "Agendar passagem"}
           </div>
           <button type="button" onClick={() => onClose()}>
@@ -2399,9 +2538,7 @@ export function NovaReservaModal({
           <span>
             {qtd}× {fmtDate(f.data)} · {f.direcao === "ida" ? "Ida" : "Volta"}
           </span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink }}>
-            {fmtBRL(valorUnit * qtd)}
-          </span>
+          <span style={{ color: C.ink }}>{fmtBRL(valorUnit * qtd)}</span>
         </div>
 
         <div className="flex items-center justify-end gap-2">
@@ -2582,10 +2719,7 @@ function NovaEncomendaModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <div
-            className="font-semibold text-sm flex items-center gap-1.5"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
+          <div className="font-semibold text-sm flex items-center gap-1.5">
             <Package size={15} />{" "}
             {editar ? "Editar encomenda" : pendente ? "Agendar encomenda" : "Nova encomenda"}
           </div>

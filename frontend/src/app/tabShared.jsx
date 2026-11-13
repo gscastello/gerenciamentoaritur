@@ -33,22 +33,32 @@ import { ehExtra } from "../domain/vagas.js";
  * without duplicating this code in every chunk.
  * ========================================================================== */
 
+// Letra única do app (issue #391): Inter, carregada no index.html.
+export const FONTE = "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif";
+// Visual aprovado pelo dono (issue #391, simulação "Painel de bordo" v16): preto de verdade
+// no fundo, cartões em grafite, branco "de farol" no texto e o vermelho da marca só no que
+// acende. Os ornamentos em vermelho escuro (`rubro`) enfeitam sem chamar atenção.
 export const C = {
-  bg: "#08090B",
-  panel: "#111214",
-  panel2: "#191A1D",
-  border: "#292A2E",
-  borderSoft: "#1E1F22",
-  ink: "#F2F3F5",
-  inkSoft: "#9CA0A8",
-  inkFaint: "#63666D",
+  bg: "#000000",
+  panel: "#111215",
+  panel2: "#191B20",
+  border: "#24262C",
+  borderSoft: "#1B1C20",
+  ink: "#F4F5F7",
+  inkSoft: "#A6AAB2",
+  // 6,1:1 sobre o cartão (o #63666D antigo ficava em 3,3:1, difícil de ler)
+  inkFaint: "#8A8E96",
   // vermelho da marca (era âmbar)
   amber: "#E4121F",
-  amberSoft: "#2A0E10",
+  amberSoft: "#2A0A0E",
   brand: "#E4121F",
   brandDim: "#A50D17",
   brandGlow: "rgba(228,18,31,0.35)",
   onBrand: "#FFFFFF",
+  // ornamentos em vermelho escuro (topo das telas, canto dos cartões, barra de baixo)
+  rubro: "#7A0B13",
+  rubro2: "#4A0A10",
+  rubro3: "#24080B",
   // Sinalização por cor foi removida do app (pedido do dono): status,
   // ocupação, direção etc. se distinguem por TEXTO e ÍCONE, não por cor.
   // Estes tokens semânticos agora apontam todos para a mesma escala de
@@ -104,6 +114,31 @@ const fmtHoraFuso = new Intl.DateTimeFormat("en-US", {
 // disso não sobra mais nenhum embarque pra "hoje", então a Agenda deve
 // abrir direto no dia seguinte em vez de mostrar um dia já encerrado.
 const HORA_FIM_OPERACAO_DIA = 14;
+// Hora de agora em São Luís (0–23) — para a saudação do topo.
+export const horaOperacao = () => Number(fmtHoraFuso.format(new Date()));
+export const saudacaoDoMomento = () => {
+  const h = horaOperacao();
+  return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+};
+// "Sexta, 14 de novembro" — o dia de São Luís, para o topo das telas.
+const fmtDiaLongo = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: FUSO_OPERACAO,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+export const diaPorExtenso = () => {
+  const t = fmtDiaLongo.format(new Date()).replace("-feira", "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+// Primeiro nome de quem está logado (o perfil às vezes guarda o e-mail).
+export function primeiroNome(profile) {
+  const raw = (profile?.name || "").trim();
+  if (!raw) return "equipe";
+  const base = raw.includes("@") ? raw.split("@")[0].replace(/[._-]+/g, " ") : raw;
+  const p = base.split(/\s+/)[0];
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
 export const diaAgendaPadrao = () =>
   dataOperacao(Number(fmtHoraFuso.format(new Date())) >= HORA_FIM_OPERACAO_DIA ? 1 : 0);
 export const fmtBRL = (n) =>
@@ -463,7 +498,7 @@ export function SeloCidadeIntermediaria({ cidade }) {
 // Sino de notificações — provido uma vez no AppInner (uma assinatura de
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
 export const NotificacoesContext = React.createContext(null);
-const useNotificacoesCtx = () => useContext(NotificacoesContext);
+export const useNotificacoesCtx = () => useContext(NotificacoesContext);
 
 // Balde da reserva: usa a classificação manual (dropoff_area) se existir;
 // senão chuta pelo texto livre que o cliente deu no agendamento.
@@ -760,27 +795,26 @@ export function BusSilhueta({ className = "", style, color = C.brand, opacity = 
   );
 }
 
+// Cabeçalho de cada tela. No celular, o nome da tela, a data e o sino já estão no topo do app
+// (issue #391): aqui fica só a linha de controles (`right`), e nada aparece se não houver
+// controle. No computador continua o título, a explicação e o sino.
 export function Header({ title, subtitle, right }) {
   return (
     // z-30: o painel do sino (dentro deste cabeçalho animado) fica por cima do conteúdo
     // da tela, como o cartão do topo da Agenda (issue #353)
-    <div className="relative z-30 px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
-      <BusSilhueta
-        className="absolute pointer-events-none hidden md:block bus-drift"
-        style={{ width: 132, right: 12, top: 6, opacity: 0.9 }}
-        color={C.brand}
-        opacity={0.07}
-      />
-      <div>
+    <div
+      className={`relative z-30 px-4 md:px-10 md:pr-16 pt-3 md:pt-8 pb-3 md:pb-5 items-start justify-between flex-wrap gap-3 anim-fadeUp ${
+        right ? "flex" : "hidden md:flex"
+      }`}
+    >
+      <div className="hidden md:block">
         <h1
-          style={{
-            fontFamily: "'Space Grotesk', sans-serif",
-            fontWeight: 700,
-            fontSize: "1.5rem",
-            color: C.ink,
-            letterSpacing: "-0.01em",
-          }}
+          style={{ fontWeight: 700, fontSize: "1.5rem", color: C.ink, letterSpacing: "-0.025em" }}
         >
+          <span className="riscos-at" aria-hidden="true">
+            <i />
+            <i />
+          </span>
           {title}
         </h1>
         {subtitle && (
@@ -788,11 +822,12 @@ export function Header({ title, subtitle, right }) {
             {subtitle}
           </p>
         )}
-        <span className="aritur-road mt-2 block" style={{ width: 56 }} />
       </div>
-      <div className="flex items-center gap-2 flex-wrap justify-end">
+      <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
         {right}
-        <SinoNotificacoes />
+        <span className="hidden md:block">
+          <SinoNotificacoes />
+        </span>
       </div>
     </div>
   );
@@ -829,11 +864,14 @@ export function ErrorBanner({ children, onDismiss, onRetry, className = "" }) {
     </div>
   );
 }
+// Fundo do cartão: grafite com o canto de cima em vermelho escuro (ornamento do visual
+// aprovado, issue #391). O filete fino no alto vem da classe `cartao-at` (GlobalStyles).
+export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.22) 0%, rgba(122,11,19,0) 55%), ${C.panel}`;
 export function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`card-lift rounded-xl border p-5 ${className}`}
-      style={{ background: C.panel, borderColor: C.border, ...style }}
+      className={`card-lift cartao-at rounded-2xl border p-5 ${className}`}
+      style={{ background: FUNDO_CARTAO, borderColor: C.border, ...style }}
     >
       {children}
     </div>
@@ -878,7 +916,6 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
       <div
         className="truncate mt-1.5"
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 700,
           fontSize: "clamp(0.9rem, 2vw, 1.28rem)",
           fontVariantNumeric: "tabular-nums",
@@ -904,52 +941,12 @@ export function MiniStat({ label, value, cor }) {
       </div>
       <div
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 700,
           fontSize: "1.1rem",
           color: cor || C.ink,
         }}
       >
         {value}
-      </div>
-    </div>
-  );
-}
-// Barra de ocupação: enche com animação (bar-grow). Sem cor de status — a
-// leitura é pelo número (X/Y e %) e pela palavra "LOTADO" quando cheia.
-export function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefixo }) {
-  const pct = total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
-  const lotado = pct >= 100;
-  const cor = lotado ? C.ink : C.inkSoft;
-  return (
-    <div>
-      {mostrarTexto && (
-        <div className="flex items-center justify-between text-[11px] mb-1">
-          <span style={{ color: C.inkSoft }}>
-            {prefixo && (
-              <b className="mr-1.5 tracking-wide" style={{ color: cor }}>
-                {prefixo}
-              </b>
-            )}
-            {ocupados}/{total}
-            {prefixo ? "" : " passageiros"}
-          </span>
-          <span
-            className="font-bold"
-            style={{ color: cor, fontFamily: "'JetBrains Mono', monospace" }}
-          >
-            {pct}%{lotado ? " · LOTADO" : ""}
-          </span>
-        </div>
-      )}
-      <div
-        className="rounded-full overflow-hidden"
-        style={{ height: altura, background: C.panel2 }}
-      >
-        <div
-          className="bar-fill bar-grow h-full rounded-full"
-          style={{ width: `${pct}%`, background: cor }}
-        />
       </div>
     </div>
   );
@@ -966,7 +963,6 @@ export function DirecaoDivisor({ label, cor }) {
           background: `${cor}1f`,
           color: cor,
           border: `1px solid ${cor}44`,
-          fontFamily: "'Space Grotesk', sans-serif",
         }}
       >
         {label}
