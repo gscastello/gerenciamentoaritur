@@ -394,6 +394,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o trecho LITERAL da conversa; o código só corrige sozinho o que tem essa prova e certeza alta, nos campos dia,
   sentido, ponto, bairro, embarque, desembarque e quantidade; tipo, nome e o resto viram pendência. Preço nunca vem
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
+  **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
+  o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
@@ -448,7 +450,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   fica na lista com o motivo. Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
   vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
   costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. **"Hoje" dito pelo cliente nunca vira amanhã calado** (issue #307): se a viagem daquele sentido já saiu e o
-  destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente. Quando
+  destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente.
+  "Quero uma passagem para hoje" **sem sentido, embarque nem destino** depois que a viagem saiu é a outra de hoje
+  **só com o "Agendado ☑️" da equipe** (quem marcou conhece o cliente) **ou com o hábito do cliente** (costume no outro
+  sentido); o bot sozinho, nos outros casos, pergunta (dono, 13/11 — issue #387). E o **"Agendado ☑️" anterior fecha o pedido de antes**: o que veio antes dele (com mais de
+  6 h até o pedido novo) só entra como histórico, nunca vira reserva de novo (`inicioDoPedidoAtual`). Quando o Agendado
+  relê com o modelo capaz, **só lança o que a leitura final gravou** (`rascunhosDoAgendado`); rascunho que sobrou da
+  primeira leitura vira pendência `nao_confirmado`, nunca reserva sem as travas. Quando
   o cliente informa depois (outro dia, endereço, cidade), o bot completa a reserva (`extra_data.a_confirmar`).
 - **O bot aprende o tempo todo, em qualquer modo** (`ia`, `manual` ou `sombra`): é o treino
   para o modo automático futuro e **nunca deve estagnar** (issue #218, `WHATSAPP.md §6b`).
