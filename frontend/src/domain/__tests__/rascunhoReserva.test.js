@@ -3,6 +3,7 @@ import {
   anotacaoDaEncomenda,
   embarqueDoRascunho,
   inicialDoRascunho,
+  rascunhoAindaValeLancar,
   viagemDoRascunho,
 } from "../rascunhoReserva.js";
 
@@ -110,5 +111,26 @@ describe("textos do cartão", () => {
     expect(anotacaoDaEncomenda({ pickup_detail: "Centro", phone: "98988887777" })).toBe(
       "E Centro 98988887777",
     );
+  });
+});
+
+describe("rascunhoAindaValeLancar (issue #357)", () => {
+  const hoje = "2026-11-12";
+  it("viagem de outro dia: dia que passou some, dia que vem fica", () => {
+    expect(rascunhoAindaValeLancar({ trip_date: "2026-11-11", direction: "ida" }, hoje, "05:00")).toBe(false);
+    expect(rascunhoAindaValeLancar({ trip_date: "2026-11-13", direction: "volta" }, hoje, "20:00")).toBe(true);
+  });
+  it("viagem de hoje some depois que saiu (Ida 07:00, Volta 14:00)", () => {
+    const ida = { trip_date: hoje, direction: "ida" };
+    const volta = { trip_date: hoje, direction: "volta" };
+    expect(rascunhoAindaValeLancar(ida, hoje, "06:59")).toBe(true);
+    expect(rascunhoAindaValeLancar(ida, hoje, "07:00")).toBe(false);
+    expect(rascunhoAindaValeLancar(volta, hoje, "13:59")).toBe(true);
+    expect(rascunhoAindaValeLancar(volta, hoje, "14:00")).toBe(false);
+  });
+  it("sem hora ou sem data: não esconde por engano / não mostra lixo", () => {
+    expect(rascunhoAindaValeLancar({ trip_date: hoje, direction: "ida" }, hoje, null)).toBe(true);
+    expect(rascunhoAindaValeLancar({ direction: "ida" }, hoje, "05:00")).toBe(false);
+    expect(rascunhoAindaValeLancar(null, hoje, "05:00")).toBe(false);
   });
 });
