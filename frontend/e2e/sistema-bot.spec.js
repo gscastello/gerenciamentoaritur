@@ -5,7 +5,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // editável (database/50), guia de estilo e o modo "Sombra".
 
 async function abrirSistema(page) {
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) {
     await page.getByRole("button", { name: "Mais" }).click();

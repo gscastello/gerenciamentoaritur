@@ -6,7 +6,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // é o estado normal de uma operação nova (ou de um dia parado). Cobre
 // especialmente Financeiro/Gestão/Operação, que não tinham nenhum e2e.
 
-const TABS = ["Dashboard", "Agenda", "Lista do Dia", "Bloco de notas", "Passageiros", "Sistema"];
+const TABS = ["Início", "Agenda", "Lista do Dia", "Bloco de notas", "Passageiros", "Sistema"];
 // telas dentro de um grupo do menu (issue #360): abertas pela aba no topo
 const TELAS_DE_GRUPO = [
   "financeiro",

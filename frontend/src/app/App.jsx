@@ -67,8 +67,8 @@ import {
   DropoffContext,
   FONTE,
   NotificacoesContext,
-  SinoNotificacoes,
   STATUS_META,
+  SinoNotificacoes,
   dataOperacao,
   diaPorExtenso,
   fmtDate,
@@ -98,11 +98,7 @@ class ErrorBoundary extends React.Component {
         >
           <div className="max-w-sm text-center">
             <AlertTriangle size={28} style={{ color: C.red, margin: "0 auto" }} />
-            <div
-              className="mt-3 font-semibold"
-            >
-              Algo deu errado nesta tela
-            </div>
+            <div className="mt-3 font-semibold">Algo deu errado nesta tela</div>
             <p className="text-xs mt-2" style={{ color: C.inkSoft }}>
               Seus dados não foram perdidos — ficam salvos separadamente. Recarregue para continuar.
             </p>
@@ -162,7 +158,7 @@ function GlobalStyles() {
       .toque-at { transition: transform .12s cubic-bezier(.2,0,0,1), border-color .18s ease, filter .12s ease; }
       .toque-at:active { transform: scale(.97); filter: brightness(.96); }
       /* seletor Ida/Volta da Agenda: só o texto e um traço vermelho embaixo do escolhido */
-      .seletor-at-traco { transition: transform .26s cubic-bezier(.2,0,0,1); }
+      .seletor-at-traco { transition: left .26s cubic-bezier(.2,0,0,1); }
       /* lugar da van acendendo (mapa da Agenda) */
       @keyframes lugarAcende { from { transform: scale(.6); opacity:.2; } to { transform: scale(1); opacity:1; } }
       .lugar-at { transition: background-color .24s ease, box-shadow .24s ease; }
@@ -245,6 +241,11 @@ function GlobalStyles() {
       .hero-fx-spark.s3 { bottom:34%; right:10%; animation-delay:3s; }
       .bus-drift { animation: busDrift 6.5s ease-in-out infinite; will-change: transform; }
 
+      /* issue #391: os cartões de destaque das telas ficam em grafite, com o canto vinho
+         (saem o vermelho cheio, a estrada e o ônibus animados por trás) */
+      .aritur-hero { background: radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.3) 0%, rgba(122,11,19,0) 55%), ${C.panel} !important;
+        border-color: ${C.border} !important; }
+      .aritur-hero::before, .aritur-hero::after, .hero-fx { display: none !important; }
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         /* Só em campo de formulário — cresce pra um alvo de toque melhor
@@ -460,7 +461,7 @@ function QuickActionsFab({
           onClick={fechar}
         />
       )}
-      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-3.5 md:right-6 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6">
+      <div className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[calc(92px+env(safe-area-inset-bottom))] md:bottom-6">
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
             {/* atalhos em todas as telas (dono, 12/11 — issue #353) */}
@@ -518,16 +519,23 @@ function QuickActionsFab({
           type="button"
           onClick={() => setAberto((v) => !v)}
           aria-label="Ações rápidas"
-          className="btn-press rounded-full flex items-center justify-center"
+          aria-expanded={aberto}
+          className="btn-press rounded-2xl flex items-center justify-center"
           style={{
-            width: 48,
-            height: 48,
-            background: C.amber,
+            width: 54,
+            height: 54,
+            background: C.brand,
             color: C.onBrand,
-            boxShadow: "0 4px 18px rgba(0,0,0,.45)",
+            boxShadow: "0 12px 28px -10px rgba(228,18,31,.85), inset 0 1px 0 rgba(255,255,255,.18)",
           }}
         >
-          {aberto ? <X size={20} /> : <Plus size={22} />}
+          <Plus
+            size={24}
+            style={{
+              transform: aberto ? "rotate(45deg)" : "none",
+              transition: "transform .22s cubic-bezier(.2,0,0,1)",
+            }}
+          />
         </button>
       </div>
     </>
@@ -827,45 +835,70 @@ function MobileNavItem({ n, active, grande, badge, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className={
         grande
-          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl"
-          : "tab-btn flex-1 flex flex-col items-center gap-0.5 py-2 min-w-0"
+          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl min-h-[64px]"
+          : "barra-at-item relative z-10 flex flex-col items-center justify-center gap-1 min-w-0 h-full"
       }
       style={
         grande
-          ? { background: active ? C.amberSoft : C.panel2, color: active ? C.amber : C.inkSoft }
-          : { color: active ? C.amber : C.inkFaint }
+          ? {
+              background: active ? C.rubro2 : C.panel2,
+              color: active ? C.ink : C.inkSoft,
+              boxShadow: active ? `inset 0 0 0 1px ${C.rubro}` : "none",
+            }
+          : { color: active ? C.ink : C.inkSoft }
       }
     >
-      <span className="relative flex items-center justify-center" style={{ minHeight: 20 }}>
-        <Icon size={grande ? 18 : 20} />
+      <span className="relative flex items-center justify-center" style={{ minHeight: 21 }}>
+        <Icon size={grande ? 19 : 21} style={{ color: active ? "#FF5260" : "currentColor" }} />
         {badge > 0 && (
           <span
-            className="absolute -top-1.5 -right-2.5 text-[8px] font-bold px-1 rounded-full"
-            style={{ background: C.purple, color: "#fff", pointerEvents: "none" }}
+            className="absolute -top-2 -right-3 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+            style={{
+              background: C.brand,
+              color: "#fff",
+              pointerEvents: "none",
+              boxShadow: "0 0 0 2px #111215",
+            }}
           >
-            {badge}
+            {badge > 99 ? "99+" : badge}
           </span>
         )}
       </span>
-      <span className={grande ? "text-[10px]" : "text-[9px] leading-none truncate max-w-full"}>
+      <span
+        className={grande
+            ? "text-[11px]"
+            : "text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"}
+        style={{ fontWeight: active ? 700 : 500 }}
+      >
         {n.label}
       </span>
     </button>
   );
 }
 
-function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) {
+// Barra de baixo flutuante (issue #391): cinco telas, a luz vinho desliza até a tocada. O resto
+// (Passageiros, Sistema, Assistente, Bloco de notas) e "Sair" ficam no botão "Mais" do topo.
+function MobileNav({
+  nav,
+  tab,
+  onSelect,
+  pendentesCount,
+  pendenciasCount = 0,
+  maisAberto,
+  setMaisAberto,
+  onSair,
+}) {
   const badgeDe = (id) =>
     id === "agenda" ? pendentesCount : id === "atendimento" ? pendenciasCount : 0;
-  const [maisAberto, setMaisAberto] = useState(false);
-  const LIMITE = 6;
+  const LIMITE = 5;
   let visiveis = nav;
   let extras = [];
   if (nav.length > LIMITE) {
-    visiveis = nav.slice(0, LIMITE - 1);
-    extras = nav.slice(LIMITE - 1);
+    visiveis = nav.slice(0, LIMITE);
+    extras = nav.slice(LIMITE);
     const ativoNosExtras = extras.find((n) => n.id === tab);
     if (ativoNosExtras) {
       const trocado = visiveis[visiveis.length - 1];
@@ -877,20 +910,26 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
     onSelect(id);
     setMaisAberto(false);
   };
+  const colunas = visiveis.length;
+  const indiceAtivo = visiveis.findIndex((n) => n.id === tab);
   return (
     <>
       {maisAberto && (
         <div
           className="md:hidden fixed inset-0 z-30 anim-fadeIn"
-          style={{ background: "rgba(0,0,0,.5)" }}
+          style={{ background: "rgba(0,0,0,.55)" }}
           onClick={() => setMaisAberto(false)}
         >
           <div
-            className="absolute left-0 right-0 bottom-0 rounded-t-2xl border-t p-3 pb-6 safe-bottom anim-slideDown"
-            style={{ background: C.panel, borderColor: C.border }}
+            className="absolute left-2 right-2 rounded-3xl border p-3 anim-slideDown"
+            style={{
+              top: "calc(76px + env(safe-area-inset-top))",
+              background: C.panel,
+              borderColor: C.border,
+              boxShadow: "0 24px 48px -16px #000",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-9 h-1 rounded-full mx-auto mb-3" style={{ background: C.border }} />
             <div className="grid grid-cols-4 gap-2">
               {extras.map((n) => (
                 <MobileNavItem
@@ -903,36 +942,48 @@ function MobileNav({ nav, tab, onSelect, pendentesCount, pendenciasCount = 0 }) 
                 />
               ))}
             </div>
+            <button
+              type="button"
+              onClick={onSair}
+              className="btn-press mt-2 w-full flex items-center justify-center gap-2 rounded-xl min-h-[48px] text-sm font-semibold"
+              style={{ background: C.panel2, color: C.inkSoft }}
+            >
+              <LogOut size={17} /> Sair da conta
+            </button>
           </div>
         </div>
       )}
-      <div
-        className="md:hidden safe-bottom fixed bottom-0 left-0 right-0 z-20 flex border-t"
-        style={{ background: C.panel, borderColor: C.border }}
+      <nav
+        aria-label="Menu"
+        data-testid="barra-de-baixo"
+        className="md:hidden fixed z-20 left-2.5 right-2.5 barra-at rounded-[22px] p-1.5"
+        style={{ bottom: "max(10px, env(safe-area-inset-bottom))", height: 68 }}
       >
-        {visiveis.map((n) => (
-          <MobileNavItem
-            key={n.id}
-            n={n}
-            active={tab === n.id}
-            badge={badgeDe(n.id)}
-            onClick={() => escolher(n.id)}
-          />
-        ))}
-        {extras.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setMaisAberto(true)}
-            className="tab-btn flex-1 flex flex-col items-center gap-0.5 py-2"
-            style={{ color: maisAberto ? C.amber : C.inkFaint }}
-          >
-            <span className="flex items-center justify-center" style={{ minHeight: 20 }}>
-              <MoreHorizontal size={20} />
-            </span>
-            <span className="text-[9px] leading-none">Mais</span>
-          </button>
-        )}
-      </div>
+        <div
+          className="relative h-full grid"
+          style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}
+        >
+          {indiceAtivo >= 0 && (
+            <span
+              aria-hidden="true"
+              className="barra-at-luz absolute top-0 bottom-0 left-0 rounded-2xl"
+              style={{
+                width: `${100 / colunas}%`,
+                transform: `translateX(${indiceAtivo * 100}%)`,
+              }}
+            />
+          )}
+          {visiveis.map((n) => (
+            <MobileNavItem
+              key={n.id}
+              n={n}
+              active={tab === n.id}
+              badge={badgeDe(n.id)}
+              onClick={() => escolher(n.id)}
+            />
+          ))}
+        </div>
+      </nav>
     </>
   );
 }
@@ -962,6 +1013,8 @@ function AppInner() {
     }
   }, []);
   const [buscaAberta, setBuscaAberta] = useState(false);
+  // folha "Mais" do celular: aberta pelo botão do topo (issue #391)
+  const [maisAberto, setMaisAberto] = useState(false);
   const [agendarAberto, setAgendarAberto] = useState(false);
   // preenchimento vindo do endereço de costume do passageiro (#228)
   const [agendarInicial, setAgendarInicial] = useState(null);
@@ -1294,10 +1347,7 @@ function AppInner() {
                       <LogOut size={15} />
                     </button>
                   </div>
-                  <div
-                    className="mt-2.5 text-[10px] leading-snug"
-                    style={{ color: C.inkFaint }}
-                  >
+                  <div className="mt-2.5 text-[10px] leading-snug" style={{ color: C.inkFaint }}>
                     Mais que transporte, <span style={{ color: C.brand }}>conectamos pessoas.</span>
                   </div>
                 </div>
@@ -1314,9 +1364,12 @@ function AppInner() {
                 onSelect={mudarAba}
                 pendentesCount={pendentesCount}
                 pendenciasCount={pendenciasCount}
+                maisAberto={maisAberto}
+                setMaisAberto={setMaisAberto}
+                onSair={signOut}
               />
 
-              <div className="flex-1 min-w-0 pb-40 md:pb-0 overflow-x-hidden relative z-10">
+              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative z-10">
                 {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
                 <header
                   data-testid="topo-tela"
@@ -1344,13 +1397,16 @@ function AppInner() {
                   <SinoNotificacoes />
                   <button
                     type="button"
-                    onClick={signOut}
+                    onClick={() => setMaisAberto((v) => !v)}
+                    aria-expanded={maisAberto}
                     className="btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ color: C.inkSoft }}
-                    title="Sair da conta"
-                    aria-label="Sair da conta"
+                    style={{
+                      color: maisAberto ? C.ink : C.inkSoft,
+                      background: maisAberto ? C.panel2 : "transparent",
+                    }}
+                    aria-label="Mais"
                   >
-                    <LogOut size={18} />
+                    <MoreHorizontal size={20} />
                   </button>
                 </header>
                 <AvisoSemInternet
@@ -1455,8 +1511,8 @@ function AppInner() {
                           reservas={reservas}
                           capacidade={capacidadeAtiva}
                           trips={trips}
-                          segundaAtiva={cfg.segundaAtiva}
-                          segundaHoras={cfg.segundaHoras}
+                          pendencias={pendenciasCount}
+                          onIr={irParaBusca}
                         />
                       )}
                       {tab === "sistema" && (

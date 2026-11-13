@@ -5,7 +5,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // PAUSADA (database/58) e dá para religar/pausar em Sistema.
 
 async function abrirSistema(page) {
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) {
     await page.getByRole("button", { name: "Mais" }).click();

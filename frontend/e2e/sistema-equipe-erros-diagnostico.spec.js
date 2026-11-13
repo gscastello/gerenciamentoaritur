@@ -6,7 +6,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // diagnóstico com data de viagem ganha um link pra Agenda.
 
 async function abrirSistema(page) {
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) {
     await page.getByRole("button", { name: "Mais" }).click();

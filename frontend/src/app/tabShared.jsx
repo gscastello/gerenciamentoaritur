@@ -498,7 +498,7 @@ export function SeloCidadeIntermediaria({ cidade }) {
 // Sino de notificações — provido uma vez no AppInner (uma assinatura de
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
 export const NotificacoesContext = React.createContext(null);
-const useNotificacoesCtx = () => useContext(NotificacoesContext);
+export const useNotificacoesCtx = () => useContext(NotificacoesContext);
 
 // Balde da reserva: usa a classificação manual (dropoff_area) se existir;
 // senão chuta pelo texto livre que o cliente deu no agendamento.
@@ -793,26 +793,26 @@ export function BusSilhueta({ className = "", style, color = C.brand, opacity = 
   );
 }
 
+// Cabeçalho de cada tela. No celular, o nome da tela, a data e o sino já estão no topo do app
+// (issue #391): aqui fica só a linha de controles (`right`), e nada aparece se não houver
+// controle. No computador continua o título, a explicação e o sino.
 export function Header({ title, subtitle, right }) {
   return (
     // z-30: o painel do sino (dentro deste cabeçalho animado) fica por cima do conteúdo
     // da tela, como o cartão do topo da Agenda (issue #353)
-    <div className="relative z-30 px-6 md:px-10 pr-6 md:pr-16 pt-5 md:pt-8 pb-5 flex items-start justify-between flex-wrap gap-3 anim-fadeUp">
-      <BusSilhueta
-        className="absolute pointer-events-none hidden md:block bus-drift"
-        style={{ width: 132, right: 12, top: 6, opacity: 0.9 }}
-        color={C.brand}
-        opacity={0.07}
-      />
-      <div>
+    <div
+      className={`relative z-30 px-4 md:px-10 md:pr-16 pt-3 md:pt-8 pb-3 md:pb-5 items-start justify-between flex-wrap gap-3 anim-fadeUp ${
+        right ? "flex" : "hidden md:flex"
+      }`}
+    >
+      <div className="hidden md:block">
         <h1
-          style={{
-            fontWeight: 700,
-            fontSize: "1.5rem",
-            color: C.ink,
-            letterSpacing: "-0.01em",
-          }}
+          style={{ fontWeight: 700, fontSize: "1.5rem", color: C.ink, letterSpacing: "-0.025em" }}
         >
+          <span className="riscos-at" aria-hidden="true">
+            <i />
+            <i />
+          </span>
           {title}
         </h1>
         {subtitle && (
@@ -820,11 +820,12 @@ export function Header({ title, subtitle, right }) {
             {subtitle}
           </p>
         )}
-        <span className="aritur-road mt-2 block" style={{ width: 56 }} />
       </div>
-      <div className="flex items-center gap-2 flex-wrap justify-end">
+      <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
         {right}
-        <SinoNotificacoes />
+        <span className="hidden md:block">
+          <SinoNotificacoes />
+        </span>
       </div>
     </div>
   );
@@ -944,45 +945,6 @@ export function MiniStat({ label, value, cor }) {
         }}
       >
         {value}
-      </div>
-    </div>
-  );
-}
-// Barra de ocupação: enche com animação (bar-grow). Sem cor de status — a
-// leitura é pelo número (X/Y e %) e pela palavra "LOTADO" quando cheia.
-export function CapacidadeBar({ ocupados, total, altura = 8, mostrarTexto = true, prefixo }) {
-  const pct = total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
-  const lotado = pct >= 100;
-  const cor = lotado ? C.ink : C.inkSoft;
-  return (
-    <div>
-      {mostrarTexto && (
-        <div className="flex items-center justify-between text-[11px] mb-1">
-          <span style={{ color: C.inkSoft }}>
-            {prefixo && (
-              <b className="mr-1.5 tracking-wide" style={{ color: cor }}>
-                {prefixo}
-              </b>
-            )}
-            {ocupados}/{total}
-            {prefixo ? "" : " passageiros"}
-          </span>
-          <span
-            className="font-bold"
-            style={{ color: cor }}
-          >
-            {pct}%{lotado ? " · LOTADO" : ""}
-          </span>
-        </div>
-      )}
-      <div
-        className="rounded-full overflow-hidden"
-        style={{ height: altura, background: C.panel2 }}
-      >
-        <div
-          className="bar-fill bar-grow h-full rounded-full"
-          style={{ width: `${pct}%`, background: cor }}
-        />
       </div>
     </div>
   );

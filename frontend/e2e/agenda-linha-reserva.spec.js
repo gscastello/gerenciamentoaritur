@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { escolherSentido } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #185: na Agenda, reservas de ponto fixo (Rodoviária / Retorno /
@@ -88,6 +89,7 @@ test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço 
     ],
   });
   await page.goto("/");
+  await escolherSentido(page, "Volta");
   await page
     .getByRole("button", { name: /^Agenda$/ })
     .first()

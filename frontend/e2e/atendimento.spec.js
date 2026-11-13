@@ -63,7 +63,14 @@ const PERGUNTAS = [
 
 async function abrirAtendimento(page, tela = "atendimento") {
   await abrirTela(page, tela);
-  if (tela !== "pendencias") await expect(page.getByText("Atendimento WhatsApp")).toBeVisible();
+  // no computador o título é "Atendimento WhatsApp"; no celular o topo do app diz "Atendimento"
+  if (tela !== "pendencias")
+    await expect(
+      page
+        .getByRole("heading", { name: /^Atendimento/ })
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
 }
 
 test("Atendimento: fila mostra o nome do cadastro ao lado do perfil do WhatsApp", async ({

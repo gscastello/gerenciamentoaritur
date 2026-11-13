@@ -5,7 +5,7 @@ import { SNAPSHOT_BACKUP_DIA, mockSupabase } from "./support/supabaseMock.js";
 // "fazer agora", ver o conteúdo e baixar CSV.
 
 async function abrirSistema(page) {
-  await expect(page.getByRole("button", { name: /Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) {
     await page.getByRole("button", { name: "Mais" }).click();

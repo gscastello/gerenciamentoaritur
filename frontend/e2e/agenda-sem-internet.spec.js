@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { sairDaConta } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #355 (dono, 12/11): abrir a Agenda mesmo sem internet. O app guarda a última
@@ -80,7 +81,7 @@ test("sair da conta apaga a cópia salva", async ({ page }) => {
     () => Object.keys(localStorage).filter((k) => k.startsWith("aritur:offline:")).length,
   );
   expect(antes).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Sair da conta" }).first().click();
+  await sairDaConta(page);
   await expect
     .poll(() =>
       page.evaluate(

@@ -10,13 +10,13 @@ import { ProgressBar } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 
 const C = {
-  bg: "#08090B",
-  panel: "#111214",
-  panel2: "#191A1D",
-  border: "#292A2E",
-  ink: "#F2F3F5",
-  inkSoft: "#9CA0A8",
-  inkFaint: "#63666D",
+  bg: "#000000",
+  panel: "#111215",
+  panel2: "#191B20",
+  border: "#24262C",
+  ink: "#F4F5F7",
+  inkSoft: "#A6AAB2",
+  inkFaint: "#8A8E96",
   brand: "#E4121F",
   red: "#F0625F",
 };
@@ -77,7 +77,7 @@ export function LoginScreen() {
         justifyContent: "center",
         background: C.bg,
         color: C.ink,
-        fontFamily: "'Inter', system-ui, sans-serif",
+        fontFamily: "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif",
         padding: 24,
       }}
     >
@@ -101,30 +101,19 @@ export function LoginScreen() {
             inset: 0,
             pointerEvents: "none",
             background:
-              "radial-gradient(120% 90% at 100% 0%, rgba(228,18,31,0.16) 0%, transparent 55%)",
+              "radial-gradient(120% 90% at 100% 0%, rgba(122,11,19,0.35) 0%, transparent 55%)",
           }}
         />
         <Bus />
         <div style={{ position: "relative" }}>
-          {/* logo com brilho do dono (issue #385): feita para fundo escuro, ocupa a
-              largura do cartão e funde no painel por baixo */}
-          <div style={{ margin: "-30px -30px 0", background: "#000", position: "relative" }}>
-            <img
-              src="/brand/logo-brilho.webp"
-              alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
-              width={960}
-              height={640}
-              style={{ width: "100%", height: "auto", display: "block" }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: "auto 0 0 0",
-                height: 48,
-                background: `linear-gradient(rgba(0,0,0,0), ${C.panel})`,
-              }}
-            />
-          </div>
+          {/* logo oficial para fundo escuro (issue #391) — já traz o slogan */}
+          <img
+            src="/brand/logo-fundo-escuro.webp"
+            alt="AriTur Transportes — Conectando destinos, cuidando de cada viagem"
+            width={560}
+            height={542}
+            style={{ width: "min(240px, 72%)", height: "auto", display: "block", margin: "0 auto" }}
+          />
           <p style={{ color: C.inkSoft, fontSize: 13, margin: "16px 0 20px" }}>
             <b style={{ color: C.ink }}>Gestão AriTur</b> — entre com sua conta da equipe.
           </p>

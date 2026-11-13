@@ -26,8 +26,12 @@ test("botão de ícone pequeno não fica esticado no celular (mesma largura e al
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible();
 
-  const sair = page.getByRole("button", { name: "Sair da conta" }).first();
-  const box = await sair.boundingBox();
+  // botão de ícone: "Sair da conta" na lateral do computador, "Mais" no topo do celular
+  const icone = page
+    .getByRole("button", { name: /^(Sair da conta|Mais)$/ })
+    .filter({ visible: true })
+    .first();
+  const box = await icone.boundingBox();
   expect(box).not.toBeNull();
   // tolerância pequena — o ponto é não ter uma altura de 42px numa caixa
   // de ~28px de largura (era 28×42 antes da correção).
