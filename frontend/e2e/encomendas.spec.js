@@ -142,7 +142,7 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   expect(chamadas[0].p_status).toBe("embarcado");
 });
 
-// Dia que a Agenda abre por padrão (calendário de Fortaleza; depois das 14h, o seguinte).
+// Dia que a Agenda abre por padrão (calendário de Fortaleza; o relógio dos testes fica às 6h).
 function diaDaAgenda() {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -157,7 +157,7 @@ function diaDaAgenda() {
       .map((x) => [x.type, x.value]),
   );
   const d = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), 12));
-  if (Number(p.hour) >= 14) d.setUTCDate(d.getUTCDate() + 1);
+  // o relógio dos testes fica às 6h (mockSupabase): a Agenda abre no próprio dia
   return d.toISOString().slice(0, 10);
 }
 
