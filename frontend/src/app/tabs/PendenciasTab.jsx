@@ -1,4 +1,4 @@
-import { Check, MessageCircle, PhoneCall } from "lucide-react";
+import { Check, MessageCircle, PhoneCall, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Skeleton } from "../../ui/motion/index.js";
@@ -10,6 +10,7 @@ import { C, Card, ErrorBanner, Header, TextInput, digitos, tempoRelativo } from 
 // nova também toca o sino (database/32).
 export default function PendenciasTab({ pend }) {
   const [novo, setNovo] = useState({ subject: "", detail: "", phone: "" });
+  const [formAberto, setFormAberto] = useState(false);
   const [erro, setErro] = useState("");
   const limparTodas = async () => {
     if (
@@ -35,6 +36,7 @@ export default function PendenciasTab({ pend }) {
         phone: novo.phone.trim() || null,
       });
       setNovo({ subject: "", detail: "", phone: "" });
+      setFormAberto(false);
     } catch (e) {
       setErro(mensagemAmigavel(e, "Não foi possível abrir a pendência."));
     }
@@ -54,7 +56,7 @@ export default function PendenciasTab({ pend }) {
         title="Pendências"
         subtitle="Atendimentos que precisam da equipe — do bot de WhatsApp ou abertos à mão."
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4 stagger">
+      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
         {pend.error && (
           <ErrorBanner onRetry={pend.recarregar}>
@@ -62,40 +64,66 @@ export default function PendenciasTab({ pend }) {
           </ErrorBanner>
         )}
 
-        <Card>
-          <div className="text-sm font-semibold mb-2" style={{ color: C.ink }}>
-            Nova pendência
-          </div>
-          <div className="grid sm:grid-cols-3 gap-2">
-            <TextInput
-              placeholder="Assunto (ex.: ligar de volta)"
-              value={novo.subject}
-              onChange={(e) => setNovo({ ...novo, subject: e.target.value })}
-            />
-            <TextInput
-              placeholder="Telefone (opcional)"
-              value={novo.phone}
-              onChange={(e) => setNovo({ ...novo, phone: e.target.value })}
-            />
-            <TextInput
-              placeholder="Detalhe (opcional)"
-              value={novo.detail}
-              onChange={(e) => setNovo({ ...novo, detail: e.target.value })}
-            />
-          </div>
+        {/* o formulário abre no botão (auditoria, issue #397): a lista vem primeiro */}
+        {!formAberto && (
           <button
             type="button"
-            onClick={abrir}
-            disabled={!novo.subject.trim()}
-            className="btn-press mt-2 text-xs px-3 py-2 rounded-lg font-medium"
-            style={{
-              background: novo.subject.trim() ? C.amber : C.border,
-              color: novo.subject.trim() ? C.onBrand : C.inkFaint,
-            }}
+            onClick={() => setFormAberto(true)}
+            className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-xl border font-semibold"
+            style={{ background: C.panel2, borderColor: C.border, color: C.ink }}
           >
-            Abrir pendência
+            <Plus size={15} /> Nova pendência
           </button>
-        </Card>
+        )}
+        {formAberto && (
+          <Card className="anim-slideDown">
+            <div
+              className="flex items-center justify-between text-sm font-semibold mb-2"
+              style={{ color: C.ink }}
+            >
+              Nova pendência
+              <button
+                type="button"
+                onClick={() => setFormAberto(false)}
+                aria-label="Fechar a nova pendência"
+                className="btn-press w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{ color: C.inkSoft }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-2">
+              <TextInput
+                autoFocus
+                placeholder="Assunto (ex.: ligar de volta)"
+                value={novo.subject}
+                onChange={(e) => setNovo({ ...novo, subject: e.target.value })}
+              />
+              <TextInput
+                placeholder="Telefone (opcional)"
+                value={novo.phone}
+                onChange={(e) => setNovo({ ...novo, phone: e.target.value })}
+              />
+              <TextInput
+                placeholder="Detalhe (opcional)"
+                value={novo.detail}
+                onChange={(e) => setNovo({ ...novo, detail: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={abrir}
+              disabled={!novo.subject.trim()}
+              className="btn-press mt-2 text-xs px-3 py-2 rounded-lg font-medium"
+              style={{
+                background: novo.subject.trim() ? C.amber : C.border,
+                color: novo.subject.trim() ? C.onBrand : C.inkFaint,
+              }}
+            >
+              Abrir pendência
+            </button>
+          </Card>
+        )}
 
         {pend.loading && pend.pendencias.length === 0 && (
           <div className="space-y-4">
@@ -105,11 +133,9 @@ export default function PendenciasTab({ pend }) {
           </div>
         )}
         {!pend.loading && !pend.error && pend.pendencias.length === 0 && (
-          <Card>
-            <div className="text-center py-6 text-xs" style={{ color: C.inkFaint }}>
-              Nenhuma pendência aberta.
-            </div>
-          </Card>
+          <p className="py-4 text-[13px]" style={{ color: C.inkFaint }}>
+            Nenhuma pendência aberta.
+          </p>
         )}
         {pend.pendencias.length > 1 && (
           <div className="flex justify-end">

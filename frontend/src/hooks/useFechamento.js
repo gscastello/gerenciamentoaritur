@@ -46,7 +46,7 @@ export function useFechamento() {
       ? estimarDas({ mes, receitas: receitasPorMes(receitas.data), anexo, aliquotaManual })
       : null;
     const rotulo = (slug) => (existe(slug) ? rotuloDaCategoria(slug) : (NOMES[slug] ?? slug));
-    return montarFechamento(pacote.data, { das, rotulo });
+    return montarFechamento(pacote.data && { mes, ...pacote.data }, { das, rotulo });
   }, [pacote.data, receitas.data, mes, anexo, aliquotaManual, existe, rotuloDaCategoria]);
 
   return {

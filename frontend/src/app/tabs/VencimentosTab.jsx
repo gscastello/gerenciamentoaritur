@@ -206,7 +206,7 @@ export default function VencimentosTab() {
         title="Vencimentos"
         subtitle="Imposto, documentos dos veículos, seguro e parcelas. O sino avisa antes de vencer."
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {(erro || venc.error) && (
           <ErrorBanner
             onDismiss={erro ? () => setErro("") : undefined}

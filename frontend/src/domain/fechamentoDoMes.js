@@ -32,8 +32,10 @@ const n2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
 /** "2026-10" → "outubro de 2026". */
 export function nomeDoMes(mes) {
-  const [a, m] = String(mes).split("-");
-  return `${MESES[Number(m) - 1] ?? m} de ${a}`;
+  const [a, m] = String(mes ?? "").split("-");
+  const nome = MESES[Number(m) - 1];
+  // sem mês válido, nada de "undefined de undefined" na tela (auditoria, issue #397)
+  return nome && a ? `${nome} de ${a}` : "";
 }
 
 /** O mês que o fechamento abre: o anterior ao de hoje ("AAAA-MM-DD" → "AAAA-MM"). */
@@ -142,7 +144,7 @@ export function montarFechamento(dados, { das = null, rotulo = (s) => s } = {}) 
 
   return {
     mes: dados?.mes,
-    titulo: `Fechamento de ${nomeDoMes(dados?.mes)}`,
+    titulo: nomeDoMes(dados?.mes) ? `Fechamento de ${nomeDoMes(dados?.mes)}` : "Fechamento do mês",
     geradoEm: dados?.gerado_em ?? null,
     resumo,
     margemPct: l.margem_pct ?? null,

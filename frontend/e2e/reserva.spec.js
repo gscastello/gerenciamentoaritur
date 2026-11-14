@@ -43,8 +43,11 @@ test("admin abre a aba Sistema e as telas de configuração renderizam", async (
   }
   await sistema.click();
 
+  // abas da tela Sistema (issue #397)
+  await page.getByRole("button", { name: "Equipe", exact: true }).click();
   await expect(page.getByText("Equipe e logins")).toBeVisible();
   await expect(page.getByText("Motorista E2E")).toBeVisible();
+  await page.getByRole("button", { name: "Preços e rotas", exact: true }).click();
   await expect(page.getByText("Cidades da rota")).toBeVisible();
   await expect(page.getByText("Cidades atendidas")).toBeVisible();
   await expect(page.getByText("Cidades intermediárias")).toBeVisible();

@@ -217,7 +217,7 @@ export default function ExtratoTab() {
         title="Extrato do banco"
         subtitle="Mande o extrato do mês (OFX ou CSV) e o app confere com os lançamentos e os pagamentos."
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {(erro || ext.error) && (
           <ErrorBanner
             onDismiss={erro ? () => setErro("") : undefined}

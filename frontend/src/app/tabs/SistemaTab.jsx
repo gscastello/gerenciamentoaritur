@@ -46,8 +46,9 @@ import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import {
   C,
   Card,
-  HeroFX,
+  Header,
   Select,
+  SubTabs,
   TextInput,
   fmtDataHora,
   normalizar,
@@ -99,6 +100,7 @@ function ListaChips({ titulo, ajuda, itens, onSalvar, salvando }) {
           >
             {c}
             <button
+              className="btn-press -my-1 -mr-2 w-8 h-8 inline-flex items-center justify-center rounded-full"
               type="button"
               onClick={() => remove(c)}
               disabled={salvando}
@@ -626,6 +628,7 @@ function SistemaBairros() {
                 </td>
                 <td className="px-2 py-1.5 w-8">
                   <button
+                    className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0"
                     type="button"
                     onClick={() => remover(b)}
                     aria-label={`remover ${b.neighborhood}`}
@@ -858,6 +861,7 @@ function SistemaEquipe() {
         <td className="px-2 py-1.5">
           <div className="flex gap-2">
             <button
+              className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0"
               type="button"
               aria-label={`editar ${u.name}`}
               onClick={() => {
@@ -868,6 +872,7 @@ function SistemaEquipe() {
               <Pencil size={12} style={{ color: C.inkFaint }} />
             </button>
             <button
+              className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0"
               type="button"
               aria-label={`redefinir senha de ${u.name}`}
               onClick={() => {
@@ -886,7 +891,7 @@ function SistemaEquipe() {
                   run(() => equipe.removeUser(u.id), "Não foi possível remover.");
                 }
               }}
-              className="disabled:opacity-40"
+              className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0 disabled:opacity-40"
             >
               <UserX size={13} style={{ color: C.red }} />
             </button>
@@ -1221,6 +1226,13 @@ function MovimentoControl() {
   );
 }
 
+const SECOES_DO_SISTEMA = [
+  { id: "precos", label: "Preços e rotas", Icon: Wallet },
+  { id: "bot", label: "Bot", Icon: Bot },
+  { id: "equipe", label: "Equipe", Icon: Users },
+  { id: "dados", label: "Dados e backup", Icon: Download },
+];
+
 export default function SistemaTab({
   reservas,
   capacidade,
@@ -1228,7 +1240,14 @@ export default function SistemaTab({
   modoAtendimento,
   onSetModo,
   onNavigate,
+  deepLink = null,
 }) {
+  const [secao, setSecao] = useState(() =>
+    SECOES_DO_SISTEMA.some((x) => x.id === deepLink?.secao) ? deepLink.secao : "precos",
+  );
+  useEffect(() => {
+    if (SECOES_DO_SISTEMA.some((x) => x.id === deepLink?.secao)) setSecao(deepLink.secao);
+  }, [deepLink]);
   const [diag, setDiag] = useState(null);
   const [rodando, setRodando] = useState(false);
   const [novoPontoNome, setNovoPontoNome] = useState("");
@@ -1334,42 +1353,22 @@ export default function SistemaTab({
 
   return (
     <div>
-      <div className="px-4 md:px-10 pt-5 md:pt-6 pb-4">
-        <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex items-center justify-between gap-3"
-          style={{ borderColor: C.brandDim }}
-        >
-          <HeroFX />
-          <div className="relative flex items-center gap-3">
-            <span
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: "rgba(0,0,0,.35)" }}
-            >
-              <ShieldCheck size={19} style={{ color: "#fff" }} />
-            </span>
-            <div>
-              <h1
-                style={{
-                  fontWeight: 700,
-                  fontSize: "1.3rem",
-                  color: "#fff",
-                }}
-              >
-                Sistema
-              </h1>
-              <p className="text-xs" style={{ color: "rgba(255,255,255,.78)" }}>
-                Fluxo, valores, atendimento, backup e correções automáticas.
-              </p>
-            </div>
-          </div>
-          {cfg.saving && (
-            <span className="relative text-xs" style={{ color: "rgba(255,255,255,.8)" }}>
+      <Header
+        title="Sistema"
+        subtitle="Preços, rotas, bot, equipe e backup."
+        right={
+          cfg.saving ? (
+            <span className="text-xs" style={{ color: C.inkSoft }}>
               salvando…
             </span>
-          )}
-        </div>
+          ) : null
+        }
+      />
+      {/* uma página de 8 mil pixels virou quatro abas (auditoria, issue #397) */}
+      <div className="px-4 md:px-10 mb-4">
+        <SubTabs value={secao} onChange={setSecao} options={SECOES_DO_SISTEMA} />
       </div>
-      <div className="px-6 md:px-10 pb-10 space-y-5">
+      <div className="px-4 md:px-10 pb-10 space-y-5">
         {erro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -1383,383 +1382,402 @@ export default function SistemaTab({
             </button>
           </div>
         )}
-        <MovimentoControl />
+        {secao === "equipe" && <SistemaEquipe />}
 
-        <SistemaErros />
+        {secao === "precos" && (
+          <>
+            <SistemaCidades />
 
-        <SistemaEquipe />
-
-        <SistemaReceitaAutomatica />
-
-        <SistemaCidades />
-
-        <Card className="anim-fadeUp">
-          <div className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Settings2 size={16} style={{ color: C.brandText }} /> Fluxo de agendamento e valores
-          </div>
-          <div className="flex items-center gap-3 mb-4 text-xs">
-            <label className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={cfg.segundaAtiva}
-                onChange={(e) => setSegunda({ active: e.target.checked })}
-              />{" "}
-              Ajuste automático de segunda-feira
-            </label>
-            {cfg.segundaAtiva && (
-              <span className="flex items-center gap-1.5">
-                antecipar{" "}
-                <TextInput
-                  type="number"
-                  min={1}
-                  max={4}
-                  defaultValue={cfg.segundaHoras}
-                  onBlur={(e) => setSegunda({ hours: Number.parseInt(e.target.value, 10) || 1 })}
-                  style={{ width: 56 }}
-                  className="py-1"
-                />{" "}
-                hora(s)
-              </span>
-            )}
-          </div>
-          {["ida", "volta"].map((dir) => (
-            <div key={dir} className="mb-4">
-              <div className="text-xs font-semibold mb-2" style={{ color: C.inkSoft }}>
-                {cfg.trips[dir].nome}
+            <Card className="anim-fadeUp">
+              <div className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Settings2 size={16} style={{ color: C.brandText }} /> Fluxo de agendamento e
+                valores
               </div>
-              <div className="space-y-2">
-                {cfg.trips[dir].pontos.map((p) => (
-                  <div
-                    key={p.id}
-                    className="grid grid-cols-[1fr_90px_90px_auto] gap-2 items-center rounded-lg px-2 py-2"
-                    style={{ background: C.panel2 }}
-                  >
-                    <TextInput
-                      defaultValue={p.nome}
-                      onBlur={(e) =>
-                        e.target.value !== p.nome && atualizarPonto(p, "nome", e.target.value)
-                      }
-                      className="py-1 text-xs"
-                    />
-                    <TextInput
-                      type="time"
-                      defaultValue={p.horaBase}
-                      onBlur={(e) =>
-                        e.target.value !== p.horaBase &&
-                        atualizarPonto(p, "horaBase", e.target.value)
-                      }
-                      className="py-1 text-xs"
-                    />
-                    {p.campo === "bairro" ? (
-                      <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
-                        por bairro
-                      </span>
-                    ) : (
-                      <TextInput
-                        type="number"
-                        defaultValue={p.valor}
-                        onBlur={(e) =>
-                          Number(e.target.value) !== p.valor &&
-                          atualizarPonto(p, "valor", e.target.value)
-                        }
-                        className="py-1 text-xs"
-                      />
-                    )}
-                    {p.core ? (
-                      <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
-                        fixo
-                      </span>
-                    ) : (
-                      <button onClick={() => removerPonto(p)}>
-                        <Trash2 size={13} style={{ color: C.red }} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-2">
-                <TextInput
-                  placeholder={`Novo ponto de ${cfg.trips[dir].nome.toLowerCase()}…`}
-                  value={novoPontoNome}
-                  onChange={(e) => setNovoPontoNome(e.target.value)}
-                  className="text-xs py-1.5"
-                />
-                <button
-                  onClick={() => addPontoOutro(dir)}
-                  className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0"
-                  style={{ background: C.amber, color: C.onBrand }}
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
-          ))}
-          <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
-            Editar um ponto: altere e clique fora do campo. "Buscar em Casa" usa a tabela de bairros
-            abaixo; os demais usam o valor fixo aqui. Vale para todos os sócios.
-          </div>
-        </Card>
-
-        <SistemaBairros />
-
-        <SistemaTrechos />
-        <SistemaLocaisOutros />
-
-        <SistemaBaldes />
-
-        <Card>
-          <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
-          <div className="grid sm:grid-cols-3 gap-3">
-            {[
-              {
-                v: "ia",
-                icon: Bot,
-                label: "IA automática",
-                desc: "O bot conduz o roteiro completo e confirma sozinho.",
-              },
-              {
-                v: "sombra",
-                icon: Eye,
-                label: "Sombra (só aprende)",
-                desc: 'O bot observa e aprende, sem gastar com respostas, e lança as reservas que a equipe marcar com "Agendado ☑️". Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).',
-              },
-              {
-                v: "manual",
-                icon: UserCog,
-                label: "Manual (você/equipe)",
-                desc: "A IA para de confirmar sozinha; a equipe assume as conversas.",
-              },
-            ].map((o) => (
-              <button
-                key={o.v}
-                onClick={() => trocarModo(o.v)}
-                className="btn-press border rounded-lg px-4 py-3 text-left"
-                style={{
-                  borderColor: modoAtendimento === o.v ? C.amber : C.border,
-                  background: modoAtendimento === o.v ? C.amberSoft : C.panel2,
-                }}
-              >
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <o.icon
-                    size={15}
-                    style={{ color: modoAtendimento === o.v ? C.brandText : C.inkSoft }}
-                  />
-                  {o.label}
-                </div>
-                <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
-                  {o.desc}
-                </div>
-              </button>
-            ))}
-          </div>
-          <div className="text-xs mt-2" style={{ color: C.inkFaint }}>
-            Vale para todos os sócios em tempo real.
-          </div>
-        </Card>
-
-        <SistemaBot />
-
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-semibold flex items-center gap-2">
-              <ShieldCheck size={16} style={{ color: C.green }} /> Diagnóstico e correção automática
-            </div>
-            <button
-              onClick={rodarDiagnostico}
-              disabled={rodando}
-              className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: C.amber, color: C.onBrand }}
-            >
-              <RefreshCw size={12} className={rodando ? "animate-spin" : ""} />{" "}
-              {rodando ? "Verificando…" : "Rodar diagnóstico agora"}
-            </button>
-          </div>
-          <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-            Checagem só-leitura. O banco já impede overbooking (trava de capacidade) e quantidade
-            inválida — isto aqui é uma segunda conferência manual.
-          </p>
-          {diag && (
-            <div className="anim-slideDown space-y-2">
-              <div className="text-xs" style={{ color: C.inkFaint }}>
-                Última verificação: {diag.quando}
-              </div>
-              {diag.fixed.length === 0 && diag.issues.length === 0 && (
-                <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}>
-                  <Check size={13} /> Nenhum problema encontrado.
-                </div>
-              )}
-              {diag.issues.map((f, i) => (
-                <div
-                  key={i}
-                  className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5"
-                  style={{ background: C.redSoft, color: C.red }}
-                >
-                  <AlertTriangle size={12} /> {f}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 pt-3 border-t" style={{ borderColor: C.borderSoft }}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>
-                Job no servidor
-              </div>
-              <button
-                type="button"
-                onClick={rodarDiagnosticoServidor}
-                disabled={serverDiag.rodando}
-                className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-                style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
-              >
-                <RefreshCw size={12} className={serverDiag.rodando ? "animate-spin" : ""} />{" "}
-                {serverDiag.rodando ? "Rodando…" : "Rodar no servidor agora"}
-              </button>
-            </div>
-            <p className="text-xs mb-2" style={{ color: C.inkFaint }}>
-              Roda sozinho de 6 em 6h. Overbooking, ponto removido, telefone ausente, reserva sem
-              viagem e pagamento em aberto viram alerta interno (sem duplicar nas 24h).
-            </p>
-            {diagServidor && (
-              <div className="anim-slideDown text-xs mb-2" style={{ color: C.inkSoft }}>
-                Última execução: {diagServidor.quando} — {diagServidor.novos_alertas} novo(s)
-                alerta(s).
-              </div>
-            )}
-            <div className="space-y-1.5">
-              {serverDiag.achados.length === 0 && !serverDiag.loading && (
-                <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}>
-                  <Check size={13} /> Servidor não encontrou pendências.
-                </div>
-              )}
-              {serverDiag.achados.map((a, i) => (
-                <div
-                  key={`${a.kind}-${a.reservation_id ?? a.trip_id ?? i}`}
-                  className="text-xs rounded-md px-2 py-1.5 flex items-center justify-between gap-1.5"
-                  style={{ background: C.warnSoft, color: C.warn }}
-                >
+              <div className="flex items-center gap-3 mb-4 text-xs">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={cfg.segundaAtiva}
+                    onChange={(e) => setSegunda({ active: e.target.checked })}
+                  />{" "}
+                  Ajuste automático de segunda-feira
+                </label>
+                {cfg.segundaAtiva && (
                   <span className="flex items-center gap-1.5">
-                    <AlertTriangle size={12} /> {DIAG_KIND_LABEL[a.kind] || a.kind}
-                  </span>
-                  {a.trip_date && onNavigate && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onNavigate({ tab: "agenda", deepLink: { kind: "data", data: a.trip_date } })
+                    antecipar{" "}
+                    <TextInput
+                      type="number"
+                      min={1}
+                      max={4}
+                      defaultValue={cfg.segundaHoras}
+                      onBlur={(e) =>
+                        setSegunda({ hours: Number.parseInt(e.target.value, 10) || 1 })
                       }
-                      className="btn-press shrink-0 text-[11px] px-2 py-1 rounded-md font-medium"
-                      style={{
-                        background: C.panel,
-                        color: C.warn,
-                        border: `1px solid ${C.warn}55`,
-                      }}
+                      style={{ width: 56 }}
+                      className="py-1"
+                    />{" "}
+                    hora(s)
+                  </span>
+                )}
+              </div>
+              {["ida", "volta"].map((dir) => (
+                <div key={dir} className="mb-4">
+                  <div className="text-xs font-semibold mb-2" style={{ color: C.inkSoft }}>
+                    {cfg.trips[dir].nome}
+                  </div>
+                  <div className="space-y-2">
+                    {cfg.trips[dir].pontos.map((p) => (
+                      <div
+                        key={p.id}
+                        className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_110px_90px_auto] gap-2 items-center rounded-lg px-2 py-2"
+                        style={{ background: C.panel2 }}
+                      >
+                        {/* no celular o nome ocupa a linha; horário e valor embaixo (auditoria, #397) */}
+                        <TextInput
+                          aria-label="Nome do ponto"
+                          defaultValue={p.nome}
+                          onBlur={(e) =>
+                            e.target.value !== p.nome && atualizarPonto(p, "nome", e.target.value)
+                          }
+                          className="py-1 text-xs col-span-3 sm:col-span-1"
+                        />
+                        <TextInput
+                          aria-label={`Horário de ${p.nome}`}
+                          type="time"
+                          defaultValue={p.horaBase}
+                          onBlur={(e) =>
+                            e.target.value !== p.horaBase &&
+                            atualizarPonto(p, "horaBase", e.target.value)
+                          }
+                          className="py-1 text-xs"
+                        />
+                        {p.campo === "bairro" ? (
+                          <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
+                            por bairro
+                          </span>
+                        ) : (
+                          <TextInput
+                            aria-label={`Valor de ${p.nome}`}
+                            type="number"
+                            defaultValue={p.valor}
+                            onBlur={(e) =>
+                              Number(e.target.value) !== p.valor &&
+                              atualizarPonto(p, "valor", e.target.value)
+                            }
+                            className="py-1 text-xs"
+                          />
+                        )}
+                        {p.core ? (
+                          <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
+                            fixo
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => removerPonto(p)}
+                            aria-label={`Remover o ponto ${p.nome}`}
+                            className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg"
+                          >
+                            <Trash2 size={14} style={{ color: C.brandText }} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <TextInput
+                      placeholder={`Novo ponto de ${cfg.trips[dir].nome.toLowerCase()}…`}
+                      value={novoPontoNome}
+                      onChange={(e) => setNovoPontoNome(e.target.value)}
+                      className="text-xs py-1.5"
+                    />
+                    <button
+                      onClick={() => addPontoOutro(dir)}
+                      className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0"
+                      style={{ background: C.amber, color: C.onBrand }}
                     >
-                      Ver reserva
+                      Adicionar
                     </button>
-                  )}
+                  </div>
                 </div>
               ))}
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <Download size={15} style={{ color: C.blue }} /> Backup completo
-          </div>
-          <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
-            Gerado pelo servidor com <b>todas</b> as tabelas — clientes, reservas, viagens,
-            veículos, motoristas, combustível, manutenções, financeiro, configurações, usuários e
-            logs — nunca só o que está carregado na tela. Um backup automático roda sozinho todo dia
-            às 3h (São Luís) e fica guardado por 30 dias.
-          </p>
-          <button
-            type="button"
-            onClick={gerarBackupAgora}
-            disabled={backup.gerando}
-            className="btn-press flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg"
-            style={{
-              background: backup.gerando ? C.border : C.panel2,
-              color: C.ink,
-              border: `1px solid ${C.border}`,
-            }}
-          >
-            <Download size={14} /> {backup.gerando ? "Gerando…" : "Gerar backup completo agora"}
-          </button>
-
-          {ultimoBackup && (
-            <div className="mt-3 anim-slideDown">
-              <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
-                Pronto — gerado em {fmtDataHora(ultimoBackup.gerado_em)}. Baixar como:
+              <div className="text-xs mt-1" style={{ color: C.inkFaint }}>
+                Editar um ponto: altere e clique fora do campo. "Buscar em Casa" usa a tabela de
+                bairros abaixo; os demais usam o valor fixo aqui. Vale para todos os sócios.
               </div>
-              <div className="flex flex-wrap gap-1.5">
+            </Card>
+
+            <SistemaBairros />
+
+            <SistemaTrechos />
+            <SistemaLocaisOutros />
+
+            <SistemaBaldes />
+          </>
+        )}
+
+        {secao === "bot" && (
+          <>
+            <Card>
+              <div className="text-sm font-semibold mb-3">Quem está atendendo agora</div>
+              <div className="grid sm:grid-cols-3 gap-3">
                 {[
-                  { id: "json", label: "JSON" },
-                  { id: "excel", label: "Excel (.xlsx)" },
-                  { id: "csv", label: "CSV (.zip)" },
-                  { id: "pdf", label: "PDF (relatório)" },
-                ].map((f) => (
+                  {
+                    v: "ia",
+                    icon: Bot,
+                    label: "IA automática",
+                    desc: "O bot conduz o roteiro completo e confirma sozinho.",
+                  },
+                  {
+                    v: "sombra",
+                    icon: Eye,
+                    label: "Sombra (só aprende)",
+                    desc: 'O bot observa e aprende, sem gastar com respostas, e lança as reservas que a equipe marcar com "Agendado ☑️". Para ver o que ele responderia, escreva no Chatwoot a nota privada #testar (com ou sem uma pergunta).',
+                  },
+                  {
+                    v: "manual",
+                    icon: UserCog,
+                    label: "Manual (você/equipe)",
+                    desc: "A IA para de confirmar sozinha; a equipe assume as conversas.",
+                  },
+                ].map((o) => (
                   <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => exportarBackup(f.id)}
-                    disabled={formatoEmProcesso === f.id}
-                    className="btn-press text-xs px-2.5 py-1.5 rounded-md"
+                    key={o.v}
+                    onClick={() => trocarModo(o.v)}
+                    className="btn-press border rounded-lg px-4 py-3 text-left"
                     style={{
-                      background: C.amberSoft,
-                      color: C.brandText,
-                      opacity: formatoEmProcesso === f.id ? 0.6 : 1,
+                      borderColor: modoAtendimento === o.v ? C.amber : C.border,
+                      background: modoAtendimento === o.v ? C.amberSoft : C.panel2,
                     }}
                   >
-                    {formatoEmProcesso === f.id ? "…" : f.label}
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <o.icon
+                        size={15}
+                        style={{ color: modoAtendimento === o.v ? C.brandText : C.inkSoft }}
+                      />
+                      {o.label}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
+                      {o.desc}
+                    </div>
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {backup.historico.length > 0 && (
-            <div className="mt-4">
-              <div className="text-xs font-semibold mb-1.5" style={{ color: C.inkSoft }}>
-                Histórico de backups
+              <div className="text-xs mt-2" style={{ color: C.inkFaint }}>
+                Vale para todos os sócios em tempo real.
               </div>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {backup.historico.map((h) => (
-                  <div
-                    key={h.id}
-                    className="flex items-center justify-between gap-2 text-xs rounded-md px-2.5 py-1.5"
-                    style={{ background: C.panel2 }}
-                  >
-                    <span style={{ color: C.inkSoft }}>
-                      {fmtDataHora(h.created_at)} ·{" "}
-                      {h.origem === "automatico" ? "automático" : "manual"} ·{" "}
-                      {(h.tamanho_bytes / 1024).toFixed(0)} KB
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => abrirBackupDoHistorico(h.id)}
-                      className="btn-press shrink-0"
-                      style={{ color: C.blue }}
-                    >
-                      Abrir
-                    </button>
+            </Card>
+
+            <SistemaBot />
+          </>
+        )}
+
+        {secao === "dados" && (
+          <>
+            <SistemaReceitaAutomatica />
+
+            <SistemaErros />
+
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold flex items-center gap-2">
+                  <ShieldCheck size={16} style={{ color: C.green }} /> Diagnóstico e correção
+                  automática
+                </div>
+                <button
+                  onClick={rodarDiagnostico}
+                  disabled={rodando}
+                  className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                  style={{ background: C.amber, color: C.onBrand }}
+                >
+                  <RefreshCw size={12} className={rodando ? "animate-spin" : ""} />{" "}
+                  {rodando ? "Verificando…" : "Rodar diagnóstico agora"}
+                </button>
+              </div>
+              <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+                Checagem só-leitura. O banco já impede overbooking (trava de capacidade) e
+                quantidade inválida — isto aqui é uma segunda conferência manual.
+              </p>
+              {diag && (
+                <div className="anim-slideDown space-y-2">
+                  <div className="text-xs" style={{ color: C.inkFaint }}>
+                    Última verificação: {diag.quando}
                   </div>
-                ))}
+                  {diag.fixed.length === 0 && diag.issues.length === 0 && (
+                    <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}>
+                      <Check size={13} /> Nenhum problema encontrado.
+                    </div>
+                  )}
+                  {diag.issues.map((f, i) => (
+                    <div
+                      key={i}
+                      className="text-xs rounded-md px-2 py-1.5 flex items-center gap-1.5"
+                      style={{ background: C.redSoft, color: C.red }}
+                    >
+                      <AlertTriangle size={12} /> {f}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 pt-3 border-t" style={{ borderColor: C.borderSoft }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>
+                    Job no servidor
+                  </div>
+                  <button
+                    type="button"
+                    onClick={rodarDiagnosticoServidor}
+                    disabled={serverDiag.rodando}
+                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                    style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+                  >
+                    <RefreshCw size={12} className={serverDiag.rodando ? "animate-spin" : ""} />{" "}
+                    {serverDiag.rodando ? "Rodando…" : "Rodar no servidor agora"}
+                  </button>
+                </div>
+                <p className="text-xs mb-2" style={{ color: C.inkFaint }}>
+                  Roda sozinho de 6 em 6h. Overbooking, ponto removido, telefone ausente, reserva
+                  sem viagem e pagamento em aberto viram alerta interno (sem duplicar nas 24h).
+                </p>
+                {diagServidor && (
+                  <div className="anim-slideDown text-xs mb-2" style={{ color: C.inkSoft }}>
+                    Última execução: {diagServidor.quando} — {diagServidor.novos_alertas} novo(s)
+                    alerta(s).
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  {serverDiag.achados.length === 0 && !serverDiag.loading && (
+                    <div className="text-xs flex items-center gap-1.5" style={{ color: C.green }}>
+                      <Check size={13} /> Servidor não encontrou pendências.
+                    </div>
+                  )}
+                  {serverDiag.achados.map((a, i) => (
+                    <div
+                      key={`${a.kind}-${a.reservation_id ?? a.trip_id ?? i}`}
+                      className="text-xs rounded-md px-2 py-1.5 flex items-center justify-between gap-1.5"
+                      style={{ background: C.warnSoft, color: C.warn }}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <AlertTriangle size={12} /> {DIAG_KIND_LABEL[a.kind] || a.kind}
+                      </span>
+                      {a.trip_date && onNavigate && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onNavigate({
+                              tab: "agenda",
+                              deepLink: { kind: "data", data: a.trip_date },
+                            })
+                          }
+                          className="btn-press shrink-0 text-[11px] px-2 py-1 rounded-md font-medium"
+                          style={{
+                            background: C.panel,
+                            color: C.warn,
+                            border: `1px solid ${C.warn}55`,
+                          }}
+                        >
+                          Ver reserva
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </Card>
+            </Card>
 
-        <BackupReservasDoDia />
+            <Card>
+              <div className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Download size={15} style={{ color: C.blue }} /> Backup completo
+              </div>
+              <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+                Gerado pelo servidor com <b>todas</b> as tabelas — clientes, reservas, viagens,
+                veículos, motoristas, combustível, manutenções, financeiro, configurações, usuários
+                e logs — nunca só o que está carregado na tela. Um backup automático roda sozinho
+                todo dia às 3h (São Luís) e fica guardado por 30 dias.
+              </p>
+              <button
+                type="button"
+                onClick={gerarBackupAgora}
+                disabled={backup.gerando}
+                className="btn-press flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg"
+                style={{
+                  background: backup.gerando ? C.border : C.panel2,
+                  color: C.ink,
+                  border: `1px solid ${C.border}`,
+                }}
+              >
+                <Download size={14} /> {backup.gerando ? "Gerando…" : "Gerar backup completo agora"}
+              </button>
 
-        <Card style={{ borderColor: C.blueSoft }}>
-          <div className="text-sm font-semibold mb-2">Acesso compartilhado entre sócios</div>
-          <p className="text-xs" style={{ color: C.inkSoft }}>
-            Todos que entram com sua conta enxergam os mesmos dados, atualizados em tempo real
-            (Supabase Realtime). É o mesmo banco onde o bot do WhatsApp vai escrever e ler as
-            reservas.
-          </p>
-        </Card>
+              {ultimoBackup && (
+                <div className="mt-3 anim-slideDown">
+                  <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
+                    Pronto — gerado em {fmtDataHora(ultimoBackup.gerado_em)}. Baixar como:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "json", label: "JSON" },
+                      { id: "excel", label: "Excel (.xlsx)" },
+                      { id: "csv", label: "CSV (.zip)" },
+                      { id: "pdf", label: "PDF (relatório)" },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => exportarBackup(f.id)}
+                        disabled={formatoEmProcesso === f.id}
+                        className="btn-press text-xs px-2.5 py-1.5 rounded-md"
+                        style={{
+                          background: C.amberSoft,
+                          color: C.brandText,
+                          opacity: formatoEmProcesso === f.id ? 0.6 : 1,
+                        }}
+                      >
+                        {formatoEmProcesso === f.id ? "…" : f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {backup.historico.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-xs font-semibold mb-1.5" style={{ color: C.inkSoft }}>
+                    Histórico de backups
+                  </div>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {backup.historico.map((h) => (
+                      <div
+                        key={h.id}
+                        className="flex items-center justify-between gap-2 text-xs rounded-md px-2.5 py-1.5"
+                        style={{ background: C.panel2 }}
+                      >
+                        <span style={{ color: C.inkSoft }}>
+                          {fmtDataHora(h.created_at)} ·{" "}
+                          {h.origem === "automatico" ? "automático" : "manual"} ·{" "}
+                          {(h.tamanho_bytes / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => abrirBackupDoHistorico(h.id)}
+                          className="btn-press shrink-0"
+                          style={{ color: C.blue }}
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <BackupReservasDoDia />
+
+            <MovimentoControl />
+          </>
+        )}
       </div>
     </div>
   );

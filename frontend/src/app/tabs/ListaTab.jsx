@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   ClipboardList,
   ListOrdered,
@@ -28,7 +27,6 @@ import {
   DirecaoDivisor,
   ErrorBanner,
   Header,
-  HeroFX,
   IDA_PRIORIDADE,
   OCUPA_VAGA,
   Pill,
@@ -41,7 +39,6 @@ import {
   digitos,
   enderecoEmbarque,
   fmtBRL,
-  fmtDate,
   inferirBaldeDesembarque,
   linhaReserva,
   todayStr,
@@ -187,69 +184,17 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           </div>
         }
       />
-      <div className="px-6 md:px-10 pb-10 space-y-6 stagger">
+      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
-        <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5"
-          style={{ borderColor: C.brandDim }}
-        >
-          <HeroFX />
-          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-3">
-            <div>
-              <div
-                className="capitalize"
-                style={{
-                  fontWeight: 700,
-                  fontSize: "1.3rem",
-                  color: "#fff",
-                }}
-              >
-                {data === todayStr() ? "Hoje" : diaSemana(data)}
-              </div>
-              <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
-                {fmtDate(data)} · lista de embarque
-              </div>
-            </div>
-            <div className="flex gap-5">
-              <div>
-                <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
-                >
-                  Passageiros
-                </div>
-                <div
-                  className="font-bold"
-                  style={{
-                    color: "#fff",
-                    fontSize: "1.15rem",
-                  }}
-                >
-                  {ativos.reduce((s, r) => s + r.quantidade, 0)}
-                </div>
-              </div>
-              <div>
-                <div
-                  className="text-[10px] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,.6)" }}
-                >
-                  Embarcados
-                </div>
-                <div
-                  className="font-bold"
-                  style={{
-                    color: "#fff",
-                    fontSize: "1.15rem",
-                  }}
-                >
-                  {ativos
-                    .filter((r) => r.status === "embarcado")
-                    .reduce((s, r) => s + r.quantidade, 0)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* resumo do dia numa linha (auditoria, issue #397: o cartão de destaque antigo saiu) */}
+        <p className="text-[13px]" style={{ color: C.inkSoft }} data-testid="resumo-da-lista">
+          <b className="capitalize" style={{ color: C.ink }}>
+            {data === todayStr() ? "Hoje" : diaSemana(data)}
+          </b>{" "}
+          · {ativos.reduce((s, r) => s + r.quantidade, 0)} passageiros ·{" "}
+          {ativos.filter((r) => r.status === "embarcado").reduce((s, r) => s + r.quantidade, 0)}{" "}
+          embarcados
+        </p>
         <SubTabs
           value={subview}
           onChange={setSubview}
@@ -535,11 +480,11 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
         }, {})
     : null;
   return (
-    <Card>
-      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-        <div className="text-xs font-bold tracking-wide" style={{ color: C.inkSoft }}>
+    <section className="border-t pt-3" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+        <h3 className="text-[12px] font-bold tracking-wide" style={{ color: C.inkSoft }}>
           {titulo}
-        </div>
+        </h3>
         <div className="flex items-center gap-1.5">
           {tally &&
             Object.entries(tally).map(([k, n]) => {
@@ -558,7 +503,7 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
             <button
               type="button"
               onClick={() => setOrganizando(true)}
-              className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+              className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2.5 min-h-[36px] rounded-lg"
               style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
             >
               <ListOrdered size={12} /> ORGANIZAR
@@ -580,8 +525,8 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
           onFechar={() => setOrganizando(false)}
         />
       ) : itens.length === 0 ? (
-        <div className="text-xs" style={{ color: C.inkFaint }}>
-          — sem anotações —
+        <div className="text-xs py-2" style={{ color: C.inkFaint }}>
+          Ninguém neste ponto.
         </div>
       ) : (
         <div>
@@ -597,7 +542,7 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
           ))}
         </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -654,32 +599,45 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
         </button>
       )}
       <div className="min-w-0 py-1.5">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[15px] font-bold shrink-0" style={{ color: C.ink }}>
-            {ehEnc ? (
-              <>
-                <Package size={13} className="inline mr-0.5" aria-hidden="true" />
-                ENC
-              </>
-            ) : (
-              `${r.quantidade}P`
-            )}
-          </span>
-          <span
-            className="text-[14px] font-semibold leading-snug"
-            style={{
-              color: C.ink,
-              overflowWrap: "anywhere",
-              textDecoration: faltou ? "line-through" : "none",
-            }}
+        {/* tocar no endereço abre a reserva completa (auditoria, issue #397): a seta saiu e o
+            texto ganhou a largura dela */}
+        <button
+          type="button"
+          onClick={() => onAbrir?.(r)}
+          disabled={!onAbrir}
+          aria-label={`Ver reserva completa de ${r.nome || r.telefone || "passageiro"}`}
+          className="toque-at block w-full text-left"
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="text-[15px] font-bold shrink-0" style={{ color: C.ink }}>
+              {ehEnc ? (
+                <>
+                  <Package size={13} className="inline mr-0.5" aria-hidden="true" />
+                  ENC
+                </>
+              ) : (
+                `${r.quantidade}P`
+              )}
+            </span>
+            <span
+              className="text-[14px] font-semibold leading-snug"
+              style={{
+                color: C.ink,
+                overflowWrap: "anywhere",
+                textDecoration: faltou ? "line-through" : "none",
+              }}
+            >
+              {endereco}
+            </span>
+          </div>
+          <div
+            className="text-[12px] mt-0.5"
+            style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
           >
-            {endereco}
-          </span>
-        </div>
-        <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint, overflowWrap: "anywhere" }}>
-          {ehEnc ? "contato: " : ""}
-          {r.nome || (ehEnc ? r.telefone : "") || "—"}
-        </div>
+            {ehEnc ? "contato: " : ""}
+            {r.nome || (ehEnc ? r.telefone : "") || "—"}
+          </div>
+        </button>
         {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
         {ehEnc && (
           <div
@@ -719,17 +677,6 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           >
             <MessageCircle size={18} />
           </a>
-        )}
-        {onAbrir && (
-          <button
-            type="button"
-            onClick={() => onAbrir(r)}
-            aria-label="Ver reserva completa"
-            className={icone}
-            style={{ color: C.inkSoft }}
-          >
-            <ChevronRight size={19} />
-          </button>
         )}
       </div>
     </div>

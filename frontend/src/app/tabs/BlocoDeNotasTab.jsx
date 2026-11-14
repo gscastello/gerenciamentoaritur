@@ -141,7 +141,7 @@ export default function BlocoDeNotasTab() {
           </button>
         }
       />
-      <div className="px-6 md:px-10 pb-10">
+      <div className="px-4 md:px-10 pb-10">
         {error && (
           <ErrorBanner onRetry={recarregar} className="mb-3">
             {mensagemAmigavel(error, "Não foi possível carregar as notas.")}

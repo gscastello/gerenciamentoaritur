@@ -456,8 +456,10 @@ export default function AgendaTab({
       {noCelular &&
         slotTopo &&
         createPortal(<BarraDoDia data={data} setData={setData} />, slotTopo)}
-      <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
-        {data !== todayStr() && (
+      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
+        {/* só quando a pessoa saiu do dia de trabalho: à noite a Agenda já abre em amanhã de
+            propósito, e aí não é "outro dia" (auditoria, issue #397) */}
+        {data !== diaAgendaPadrao() && (
           <FadeIn>
             <div
               className="flex items-center justify-between gap-2 text-[13px]"
@@ -467,11 +469,11 @@ export default function AgendaTab({
               <span className="truncate">Você está vendo outro dia</span>
               <button
                 type="button"
-                onClick={() => setData(todayStr())}
+                onClick={() => setData(diaAgendaPadrao())}
                 className="btn-press shrink-0 min-h-[40px] px-3 rounded-lg font-semibold"
                 style={{ color: C.ink, background: C.panel2 }}
               >
-                Voltar para hoje
+                {diaAgendaPadrao() === todayStr() ? "Voltar para hoje" : "Voltar para amanhã"}
               </button>
             </div>
           </FadeIn>
