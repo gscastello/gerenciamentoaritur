@@ -71,6 +71,7 @@ import {
   notasSemReservaSemEndereco,
   sentidoPeloLugarDoEmbarque,
   idaPeloEmbarqueEmSaoLuis,
+  outroPodeSerBusca,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -92,6 +93,8 @@ import {
   bairroEscrito,
   cidadeDoEnderecoEscrito,
   voltaPeloEnderecoDoInterior,
+  sentidoDoDiaEscrito,
+  pediuDeNovo,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -257,9 +260,51 @@ async function viagensJaReservadas(customerId: string | null, hoje: string, ante
     .is("deleted_at", null)
     .gte("trips.trip_date", hoje);
   // avaliação (#419): o que existia antes da marca, com o status de então (cancelada depois ainda contava)
-  q = antesDe ? q.lt("created_at", antesDe) : q.neq("status", "cancelada");
+  q = antesDe ? q.lt("created_at", antesDe).or(`status.neq.cancelada,cancelled_at.gte.${antesDe}`) : q.neq("status", "cancelada");
   const { data } = await q;
   return new Set((data ?? []).map((r: Bloco) => `${r.trips.trip_date}|${r.trips.direction}`));
+}
+
+/**
+ * "Gostaria de agendar de novo!" (issue #419): a reserva que o passageiro cancelou nos últimos 7
+ * dias, como pedido — mesmo sentido, embarque e desembarque; o dia é o escrito/confirmado agora ou,
+ * se ainda não passou, o da cancelada. Na avaliação, só o que já estava cancelado antes da marca.
+ */
+async function pedidoDaReservaCancelada(
+  customerId: string | null,
+  hoje: string,
+  dia: string | null,
+  antesDe?: string,
+): Promise<PedidoExtraido | null> {
+  if (!customerId) return null;
+  const desde = new Date((antesDe ? Date.parse(antesDe) : Date.now()) - 7 * 24 * 3600 * 1000).toISOString();
+  let q = supabaseAdmin
+    .from("reservations")
+    .select("type, quantity, pickup_neighborhood, pickup_detail, dropoff_location, cancelled_at, route_points(code), trips!inner(trip_date, direction)")
+    .eq("customer_id", customerId)
+    .eq("status", "cancelada")
+    .is("deleted_at", null)
+    .gte("cancelled_at", desde)
+    .order("cancelled_at", { ascending: false })
+    .limit(1);
+  if (antesDe) q = q.lt("cancelled_at", antesDe);
+  const { data } = await q;
+  const r = (data ?? [])[0] as Bloco | undefined;
+  if (!r) return null;
+  const data_ = dia ?? (r.trips.trip_date >= hoje ? r.trips.trip_date : null);
+  const volta = r.trips.direction === "volta";
+  return {
+    tipo: r.type ?? "passagem",
+    data: data_,
+    direcao: r.trips.direction,
+    ponto: volta ? null : (r.route_points?.code ?? null),
+    cidade_dita: volta ? (r.route_points?.code ?? null) : null,
+    bairro: r.pickup_neighborhood ?? null,
+    endereco: r.pickup_detail ?? null,
+    desembarque: r.dropoff_location ?? null,
+    quantidade: r.quantity ?? 1,
+    duvida: "Refeita da reserva que o passageiro cancelou (\"agendar de novo\"): confira.",
+  };
 }
 
 /** O que a equipe ensinou sobre o passageiro (customers.bot_instructions, issue #328). */
@@ -348,13 +393,24 @@ async function lerEGravar(
   const lidos = await lerPedidos(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
-  const juntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
+  const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
   const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto }));
   // a ORIGEM decide: saindo de Pirapemas/Cantanhede é Volta, de São Luís é Ida (dono, 14/11 — #407)
   const origem = origemDoPedido(falasDoTrecho);
+  // "agendar de novo" sem pedido lido: refaz a reserva que ele cancelou (issue #419)
+  let juntos = lidosJuntos;
+  if (!juntos.length && pediuDeNovo(textosDoCliente)) {
+    const falasDoDia = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
+    const dias = [...new Set([...datasEscritas(doCliente.map((m) => ({ texto: m.texto, em: m.em }))), ...datasConfirmadas(falasDoDia)])].filter((d) => d >= hoje);
+    const refeito = await pedidoDaReservaCancelada(cliente?.id ?? null, hoje, dias.length === 1 ? dias[0] : null, simular?.reservasAntesDe);
+    if (refeito) {
+      juntos = [refeito];
+      evento("bot_pedido_de_novo", { conversa: entrada.chatwootConversationId });
+    }
+  }
   const pelaOrigem = pedidosPelaOrigem(juntos, origem);
   if (pelaOrigem !== juntos) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
@@ -368,7 +424,7 @@ async function lerEGravar(
   const pares = segundaViagemEhAOutra(comOPar, textosDoCliente);
   if (pares !== comOPar) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
   // Volta que embarca num lugar de São Luís (trecho da BR: Pedrinhas, Estiva…) é a Ida (issue #419)
-  const naBr = idaPeloEmbarqueEmSaoLuis(pares, ctx.locaisDeOutros);
+  const naBr = idaPeloEmbarqueEmSaoLuis(pares, ctx.locaisDeOutros, (data) => sentidoDoDiaEscrito(mensagensDoCliente, data));
   if (naBr !== pares) evento("bot_volta_na_br_e_ida", { conversa: entrada.chatwootConversationId });
   // "Agendado ☑️ seg Ida Estiva 2P": o que a EQUIPE escreveu na marca vence a leitura (issue #420)
   const marca = opcoes.confirmadoPelaEquipe ? mensagens.find((m) => m.id === entrada.mensagemId) : undefined;
@@ -401,6 +457,11 @@ async function lerEGravar(
   const ondeEmbarca = new Set<PedidoExtraido>();
   // o trecho dito decide o sentido só quando há UMA viagem (várias: vale a do dia — issue #419)
   const origemUnica = pedidos.length === 1 ? origem : null;
+  // NINGUÉM escreveu o dia (cliente, equipe, marca): a leitura não chuta "amanhã" — fica sem dia e o
+  // bot pergunta ao passageiro (issue #419: "guarde uma vaga pra mim" lido como amanhã; era segunda)
+  const algumDiaEscrito = datasEscritas(mensagensDoCliente).length > 0 ||
+    confirmadas.length > 0 ||
+    datasEscritas(recentes.filter((m) => m.quem === "equipe" && m.id !== entrada.mensagemId).map((m) => ({ texto: m.texto, em: m.em }))).length > 0;
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -413,6 +474,10 @@ async function lerEGravar(
       sentidoDaEquipe: dadosMarca.direcao ?? null,
     });
     Object.assign(p, conferido.pedido);
+    if (!algumDiaEscrito && p.data && (p.tipo ?? "passagem") !== "encomenda") {
+      evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
+      p.data = null;
+    }
     // busca em casa num endereço de Pirapemas/Cantanhede não existe: é a Volta saindo de lá (issue #419)
     if (
       (p.tipo ?? "passagem") !== "encomenda" &&
@@ -607,6 +672,18 @@ async function lerEGravar(
         const i = v.aConfirmar.indexOf("endereco");
         if (i >= 0) v.aConfirmar.splice(i, 1);
         evento("bot_busca_na_br", { conversa: entrada.chatwootConversationId, local });
+      }
+    }
+    // "vou esperar em frente ao Pátio Norte": lugar da cidade é busca pelo bairro, não Outros (issue #419)
+    if (outroPodeSerBusca(r, ctx.locaisDeOutros) && ctx.pontos.ida.includes("busca")) {
+      const { data: lugaresSl } = await supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: String(r.pickup_detail).slice(0, 300) });
+      const peloLugar = bairroPelosLugares((lugaresSl ?? []) as LugarDeSaoLuis[]);
+      const daTabela = peloLugar ? bairroDaTabela(peloLugar.bairro, ctx.bairrosTabela) : null;
+      if (peloLugar && daTabela) {
+        r.route_point_code = "busca";
+        r.pickup_neighborhood = daTabela.neighborhood;
+        r.notes = [r.notes, `${peloLugar.lugar} fica no ${daTabela.neighborhood}: busca pelo bairro, não Outros.`].filter(Boolean).join(" ").slice(0, 300);
+        evento("bot_outro_era_busca", { conversa: entrada.chatwootConversationId, bairro: daTabela.neighborhood });
       }
     }
     // o cliente deu o endereço e o bairro foi achado (tabela, memória, lugares ou internet): a
@@ -952,7 +1029,8 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
   await avisarAgendadoQueFalhou(
     entrada,
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
-    { pendentes, nome: nomeDoCliente },
+    // sem o dia escrito, quem sabe é o passageiro: pergunta a ele (autorizado pelo dono, 14/11)
+    { pendentes: [...pendentes, ...(motivosLidos.includes("sem_data") ? ["sem_data"] : [])], nome: nomeDoCliente },
   );
   // o cliente escreveu DURANTE esta leitura e ficou algo pendente: lê de novo uma vez, agora sem
   // concorrência — o que ele mandou nesses segundos não se perde (issue #337)

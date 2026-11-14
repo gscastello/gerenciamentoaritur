@@ -479,11 +479,18 @@ export function localDeOutros(textos: (string | null | undefined)[], locais: str
  * Volta sai de Pirapemas/Cantanhede. É a Ida, embarque em Outros (issue #419: "dia 14 de Pedrinhas"
  * lida como Volta porque outra mensagem dizia "de Pirapemas a São Luís… dia 15").
  */
-export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(pedidos: P[], locais: string[]): P[] {
+export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(
+  pedidos: P[],
+  locais: string[],
+  /** o sentido que o cliente escreveu para aquele dia ("vou voltar segunda pra São Luís" = Volta: não mexe) */
+  sentidoDoDia: (data: string | null | undefined) => "ida" | "volta" | null = () => null,
+): P[] {
   let mudou = false;
   const out = pedidos.map((p) => {
     if ((p.tipo ?? "passagem") === "encomenda" || p.direcao !== "volta" || !p.endereco) return p;
-    const local = localDeOutros([p.endereco], locais);
+    if (sentidoDoDia(p.data) === "volta") return p;
+    // "Rua do Aeroporto" (Cantanhede) é rua, não o aeroporto de São Luís
+    const local = localDeOutros([semLogradouros(p.endereco)], locais);
     if (!local || cidadeDaVolta(p.endereco) || ["campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"].some((c) => normalizarTexto(p.endereco).includes(c))) return p;
     mudou = true;
     const desceEmSaoLuis = /sao luis|slz/.test(normalizarTexto(p.desembarque ?? ""));
@@ -500,6 +507,23 @@ export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(pedidos: P[],
   });
   return mudou ? out : pedidos;
 }
+
+/**
+ * Ida em "Outros" num lugar da CIDADE ("vou esperar em frente ao Pátio Norte"): Outros é a BR, posto,
+ * aeroporto e os locais cadastrados; ponto de referência dentro de São Luís é busca, pelo bairro
+ * (issue #419). Devolve true quando vale procurar o bairro do lugar na memória de São Luís.
+ */
+export function outroPodeSerBusca(
+  r: { direction: string; route_point_code: string | null; pickup_detail: string | null },
+  locais: string[],
+): boolean {
+  if (r.direction !== "ida" || r.route_point_code !== "outro" || !r.pickup_detail) return false;
+  if (localDeOutros([r.pickup_detail], locais)) return false;
+  const n = ` ${normalizarTexto(r.pickup_detail)} `;
+  if (/ (br|posto|aeroporto|rodovia|estrada|pista|beira|km|retorno|rodoviaria|terminal|ponte|balsa|ferry|prf) /.test(n)) return false;
+  return !CIDADES_DA_ROTA_FORA.some((c) => n.includes(` ${c} `));
+}
+const CIDADES_DA_ROTA_FORA = ["pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
 
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
@@ -1072,6 +1096,7 @@ export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
   qual_viagem: "é a Volta de hoje (saindo daí para São Luís) ou a Ida de amanhã (saindo de São Luís)?",
   onde_embarca: "você vai embarcar em São Luís (Ida) ou aí em Pirapemas/Cantanhede (Volta, para São Luís)?",
   cidade: "você embarca em Pirapemas ou em Cantanhede?",
+  sem_data: "qual o dia da sua viagem?",
 };
 
 /**

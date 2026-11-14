@@ -21,6 +21,10 @@ Deno.test("#419 avaliação: certo, errado, faltou, pendente", () => {
   // dúvida: pendência
   const p = compararCaso([ida], [{ ...ida, pendencia: { motivo: "cidade", codigo: "cidade" } }]);
   assertEquals(p.resultado, "pendente");
+  // não lançou por falta do dia: pendência com o motivo; caso conferido em que perguntar é o certo
+  assertEquals(compararCaso([ida], [], { motivos: ["sem_data"] }).resultado, "pendente");
+  assertEquals(compararCaso([ida], [], { motivos: ["sem_data"], pendenteOk: true }).resultado, "certo");
+  assertEquals(compararCaso([ida], [], { motivos: ["ja_reservado"] }).resultado, "faltou");
   // errado vence tudo
   assertEquals(compararCaso([ida, volta], [{ ...ida, quantity: 2 }]).resultado, "errado");
 });

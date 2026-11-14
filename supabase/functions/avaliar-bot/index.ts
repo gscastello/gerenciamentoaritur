@@ -40,8 +40,12 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null) {
       pickup_detail: p.pickup_detail,
       dropoff_location: p.dropoff_location,
       pendencia: p.pendencia ?? null,
+      notes: p.notes ?? null,
     }));
-    const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas);
+    const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas, {
+      motivos: r.motivos,
+      pendenteOk: caso.pendente_ok === true,
+    });
     await supabaseAdmin.from("bot_avaliacoes").insert({
       rodada,
       caso_id: caso.id,

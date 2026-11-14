@@ -118,6 +118,27 @@ export function pedidosPeloSentidoDoDia<P extends PedidoDoPar>(pedidos: P[], men
   return mudou ? out : pedidos;
 }
 
+/** "Gostaria de agendar de novo!", "marca novamente", "reserva outra vez" (issue #419). */
+export function pediuDeNovo(textos: string[]): boolean {
+  return textos.some((t) =>
+    / (agend|marc|reserv|remarc)\w* (de novo|novamente|outra vez|denovo) /.test(` ${normalizarTexto(t)} `) ||
+    / (de novo|novamente|denovo) (a|minha|aquela)? ?(passagem|reserva|vaga) /.test(` ${normalizarTexto(t)} `)
+  );
+}
+
+/** O sentido que o cliente escreveu nas mensagens que citam SÓ aquele dia (null = não escreveu ou os dois). */
+export function sentidoDoDiaEscrito(mensagens: MensagemDoCliente[], data: string | null | undefined): "ida" | "volta" | null {
+  if (!data) return null;
+  const doDia = mensagens.filter((m) => {
+    const ds = datasEscritas([m]);
+    return ds.length === 1 && ds[0] === data;
+  });
+  const t = doDia.map((m) => m.texto);
+  // "vou voltar segunda-feira com vocês para São Luís" (o rótulo pega "volta", não "voltar")
+  const voltar = t.some((x) => / (voltar|volto|voltando|retornar|retorno pra|retorno para) /.test(` ${normalizarTexto(x)} `));
+  return sentidoEscrito(t) ?? (voltar ? "volta" : null);
+}
+
 /**
  * "Uma passagem na segunda pra ir e na terça pra volta" e a leitura trouxe só UMA viagem
  * (issue #415): monta a outra com o dia que o cliente escreveu depois. A Volta sai da cidade
@@ -424,6 +445,7 @@ const RE_CIDADE_DO_INTERIOR = /(?:^| )(pirapemas|pirapema|piraprmas|cantanhede|c
 /** Antes da cidade, na mesma linha: é o destino ("vou pra", "fico em", "destino") ou o nome de uma rua/residencial. */
 const RE_CIDADE_E_DESTINO = / (pra|pro|para|p|ate|destino|vou|vamos|ir|ficar|fico|fica|desco|descer|deixar|chegar|chego|volto|voltar|sou|natural|morava|familia|mae|pai) /;
 const RE_NOME_DE_RUA = / (residencial|conjunto|condominio|vila|rua|avenida|av|travessa|tv|bairro|loteamento) $/;
+const RE_CAMPO_DE_DESTINO = / (ficar|fica|fico|desembarque|desembarcar|destino|desce|descer|deixar|vai ficar) /;
 const RE_MARCA_DE_ENDERECO = / (rua|r|avenida|av|travessa|tv|praca|povoado|endereco|centro|bairro|perto|proximo|px|prox|casa|esquina|numero) /;
 
 /**
@@ -443,6 +465,8 @@ export function cidadeDoEnderecoEscrito(textos: string[]): { cidade: "pirapemas"
       if (!m) continue;
       const antes = ` ${n.slice(0, m.index! + 1).trim()} `;
       if (RE_CIDADE_E_DESTINO.test(antes) || RE_NOME_DE_RUA.test(antes)) continue;
+      // formulário: a resposta de "Onde você vai ficar? (Cidade, Rua…)" é o DESTINO (issue #419)
+      if (linhas.slice(Math.max(0, k - 3), k).some((l) => RE_CAMPO_DE_DESTINO.test(` ${normalizarTexto(l)} `))) continue;
       const cidade = m[1].startsWith("pira") ? "pirapemas" : "cantanhede";
       const soACidade = normalizarTexto(linhas[k]).split(" ").length <= 2;
       let linha: string | null = null;
@@ -574,6 +598,9 @@ export function quantidadeEscrita(textos: string[]): number | null {
 // ---------------------------------------------------------------------------
 
 /** rodoviária, retorno, buscar em casa, Outros (aeroporto, BR, Posto Carone). Vários = null. */
+const RE_RETORNO_E_VIAGEM =
+  / (e retorno|retorno (no|na|dia|em|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha|depois|semana|de manha|a tarde|pra|para)) /;
+
 export function pontoEscrito(textos: string[], pontos: string[]): string | null {
   const achados: string[] = [];
   for (const t of textos) {
@@ -583,7 +610,9 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
     if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
     // "parada das vans" é o Retorno das Vans, não a rodoviária (dono, 11/11 — issue #333)
-    if (/ retorno | (parada|ponto) das? vans? /.test(n)) achados.push("retorno");
+    // "e retorno segunda-feira de manhã" é a viagem de volta, não o ponto Retorno (issue #419)
+    const retornoEhViagem = RE_RETORNO_E_VIAGEM.test(n);
+    if ((!retornoEhViagem && / retorno /.test(n)) || / (parada|ponto) das? vans? /.test(n)) achados.push("retorno");
     else if (/ (aeroporto|posto carone|carone|br) /.test(n)) achados.push("outro");
     // "estou em casa" no meio da conversa não é pedido de busca: só com buscar/pegar ou numa resposta curta
     const curta = n.trim().split(" ").length <= 5;

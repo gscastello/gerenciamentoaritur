@@ -8,7 +8,8 @@ import {
   segundaViagemEhAOutra,
   voltaPeloEnderecoDoInterior,
 } from "./pedidoDoCliente.ts";
-import { idaPeloEmbarqueEmSaoLuis, type LugarNasCidades, sentidoPeloLugarDoEmbarque } from "./rascunhoPuro.ts";
+import { idaPeloEmbarqueEmSaoLuis, type LugarNasCidades, outroPodeSerBusca, sentidoPeloLugarDoEmbarque } from "./rascunhoPuro.ts";
+import { pediuDeNovo, pontoEscrito } from "./pedidoDoCliente.ts";
 
 type Lido = {
   tipo: string;
@@ -35,6 +36,13 @@ Deno.test("#419 endereço escrito em Pirapemas/Cantanhede: a cidade do embarque,
   assertEquals(cidadeDoEnderecoEscrito(["Rua 5, Residencial Pirapemas"]), null);
   assertEquals(cidadeDoEnderecoEscrito(["sou de Cantanhede, moro na rua do sol"]), null);
   assertEquals(cidadeDoEnderecoEscrito(["Dia 15/11", "Pirapemas"]), null);
+  // formulário: a cidade na resposta de "Onde você vai ficar?" é o destino
+  assertEquals(
+    cidadeDoEnderecoEscrito([
+      ". Local de Embarque\n(Retorno/Rodoviária, Buscar em casa?)\nVila Azul, Rua Primeiro, 58\n\n. Onde você vai ficar?\n(Cidade, Rua e ponto de referência)\nRua das Flores, Cantanhede.",
+    ]),
+    null,
+  );
   // as duas cidades: não decide
   assertEquals(cidadeDoEnderecoEscrito(["Rua A 1, Pirapemas", "Rua B 2, Cantanhede"]), null);
 });
@@ -113,7 +121,38 @@ Deno.test("#419 Volta que embarca na BR de São Luís é a Ida", () => {
   const lidos: Lido[] = [{ tipo: "passagem", data: "2026-11-14", direcao: "volta", ponto: "pirapemas", bairro: null, endereco: "BR — Pedrinhas", desembarque: "São Luís", cidade_dita: "pirapemas" }];
   const [p] = idaPeloEmbarqueEmSaoLuis(lidos, locais);
   assertEquals([p.direcao, p.ponto, p.endereco, p.desembarque, p.cidade_dita], ["ida", "outro", "Pedrinhas (BR)", null, null]);
+  // "Rua do Aeroporto" é rua (Cantanhede), e o cliente escreveu que VOLTA naquele dia
+  const rua = [{ ...lidos[0], data: "2026-11-16", endereco: "Perto do campo da rua do Aeroporto", cidade_dita: "cantanhede" }];
+  assertEquals(idaPeloEmbarqueEmSaoLuis(rua, [...locais, "Aeroporto"]), rua);
+  const aeroporto = [{ ...rua[0], endereco: "Aeroporto de São Luís" }];
+  assertEquals(idaPeloEmbarqueEmSaoLuis(aeroporto, [...locais, "Aeroporto"], () => "volta"), aeroporto);
   // embarque em Pirapemas: não mexe
   const certo = [{ ...lidos[0], endereco: "Rua do Sol, Pirapemas" }];
   assertEquals(idaPeloEmbarqueEmSaoLuis(certo, locais), certo);
+});
+
+Deno.test("#419 'e retorno segunda-feira' é a viagem de volta, não o ponto Retorno", () => {
+  const pontos = ["busca", "rodoviaria", "retorno", "outro"];
+  assertEquals(pontoEscrito(["passagem pra São Luís amanhã a tarde e retorno segunda-feira de manhã"], pontos), null);
+  assertEquals(pontoEscrito(["espero no retorno"], pontos), "retorno");
+  assertEquals(pontoEscrito(["vou estar no retorno do aeroporto"], pontos), "retorno");
+});
+
+Deno.test("#419 Outros num lugar da cidade pode ser busca pelo bairro; BR, posto e aeroporto não", () => {
+  const locais = ["Estiva", "Pedrinhas"];
+  const r = (pickup_detail: string) => ({ direction: "ida", route_point_code: "outro", pickup_detail });
+  assert(outroPodeSerBusca(r("Em frente ao shopping"), locais));
+  assert(!outroPodeSerBusca(r("Estiva"), locais));
+  assert(!outroPodeSerBusca(r("Posto Ipiranga da BR"), locais));
+  assert(!outroPodeSerBusca(r("Aeroporto de São Luís"), locais));
+  assert(!outroPodeSerBusca(r("Cantanhede, praça da matriz"), locais));
+  assert(!outroPodeSerBusca({ ...r("Em frente ao shopping"), route_point_code: "busca" }, locais));
+});
+
+Deno.test("#419 'agendar de novo' é refazer a reserva cancelada", () => {
+  assert(pediuDeNovo(["Gostaria de agendar de novo! Agora certeza!"]));
+  assert(pediuDeNovo(["marca novamente pra mim"]));
+  assert(pediuDeNovo(["quero de novo a passagem"]));
+  assert(!pediuDeNovo(["obrigado de novo"]));
+  assert(!pediuDeNovo(["Uma passagem pra amanhã"]));
 });

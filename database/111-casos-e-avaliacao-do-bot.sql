@@ -46,7 +46,7 @@ create policy bot_avaliacoes_admin on public.bot_avaliacoes for select using (co
 
 -- Gera (ou completa) os casos a partir das marcas "Agendado ☑️" da equipe desde `p_desde`.
 -- Esperado = viagens do passageiro (ou lançadas por esta marca para outra pessoa) criadas entre a
--- marca e 12 h depois, menos as canceladas em até 6 h (correção de erro, não pedido).
+-- marca e 12 h depois, menos as canceladas em até 30 min (correção de erro, não pedido).
 create or replace function public.fn_gerar_casos_bot(p_desde timestamptz default timestamptz '2026-11-10 00:00:00-03')
 returns integer
 language plpgsql
@@ -87,7 +87,9 @@ begin
                 and (r.customer_id = a.cliente or r.whatsapp_source_message_id like 'cw-' || a.mid || '-agendado-%')
                 and r.created_at >= a.em - interval '1 minute'
                 and r.created_at < a.em + interval '12 hours'
-                and not (r.status = 'cancelada' and r.cancelled_at < r.created_at + interval '6 hours')
+                -- cancelada em até 30 min = a equipe corrigindo um erro; depois disso costuma ser o
+                -- passageiro desmarcando ("não vai dar de ir hoje"), e a reserva estava certa
+                and not (r.status = 'cancelada' and r.cancelled_at < r.created_at + interval '30 minutes')
            ), '[]'::jsonb)
       from alvo a
     on conflict (mensagem_id) do nothing
@@ -100,3 +102,7 @@ $$;
 
 revoke all on function public.fn_gerar_casos_bot(timestamptz) from public, anon, authenticated;
 grant execute on function public.fn_gerar_casos_bot(timestamptz) to service_role;
+
+-- 111b — o certo, em alguns casos conferidos, é PERGUNTAR (o cliente não escreveu o dia): a pendência
+-- conta como acerto. Casos conferidos à mão ficam com verificado = true e a observação do porquê.
+alter table public.bot_casos add column if not exists pendente_ok boolean not null default false;

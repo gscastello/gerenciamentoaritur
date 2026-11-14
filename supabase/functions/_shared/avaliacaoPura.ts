@@ -42,7 +42,8 @@ function camposDiferentes(esperada: ViagemDoCaso, lida: ViagemDoCaso): string[] 
   }
   if (Number(esperada.quantity || 1) !== Number(lida.quantity || 1)) out.push(`quantidade: ${lida.quantity} ≠ ${esperada.quantity}`);
   if (esperada.route_point_code === "busca" && lida.route_point_code === "busca" &&
-    esperada.pickup_neighborhood && !mesmoTexto(esperada.pickup_neighborhood, lida.pickup_neighborhood)) {
+    // bairro vazio = "endereço a confirmar" (o bot pergunta ao passageiro), não bairro errado
+    esperada.pickup_neighborhood && lida.pickup_neighborhood && !mesmoTexto(esperada.pickup_neighborhood, lida.pickup_neighborhood)) {
     out.push(`bairro: ${lida.pickup_neighborhood ?? "—"} ≠ ${esperada.pickup_neighborhood}`);
   }
   return out;
@@ -52,8 +53,19 @@ function camposDiferentes(esperada: ViagemDoCaso, lida: ViagemDoCaso): string[] 
  * Compara as viagens que o Agendado lançaria com as que ficaram. Casa por dia + sentido; viagem
  * lida que não casa com nenhuma esperada é ERRO (reserva que não devia existir).
  */
-export function compararCaso(esperadas: ViagemDoCaso[], planejadas: ViagemPlanejada[]): ResultadoDoCaso {
+export function compararCaso(
+  esperadas: ViagemDoCaso[],
+  planejadas: ViagemPlanejada[],
+  opcoes: {
+    /** por que o Agendado não lançou um pedido (sem_data, sem_cidade…): vira pendência com o motivo */
+    motivos?: string[];
+    /** caso conferido em que o certo é perguntar (o cliente não escreveu o dia, por exemplo) */
+    pendenteOk?: boolean;
+  } = {},
+): ResultadoDoCaso {
   const diferencas: string[] = [];
+  // "ja_reservado" não é pendência: a viagem já existia
+  const motivosDePendencia = (opcoes.motivos ?? []).filter((m) => m !== "ja_reservado");
   let errado = false;
   let faltou = false;
   let pendente = false;
@@ -61,8 +73,14 @@ export function compararCaso(esperadas: ViagemDoCaso[], planejadas: ViagemPlanej
   for (const e of esperadas) {
     const i = planejadas.findIndex((p, k) => !usadas.has(k) && p.trip_date === e.trip_date && p.direction === e.direction);
     if (i === -1) {
-      faltou = true;
-      diferencas.push(`faltou ${rotulo(e)}`);
+      if (motivosDePendencia.length) {
+        // o Agendado avisa a equipe com o motivo: não some calado
+        pendente = true;
+        diferencas.push(`${rotulo(e)} ficaria pendente: ${motivosDePendencia.join(", ")}`);
+      } else {
+        faltou = true;
+        diferencas.push(`faltou ${rotulo(e)}`);
+      }
       continue;
     }
     usadas.add(i);
@@ -89,7 +107,7 @@ export function compararCaso(esperadas: ViagemDoCaso[], planejadas: ViagemPlanej
     errado = true;
     diferencas.push(`lançaria ${rotulo(p)} que não foi pedida`);
   });
-  const resultado = errado ? "errado" : faltou ? "faltou" : pendente ? "pendente" : "certo";
+  const resultado = errado ? "errado" : faltou ? "faltou" : pendente && !opcoes.pendenteOk ? "pendente" : "certo";
   return { resultado, diferencas };
 }
 
