@@ -240,15 +240,17 @@ async function viagensRecentes(customerId: string): Promise<{ data: string; dire
 }
 
 /** Viagens (data|sentido) em que o cliente já tem reserva ativa. */
-async function viagensJaReservadas(customerId: string | null, hoje: string): Promise<Set<string>> {
+async function viagensJaReservadas(customerId: string | null, hoje: string, antesDe?: string): Promise<Set<string>> {
   if (!customerId) return new Set();
-  const { data } = await supabaseAdmin
+  let q = supabaseAdmin
     .from("reservations")
     .select("status, trips!inner(trip_date, direction)")
     .eq("customer_id", customerId)
     .is("deleted_at", null)
-    .neq("status", "cancelada")
     .gte("trips.trip_date", hoje);
+  // avaliação (#419): o que existia antes da marca, com o status de então (cancelada depois ainda contava)
+  q = antesDe ? q.lt("created_at", antesDe) : q.neq("status", "cancelada");
+  const { data } = await q;
   return new Set((data ?? []).map((r: Bloco) => `${r.trips.trip_date}|${r.trips.direction}`));
 }
 
@@ -292,12 +294,21 @@ async function textosAntigosDoCliente(conversationId: string): Promise<string[]>
  * Lê a conversa e grava/atualiza os rascunhos. Devolve o que foi lido para quem
  * chamou (o Agendado ☑️ lança em seguida).
  */
+/**
+ * Simulação para a avaliação com casos reais (issue #419): lê a conversa como ela estava no momento
+ * da marca (`agora`), conta como "já reservado" só o que existia ANTES da marca e não grava nada —
+ * devolve as reservas que o Agendado lançaria em `planejadas`.
+ */
+export type SimulacaoDaLeitura = { agora: Date; reservasAntesDe: string };
+
 async function lerEGravar(
   entrada: Entrada,
   mensagens: MensagemDaConversa[],
-  opcoes: { confirmadoPelaEquipe: boolean; modelo?: string },
+  opcoes: { confirmadoPelaEquipe: boolean; modelo?: string; simular?: SimulacaoDaLeitura },
 ) {
-  const agora = new Date();
+  const simular = opcoes.simular ?? null;
+  const planejadas: (Bloco & { pendencia: { motivo: string; codigo: string } | null; a_confirmar: ItemAConfirmar[] })[] = [];
+  const agora = simular?.agora ?? new Date();
   const hoje = diaCivil(agora);
   const horaAgora = fmtHoraSaoLuis.format(agora);
   const ctx = await contexto();
@@ -356,7 +367,7 @@ async function lerEGravar(
   // "A ida é sábado, certo?" → "Isso": vale como dito pelo cliente (issue #335)
   const confirmadas = datasConfirmadas(falasDoPedido);
 
-  const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje);
+  const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje, simular?.reservasAntesDe);
   const telefone = normalizarTelefone(entrada.telefone);
 
   const gravados: string[] = [];
@@ -557,7 +568,7 @@ async function lerEGravar(
     // marcando para outra pessoa: a reserva é do passageiro (issue #268)
     const outro = v.passageiro && !variantesTelefone(entrada.telefone).includes(v.passageiro.telefone) ? v.passageiro : null;
     const dono = outro ? await whatsappService.identifyCustomer(outro.telefone) : cliente;
-    const reservadasDoDono = outro ? await viagensJaReservadas(dono?.id ?? null, hoje) : jaReservadas;
+    const reservadasDoDono = outro ? await viagensJaReservadas(dono?.id ?? null, hoje, simular?.reservasAntesDe) : jaReservadas;
     if (reservadasDoDono.has(`${r.trip_date}|${r.direction}`)) {
       motivos.push("ja_reservado");
       continue;
@@ -626,6 +637,14 @@ async function lerEGravar(
         : r.notes,
       source_message_id: entrada.mensagemId,
     };
+    if (simular) {
+      // avaliação: guarda o que seria lançado, sem gravar rascunho
+      const id = `sim-${planejadas.length + 1}`;
+      planejadas.push({ ...linha, id, pendencia, a_confirmar: [...v.aConfirmar] });
+      gravados.push(id);
+      if (pendencia) incertos.set(id, pendencia);
+      continue;
+    }
     // um rascunho aberto por conversa, sentido e passageiro: o cliente corrigiu a data? atualiza o mesmo.
     // Duas pessoas na mesma viagem (a cliente e o contato que ela mandou) são dois rascunhos (dono, 10/11).
     let busca = supabaseAdmin
@@ -659,7 +678,7 @@ async function lerEGravar(
     hoje,
   );
   if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
-  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido };
+  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -1164,4 +1183,61 @@ async function chamarFerramenta(system: string, conteudo: string, ferramenta: { 
   const corpo = await res.json();
   const bloco = (corpo.content ?? []).find((b: Bloco) => b.type === "tool_use" && b.name === ferramenta.name);
   return bloco?.input ?? null;
+}
+
+/**
+ * Avaliação com casos reais (issue #419): faz a MESMA leitura do "Agendado ☑️" como a conversa
+ * estava no momento da marca, sem gravar nada, inclusive a releitura com o modelo capaz quando o
+ * Agendado a faria. Devolve as viagens que seriam lançadas (com a pendência de cada uma).
+ */
+export async function simularAgendado(c: {
+  conversationId: string | null;
+  chatwootConversationId: number;
+  mensagemId: number;
+  telefone: string;
+  marcaEm: string;
+}) {
+  // o Agendado lê alguns segundos depois da marca
+  const ate = Date.parse(c.marcaEm) + 30_000;
+  let mensagens: MensagemDaConversa[];
+  try {
+    mensagens = converterMensagensDoChatwoot(await chatwootClient.listarMensagens(c.chatwootConversationId, 6));
+  } catch {
+    const { data } = await supabaseAdmin
+      .from("bot_observations")
+      .select("author, content, created_at, chatwoot_message_id")
+      .eq("chatwoot_conversation_id", c.chatwootConversationId)
+      .in("author", ["cliente", "equipe"])
+      .order("created_at", { ascending: false })
+      .limit(120);
+    mensagens = converterObservacoes(data ?? []);
+  }
+  mensagens = mensagens.filter((m) => Date.parse(m.em) <= ate);
+  const entrada: Entrada = {
+    conversationId: c.conversationId ?? "",
+    chatwootConversationId: c.chatwootConversationId,
+    mensagemId: c.mensagemId,
+    telefone: c.telefone,
+  };
+  const simular: SimulacaoDaLeitura = { agora: new Date(ate), reservasAntesDe: c.marcaEm };
+  let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular });
+  let releu = false;
+  if (
+    agendadoPrecisaReler({
+      pedidos: lido.pedidos.length,
+      motivos: lido.motivos,
+      codigosPendentes: [...lido.incertos.values()].map((i) => i.codigo),
+      diasSemPedido: lido.diasSemPedido,
+    })
+  ) {
+    releu = true;
+    lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, modelo: MODELO_CAPAZ, simular });
+  }
+  return {
+    planejadas: lido.planejadas,
+    diasSemPedido: lido.diasSemPedido,
+    motivos: lido.motivos,
+    releu,
+    tokens: { entrada: lido.uso?.input_tokens ?? 0, saida: lido.uso?.output_tokens ?? 0 },
+  };
 }
