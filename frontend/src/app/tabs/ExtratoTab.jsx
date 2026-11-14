@@ -266,7 +266,7 @@ export default function ExtratoTab() {
         <Card>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
             <div className="text-sm font-semibold flex items-center gap-2">
-              <Landmark size={16} style={{ color: C.brandText }} /> Conferência do mês
+              <Landmark size={16} style={{ color: C.inkSoft }} /> Conferência do mês
             </div>
             <TextInput
               type="month"

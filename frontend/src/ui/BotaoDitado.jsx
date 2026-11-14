@@ -74,7 +74,7 @@ export function BotaoDitado({ onTexto, onErro, rotulo = "Ditar anotação", core
       aria-label={ouvindo ? "Parar de ouvir" : rotulo}
       aria-pressed={ouvindo}
       title={ouvindo ? "Ouvindo… toque para parar" : rotulo}
-      className="btn-press shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
+      className="btn-press shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
       style={{
         background: ouvindo ? cores.ativo : cores.fundo,
         color: ouvindo ? cores.ativoTexto : cores.texto,

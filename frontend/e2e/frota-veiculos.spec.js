@@ -53,10 +53,10 @@ test("Frota: não deixa remover o veículo padrão, mas remove os outros", async
   await expect(page.getByRole("button", { name: /Ônibus 2/ })).toBeVisible();
 
   // só o veículo não-padrão tem botão de remover (Ônibus 1 é o padrão)
-  await expect(page.getByTitle("Remover veículo")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Remover veículo" })).toHaveCount(1);
 
   page.once("dialog", (d) => d.accept());
-  await page.getByTitle("Remover veículo").click();
+  await page.getByRole("button", { name: "Remover veículo" }).click();
   await expect(page.getByRole("button", { name: /Ônibus 2/ })).toHaveCount(0);
 });
 

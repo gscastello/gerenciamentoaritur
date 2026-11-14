@@ -46,6 +46,7 @@ import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import {
   C,
   Card,
+  Field,
   Header,
   Select,
   SubTabs,
@@ -162,7 +163,7 @@ function SistemaReceitaAutomatica() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Wallet size={16} style={{ color: C.brandText }} /> Receita automática das passagens
+        <Wallet size={16} style={{ color: C.inkSoft }} /> Receita automática das passagens
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         {ligada ? (
@@ -215,7 +216,7 @@ function SistemaCidades() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Route size={16} style={{ color: C.brandText }} /> Cidades da rota
+        <Route size={16} style={{ color: C.inkSoft }} /> Cidades da rota
       </div>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
         No fluxo de reserva, embarque/desembarque que menciona uma cidade <b>intermediária</b> faz a
@@ -305,108 +306,132 @@ function SistemaBaldes() {
       setEditId(null);
     }, "Não foi possível salvar.");
 
+  // lista em vez de tabela (issue #399): cabe no celular sem cortar a coluna "Ordem"
+  const botaoIcone = "btn-press w-10 h-10 rounded-lg flex items-center justify-center shrink-0";
   const linha = (b) =>
     editId === b.id ? (
-      <tr key={b.id} style={{ background: C.panel2 }}>
-        <td className="px-2 py-1.5">
-          <TextInput
-            value={ev.label}
-            onChange={(e) => setEv({ ...ev, label: e.target.value })}
-            className="text-xs"
-          />
-        </td>
-        <td className="px-2 py-1.5">
+      <li key={b.id} className="rounded-lg p-3 space-y-2" style={{ background: C.panel2 }}>
+        <Field label="Local">
+          <TextInput value={ev.label} onChange={(e) => setEv({ ...ev, label: e.target.value })} />
+        </Field>
+        <Field label="Campo de detalhe">
           <TextInput
             value={ev.detail_label}
             onChange={(e) => setEv({ ...ev, detail_label: e.target.value })}
-            className="text-xs"
             placeholder="Rótulo do campo de detalhe"
           />
-          <TextInput
-            value={ev.detail_placeholder}
-            onChange={(e) => setEv({ ...ev, detail_placeholder: e.target.value })}
-            className="text-xs mt-1"
-            placeholder="Placeholder (ex.: Km, o que tem perto)"
-          />
-        </td>
-        <td className="px-2 py-1.5 text-center">
-          <input
-            type="checkbox"
-            checked={!!ev.detail_required}
-            onChange={(e) => setEv({ ...ev, detail_required: e.target.checked })}
-          />
-        </td>
-        <td className="px-2 py-1.5 text-center">
-          <input
-            type="checkbox"
-            aria-label="Exige revisão"
-            checked={!!ev.needs_review}
-            onChange={(e) => setEv({ ...ev, needs_review: e.target.checked })}
-          />
-        </td>
-        <td className="px-2 py-1.5 w-14">
-          <TextInput
-            type="number"
-            value={ev.sort_order}
-            onChange={(e) => setEv({ ...ev, sort_order: e.target.value })}
-            className="text-xs w-14"
-          />
-        </td>
-        <td className="px-2 py-1.5">
-          <div className="flex gap-2">
-            <button type="button" onClick={salvar}>
-              <Save size={13} style={{ color: C.green }} />
-            </button>
-            <button type="button" onClick={() => setEditId(null)}>
-              <X size={13} style={{ color: C.inkFaint }} />
-            </button>
-          </div>
-        </td>
-      </tr>
+        </Field>
+        <TextInput
+          value={ev.detail_placeholder}
+          onChange={(e) => setEv({ ...ev, detail_placeholder: e.target.value })}
+          placeholder="Placeholder (ex.: Km, o que tem perto)"
+        />
+        <div
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs"
+          style={{ color: C.inkSoft }}
+        >
+          <label className="flex items-center gap-1.5 min-h-[40px]">
+            <input
+              type="checkbox"
+              checked={!!ev.detail_required}
+              onChange={(e) => setEv({ ...ev, detail_required: e.target.checked })}
+            />
+            detalhe obrigatório
+          </label>
+          <label className="flex items-center gap-1.5 min-h-[40px]">
+            <input
+              type="checkbox"
+              aria-label="Exige revisão"
+              checked={!!ev.needs_review}
+              onChange={(e) => setEv({ ...ev, needs_review: e.target.checked })}
+            />
+            exige revisão
+          </label>
+          <label className="flex items-center gap-1.5">
+            ordem
+            <TextInput
+              type="number"
+              value={ev.sort_order}
+              onChange={(e) => setEv({ ...ev, sort_order: e.target.value })}
+              className="w-20"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setEditId(null)}
+            className="btn-press min-h-[40px] px-3 rounded-lg text-xs font-semibold"
+            style={{ color: C.inkSoft }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            className="btn-press flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg text-xs font-semibold"
+            style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+          >
+            <Save size={14} /> Salvar
+          </button>
+        </div>
+      </li>
     ) : (
-      <tr key={b.id} className="row-hover border-t" style={{ borderColor: C.borderSoft }}>
-        <td className="px-2 py-1.5">{b.label}</td>
-        <td className="px-2 py-1.5 text-xs" style={{ color: C.inkSoft }}>
-          {b.detail_label}
-        </td>
-        <td className="px-2 py-1.5 text-center text-xs">{b.detail_required ? "sim" : "—"}</td>
-        <td className="px-2 py-1.5 text-center text-xs">{b.needs_review ? "sim" : "—"}</td>
-        <td className="px-2 py-1.5 text-xs" style={{ color: C.inkFaint }}>
-          {b.sort_order}
-        </td>
-        <td className="px-2 py-1.5">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setEditId(b.id);
-                setEv({
-                  label: b.label,
-                  detail_label: b.detail_label,
-                  detail_placeholder: b.detail_placeholder,
-                  detail_required: b.detail_required,
-                  needs_review: b.needs_review,
-                  sort_order: String(b.sort_order),
-                });
-              }}
-            >
-              <Pencil size={12} style={{ color: C.inkFaint }} />
-            </button>
-            <button
-              type="button"
-              onClick={() => run(() => dropoff.remover(b.id), "Não foi possível remover.")}
-            >
-              <X size={13} style={{ color: C.inkFaint }} />
-            </button>
+      <li
+        key={b.id}
+        className="row-hover flex items-center gap-2 border-t py-1.5"
+        style={{ borderColor: C.borderSoft }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium" style={{ color: C.ink }}>
+            {b.label}
           </div>
-        </td>
-      </tr>
+          <div className="text-xs" style={{ color: C.inkSoft, overflowWrap: "anywhere" }}>
+            {[
+              b.detail_label,
+              b.detail_required ? "detalhe obrigatório" : null,
+              b.needs_review ? "exige revisão" : null,
+              `ordem ${b.sort_order}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label={`Editar ${b.label}`}
+          className={botaoIcone}
+          style={{ color: C.inkSoft }}
+          onClick={() => {
+            setEditId(b.id);
+            setEv({
+              label: b.label,
+              detail_label: b.detail_label,
+              detail_placeholder: b.detail_placeholder,
+              detail_required: b.detail_required,
+              needs_review: b.needs_review,
+              sort_order: String(b.sort_order),
+            });
+          }}
+        >
+          <Pencil size={15} />
+        </button>
+        <button
+          type="button"
+          aria-label={`Remover ${b.label}`}
+          className={botaoIcone}
+          style={{ color: C.inkSoft }}
+          onClick={() => run(() => dropoff.remover(b.id), "Não foi possível remover.")}
+        >
+          <X size={16} />
+        </button>
+      </li>
     );
 
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MapPin size={16} style={{ color: C.brandText }} /> Locais de desembarque
+        <MapPin size={16} style={{ color: C.inkSoft }} /> Locais de desembarque
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         A cidade/local de desembarque da reserva e os grupos da rota do motorista. Renomeie, defina
@@ -421,7 +446,7 @@ function SistemaBaldes() {
           {erro}
         </div>
       )}
-      <div className="flex flex-wrap items-end gap-2 mb-4">
+      <div className="form-linha flex flex-wrap items-end gap-2 mb-4">
         <Select
           value={novo.direction}
           onChange={(e) => setNovo({ ...novo, direction: e.target.value })}
@@ -469,25 +494,11 @@ function SistemaBaldes() {
         </button>
       </div>
       {["ida", "volta"].map((dir) => (
-        <div key={dir} className="mb-3">
+        <div key={dir} className="mt-4">
           <div className="text-xs font-semibold mb-1" style={{ color: C.inkSoft }}>
             {dir === "ida" ? "Ida (São Luís → Pirapemas)" : "Volta (Pirapemas → São Luís)"}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs" style={{ color: C.inkFaint }}>
-                  <th className="px-2 py-1 font-medium">Local</th>
-                  <th className="px-2 py-1 font-medium">Campo de detalhe</th>
-                  <th className="px-2 py-1 font-medium">Obrig.</th>
-                  <th className="px-2 py-1 font-medium">Revisão</th>
-                  <th className="px-2 py-1 font-medium">Ordem</th>
-                  <th className="px-2 py-1 font-medium" aria-label="ações" />
-                </tr>
-              </thead>
-              <tbody>{dropoff.porDirecao(dir).map(linha)}</tbody>
-            </table>
-          </div>
+          <ul>{dropoff.porDirecao(dir).map(linha)}</ul>
         </div>
       ))}
     </Card>
@@ -538,7 +549,7 @@ function SistemaBairros() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MapPin size={16} style={{ color: C.brandText }} /> Preços por bairro (Buscar em Casa)
+        <MapPin size={16} style={{ color: C.inkSoft }} /> Preços por bairro (Buscar em Casa)
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do
@@ -561,7 +572,7 @@ function SistemaBairros() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 mb-3">
+      <div className="form-linha flex flex-wrap items-end gap-2 mb-3">
         <div>
           <label className="text-[10px] block" style={{ color: C.inkFaint }}>
             Bairro
@@ -904,7 +915,7 @@ function SistemaEquipe() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Users size={16} style={{ color: C.brandText }} /> Equipe e logins
+        <Users size={16} style={{ color: C.inkSoft }} /> Equipe e logins
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quem entra no sistema e com qual papel. Desativar bloqueia o acesso sem apagar o histórico.
@@ -954,7 +965,7 @@ function SistemaEquipe() {
         >
           <UserCog size={13} /> Criar um login novo
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="form-linha flex flex-wrap items-end gap-2">
           <TextInput
             type="email"
             value={novo.email}
@@ -1058,7 +1069,7 @@ function SistemaErros() {
     <Card className="anim-fadeUp">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="text-sm font-semibold flex items-center gap-2">
-          <AlertTriangle size={16} style={{ color: C.brandText }} /> Erros recentes do app
+          <AlertTriangle size={16} style={{ color: C.inkSoft }} /> Erros recentes do app
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {erros.length > 0 &&
@@ -1189,7 +1200,7 @@ function MovimentoControl() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Sparkles size={16} style={{ color: C.brandText }} /> Movimento e animações
+        <Sparkles size={16} style={{ color: C.inkSoft }} /> Movimento e animações
       </div>
       <p className="text-xs mb-1" style={{ color: C.inkSoft }}>
         Heros, estrada e ônibus animados. No <b>Automático</b> o app respeita o ajuste de{" "}
@@ -1368,7 +1379,7 @@ export default function SistemaTab({
       <div className="px-4 md:px-10 mb-4">
         <SubTabs value={secao} onChange={setSecao} options={SECOES_DO_SISTEMA} />
       </div>
-      <div className="px-4 md:px-10 pb-10 space-y-5">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {erro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -1390,11 +1401,10 @@ export default function SistemaTab({
 
             <Card className="anim-fadeUp">
               <div className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Settings2 size={16} style={{ color: C.brandText }} /> Fluxo de agendamento e
-                valores
+                <Settings2 size={16} style={{ color: C.inkSoft }} /> Fluxo de agendamento e valores
               </div>
-              <div className="flex items-center gap-3 mb-4 text-xs">
-                <label className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-xs">
+                <label className="flex items-center gap-1.5 min-h-[40px]">
                   <input
                     type="checkbox"
                     checked={cfg.segundaAtiva}
@@ -1413,74 +1423,82 @@ export default function SistemaTab({
                       onBlur={(e) =>
                         setSegunda({ hours: Number.parseInt(e.target.value, 10) || 1 })
                       }
-                      style={{ width: 56 }}
-                      className="py-1"
+                      style={{ width: 64 }}
                     />{" "}
-                    hora(s)
+                    {cfg.segundaHoras === 1 ? "hora" : "horas"}
                   </span>
                 )}
               </div>
               {["ida", "volta"].map((dir) => (
                 <div key={dir} className="mb-4">
-                  <div className="text-xs font-semibold mb-2" style={{ color: C.inkSoft }}>
+                  <div
+                    className="text-xs font-semibold mb-2 uppercase tracking-[.06em]"
+                    style={{ color: C.inkSoft }}
+                  >
                     {cfg.trips[dir].nome}
                   </div>
                   <div className="space-y-2">
                     {cfg.trips[dir].pontos.map((p) => (
+                      // um ponto por bloco (issue #399): nome em cima, horário e valor com rótulo
+                      // embaixo; o "fixo" solto saiu (ponto fixo só não tem o botão de remover)
                       <div
                         key={p.id}
-                        className="grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[1fr_110px_90px_auto] gap-2 items-center rounded-lg px-2 py-2"
+                        className="rounded-lg p-3 space-y-2"
                         style={{ background: C.panel2 }}
                       >
-                        {/* no celular o nome ocupa a linha; horário e valor embaixo (auditoria, #397) */}
-                        <TextInput
-                          aria-label="Nome do ponto"
-                          defaultValue={p.nome}
-                          onBlur={(e) =>
-                            e.target.value !== p.nome && atualizarPonto(p, "nome", e.target.value)
-                          }
-                          className="py-1 text-xs col-span-3 sm:col-span-1"
-                        />
-                        <TextInput
-                          aria-label={`Horário de ${p.nome}`}
-                          type="time"
-                          defaultValue={p.horaBase}
-                          onBlur={(e) =>
-                            e.target.value !== p.horaBase &&
-                            atualizarPonto(p, "horaBase", e.target.value)
-                          }
-                          className="py-1 text-xs"
-                        />
-                        {p.campo === "bairro" ? (
-                          <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
-                            por bairro
-                          </span>
-                        ) : (
+                        <div className="flex items-center gap-2">
                           <TextInput
-                            aria-label={`Valor de ${p.nome}`}
-                            type="number"
-                            defaultValue={p.valor}
+                            aria-label="Nome do ponto"
+                            defaultValue={p.nome}
                             onBlur={(e) =>
-                              Number(e.target.value) !== p.valor &&
-                              atualizarPonto(p, "valor", e.target.value)
+                              e.target.value !== p.nome && atualizarPonto(p, "nome", e.target.value)
                             }
-                            className="py-1 text-xs"
                           />
-                        )}
-                        {p.core ? (
-                          <span className="text-[10px] text-center" style={{ color: C.inkFaint }}>
-                            fixo
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => removerPonto(p)}
-                            aria-label={`Remover o ponto ${p.nome}`}
-                            className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg"
-                          >
-                            <Trash2 size={14} style={{ color: C.brandText }} />
-                          </button>
-                        )}
+                          {!p.core && (
+                            <button
+                              type="button"
+                              onClick={() => removerPonto(p)}
+                              aria-label={`Remover o ponto ${p.nome}`}
+                              className="btn-press w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-lg"
+                              style={{ color: C.inkSoft }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Field label="Horário">
+                            <TextInput
+                              aria-label={`Horário de ${p.nome}`}
+                              type="time"
+                              defaultValue={p.horaBase}
+                              onBlur={(e) =>
+                                e.target.value !== p.horaBase &&
+                                atualizarPonto(p, "horaBase", e.target.value)
+                              }
+                            />
+                          </Field>
+                          <Field label="Valor (R$)">
+                            {p.campo === "bairro" ? (
+                              <div
+                                className="min-h-[38px] flex items-center text-xs"
+                                style={{ color: C.inkFaint }}
+                              >
+                                pela tabela de bairros
+                              </div>
+                            ) : (
+                              <TextInput
+                                aria-label={`Valor de ${p.nome}`}
+                                type="number"
+                                defaultValue={p.valor}
+                                onBlur={(e) =>
+                                  Number(e.target.value) !== p.valor &&
+                                  atualizarPonto(p, "valor", e.target.value)
+                                }
+                              />
+                            )}
+                          </Field>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1492,9 +1510,14 @@ export default function SistemaTab({
                       className="text-xs py-1.5"
                     />
                     <button
+                      type="button"
                       onClick={() => addPontoOutro(dir)}
-                      className="btn-press text-xs px-3 py-1.5 rounded-lg shrink-0"
-                      style={{ background: C.amber, color: C.onBrand }}
+                      className="btn-press text-xs font-semibold px-4 min-h-[40px] rounded-lg shrink-0"
+                      style={{
+                        background: C.panel2,
+                        color: C.ink,
+                        border: `1px solid ${C.border}`,
+                      }}
                     >
                       Adicionar
                     </button>

@@ -168,10 +168,27 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
       <Header
         title="Lista do Dia"
         subtitle='Anotações por local — busca em casa no formato "NP - BAIRRO - TELEFONE".'
-        right={
-          <div className="flex items-center gap-2">
+      />
+      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
+        {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
+        {/* o dia e o resumo na mesma linha (issue #399: o campo de data ficava solto no topo) */}
+        <div className="flex items-center justify-between gap-3">
+          <p
+            className="text-[13px] min-w-0"
+            style={{ color: C.inkSoft }}
+            data-testid="resumo-da-lista"
+          >
+            <b className="capitalize" style={{ color: C.ink }}>
+              {data === todayStr() ? "Hoje" : diaSemana(data)}
+            </b>{" "}
+            · {ativos.reduce((s, r) => s + r.quantidade, 0)} passageiros ·{" "}
+            {ativos.filter((r) => r.status === "embarcado").reduce((s, r) => s + r.quantidade, 0)}{" "}
+            embarcados
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
             <TextInput
               type="date"
+              aria-label="Dia da lista"
               value={data}
               onChange={(e) => setData(e.target.value)}
               className="w-auto"
@@ -182,19 +199,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
               </span>
             )}
           </div>
-        }
-      />
-      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
-        {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
-        {/* resumo do dia numa linha (auditoria, issue #397: o cartão de destaque antigo saiu) */}
-        <p className="text-[13px]" style={{ color: C.inkSoft }} data-testid="resumo-da-lista">
-          <b className="capitalize" style={{ color: C.ink }}>
-            {data === todayStr() ? "Hoje" : diaSemana(data)}
-          </b>{" "}
-          · {ativos.reduce((s, r) => s + r.quantidade, 0)} passageiros ·{" "}
-          {ativos.filter((r) => r.status === "embarcado").reduce((s, r) => s + r.quantidade, 0)}{" "}
-          embarcados
-        </p>
+        </div>
         <SubTabs
           value={subview}
           onChange={setSubview}
@@ -221,7 +226,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
                       className="text-xs rounded-md px-2 py-1.5"
                       style={{ background: C.purpleSoft }}
                     >
-                      {linhaReserva(r, trips)} — {r.desembarque}
+                      {[linhaReserva(r, trips), r.nome, r.desembarque].filter(Boolean).join(" · ")}
                     </div>
                   ))}
                 </div>
@@ -509,12 +514,12 @@ function ListaSecao({ titulo, itens, trips, marcar, buscar, onAbrir, onOrdenar }
               <ListOrdered size={12} /> ORGANIZAR
             </button>
           )}
-          {qtdEncomendas > 0 && (
-            <Pill color={C.amber}>
-              {qtdEncomendas} {qtdEncomendas === 1 ? "encomenda" : "encomendas"}
-            </Pill>
-          )}
-          <Pill>{paxAtivos} pax</Pill>
+          {/* encomenda conta junto das passagens, no mesmo contador (issue #399) */}
+          <Pill>
+            {paxAtivos} pax
+            {qtdEncomendas > 0 &&
+              ` · ${qtdEncomendas} ${qtdEncomendas === 1 ? "encomenda" : "encomendas"}`}
+          </Pill>
         </div>
       </div>
       {organizando ? (

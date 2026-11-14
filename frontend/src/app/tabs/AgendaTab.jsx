@@ -6,18 +6,14 @@ import {
   Clock,
   Copy,
   Hourglass,
-  Megaphone,
   MessageCircle,
   MoreHorizontal,
   NotebookPen,
   Package,
   Pencil,
   PhoneCall,
-  PlayCircle,
   Plus,
   RefreshCw,
-  Route,
-  StopCircle,
   Sunrise,
   Truck,
   Users,
@@ -57,11 +53,10 @@ import {
 } from "../../domain/validacao.js";
 import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
 import { useLocaisOutros } from "../../hooks/useLocaisOutros.js";
-import { useTrips } from "../../hooks/useTrips.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
 import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
-import { FadeIn, Presence, useReducedMotion } from "../../ui/motion/index.js";
+import { FadeIn, Presence } from "../../ui/motion/index.js";
 import {
   BUSCA_MODOS,
   BotaoAgendar,
@@ -75,7 +70,6 @@ import {
   STATUS_META,
   Select,
   SeloCidadeIntermediaria,
-  StatusPill,
   TextArea,
   TextInput,
   VOLTA_ORDEM,
@@ -132,6 +126,7 @@ export default function AgendaTab({
   segundaHoras,
   deepLink,
   onAgendar,
+  pedidoEncomenda = null,
 }) {
   const [data, setData] = useState(diaAgendaPadrao());
   useDeepLinkData(deepLink, setData);
@@ -166,9 +161,12 @@ export default function AgendaTab({
   }, [deepLink]);
   const [editando, setEditando] = useState(null);
   const [encomendaModal, setEncomendaModal] = useState(null); // null = fechado; {} = nova; {pendente:r} = agendando uma pendente
+  // "Encomenda" no formulário de nova reserva (issue #399): a encomenda nasce junto das passagens
+  useEffect(() => {
+    if (pedidoEncomenda?.at && Date.now() - pedidoEncomenda.at < 5000) setEncomendaModal({});
+  }, [pedidoEncomenda]);
   const [acaoErro, setAcaoErro] = useState("");
   const [extraModal, setExtraModal] = useState(null); // null = fechado; { direcao }
-  const T = useTrips(data);
   // Mantém a reserva em edição durante a animação de saída do modal (issue #2).
   const modalHeld = useRef(null);
   if (editando) modalHeld.current = editando;
@@ -487,7 +485,6 @@ export default function AgendaTab({
           horaIda={horaDaViagem("ida")}
           horaVolta={horaDaViagem("volta")}
         />
-        <AtalhosDosPontos trips={trips} doDia={doDia} sentido={sentido} onSentido={setSentido} />
         {segunda && (
           <div
             className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
@@ -576,28 +573,33 @@ export default function AgendaTab({
             </div>
             <div className="space-y-2">
               {pendentesDoDia.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
-                  style={{ background: C.purpleSoft }}
-                >
-                  <div className="text-xs">
-                    <StatusPill status="pendente" />{" "}
-                    <span className="font-semibold ml-1">{linhaReserva(r, trips)}</span> · {r.nome}{" "}
-                    · {r.motivoPendente}
+                <div key={r.id} className="rounded-lg px-3 py-2.5" style={{ background: C.panel2 }}>
+                  {/* texto inteiro, sem "·" sobrando quando falta o motivo (issue #399) */}
+                  <div
+                    className="text-[13px] font-semibold"
+                    style={{ color: C.ink, overflowWrap: "anywhere" }}
+                  >
+                    {linhaReserva(r, trips)}
                   </div>
-                  <div className="flex gap-2">
+                  {(r.nome || r.motivoPendente) && (
+                    <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
+                      {[r.nome, r.motivoPendente].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-2">
                     <button
+                      type="button"
                       onClick={() => confirmarPendente(r)}
-                      className="btn-press text-xs px-2 py-1 rounded-md"
-                      style={{ background: C.greenSoft, color: C.green }}
+                      className="btn-press flex-1 sm:flex-none text-[13px] font-semibold px-4 min-h-[40px] rounded-lg"
+                      style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
                     >
                       Confirmar
                     </button>
                     <button
+                      type="button"
                       onClick={() => atualizarStatus(r.id, "cancelada")}
-                      className="btn-press text-xs px-2 py-1 rounded-md"
-                      style={{ background: C.redSoft, color: C.red }}
+                      className="btn-press flex-1 sm:flex-none text-[13px] font-semibold px-4 min-h-[40px] rounded-lg"
+                      style={{ color: C.red, border: `1px solid ${C.border}` }}
                     >
                       Recusar
                     </button>
@@ -659,30 +661,6 @@ export default function AgendaTab({
           </Card>
         )}
 
-        {/* encomendas do dia numa linha só (crítica de design, issue #393) */}
-        <div
-          className="flex items-center justify-between gap-2 border-y py-1"
-          style={{ borderColor: C.panel2 }}
-        >
-          <div className="flex items-center gap-2 text-[13px] min-w-0" style={{ color: C.inkSoft }}>
-            <Package size={15} />
-            <span className="truncate">
-              {encomendasAgendadas.length === 0
-                ? "Nenhuma encomenda hoje"
-                : `${encomendasAgendadas.length} encomenda(s) — no ponto de embarque`}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEncomendaModal({})}
-            aria-label="Nova encomenda"
-            className="btn-press flex items-center gap-1 text-[13px] px-2 min-h-[40px] rounded-lg font-semibold"
-            style={{ color: C.ink }}
-          >
-            <Plus size={15} /> Nova
-          </button>
-        </div>
-
         {[sentido].map((dir) => (
           <ViagemOperacional
             key={dir}
@@ -692,7 +670,6 @@ export default function AgendaTab({
             doDia={doDia}
             capacidade={capacidade}
             trips={trips}
-            T={T}
             onStatus={atualizarStatus}
             onEditar={setEditando}
             onExtra={alternarExtra}
@@ -788,7 +765,7 @@ function BotaoCopiar({ texto, label = "Copiar", cor, title }) {
       type="button"
       onClick={copiar}
       title={title}
-      className="btn-press flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
+      className="btn-press flex items-center gap-1 px-2.5 min-h-[36px] rounded-lg text-[11px] font-medium"
       style={{
         background: cor ? `${cor}22` : C.panel2,
         color: estado === "erro" ? C.red : cor || C.inkSoft,
@@ -884,10 +861,10 @@ function AcoesDaReserva({ r, aberto, onFechar, onStatus, onEditar, onExtra, text
       >
         <div className="w-9 h-1 rounded-full mx-auto mt-1 mb-2" style={{ background: C.border }} />
         <div className="px-3 pb-2">
-          <div className="text-[15px] font-semibold truncate" style={{ color: C.ink }}>
+          <div className="text-[15px] font-semibold break-words" style={{ color: C.ink }}>
             {r.nome || r.telefone || "Reserva"}
           </div>
-          <div className="text-xs truncate" style={{ color: C.inkFaint }}>
+          <div className="text-xs break-words" style={{ color: C.inkFaint }}>
             {r.tipo === "encomenda" ? "Encomenda" : `${r.quantidade}P`} ·{" "}
             {r.telefone || "sem telefone"}
           </div>
@@ -964,12 +941,13 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
   const nome = r.nome || (ehEnc ? r.telefone : "") || "—";
-  // crítica de design: nome em cima; quantidade, endereço/bairro e valor embaixo
-  const principal = ehEnc ? `contato: ${nome}` : nome;
+  // dono (issue #399): o ENDEREÇO em destaque e o nome em segundo plano, os dois inteiros
+  // (nada de reticências). Ponto fixo sem endereço (Rodoviária) mostra o nome em cima.
+  const quem = ehEnc ? `contato: ${nome}` : nome;
+  const principal = endereco || quem;
   const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
   // o que vem embaixo, separado por " · "
   const detalhes = [
-    endereco || null,
     ehEnc ? resumoDaEncomenda(r) : r.pago ? "✓ Pago" : r.valorTotal ? fmtBRL(r.valorTotal) : null,
     pagamentoEmDestaque && !r.pago ? rotuloPagamento(r.pagamento) : null,
     r.desembarque ? `desce: ${r.desembarque}` : null,
@@ -979,13 +957,13 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         ? "✓ Entregue"
         : null,
   ].filter(Boolean);
-  const icone = "btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0";
+  const icone = "btn-press w-10 h-11 rounded-xl flex items-center justify-center shrink-0";
   return (
     <div
-      className="row-hover grid items-center gap-1 py-1.5 pr-0.5 border-b"
+      className="row-hover grid items-start gap-1 py-2 pr-0.5 border-b"
       data-testid="linha-reserva"
       style={{
-        gridTemplateColumns: "44px minmax(0,1fr) auto",
+        gridTemplateColumns: "40px minmax(0,1fr) auto",
         borderColor: C.panel2,
         background: cidadeIntermediaria
           ? C.rotaSoft
@@ -1007,7 +985,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         }
         aria-pressed={embarcado}
         onClick={() => onStatus(r.id, embarcado ? "confirmada" : "embarcado")}
-        className="check-fast w-11 h-11 flex items-center justify-center"
+        className="check-fast w-10 h-11 flex items-center justify-center"
       >
         <span
           className="w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center"
@@ -1020,29 +998,35 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         </span>
       </button>
       <div className="min-w-0 py-0.5">
-        <div className="flex items-baseline gap-1.5 min-w-0">
-          <span
-            className="text-[15px] font-semibold leading-snug truncate"
-            style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
-          >
-            {principal}
+        <div
+          className="text-[15px] font-semibold leading-snug"
+          style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
+        >
+          <span className="font-bold mr-1.5" style={{ color: corTexto }}>
+            {ehEnc ? "ENC" : `${r.quantidade}P`}
           </span>
+          <span>{principal}</span>
         </div>
+        {endereco && (
+          <div
+            className="text-[13px] leading-snug mt-0.5"
+            style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
+          >
+            {quem}
+          </div>
+        )}
         {
           <div
             className="text-[12.5px] leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5"
             style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
           >
-            <span className="font-bold" style={{ color: corTexto }}>
-              {ehEnc ? "ENC" : `${r.quantidade}P`}
-            </span>
-            {detalhes.map((d) => (
+            {detalhes.map((d, i) => (
               <span
                 key={d}
                 className={d === "✓ Pago" ? "font-semibold" : ""}
                 style={d === "✓ Pago" ? { color: C.ink } : undefined}
               >
-                {"· "}
+                {i > 0 ? "· " : ""}
                 {d}
               </span>
             ))}
@@ -1051,7 +1035,8 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
                 className="inline-flex items-center gap-1 font-semibold"
                 style={{ color: modoBusca.cor }}
               >
-                · <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
+                {detalhes.length > 0 ? "· " : ""}
+                <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
               </span>
             )}
           </div>
@@ -1196,90 +1181,13 @@ function ordenarPontos(pontos, direcao) {
   return [...pontos].sort((a, b) => pos(a.id) - pos(b.id));
 }
 
-// Atalhos no topo da Agenda (issue #258): um botão por ponto de embarque, Ida e
-// Volta, com as passagens do dia. O toque rola até o ponto.
-function AtalhosDosPontos({ trips, doDia, sentido, onSentido }) {
-  const reduzido = useReducedMotion();
-  const rolar = (direcao, id) =>
-    document
-      .getElementById(`ponto-${direcao}-${id}`)
-      ?.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "start" });
-  // ponto da outra viagem: troca o seletor Ida/Volta e rola depois que ela aparece (issue #391)
-  const ir = (direcao, id) => {
-    if (direcao === sentido || !onSentido) return rolar(direcao, id);
-    onSentido(direcao);
-    requestAnimationFrame(() => requestAnimationFrame(() => rolar(direcao, id)));
-  };
-  return (
-    <nav
-      aria-label="Ir para o ponto de embarque"
-      className="space-y-1.5"
-      data-testid="atalhos-pontos"
-    >
-      {["ida", "volta"].map((direcao) => {
-        const viagem = trips[direcao];
-        if (!viagem?.pontos?.length) return null;
-        const cor = C.inkSoft;
-        const rotulo = direcao === "ida" ? "Ida" : "Volta";
-        return (
-          <div key={direcao} className="flex items-center gap-1.5 overflow-x-auto pb-0.5 min-w-0">
-            <span
-              className="text-[10px] font-bold uppercase tracking-wide shrink-0 w-11"
-              style={{ color: cor }}
-            >
-              {rotulo}
-            </span>
-            {ordenarPontos(viagem.pontos, direcao).map((p) => {
-              const qtd = doDia
-                .filter(
-                  (r) =>
-                    r.direcao === direcao &&
-                    r.pontoId === p.id &&
-                    r.status !== "cancelada" &&
-                    r.status !== "espera" &&
-                    !ehExtra(r),
-                )
-                .reduce((s, r) => s + r.quantidade, 0);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => ir(direcao, p.id)}
-                  aria-label={`Ir para ${p.nome} (${rotulo}) — ${qtd} passagem(ns)`}
-                  className="btn-press shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium"
-                  style={{
-                    background: C.panel2,
-                    color: C.ink,
-                    border: `1px solid ${C.border}`,
-                  }}
-                >
-                  {p.nome}
-                  <span
-                    className="text-[11px]"
-                    style={{
-                      color: qtd > 0 ? C.ink : C.inkFaint,
-                      fontWeight: qtd > 0 ? 700 : 400,
-                    }}
-                  >
-                    {qtd}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })}
-    </nav>
-  );
-}
-
-// "3 passagem(ns) · 1 encomenda(s)" no cabeçalho do ponto.
+// "3 passagens · 1 encomenda" no cabeçalho do ponto.
 function resumoDoPonto(itens, encomendas) {
   const partes = [];
-  if (itens.length > 0) {
-    partes.push(`${itens.reduce((s, r) => s + r.quantidade, 0)} passagem(ns)`);
-  }
-  if (encomendas.length > 0) partes.push(`${encomendas.length} encomenda(s)`);
+  const pax = itens.reduce((s, r) => s + r.quantidade, 0);
+  if (pax > 0) partes.push(`${pax} ${pax === 1 ? "passagem" : "passagens"}`);
+  if (encomendas.length > 0)
+    partes.push(`${encomendas.length} ${encomendas.length === 1 ? "encomenda" : "encomendas"}`);
   return partes.length > 0 ? partes.join(" · ") : "sem reservas";
 }
 // "Celular" = a largura em que o app mostra o topo e a barra de baixo (abaixo de 768 px).
@@ -1414,7 +1322,6 @@ function ViagemOperacional({
   doDia,
   capacidade,
   trips,
-  T,
   onStatus,
   onEditar,
   onExtra,
@@ -1449,6 +1356,7 @@ function ViagemOperacional({
   const extras = doGrupo.filter(
     (r) => ehExtra(r) && r.status !== "cancelada" && r.status !== "espera",
   );
+  const extrasPax = extras.reduce((s, r) => s + r.quantidade, 0);
   const extrasQtd = extras
     .filter((r) => OCUPA_VAGA.includes(r.status))
     .reduce((s, r) => s + r.quantidade, 0);
@@ -1456,86 +1364,8 @@ function ViagemOperacional({
   // já contém todos os pontos (os que não estão na ordem fixa vão para o fim).
   const pontosOrdenados = ordenarPontos(viagem.pontos, direcao);
 
-  const trip = T?.byDirection?.[direcao] || null;
-  const viagemAtiva = trip?.status === "em_andamento" ? trip : null;
-  const viagemConcluida = trip?.status === "concluida" ? trip : null;
-  const iniciarViagem = () => {
-    if (!trip?.trip_id) {
-      alert("Ainda não há viagem para este dia/direção — crie uma reserva primeiro.");
-      return;
-    }
-    const kmTxt = prompt("Km atual do veículo na saída?");
-    if (kmTxt === null) return;
-    T.startTrip(trip.trip_id, { km: Number.parseFloat(kmTxt) || 0 }).catch((e) =>
-      alert(mensagemAmigavel(e, "Não foi possível iniciar a viagem.")),
-    );
-  };
-  const finalizarViagem = () => {
-    if (!viagemAtiva?.trip_id) return;
-    const kmTxt = prompt("Km atual do veículo na chegada?");
-    if (kmTxt === null) return;
-    T.finishTrip(viagemAtiva.trip_id, { km: Number.parseFloat(kmTxt) || 0 }).catch((e) =>
-      alert(mensagemAmigavel(e, "Não foi possível finalizar a viagem.")),
-    );
-  };
-  const avisarJanela = (nomeCidade) =>
-    alert(
-      `Mensagem simulada enviada aos passageiros de ${nomeCidade}: "Estamos a caminho para te buscar! 🚐"`,
-    );
-
   return (
     <section className="relative" aria-label={`Viagem de ${viagem.nome}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <div className="text-xs min-w-0" style={{ color: C.inkFaint }}>
-          {viagem.label}
-        </div>
-        <div className="flex items-center gap-2">
-          {viagemConcluida ? (
-            <span
-              className="text-xs px-2 py-1.5 rounded-lg"
-              style={{ background: C.greenSoft, color: C.green }}
-            >
-              ✓ Viagem concluída
-            </span>
-          ) : !viagemAtiva ? (
-            <button
-              onClick={iniciarViagem}
-              className="btn-press flex items-center gap-1.5 text-[13px] font-semibold px-3 min-h-[40px] rounded-lg border"
-              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-            >
-              <PlayCircle size={15} /> Iniciar viagem
-            </button>
-          ) : (
-            <button
-              onClick={finalizarViagem}
-              className="btn-press flex items-center gap-1.5 text-[13px] font-semibold px-3 min-h-[40px] rounded-lg border"
-              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-            >
-              <StopCircle size={15} /> Finalizar viagem
-            </button>
-          )}
-        </div>
-      </div>
-      {viagemAtiva && (
-        <div
-          className="text-xs mb-3 rounded-lg px-3 py-2 flex items-center gap-1.5"
-          style={{ background: C.blueSoft, color: C.blue }}
-        >
-          <Route size={12} /> Em andamento desde{" "}
-          {viagemAtiva.started_at ? fmtHora(viagemAtiva.started_at) : "—"} · km saída{" "}
-          {viagemAtiva.start_km ?? "—"}
-        </div>
-      )}
-      {viagemConcluida && (
-        <div
-          className="text-xs mb-3 rounded-lg px-3 py-2 flex items-center gap-1.5"
-          style={{ background: C.greenSoft, color: C.green }}
-        >
-          <Route size={12} /> Concluída
-          {viagemConcluida.duration_min ? ` em ${viagemConcluida.duration_min} min` : ""}
-          {viagemConcluida.end_km ? ` · km chegada ${viagemConcluida.end_km}` : ""}
-        </div>
-      )}
       {/* lotação (crítica de design, issue #393): barra fina neutra e quatro números */}
       <div className="mb-3" data-testid={`lotacao-${direcao}`}>
         <div
@@ -1552,23 +1382,15 @@ function ViagemOperacional({
             }}
           />
         </div>
-        <div className="grid grid-cols-4 gap-1.5 mt-2">
-          {[
-            ["Confirm.", confirmados],
-            ["Pend.", pendentesQtd],
-            ["Embarc.", embarcados],
-            ["Pagos", pagosQtd],
-          ].map(([rotulo, n]) => (
-            <div key={rotulo} className="rounded-lg px-2 py-1.5" style={{ background: C.panel }}>
-              <div className="text-[15px] font-bold leading-tight" style={{ color: C.ink }}>
-                {n}
-              </div>
-              <div className="text-[10px] uppercase tracking-[.06em]" style={{ color: C.inkFaint }}>
-                {rotulo}
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* os quatro números numa linha (issue #399: os quadradinhos soltos saíram) */}
+        <p className="text-[13px] mt-2 leading-relaxed" style={{ color: C.inkSoft }}>
+          <b style={{ color: C.ink }}>
+            {confirmados} de {capacidade} vagas
+          </b>
+          {pendentesQtd > 0 &&
+            ` · ${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"}`}
+          {` · ${embarcados} ${embarcados === 1 ? "embarcado" : "embarcados"} · ${pagosQtd} ${pagosQtd === 1 ? "pago" : "pagos"}`}
+        </p>
         {extrasQtd > 0 && (
           <div className="text-xs mt-1.5" style={{ color: C.inkFaint }}>
             + {extrasQtd} extra(s) fora das vagas
@@ -1592,40 +1414,46 @@ function ViagemOperacional({
           const editando = ehBusca && editandoBusca;
           return (
             <div key={p.id}>
+              {/* cabeçalho do ponto (issue #399): hora, ponto e quantos numa linha; as ações da
+                  busca em casa embaixo, alinhadas, em vez de tudo misturado */}
               <div
                 id={`ponto-${direcao}-${p.id}`}
-                className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 pb-1 border-t scroll-mt-24"
+                className="mt-1 pt-3 pb-1 border-t scroll-mt-24"
                 style={{ borderColor: C.panel2 }}
               >
-                <span className="text-[13px] font-semibold" style={{ color: C.inkSoft }}>
-                  {hora}
-                </span>
-                <span className="text-[14px] font-bold" style={{ color: C.ink }}>
-                  {p.nome}
-                </span>
-                {ehBusca && !editando && <GruposDeBusca itens={itens} trips={trips} />}
-                {ehBusca && !editando && itens.length > 0 && onSalvarBusca && (
-                  <button
-                    type="button"
-                    onClick={() => setEditandoBusca(true)}
-                    className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
-                    style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  <span
+                    className="text-[13px] font-semibold tabular-nums"
+                    style={{ color: C.inkSoft }}
                   >
-                    <Pencil size={12} /> EDITAR LISTA
-                  </button>
-                )}
-                <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
-                  {resumoDoPonto(itens, encDoPonto)}
-                </span>
-                {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
-                {p.janela && (
-                  <button
-                    onClick={() => avisarJanela(p.nome)}
-                    className="btn-press flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
-                    style={{ background: C.blueSoft, color: C.blue }}
-                  >
-                    <Megaphone size={10} /> Avisar
-                  </button>
+                    {hora}
+                  </span>
+                  <span className="text-[15px] font-bold" style={{ color: C.ink }}>
+                    {p.nome}
+                  </span>
+                  <span className="text-[12.5px]" style={{ color: C.inkSoft }}>
+                    {resumoDoPonto(itens, encDoPonto)}
+                  </span>
+                  {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
+                </div>
+                {ehBusca && !editando && itens.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <GruposDeBusca itens={itens} trips={trips} />
+                    {onSalvarBusca && (
+                      <button
+                        type="button"
+                        onClick={() => setEditandoBusca(true)}
+                        className="btn-press flex items-center gap-1.5 text-[12px] font-semibold px-3 min-h-[36px] rounded-lg"
+                        style={{
+                          background: C.panel2,
+                          color: C.ink,
+                          border: `1px solid ${C.border}`,
+                        }}
+                      >
+                        <Pencil size={12} /> Editar lista
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               {editando ? (
@@ -1672,7 +1500,8 @@ function ViagemOperacional({
                 Encomendas
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
-                {encSemPonto.length} encomenda(s) · sem ponto de embarque
+                {encSemPonto.length} {encSemPonto.length === 1 ? "encomenda" : "encomendas"} · sem
+                ponto de embarque
               </span>
             </div>
             <div className="space-y-1.5 mb-1.5">
@@ -1700,12 +1529,12 @@ function ViagemOperacional({
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                 {extras.length === 0
                   ? "fora das vagas"
-                  : `${extras.reduce((s, r) => s + r.quantidade, 0)} passagem(ns) · fora das vagas`}
+                  : `${extrasPax} ${extrasPax === 1 ? "passagem" : "passagens"} · fora das vagas`}
               </span>
               <button
                 type="button"
                 onClick={onNovoExtra}
-                className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md"
+                className="btn-press flex items-center gap-1 text-[11px] font-semibold px-3 min-h-[36px] rounded-lg"
                 style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
               >
                 <Plus size={12} /> Adicionar extra
@@ -2053,6 +1882,7 @@ export function NovaReservaModal({
   capacidade = 31,
   extraInicial = false,
   inicial = null,
+  onEncomenda = null,
 }) {
   // Extra na ida: começa em "Outro local de embarque" (beira da estrada etc.).
   const primeiroPonto = (dir) =>
@@ -2255,10 +2085,42 @@ export function NovaReservaModal({
           <div className="font-semibold text-sm">
             {extraInicial ? "Adicionar passagem extra" : "Agendar passagem"}
           </div>
-          <button type="button" onClick={() => onClose()}>
-            <X size={16} style={{ color: C.inkSoft }} />
+          <button
+            type="button"
+            onClick={() => onClose()}
+            aria-label="Fechar"
+            className="btn-press w-10 h-10 -mr-2 rounded-lg flex items-center justify-center"
+          >
+            <X size={18} style={{ color: C.inkSoft }} />
           </button>
         </div>
+        {/* encomenda nasce aqui, junto das passagens (issue #399: sem cartão próprio na Agenda) */}
+        {onEncomenda && !extraInicial && !inicial && (
+          <div
+            className="grid grid-cols-2 gap-1 rounded-xl border p-1 mb-4"
+            style={{ background: C.panel2, borderColor: C.border }}
+            role="group"
+            aria-label="Tipo"
+          >
+            <button
+              type="button"
+              aria-pressed="true"
+              className="min-h-[40px] rounded-lg text-[13px] font-semibold"
+              style={{ background: C.panel, color: C.ink, boxShadow: `inset 0 -2px 0 ${C.brand}` }}
+            >
+              Passagem
+            </button>
+            <button
+              type="button"
+              aria-pressed="false"
+              onClick={() => onEncomenda()}
+              className="btn-press min-h-[40px] rounded-lg text-[13px] font-semibold"
+              style={{ color: C.inkSoft }}
+            >
+              Encomenda
+            </button>
+          </div>
+        )}
 
         {erro && (
           <div

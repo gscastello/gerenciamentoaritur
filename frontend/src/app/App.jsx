@@ -575,9 +575,9 @@ function ItemResultado({ icon: Icon, titulo, sub, onClick }) {
         <Icon size={15} />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm truncate">{titulo}</span>
+        <span className="block text-sm break-words">{titulo}</span>
         {sub && (
-          <span className="block text-xs truncate" style={{ color: C.inkFaint }}>
+          <span className="block text-xs break-words" style={{ color: C.inkFaint }}>
             {sub}
           </span>
         )}
@@ -1043,6 +1043,8 @@ function AppInner() {
   // "+ Lançar" do Financeiro: abre o formulário mesmo que a tela ainda esteja carregando
   const [pedidoLancar, setPedidoLancar] = useState(null);
   const [agendarAberto, setAgendarAberto] = useState(false);
+  // "Encomenda" no formulário de nova reserva abre o da encomenda na Agenda (issue #399)
+  const [pedidoEncomenda, setPedidoEncomenda] = useState(null);
   // preenchimento vindo do endereço de costume do passageiro (#228)
   const [agendarInicial, setAgendarInicial] = useState(null);
   const [agendou, setAgendou] = useState("");
@@ -1243,6 +1245,12 @@ function AppInner() {
                     capacidade={capacidadeAtiva}
                     onCriar={R.createReservation}
                     inicial={agendarInicial}
+                    onEncomenda={() => {
+                      setAgendarAberto(false);
+                      setAgendarInicial(null);
+                      if (tab !== "agenda") setTab("agenda");
+                      setPedidoEncomenda({ at: Date.now() });
+                    }}
                     onClose={(r) => {
                       setAgendarAberto(false);
                       setAgendarInicial(null);
@@ -1508,7 +1516,8 @@ function AppInner() {
                   <TabSkeleton tab={tab} />
                 ) : (
                   <Suspense fallback={<TabSkeleton tab={tab} />}>
-                    <div className="anim-fadeIn">
+                    {/* mesmo respiro entre o topo e o primeiro bloco em toda tela (issue #399) */}
+                    <div className={`anim-fadeIn ${tab === "dashboard" ? "" : "pt-4 md:pt-0"}`}>
                       {["atendimento", "para_lancar", "bot"].includes(tab) && (
                         <AtendimentoTab
                           onContagens={setContagensAtendimento}
@@ -1536,6 +1545,7 @@ function AppInner() {
                           segundaHoras={cfg.segundaHoras}
                           deepLink={deepLink}
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
+                          pedidoEncomenda={pedidoEncomenda}
                         />
                       )}
                       {tab === "lista" && (
@@ -1569,12 +1579,6 @@ function AppInner() {
                           pix={cfgSettings.pix}
                           deepLink={deepLink}
                           pedidoLancar={pedidoLancar}
-                          atalhos={[
-                            { id: "fechamento", label: "Fechamento", Icon: ClipboardList },
-                            { id: "extrato", label: "Extrato", Icon: Landmark },
-                          ]
-                            .filter((a) => TELAS.includes(a.id))
-                            .map((a) => ({ ...a, onClick: () => mudarAba(a.id) }))}
                         />
                       )}
                       {tab === "gestao" && <GestaoTab deepLink={deepLink} />}

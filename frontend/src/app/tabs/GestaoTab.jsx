@@ -225,7 +225,7 @@ export default function GestaoTab({ deepLink }) {
         />
       </div>
 
-      <div className="px-4 md:px-10 pb-10 space-y-6">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {aba === "resultado" && (
           <GestaoResultado
             receita={receita}
@@ -810,7 +810,7 @@ function CategoriaCard({ titulo, descricao, kind, lista, grupos, gruposSugeridos
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         {descricao} Uma categoria só pode ser removida quando nenhum custo ativo está usando ela.
       </p>
-      <div className="flex flex-wrap items-end gap-2 mb-4">
+      <div className="form-linha flex flex-wrap items-end gap-2 mb-4">
         <div>
           <label className="text-[10px] block" style={{ color: C.inkFaint }}>
             Nova categoria
