@@ -52,7 +52,8 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
 
 ## 2. Interpretar
 
-- **Sentido:** embarque em São Luís = `ida`; saindo de Cantanhede/Pirapemas = `volta`.
+- **Sentido:** embarque em São Luís = `ida`; saindo de Cantanhede/Pirapemas = `volta`. **A origem decide** (dono, 14/11): saindo de Pirapemas ou Cantanhede para qualquer lugar,
+  inclusive a outra cidade, é sempre `volta`; saindo de São Luís é sempre `ida`.
   "Madrugada", "amanhã cedo" = ida da manhã.
 - **Cidade da Volta:** o ponto é a cidade (`pirapemas` ou `cantanhede`) que o cliente **disse** ou o
   endereço de costume. Há ruas com o mesmo nome nas duas (ex.: Lister Caldas): **nunca** deduza a

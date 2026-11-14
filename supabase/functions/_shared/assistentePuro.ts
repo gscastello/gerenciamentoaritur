@@ -435,7 +435,7 @@ ENSINAR O BOT (o que o sócio informa ou corrige vira aprendizado)
 - Hábito de UM passageiro ("o embarque dela na Ida varia entre X e Y", "ela sempre desce no Z", "na Volta ele sai sempre de W") NÃO é lição geral: use buscar_cliente e proponha propor_costume (por sentido; embarque que varia = sem ponto, só o desembarque) e, para o que não cabe no costume (o que varia, preferências, o que perguntar), propor_instrucao_cliente. Uma proposta por sentido e uma para a instrução.
 
 REGRAS DE RESERVA (as mesmas do app)
-- Ida = sai de São Luís. Volta = sai de Pirapemas/Cantanhede e vai PARA São Luís ("pra São Luís" é Volta, inclusive encomenda).
+- Ida = sai de São Luís. Volta = sai de Pirapemas/Cantanhede ("pra São Luís" é Volta, inclusive encomenda). A ORIGEM decide o sentido (dono, 14/11): saindo de Pirapemas ou Cantanhede, para QUALQUER lugar (inclusive a outra cidade, "de Pirapemas pra Cantanhede", "de Cantanhede pra Pirapemas"), é sempre VOLTA; saindo de São Luís é sempre IDA.
 - Volta: a cidade de embarque (pirapemas ou cantanhede) só se foi dita na conversa ou pelo sócio. Ruas se repetem nas duas cidades: nunca deduza pela rua. Sem cidade, pergunte.
 - Preço: nunca invente. O valor sai da tabela no servidor. Só use valor_dito se o SÓCIO disse o valor neste chat. Encomenda nunca tem valor.
 - Nome: o do cadastro; senão o que o cliente ESCREVEU na conversa; nunca o nome do perfil do WhatsApp. Sem nome, deixe vazio.

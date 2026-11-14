@@ -290,9 +290,22 @@ Deno.test("#401: formulário de Ida colado duas vezes + 'outra de volta': a segu
   assertEquals(segundaViagemEhAOutra(certos, textos), certos);
 });
 
-Deno.test("#406: Pirapemas → Cantanhede é a Volta saindo de Pirapemas (escrito ou confirmado com a equipe)", async () => {
-  const { pediuPirapemasParaCantanhede, pedidosDePirapemasParaCantanhede, conferenciaFinal } = await import("./pedidoDoCliente.ts");
-  // caso real: o cliente só escreveu "Pra Cantanhede"; a equipe disse o trecho e ele confirmou
+Deno.test("#406/#407: a origem decide o sentido — de Pirapemas/Cantanhede é Volta, de São Luís é Ida", async () => {
+  const { origemEscrita, origemDoPedido, pedidosPelaOrigem, conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  // origem escrita vence o destino
+  assertEquals(sentidoEscrito(["uma passagem de Pirapemas para Cantanhede"]), "volta");
+  assertEquals(sentidoEscrito(["de Cantanhede pra Pirapemas amanhã"]), "volta");
+  assertEquals(sentidoEscrito(["saindo de Cantanhede"]), "volta");
+  assertEquals(sentidoEscrito(["de São Luís pra Miranda"]), "ida");
+  assertEquals(sentidoEscrito(["saindo de slz"]), "ida");
+  // sem origem, o destino diz
+  assertEquals(sentidoEscrito(["Pra Cantanhede"]), "ida");
+  assertEquals(sentidoEscrito(["quero ir pra São Luís"]), "volta");
+  // "sou de Pirapemas" não é origem do trecho
+  assertEquals(origemEscrita("sou de Pirapemas"), null);
+  assertEquals(origemEscrita("de Cantanhede pra Pirapemas")?.cidade, "cantanhede");
+
+  // caso real (#406): o cliente só escreveu "Pra Cantanhede"; a equipe disse o trecho e ele confirmou
   const falas = [
     { quem: "cliente", texto: "Agenda minha passagem pra amanhã, por favor!" },
     { quem: "cliente", texto: "Pra Cantanhede" },
@@ -300,28 +313,32 @@ Deno.test("#406: Pirapemas → Cantanhede é a Volta saindo de Pirapemas (escrit
     { quem: "cliente", texto: "Isso" },
     { quem: "equipe", texto: "Agendado ☑️" },
   ];
-  assert(pediuPirapemasParaCantanhede(falas));
-  assert(!pediuPirapemasParaCantanhede([{ quem: "equipe", texto: "De pirapemas pra Cantanhede?" }, { quem: "cliente", texto: "não, de São Luís" }]));
-  assert(pediuPirapemasParaCantanhede([{ quem: "cliente", texto: "uma passagem de Pirapemas para Cantanhede" }]));
-  assertEquals(sentidoEscrito(["uma passagem de Pirapemas para Cantanhede"]), "volta");
+  const origem = origemDoPedido(falas);
+  assertEquals(origem?.sentido, "volta");
+  assertEquals(origem?.cidade, "pirapemas");
+  // a equipe sugeriu e o cliente negou: não vale
+  assertEquals(origemDoPedido([{ quem: "equipe", texto: "De pirapemas pra Cantanhede?" }, { quem: "cliente", texto: "não, de São Luís pra Cantanhede" }])?.sentido, "ida");
 
-  const lidos: { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string; desembarque: string; cidade_dita?: string | null }[] = [
+  const lidos: { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string; desembarque: string | null; cidade_dita?: string | null }[] = [
     { tipo: "passagem", data: "2026-11-15", direcao: "ida", ponto: "busca", bairro: "Turu", endereco: "Rua do Sol", desembarque: "Cantanhede" },
   ];
-  const [p] = pedidosDePirapemasParaCantanhede(lidos, falas);
+  const [p] = pedidosPelaOrigem(lidos, origem);
   assertEquals(p.direcao, "volta");
   assertEquals(p.cidade_dita, "pirapemas");
   assertEquals(p.bairro, null);
   assertEquals(p.ponto, null);
   assertEquals(p.endereco, "Rua do Sol");
   assertEquals(p.desembarque, "Cantanhede");
-  // sem o trecho, não mexe
-  assertEquals(pedidosDePirapemasParaCantanhede(lidos, falas.slice(0, 2)), lidos);
+  // sem origem dita, não mexe
+  assertEquals(pedidosPelaOrigem(lidos, origemDoPedido(falas.slice(0, 2))), lidos);
+  // de Cantanhede pra Pirapemas lido como Ida: Volta saindo de Cantanhede, descendo em Pirapemas
+  const [c] = pedidosPelaOrigem([{ ...lidos[0], desembarque: null }], origemDoPedido([{ quem: "cliente", texto: "de Cantanhede pra Pirapemas" }]));
+  assertEquals([c.direcao, c.cidade_dita, c.desembarque], ["volta", "cantanhede", "Pirapemas"]);
 
   // a conferência final não trava a Volta de Pirapemas pelo "pra Cantanhede" do cliente
   const msgs = [msg("Agenda minha passagem pra amanhã, por favor!"), msg("Pra Cantanhede")];
   const r = { trip_date: "2026-11-12", direction: "volta", quantity: 1, route_point_code: "pirapemas" };
   const base = { hoje: "2026-11-11", pedidosLidos: 1, cidadeEscrita: "cantanhede" };
   assert(conferenciaFinal(r, msgs, base).length > 0);
-  assertEquals(conferenciaFinal(r, msgs, { ...base, trechoDePirapemas: true }), []);
+  assertEquals(conferenciaFinal(r, msgs, { ...base, origem }), []);
 });
