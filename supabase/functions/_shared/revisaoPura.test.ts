@@ -239,3 +239,55 @@ Deno.test("#377: prova que junta a pergunta da equipe e a resposta do cliente co
   assertEquals(partesDaEvidencia("oi / ok"), []);
   assertEquals(evidenciaNaConversa("oi / ok", conv), false);
 });
+
+Deno.test("#401: Ida virou Volta: embarque e desembarque trocam junto com o sentido", () => {
+  const ida = {
+    ...base,
+    id: "r22",
+    data: "2026-11-22",
+    ponto: "busca",
+    bairro: "Cohab Anil III",
+    embarque: "Condomínio home Practice",
+    desembarque: "Praça da Cruz",
+    criada_em: "2026-11-14T13:01:00Z",
+  };
+  const falas = [{ em: "2026-11-14T13:05:00Z", texto: "Volta - Cantanhede para São Luís - 22/11" }];
+  const achados = achadosValidos([
+    { reserva_id: "r22", campo: "sentido", valor_correto: "volta", evidencia: "Volta - Cantanhede para São Luís - 22/11", certeza: "alta" },
+    { reserva_id: "r22", campo: "ponto", valor_correto: "cantanhede", evidencia: "Volta - Cantanhede para São Luís - 22/11", certeza: "alta" },
+    { reserva_id: "r22", campo: "embarque", valor_correto: "Praça da Cruz", evidencia: "Volta - Cantanhede para São Luís", certeza: "media" },
+  ]);
+  const r = decidirRevisao(achados, { reservas: [ida], conversa: falas[0].texto, hoje: "2026-11-14", pontos, falas, horaAgora: "10:15" });
+  assertEquals(r.correcoes.length, 1);
+  const c = r.correcoes[0];
+  assertEquals(c.sentido, "volta");
+  assertEquals(c.embarque, "Praça da Cruz");
+  assertEquals(c.desembarque, "Condomínio home Practice, Cohab Anil III");
+  assertEquals(c.bairro, null);
+  assertEquals(r.pendencias.length, 0);
+});
+
+Deno.test("#410: com o 'Atualizado ☑️' da equipe, certeza média corrige — inclusive dia e sentido com prova anterior", () => {
+  const ida = { ...base, id: "r40", data: "2026-11-20", criada_em: "2026-11-14T13:00:00Z" };
+  const falas = [{ em: "2026-11-14T12:00:00Z", texto: "na verdade é dia 21, pode mudar?" }];
+  const achados = achadosValidos([
+    { reserva_id: "r40", campo: "data", valor_correto: "2026-11-21", evidencia: "na verdade é dia 21", certeza: "media" },
+    { reserva_id: "r40", campo: "embarque", valor_correto: "Rodoviária, plataforma 3", evidencia: "na verdade é dia 21", certeza: "media" },
+  ]);
+  const ctxBase = { reservas: [ida], conversa: falas[0].texto, hoje: "2026-11-14", pontos, falas, horaAgora: "10:00" };
+  // sem a marca: prova anterior + certeza média = pendência
+  const semMarca = decidirRevisao(achados, ctxBase);
+  assertEquals(semMarca.correcoes.length, 0);
+  assertEquals(semMarca.pendencias.length, 2);
+  // com a marca: corrige os dois
+  const comMarca = decidirRevisao(achados, { ...ctxBase, confirmadoPelaEquipe: true });
+  assertEquals(comMarca.correcoes.length, 1);
+  assertEquals(comMarca.correcoes[0].data, "2026-11-21");
+  assertEquals(comMarca.correcoes[0].embarque, "Rodoviária, plataforma 3");
+  // certeza baixa nunca corrige sozinha
+  const baixa = decidirRevisao(
+    achadosValidos([{ reserva_id: "r40", campo: "data", valor_correto: "2026-11-22", evidencia: "na verdade é dia 21", certeza: "baixa" }]),
+    { ...ctxBase, confirmadoPelaEquipe: true },
+  );
+  assertEquals(baixa.correcoes.length, 0);
+});

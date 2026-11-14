@@ -251,7 +251,9 @@ async function conferirPreco(r: ReservaRevisada, ctx: { botId: string | null }):
   const novo = precoRevisado({
     atual: r.valor,
     tabela: valor.ok ? valor.preco : null,
-    alteradoPelaEquipe: await precoMudadoPelaEquipe(r.id, ctx.botId),
+    // valor que uma PESSOA pôs (ao criar, pelo app ou pelo Assistente, ou ao editar) fica; o revisor só
+    // acerta o valor zerado ou o que o próprio bot gravou (issue #401: Volta em casa num bairro sem preço)
+    alteradoPelaEquipe: !r.criada_pelo_bot || await precoMudadoPelaEquipe(r.id, ctx.botId),
   });
   if (novo == null) return null;
   const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
@@ -310,8 +312,13 @@ async function avisarCliente(chatwoot: number, reservas: ReservaRevisada[], nome
 }
 
 /** Revisa um passageiro. Devolve o resultado gravado. */
-export async function revisarCliente(customerId: string, assinaturaAntes: string, opcoes: { simular?: boolean } = {}) {
+export async function revisarCliente(
+  customerId: string,
+  assinaturaAntes: string,
+  opcoes: { simular?: boolean; equipeConfirmou?: boolean } = {},
+) {
   const simular = opcoes.simular === true;
+  const equipeConfirmou = opcoes.equipeConfirmou === true;
   const hoje = diaCivil(new Date());
   const { data: bot } = await supabaseAdmin.from("users").select("id").eq("name", "Bot WhatsApp").maybeSingle();
   const botId: string | null = bot?.id ?? null;
@@ -322,9 +329,29 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
     .maybeSingle();
   if (!cliente) return { resultado: "erro", erro: "cliente não encontrado" };
   let custo = 0;
+  // marca "em revisão": a rodada seguinte (a cada minuto) não pega o mesmo passageiro (issue #410)
+  let linhaId: string | null = null;
+  if (!simular) {
+    const { data: marca } = await supabaseAdmin
+      .from("revisoes_reservas")
+      .insert({ customer_id: customerId, assinatura: assinaturaAntes, resultado: "andamento" })
+      .select("id")
+      .maybeSingle();
+    linhaId = marca?.id ?? null;
+  }
+  const gravar = async (linha: Record<string, unknown>) => {
+    if (linhaId) {
+      await supabaseAdmin.from("revisoes_reservas").update({ ...linha, revisado_em: new Date().toISOString() }).eq("id", linhaId);
+    } else {
+      await supabaseAdmin.from("revisoes_reservas").insert({ customer_id: customerId, ...linha });
+    }
+  };
   try {
     const reservas = await reservasDoCliente(customerId, hoje, botId);
-    if (!reservas.length) return { resultado: "ok" };
+    if (!reservas.length) {
+      if (linhaId) await gravar({ assinatura: assinaturaAntes, resultado: "ok" });
+      return { resultado: "ok", semReserva: true };
+    }
     const conversa = await conversaDoCliente(cliente.phone);
     const aplicados: string[] = [];
     const pendenciasTexto: string[] = [];
@@ -372,7 +399,10 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
         extras,
       });
       const passadas = await viagensPassadas(customerId, hoje);
-      const conteudo = `PASSAGEIRO: ${cliente.name || "(sem nome)"}\n\nRESERVAS FUTURAS (revise estas):\n${reservasParaOPrompt(ativas, nomes)}\n\nVIAGENS PASSADAS (já feitas; os pedidos delas na conversa NÃO valem para as futuras):\n${passadas}\n\nCONVERSA (mais antiga primeiro):\n${conversa.texto}`;
+      const marcaDaEquipe = equipeConfirmou
+        ? 'A EQUIPE ACABOU DE MARCAR "Atualizado ☑️" NA CONVERSA: as reservas têm de ficar como a conversa combinou. Aponte TODA diferença (dia, sentido, ponto, bairro, embarque, desembarque, quantidade), com o trecho literal.\n\n'
+        : "";
+      const conteudo = `${marcaDaEquipe}PASSAGEIRO: ${cliente.name || "(sem nome)"}\n\nRESERVAS FUTURAS (revise estas):\n${reservasParaOPrompt(ativas, nomes)}\n\nVIAGENS PASSADAS (já feitas; os pedidos delas na conversa NÃO valem para as futuras):\n${passadas}\n\nCONVERSA (mais antiga primeiro):\n${conversa.texto}`;
       const r = await chamarRevisor(system, conteudo);
       custo += r.custo;
       achados = achadosValidos(r.entrada?.achados);
@@ -389,6 +419,7 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
         horaAgora: agora,
         // o que a equipe (ou o Assistente) mudou à mão vence a conversa anterior (issue #389)
         mudancasDaEquipe: await mudancasDaEquipe(ativas.map((x) => x.id), botId),
+        confirmadoPelaEquipe: equipeConfirmou,
       });
       for (const c of decisao.correcoes) {
         const alvo = ativas.find((x) => x.id === c.reserva_id) as ReservaRevisada;
@@ -430,8 +461,7 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
     }
     const resultado = aplicados.length ? "corrigida" : pendenciasTexto.length ? "pendencia" : "ok";
     const { data: assinatura } = await supabaseAdmin.rpc("fn_assinatura_revisao", { p_customer_id: customerId });
-    await supabaseAdmin.from("revisoes_reservas").insert({
-      customer_id: customerId,
+    await gravar({
       assinatura: assinatura ?? assinaturaAntes,
       resultado,
       achados,
@@ -440,11 +470,10 @@ export async function revisarCliente(customerId: string, assinaturaAntes: string
       modelo: conversa.prova ? MODELO : null,
       custo,
     });
-    evento("revisor_cliente", { resultado, aplicados: aplicados.length, pendencias: pendenciasTexto.length, custo });
+    evento("revisor_cliente", { resultado, aplicados: aplicados.length, pendencias: pendenciasTexto.length, custo, equipe: equipeConfirmou });
     return { resultado, aplicados, pendencias: pendenciasTexto.length };
   } catch (err) {
-    await supabaseAdmin.from("revisoes_reservas").insert({
-      customer_id: customerId,
+    await gravar({
       assinatura: assinaturaAntes,
       resultado: "erro",
       erro: String(err).slice(0, 500),
@@ -472,4 +501,35 @@ export async function rodadaDoRevisor(limite = 6, opcoes: { simular?: boolean } 
   }
   evento("revisor_rodada", { revisados: fila.length, resultados });
   return { revisados: fila.length, resultados };
+}
+
+/**
+ * "Atualizado ☑️" da equipe na conversa (issue #410): revisa o passageiro NA HORA, com a marca
+ * como confirmação (corrige com certeza média, inclusive dia e sentido). Sem reserva futura,
+ * devolve `semReserva` — quem chamou lança como Agendado. Nada mudou: pendência avisando.
+ */
+export async function revisarPelaMarca(entrada: { telefone: string; chatwootConversationId: number }) {
+  try {
+    const { data: clienteId } = await supabaseAdmin.rpc("fn_cliente_por_telefone", { p_telefone: entrada.telefone });
+    if (!clienteId) return { semReserva: true };
+    const { data: assinatura } = await supabaseAdmin.rpc("fn_assinatura_revisao", { p_customer_id: clienteId });
+    const r = await revisarCliente(String(clienteId), String(assinatura ?? ""), { equipeConfirmou: true });
+    evento("bot_atualizado", { conversa: entrada.chatwootConversationId, resultado: r.resultado });
+    if ((r as { semReserva?: boolean }).semReserva) return { semReserva: true };
+    if (r.resultado === "ok") {
+      await supabaseAdmin.rpc("rpc_open_support_ticket", {
+        p_subject: "Atualizado ☑️ não mudou nada",
+        p_detail:
+          "O revisor leu a conversa e as reservas futuras já batem com o que foi combinado (ou o que mudou não está escrito na conversa: áudio, ligação). Confira e ajuste pela Agenda se precisar.",
+        p_phone: entrada.telefone,
+        p_customer_id: clienteId,
+        p_source: "whatsapp",
+        p_meta: { chatwoot_conversation_id: entrada.chatwootConversationId, atualizado: true },
+      });
+    }
+    return { semReserva: false, resultado: r.resultado };
+  } catch (err) {
+    evento("bot_erro", { etapa: "atualizado", erro: String(err).slice(0, 300) });
+    return { semReserva: false, resultado: "erro" };
+  }
 }

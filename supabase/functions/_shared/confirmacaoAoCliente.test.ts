@@ -28,11 +28,11 @@ Deno.test("primeiro nome do cadastro", () => {
   assertEquals(primeiroNome(null), null);
 });
 
-Deno.test("Volta de hoje: resumo com dia, embarque, desembarque e quantidade, sem valor", () => {
+Deno.test("Volta de hoje: resumo com dia, embarque e quantidade, sem valor nem desembarque", () => {
   const m = mensagemDeConfirmacao([volta], { hoje: HOJE, nome: "Auristelia Coutinho" });
   assert(m);
   assertStringIncludes(m, "Prontinho, Auristelia! ✅ Sua vaga está reservada:");
-  assertStringIncludes(m, "🚐 Volta de hoje, quarta (11/11): sai de Pirapemas (Eurico Ribeiro, casa amarela) e desce em Miranda do Norte · 1 passagem");
+  assertStringIncludes(m, "🚐 Volta de hoje, quarta (11/11): sai de Pirapemas (Eurico Ribeiro, casa amarela) · 1 passagem");
   assertStringIncludes(m, "Se algo estiver diferente, é só me responder aqui.");
   assert(!/R\$|reais|valor/i.test(m), m);
   // não pode ser lida como um novo "Agendado ☑️"
@@ -46,7 +46,7 @@ Deno.test("Ida sem endereço: pede o endereço; marcas internas não aparecem", 
   );
   assert(m);
   assertStringIncludes(m, "Prontinho! ✅");
-  assertStringIncludes(m, "🚐 Ida de amanhã, quinta (12/11): sai de busca em casa e desce em Pirapemas · 2 passagens");
+  assertStringIncludes(m, "🚐 Ida de amanhã, quinta (12/11): sai de busca em casa · 2 passagens");
   assertStringIncludes(m, "📍 Me manda, por favor, o endereço onde a van te pega.");
   assert(!m.includes("Endereço a confirmar"));
 });
@@ -66,7 +66,8 @@ Deno.test("ida e volta: em ordem, volta sem dia dito pergunta o dia", () => {
   assertStringIncludes(m, "Suas vagas estão reservadas:");
   const [a, b] = [m.indexOf("🚐 Ida"), m.indexOf("🚐 Volta")];
   assert(a > 0 && b > a, m);
-  assertStringIncludes(m, "sai de Rodoviária e desce em Cantanhede");
+  assertStringIncludes(m, "sai de Rodoviária · ");
+  assert(!m.includes("desce em"));
   assertStringIncludes(m, "sai de Pirapemas (Rua Grande) · 1 passagem");
   assertStringIncludes(m, "📅 A volta é no mesmo dia?");
 });

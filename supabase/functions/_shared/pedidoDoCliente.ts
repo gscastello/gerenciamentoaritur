@@ -34,30 +34,338 @@ const unico = <T>(valores: T[]): T | null => {
 /** "pra São Luís", "de Pirapemas pra…" = volta; "pra Pirapemas", "saindo de São Luís" = ida. Os dois = null. */
 /** O cliente falou das duas viagens ("ida e volta", "e volto domingo", "a volta é…")? */
 export function falouDasDuasViagens(textos: string[]): boolean {
-  return textos.some((t) => / (ida e volta|volta|voltar|volto|voltando|vou e volto|regresso|retornar|retorno pra|retorno para) /.test(` ${normalizarTexto(t)} `));
+  // "e retorno segunda-feira", "retorno no domingo" é a outra viagem; "no retorno" sozinho é o ponto (issue #401)
+  return textos.some((t) =>
+    / (ida e volta|volta|voltar|volto|voltando|vou e volto|regresso|retornar|retornando|retorno pra|retorno para|e retorno) /.test(` ${normalizarTexto(t)} `) ||
+    / retorno (no|na|dia|em|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha) /.test(` ${normalizarTexto(t)} `)
+  );
+}
+
+type PedidoDoPar = {
+  tipo?: string | null;
+  data?: string | null;
+  direcao?: string | null;
+  ponto?: string | null;
+  bairro?: string | null;
+  endereco?: string | null;
+  desembarque?: string | null;
+  cidade_dita?: string | null;
+  duvida?: string | null;
+  quantidade?: number | null;
+};
+
+const cidadeDoInterior = (t: string | null | undefined): "pirapemas" | "cantanhede" | null => {
+  const n = normalizarTexto(t ?? "");
+  const p = n.includes("pirapemas") || n.includes("campestre");
+  const c = n.includes("cantanhede");
+  return p === c ? null : p ? "pirapemas" : "cantanhede";
+};
+
+/**
+ * O sentido que o cliente escreveu na(s) mensagem(ns) que citam o DIA da viagem ("Volta na terça
+ * feira de Cantanhede pro Marsil") vale para a viagem daquele dia (issue #415). Lida no sentido
+ * contrário, ela vira: Volta sai da cidade dita (ou da que aparece no embarque lido) e o endereço
+ * que era só o nome da cidade sai; Ida perde a cidade da Volta. Sem sentido único no dia, não mexe.
+ */
+export function pedidosPeloSentidoDoDia<P extends PedidoDoPar>(pedidos: P[], mensagens: MensagemDoCliente[]): P[] {
+  let mudou = false;
+  const out = pedidos.map((p) => {
+    if ((p.tipo ?? "passagem") === "encomenda" || !p.data || (p.direcao !== "ida" && p.direcao !== "volta")) return p;
+    // só mensagens que citam UM dia: "segunda pra ir e terça pra volta" não decide nenhum dos dois
+    const doDia = mensagens.filter((m) => {
+      const ds = datasEscritas([m]);
+      return ds.length === 1 && ds[0] === p.data;
+    });
+    const sentido = sentidoEscrito(doDia.map((m) => m.texto));
+    if (!sentido || sentido === p.direcao) return p;
+    mudou = true;
+    const origem = doDia.map((m) => origemEscrita(m.texto)).find(Boolean) ?? null;
+    const aviso = `O cliente escreveu ${sentido === "volta" ? "Volta" : "Ida"} para ${p.data.split("-").reverse().slice(0, 2).join("/")}: ficou na ${sentido === "volta" ? "Volta" : "Ida"}.`;
+    if (sentido === "volta") {
+      const cidade = (origem?.de === "pirapemas" || origem?.de === "cantanhede" ? origem.de : null) ?? cidadeDoInterior(p.endereco) ??
+        cidadeDoInterior(p.desembarque);
+      const soACidade = !!p.endereco && cidadeDoInterior(p.endereco) !== null && normalizarTexto(p.endereco).split(" ").length <= 2;
+      return {
+        ...p,
+        direcao: "volta",
+        ponto: null,
+        bairro: null,
+        cidade_dita: cidade,
+        endereco: soACidade ? null : (p.endereco ?? null),
+        duvida: [p.duvida, aviso].filter(Boolean).join(" "),
+      };
+    }
+    return { ...p, direcao: "ida", ponto: null, cidade_dita: null, duvida: [p.duvida, aviso].filter(Boolean).join(" ") };
+  });
+  return mudou ? out : pedidos;
+}
+
+/**
+ * "Uma passagem na segunda pra ir e na terça pra volta" e a leitura trouxe só UMA viagem
+ * (issue #415): monta a outra com o dia que o cliente escreveu depois. A Volta sai da cidade
+ * para onde a Ida vai e desce no endereço de São Luís da Ida (embarque a confirmar); a Ida
+ * busca no endereço de São Luís onde a Volta desce e desce na cidade de onde a Volta sai.
+ * Só com um pedido lido, os dois sentidos falados e UM dia a mais escrito depois do lido.
+ */
+export function outraViagemDoPar<P extends PedidoDoPar>(pedidos: P[], mensagens: MensagemDoCliente[], hoje: string): P[] {
+  if (pedidos.length !== 1) return pedidos;
+  const [p] = pedidos;
+  const textos = mensagens.map((m) => m.texto);
+  if ((p.tipo ?? "passagem") === "encomenda" || !p.data || (p.direcao !== "ida" && p.direcao !== "volta")) return pedidos;
+  if (!falouDasDuasViagens(textos)) return pedidos;
+  const depois = datasEscritas(mensagens).filter((d) => d >= hoje && d > (p.data as string));
+  if (depois.length !== 1) return pedidos;
+  const ddmm = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
+  const deSaoLuis = [p.endereco, p.bairro].filter(Boolean).join(", ") || null;
+  const outra: P = p.direcao === "ida"
+    ? {
+      ...p,
+      data: depois[0],
+      direcao: "volta",
+      ponto: null,
+      bairro: null,
+      cidade_dita: cidadeDoInterior(p.desembarque),
+      endereco: null,
+      desembarque: deSaoLuis,
+      duvida: `Volta de ${ddmm(depois[0])} pedida junto com a Ida de ${ddmm(p.data)}: sai da cidade da Ida e desce no endereço de São Luís; embarque a confirmar.`,
+    }
+    : {
+      ...p,
+      data: depois[0],
+      direcao: "ida",
+      ponto: null,
+      cidade_dita: null,
+      endereco: p.desembarque ?? null,
+      bairro: null,
+      desembarque: cidadeDoInterior(p.cidade_dita ?? p.endereco) === "pirapemas" ? "Pirapemas" : cidadeDoInterior(p.cidade_dita ?? p.endereco) === "cantanhede" ? "Cantanhede" : null,
+      duvida: `Ida de ${ddmm(depois[0])} pedida junto com a Volta de ${ddmm(p.data)}: busca onde a Volta desce; confira o embarque.`,
+    };
+  return [p, outra];
+}
+
+/**
+ * "Uma de Ida para Cantanhede e outra de volta" e a leitura trouxe DUAS viagens de dias
+ * diferentes no MESMO sentido (o cliente colou o mesmo formulário duas vezes): a segunda é
+ * a outra viagem, com embarque e desembarque trocados (issue #401). Só com exatamente duas
+ * passagens; senão devolve a mesma lista.
+ */
+export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], textos: string[]): P[] {
+  if (pedidos.length !== 2 || !falouDasDuasViagens(textos)) return pedidos;
+  const [a, b] = [...pedidos].sort((x, y) => String(x.data ?? "").localeCompare(String(y.data ?? "")));
+  const sentido = a.direcao;
+  if ((a.tipo ?? "passagem") === "encomenda" || (b.tipo ?? "passagem") === "encomenda") return pedidos;
+  if (!a.data || !b.data || a.data === b.data || (sentido !== "ida" && sentido !== "volta") || b.direcao !== sentido) return pedidos;
+  const outro = sentido === "ida" ? "volta" : "ida";
+  const deSaoLuis = [b.endereco, b.bairro].filter(Boolean).join(", ") || null;
+  const virada: P = {
+    ...b,
+    direcao: outro,
+    ponto: null,
+    bairro: null,
+    // Ida → Volta: sobe onde a Ida descia e desce no endereço de São Luís; Volta → Ida: o contrário
+    endereco: b.desembarque ?? null,
+    desembarque: outro === "volta" ? deSaoLuis : (b.endereco ?? null),
+    cidade_dita: outro === "volta" ? (b.cidade_dita ?? null) : null,
+    duvida: [b.duvida, `O cliente pediu ida e volta e as duas viagens vieram no mesmo sentido: a de ${b.data.split("-").reverse().slice(0, 2).join("/")} ficou na ${outro === "volta" ? "Volta" : "Ida"}, com embarque e desembarque trocados. Confira.`]
+      .filter(Boolean)
+      .join(" "),
+  };
+  return pedidos.map((p) => (p === b ? virada : p));
+}
+
+/**
+ * O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11 — issues #406 e #407). A Ida sai de São Luís e
+ * vai até Pirapemas; a Volta sai de Pirapemas e vai até São Luís, pelo mesmo caminho:
+ *   São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas
+ * Destino DEPOIS da origem nessa ordem = Ida; destino ANTES = Volta. "De Cantanhede pra Pirapemas" é
+ * Ida (a Volta já passou por Cantanhede vinda de Pirapemas); "de Pirapemas pra Cantanhede" é Volta.
+ * Só a origem: São Luís = Ida; Pirapemas/Cantanhede = Volta (o mais comum). Vale sobre o destino
+ * sozinho ("pra Cantanhede" de quem sai de Pirapemas não é Ida).
+ */
+export const ORDEM_DA_IDA = ["sao luis", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "cantanhede", "campestre", "pirapemas"] as const;
+type Parada = (typeof ORDEM_DA_IDA)[number];
+
+const NOME_DA_PARADA: Record<Parada, string> = {
+  "sao luis": "São Luís",
+  bacabeira: "Bacabeira",
+  "santa rita": "Santa Rita",
+  entroncamento: "Entroncamento",
+  miranda: "Miranda do Norte",
+  matoes: "Matões do Norte",
+  cantanhede: "Cantanhede",
+  campestre: "Campestre",
+  pirapemas: "Pirapemas",
+};
+
+const PARADA = "(sao luis|slz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|cantanhede|campestre|pirapemas)";
+// "pra", "pro", "para", "p/", "até" (issue #415: "de Cantanhede pro Marsil")
+const PARA = "(?:pra|pro|para|p|a|ate|ir pra|ir pro|ir para)";
+const RE_DE_PARA = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} ${PARA} ${PARADA} `);
+/** origem do interior ou São Luís com destino QUALQUER (fora da rota: condomínio, bairro, casa de alguém) */
+const RE_DE_PARA_LUGAR = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} ${PARA} [a-z]`);
+const RE_SO_ORIGEM = new RegExp(` (de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} `);
+
+function parada(t: string): Parada | null {
+  const n = t.replace(/ do norte$/, "");
+  if (n === "slz") return "sao luis";
+  return (ORDEM_DA_IDA as readonly string[]).includes(n) ? (n as Parada) : null;
+}
+
+export type OrigemDoTrecho = {
+  sentido: "ida" | "volta";
+  /** de onde sai (parada da rota) */
+  de: Parada;
+  /** para onde vai, se disse */
+  para: Parada | null;
+};
+
+/** O sentido do trecho pela ordem das paradas (null = mesma parada). */
+export function sentidoDoTrecho(de: Parada, para: Parada): "ida" | "volta" | null {
+  const a = ORDEM_DA_IDA.indexOf(de);
+  const b = ORDEM_DA_IDA.indexOf(para);
+  return a === b ? null : a < b ? "ida" : "volta";
+}
+
+/** Origem escrita numa frase: "de Cantanhede pra Pirapemas", "saindo de São Luís". "Sou de Pirapemas" sozinho não conta. */
+export function origemEscrita(texto: string): OrigemDoTrecho | null {
+  const n = ` ${normalizarTexto(texto)} `;
+  const trecho = n.match(RE_DE_PARA);
+  if (trecho) {
+    const de = parada(trecho[1]);
+    const para = parada(trecho[2]);
+    const sentido = de && para ? sentidoDoTrecho(de, para) : null;
+    if (de && para && sentido) return { sentido, de, para };
+  }
+  // "de Cantanhede pro Marsil": destino fora da rota = o lado de São Luís (issue #415)
+  const lugar = n.match(RE_DE_PARA_LUGAR);
+  if (lugar) {
+    const de = parada(lugar[1]);
+    if (de === "sao luis") return { sentido: "ida", de, para: null };
+    if (de === "pirapemas" || de === "cantanhede") return { sentido: "volta", de, para: null };
+  }
+  // só a origem: precisa de "saindo/vindo de" ("de Pirapemas" sozinho pode ser "sou de Pirapemas")
+  const so = n.match(RE_SO_ORIGEM);
+  if (so && so[1] !== "de") {
+    const de = parada(so[2]);
+    if (de === "sao luis") return { sentido: "ida", de, para: null };
+    if (de === "pirapemas" || de === "cantanhede") return { sentido: "volta", de, para: null };
+  }
+  return null;
 }
 
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   const achados: ("ida" | "volta")[] = [];
   for (const t of textos) {
+    const origem = origemEscrita(t);
+    if (origem) {
+      achados.push(origem.sentido);
+      continue;
+    }
     const n = ` ${normalizarTexto(t)} `;
-    // "sou de Pirapemas" não diz o sentido: só "saindo de…" ou "de X pra Y"
-    if (
-      / (pra|para|p|ate|ir pra|ir para) (sao luis|slz) /.test(n) ||
-      / (saindo de|sair de|saio de|vindo de|venho de) (pirapemas|cantanhede) /.test(n) ||
-      / de (pirapemas|cantanhede) (pra|para|a|ate) /.test(n)
-    ) {
-      achados.push("volta");
+    // "Volta na terça…", "a ida é segunda": o rótulo escrito diz o sentido (issue #415); os dois = nenhum
+    const rotuloVolta = / volta /.test(n);
+    const rotuloIda = / (ida|pra ir|para ir) /.test(n);
+    if (rotuloVolta !== rotuloIda) {
+      achados.push(rotuloVolta ? "volta" : "ida");
+      continue;
     }
-    if (
-      / (pra|para|p|ate|ir pra|ir para) (pirapemas|cantanhede) /.test(n) ||
-      / (saindo de|sair de|saio de) (sao luis|slz) /.test(n) ||
-      / de (sao luis|slz) (pra|para|a|ate) /.test(n)
-    ) {
-      achados.push("ida");
-    }
+    // sem origem dita, o destino diz o sentido
+    if (/ (pra|pro|para|p|ate|ir pra|ir pro|ir para) (sao luis|slz) /.test(n)) achados.push("volta");
+    if (/ (pra|pro|para|p|ate|ir pra|ir pro|ir para) (pirapemas|cantanhede) /.test(n)) achados.push("ida");
   }
   return unico(achados);
+}
+
+const RESPOSTA_DE_SIM = /^(sim|isso|certo|exato|correto|isso mesmo|e isso|pode ser|ok|blz|beleza|s)\b/;
+
+/**
+ * O trecho pedido: o que o CLIENTE escreveu, ou o que a EQUIPE disse e ele confirmou logo
+ * depois ("De pirapemas pra Cantanhede, certo?" → "Isso"). Vale o mais recente; sentidos
+ * diferentes = null.
+ */
+export function origemDoPedido(falas: { quem: string; texto: string }[]): OrigemDoTrecho | null {
+  const achadas: OrigemDoTrecho[] = [];
+  for (let i = 0; i < falas.length; i++) {
+    const m = falas[i];
+    const origem = origemEscrita(m.texto);
+    if (!origem) continue;
+    if (m.quem === "cliente") {
+      achadas.push(origem);
+      continue;
+    }
+    if (m.quem !== "equipe") continue;
+    for (let k = i + 1; k < falas.length && k <= i + 3; k++) {
+      const r = falas[k];
+      if (r.quem === "equipe") break;
+      if (r.quem !== "cliente") continue;
+      if (RESPOSTA_DE_SIM.test(normalizarTexto(r.texto))) achadas.push(origem);
+      break;
+    }
+  }
+  if (new Set(achadas.map((a) => a.sentido)).size !== 1) return null;
+  return achadas.at(-1) ?? null;
+}
+
+/** Cidade de embarque da Volta (o ponto): Campestre vai no ponto Pirapemas; outra cidade do caminho, no Cantanhede (#326). */
+export function pontoDaVoltaPelaOrigem(de: Parada): "pirapemas" | "cantanhede" | null {
+  if (de === "pirapemas" || de === "campestre") return "pirapemas";
+  if (de === "sao luis") return null;
+  return "cantanhede";
+}
+
+const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "sao luis" ? "sao luis" : p);
+
+/**
+ * O pedido segue o trecho dito (issue #407): sentido pela ordem das paradas, embarque na cidade de
+ * onde sai e desembarque na de destino. Volta: o ponto é a cidade (Campestre = Pirapemas; outras do
+ * caminho = Cantanhede, com a cidade no endereço) e o bairro de São Luís lido por engano sai. Ida
+ * saindo de uma cidade do interior ("de Cantanhede pra Pirapemas"): ponto Outros com a cidade.
+ */
+export function pedidosPelaOrigem<P extends PedidoDoPar>(pedidos: P[], origem: OrigemDoTrecho | null): P[] {
+  if (!origem) return pedidos;
+  let mudou = false;
+  const destino = origem.para ? NOME_DA_PARADA[origem.para] : null;
+  const nomeDe = NOME_DA_PARADA[origem.de];
+  const out = pedidos.map((p) => {
+    if ((p.tipo ?? "passagem") === "encomenda") return p;
+    const naCidade = (end: string | null | undefined) => (temANome(end, origem.de) ? (end ?? null) : [nomeDe, end].filter(Boolean).join(", "));
+    let novo: P | null = null;
+    if (origem.sentido === "volta") {
+      const ponto = pontoDaVoltaPelaOrigem(origem.de);
+      const doCaminho = origem.de !== "pirapemas" && origem.de !== "cantanhede";
+      if (p.direcao !== "volta" || p.bairro || (ponto && cidadeDaVoltaTexto(p.cidade_dita) !== ponto)) {
+        novo = {
+          ...p,
+          direcao: "volta",
+          ponto: null,
+          bairro: null,
+          cidade_dita: ponto,
+          endereco: doCaminho ? naCidade(p.endereco) : (p.endereco ?? null),
+          desembarque: p.desembarque || destino,
+        };
+      }
+    } else if (origem.de === "sao luis") {
+      if (p.direcao !== "ida") {
+        novo = { ...p, direcao: "ida", ponto: null, cidade_dita: null, desembarque: p.desembarque || destino };
+      }
+    } else if (p.direcao !== "ida" || p.ponto !== "outro" || p.bairro) {
+      // Ida que sobe numa cidade do interior: ponto Outros, com a cidade no endereço
+      novo = { ...p, direcao: "ida", ponto: "outro", bairro: null, cidade_dita: null, endereco: naCidade(p.endereco), desembarque: p.desembarque || destino };
+    }
+    if (!novo) return p;
+    mudou = true;
+    const trecho = `${nomeDe}${destino ? ` para ${destino}` : ""}`;
+    return {
+      ...novo,
+      duvida: [p.duvida, `Trecho ${trecho}: é a ${origem.sentido === "ida" ? "Ida" : "Volta"} (pela ordem das paradas).`].filter(Boolean).join(" "),
+    };
+  });
+  return mudou ? out : pedidos;
+}
+
+function cidadeDaVoltaTexto(v: string | null | undefined): string | null {
+  const n = normalizarTexto(v ?? "");
+  return n.includes("pirapemas") ? "pirapemas" : n.includes("cantanhede") ? "cantanhede" : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +449,10 @@ export function quantidadeEscrita(textos: string[]): number | null {
 export function pontoEscrito(textos: string[], pontos: string[]): string | null {
   const achados: string[] = [];
   for (const t of textos) {
+    // pergunta ("Desce na rodoviária ou na casa?") e fala de onde DESCE não dizem onde ele embarca (issue #401)
+    if (t.includes("?")) continue;
     const n = ` ${normalizarTexto(t)} `;
+    if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
     // "parada das vans" é o Retorno das Vans, não a rodoviária (dono, 11/11 — issue #333)
     if (/ retorno | (parada|ponto) das? vans? /.test(n)) achados.push("retorno");
@@ -201,7 +512,14 @@ export type CamposDoPedido = {
 export function conferirPeloCliente<P extends CamposDoPedido>(
   p: P,
   mensagens: MensagemDoCliente[],
-  ctx: { hoje: string; pontosIda: string[]; bairros: { neighborhood: string }[]; pedidosLidos: number },
+  ctx: {
+    hoje: string;
+    pontosIda: string[];
+    bairros: { neighborhood: string }[];
+    pedidosLidos: number;
+    /** origem do trecho (escrita ou confirmada com a equipe): decide o sentido (issues #406 e #407) */
+    origem?: OrigemDoTrecho | null;
+  },
 ): { pedido: P; completados: string[]; avisos: string[] } {
   const textos = mensagens.map((m) => m.texto);
   const pedido = { ...p };
@@ -209,7 +527,7 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
   const avisos: string[] = [];
   if (pedido.tipo === "encomenda") return { pedido, completados, avisos };
 
-  const sentido = sentidoEscrito(textos);
+  const sentido = ctx.origem?.sentido ?? sentidoEscrito(textos);
   if (!pedido.direcao && sentido) {
     pedido.direcao = sentido;
     completados.push(`sentido ${sentido}`);
@@ -284,10 +602,13 @@ export function conferenciaFinal(
     cidadeEscrita?: string | null;
     /** datas de perguntas da equipe que o cliente confirmou ("A ida é sábado, certo?" → "Isso") — issue #335 */
     datasConfirmadas?: string[];
+    /** origem do trecho: decide o sentido; "pra Cantanhede" de quem sai de Pirapemas não contradiz (issues #406 e #407) */
+    origem?: OrigemDoTrecho | null;
   },
 ): string[] {
   if (r.type === "encomenda") return [];
   const textos = mensagens.map((m) => m.texto);
+  if (ctx.origem?.sentido === "volta") ctx = { ...ctx, cidadeEscrita: pontoDaVoltaPelaOrigem(ctx.origem.de) };
   const naoBate: string[] = [];
 
   const datas = [...new Set([...datasEscritas(mensagens), ...(ctx.datasConfirmadas ?? [])])]
@@ -297,7 +618,7 @@ export function conferenciaFinal(
     naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
   }
 
-  const sentido = sentidoEscrito(textos);
+  const sentido = ctx.origem?.sentido ?? sentidoEscrito(textos);
   if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
     naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
   }
