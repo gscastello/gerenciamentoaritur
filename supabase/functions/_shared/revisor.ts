@@ -251,7 +251,9 @@ async function conferirPreco(r: ReservaRevisada, ctx: { botId: string | null }):
   const novo = precoRevisado({
     atual: r.valor,
     tabela: valor.ok ? valor.preco : null,
-    alteradoPelaEquipe: await precoMudadoPelaEquipe(r.id, ctx.botId),
+    // valor que uma PESSOA pôs (ao criar, pelo app ou pelo Assistente, ou ao editar) fica; o revisor só
+    // acerta o valor zerado ou o que o próprio bot gravou (issue #401: Volta em casa num bairro sem preço)
+    alteradoPelaEquipe: !r.criada_pelo_bot || await precoMudadoPelaEquipe(r.id, ctx.botId),
   });
   if (novo == null) return null;
   const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
