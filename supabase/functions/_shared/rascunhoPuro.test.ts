@@ -1076,3 +1076,14 @@ Deno.test("#417: mensagem que o bot não lê fica marcada; editada vira texto no
   const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["dia_ilegivel"] });
   assertStringIncludes(aviso?.detalhe ?? "", "confira o dia no WhatsApp");
 });
+
+Deno.test("#418: busca em casa num local da BR (Estiva, Pedrinhas, Oleama…) é Outros", async () => {
+  const { localDeOutros } = await import("./rascunhoPuro.ts");
+  const locais = ["Aeroporto", "Pedrinhas", "Oleama", "Estiva", "Vila itamar", "Maracanã", "Posto Ipiranga"];
+  assertEquals(localDeOutros(["Estiva", "Estiva"], locais), "Estiva");
+  assertEquals(localDeOutros([null, "perto da entrada da vila itamar"], locais), "Vila itamar");
+  assertEquals(localDeOutros(["Maracana", "rua 3"], locais), "Maracanã");
+  assertEquals(localDeOutros(["Cohatrac", "Condomínio Marsil"], locais), null);
+  // palavra inteira: "Estivador" não é Estiva
+  assertEquals(localDeOutros(["Rua dos Estivadores"], locais), null);
+});

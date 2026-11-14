@@ -459,6 +459,21 @@ export const ehMensagemIlegivel = (t: string | null | undefined) => String(t ?? 
 /** Texto guardado quando o cliente EDITA uma mensagem (o Chatwoot avisa por message_updated). */
 export const textoEditado = (t: string) => `(editou a mensagem anterior) ${t}`;
 
+/**
+ * O local de "Outros" (lista Sistema → Locais em Outros: Estiva, Pedrinhas, Oleama… na BR) citado no
+ * bairro ou no endereço de uma busca em casa (issue #418). Palavra inteira, sem acento; o nome mais
+ * longo vence. Nenhum = null.
+ */
+export function localDeOutros(textos: (string | null | undefined)[], locais: string[]): string | null {
+  const t = ` ${normalizarTexto(textos.filter(Boolean).join(" "))} `;
+  let achado: string | null = null;
+  for (const l of locais) {
+    const n = normalizarTexto(l);
+    if (n.length >= 3 && t.includes(` ${n} `) && (!achado || n.length > normalizarTexto(achado).length)) achado = l;
+  }
+  return achado;
+}
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",
@@ -536,6 +551,7 @@ ${quando}
 - Ida = embarque em São Luís; Volta = embarque em Pirapemas/Cantanhede. "Madrugada"/"amanhã cedo" é a Ida da manhã.
 - O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta. Volta: cidade_dita = Pirapemas ou Cantanhede (de onde sai), o endereço dela em endereco e o destino em desembarque. Ida que sobe numa cidade do interior ("de Cantanhede pra Pirapemas"): ponto "outro" com a cidade e o endereço em endereco, destino em desembarque. Nunca é busca em casa em São Luís. Vale também quando a equipe disse o trecho e o cliente confirmou ("De pirapemas pra Cantanhede, certo?" → "Isso").
 - Sem origem dita, o DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
+- Trechos da BR (Estiva, Pedrinhas, Oleama, Maracanã, Vila Itamar… — os LOCAIS de Outros): a empresa NÃO busca em casa ali; o cliente espera na BR e a van para. Use ponto "outro" com o local em endereco, nunca "busca".
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
 - Passageiro RECORRENTE (tem ENDEREÇO DE COSTUME) que só pede "guarde uma vaga pra mim amanhã", sem dizer o sentido: registre o pedido com o dia e deixe direcao vazia (o sistema decide pelo hábito dele) e o local vazio (vem do costume). Não deixe de registrar por faltar sentido ou endereço.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.

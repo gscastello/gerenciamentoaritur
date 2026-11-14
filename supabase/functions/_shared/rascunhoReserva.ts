@@ -51,6 +51,7 @@ import {
   validarPedidoExtraido,
   sentidoPeloHabito,
   ehMensagemIlegivel,
+  localDeOutros,
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
   perguntaAoCliente,
@@ -128,11 +129,13 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
 }
 
 async function contexto() {
-  const [ida, volta, { data: areas }, { data: bairros }] = await Promise.all([
+  const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
     supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null),
     supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood"),
+    // locais da BR em "Outros" (Estiva, Pedrinhas, Oleama…): não buscamos em casa ali (issue #418)
+    supabaseAdmin.from("boarding_spot_prices").select("local"),
   ]);
   const ativos = (l: Bloco[] | null) => (l ?? []).filter((p) => p.active !== false);
   const pontos = { ida: ativos(ida).map((p) => String(p.code)), volta: ativos(volta).map((p) => String(p.code)) };
@@ -149,6 +152,7 @@ async function contexto() {
     desembarques,
     bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).join(", "),
     bairrosTabela: (bairros ?? []) as { neighborhood: string }[],
+    locaisDeOutros: ((locais ?? []) as Bloco[]).map((l) => String(l.local)),
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
   };
 }
@@ -519,6 +523,20 @@ async function lerEGravar(
         r.pickup_detail = original || null;
         r.pickup_neighborhood = deduzido.bairro;
         r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
+      }
+    }
+    // trecho da BR (Estiva, Pedrinhas, Oleama, Maracanã…): a empresa não busca em casa ali — o cliente
+    // espera na BR e a van para. Busca em casa num local de "Outros" vira Outros (issue #418)
+    if (r.route_point_code === "busca" && ctx.pontos.ida.includes("outro")) {
+      const local = localDeOutros([r.pickup_neighborhood, r.pickup_detail], ctx.locaisDeOutros);
+      if (local) {
+        r.route_point_code = "outro";
+        r.pickup_neighborhood = null;
+        r.pickup_detail = `${local} (BR)`;
+        r.notes = [r.notes, `${local} fica na BR: embarque na BR (Outros), não busca em casa.`].filter(Boolean).join(" ").slice(0, 300);
+        const i = v.aConfirmar.indexOf("endereco");
+        if (i >= 0) v.aConfirmar.splice(i, 1);
+        evento("bot_busca_na_br", { conversa: entrada.chatwootConversationId, local });
       }
     }
     // o cliente deu o endereço e o bairro foi achado (tabela, memória, lugares ou internet): a
