@@ -160,7 +160,7 @@ function SistemaReceitaAutomatica() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Wallet size={16} style={{ color: C.amber }} /> Receita automática das passagens
+        <Wallet size={16} style={{ color: C.brandText }} /> Receita automática das passagens
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         {ligada ? (
@@ -213,7 +213,7 @@ function SistemaCidades() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Route size={16} style={{ color: C.amber }} /> Cidades da rota
+        <Route size={16} style={{ color: C.brandText }} /> Cidades da rota
       </div>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
         No fluxo de reserva, embarque/desembarque que menciona uma cidade <b>intermediária</b> faz a
@@ -404,7 +404,7 @@ function SistemaBaldes() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MapPin size={16} style={{ color: C.amber }} /> Locais de desembarque
+        <MapPin size={16} style={{ color: C.brandText }} /> Locais de desembarque
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         A cidade/local de desembarque da reserva e os grupos da rota do motorista. Renomeie, defina
@@ -536,13 +536,13 @@ function SistemaBairros() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MapPin size={16} style={{ color: C.amber }} /> Preços por bairro (Buscar em Casa)
+        <MapPin size={16} style={{ color: C.brandText }} /> Preços por bairro (Buscar em Casa)
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quando o cliente escolhe "Buscar em Casa", o valor da passagem vem daqui pelo nome do
         bairro. Bairro não cadastrado → a reserva vai para confirmação manual.{" "}
         {bairros.semPreco > 0 && (
-          <strong style={{ color: C.amber }}>
+          <strong style={{ color: C.brandText }}>
             {bairros.semPreco} bairro(s) sem preço no topo da lista: o bot deixa o valor a confirmar
             até você preencher.{" "}
           </strong>
@@ -899,7 +899,7 @@ function SistemaEquipe() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Users size={16} style={{ color: C.amber }} /> Equipe e logins
+        <Users size={16} style={{ color: C.brandText }} /> Equipe e logins
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quem entra no sistema e com qual papel. Desativar bloqueia o acesso sem apagar o histórico.
@@ -1053,7 +1053,7 @@ function SistemaErros() {
     <Card className="anim-fadeUp">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="text-sm font-semibold flex items-center gap-2">
-          <AlertTriangle size={16} style={{ color: C.amber }} /> Erros recentes do app
+          <AlertTriangle size={16} style={{ color: C.brandText }} /> Erros recentes do app
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {erros.length > 0 &&
@@ -1184,7 +1184,7 @@ function MovimentoControl() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Sparkles size={16} style={{ color: C.amber }} /> Movimento e animações
+        <Sparkles size={16} style={{ color: C.brandText }} /> Movimento e animações
       </div>
       <p className="text-xs mb-1" style={{ color: C.inkSoft }}>
         Heros, estrada e ônibus animados. No <b>Automático</b> o app respeita o ajuste de{" "}
@@ -1395,7 +1395,7 @@ export default function SistemaTab({
 
         <Card className="anim-fadeUp">
           <div className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Settings2 size={16} style={{ color: C.amber }} /> Fluxo de agendamento e valores
+            <Settings2 size={16} style={{ color: C.brandText }} /> Fluxo de agendamento e valores
           </div>
           <div className="flex items-center gap-3 mb-4 text-xs">
             <label className="flex items-center gap-1.5">
@@ -1542,7 +1542,7 @@ export default function SistemaTab({
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <o.icon
                     size={15}
-                    style={{ color: modoAtendimento === o.v ? C.amber : C.inkSoft }}
+                    style={{ color: modoAtendimento === o.v ? C.brandText : C.inkSoft }}
                   />
                   {o.label}
                 </div>
@@ -1707,7 +1707,7 @@ export default function SistemaTab({
                     className="btn-press text-xs px-2.5 py-1.5 rounded-md"
                     style={{
                       background: C.amberSoft,
-                      color: C.amber,
+                      color: C.brandText,
                       opacity: formatoEmProcesso === f.id ? 0.6 : 1,
                     }}
                   >

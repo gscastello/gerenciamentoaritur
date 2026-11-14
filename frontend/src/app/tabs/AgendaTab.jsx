@@ -141,6 +141,12 @@ export default function AgendaTab({
     data === todayStr() && horaOperacao() >= 9 ? "volta" : "ida",
   );
   const sentidoAplicado = useRef(null);
+  // celular: a barra da data vai para o topo do app (#topo-slot), no lugar do título
+  const noCelular = useNoCelular();
+  const [slotTopo, setSlotTopo] = useState(null);
+  useEffect(() => {
+    setSlotTopo(document.getElementById("topo-slot"));
+  }, []);
   // hora principal de cada viagem: Ida = saída da Rodoviária; Volta = primeiro ponto
   const horaDaViagem = (dir) => {
     const pontos = trips[dir]?.pontos || [];
@@ -437,46 +443,8 @@ export default function AgendaTab({
         subtitle="Painel operacional do dia — capacidade, confirmados, pendentes, vagas e embarcados."
         right={
           <div className="flex items-center gap-1.5 w-full md:w-auto">
-            {/* data com setas (crítica de design, issue #393): anda dia a dia sem abrir o calendário */}
-            <button
-              type="button"
-              onClick={() => setData(deslocarDia(data, -1))}
-              aria-label="Dia anterior"
-              className="btn-press w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border"
-              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-            >
-              <ChevronLeft size={19} />
-            </button>
-            <div
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 h-11 rounded-xl border px-2"
-              style={{ background: C.panel, borderColor: C.border }}
-              data-testid="dia-da-agenda"
-            >
-              <span className="text-sm font-semibold capitalize" style={{ color: C.ink }}>
-                {data === todayStr()
-                  ? "Hoje"
-                  : data === deslocarDia(todayStr(), 1)
-                    ? "Amanhã"
-                    : diaSemana(data).slice(0, 3)}
-              </span>
-              <input
-                type="date"
-                value={data}
-                onChange={(e) => e.target.value && setData(e.target.value)}
-                aria-label="Dia da Agenda"
-                className="bg-transparent text-sm font-medium outline-none min-w-0"
-                style={{ color: C.inkSoft, colorScheme: "dark" }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setData(deslocarDia(data, 1))}
-              aria-label="Próximo dia"
-              className="btn-press w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border"
-              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-            >
-              <ChevronRight size={19} />
-            </button>
+            {/* data com setas (crítica de design, issue #393): no celular fica no topo do app */}
+            {!noCelular && <BarraDoDia data={data} setData={setData} />}
             {onAgendar && (
               <span className="hidden sm:block">
                 <BotaoAgendar onClick={onAgendar} />
@@ -485,7 +453,29 @@ export default function AgendaTab({
           </div>
         }
       />
+      {noCelular &&
+        slotTopo &&
+        createPortal(<BarraDoDia data={data} setData={setData} />, slotTopo)}
       <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
+        {data !== todayStr() && (
+          <FadeIn>
+            <div
+              className="flex items-center justify-between gap-2 text-[13px]"
+              data-testid="fora-de-hoje"
+              style={{ color: C.inkSoft }}
+            >
+              <span className="truncate">Você está vendo outro dia</span>
+              <button
+                type="button"
+                onClick={() => setData(todayStr())}
+                className="btn-press shrink-0 min-h-[40px] px-3 rounded-lg font-semibold"
+                style={{ color: C.ink, background: C.panel2 }}
+              >
+                Voltar para hoje
+              </button>
+            </div>
+          </FadeIn>
+        )}
         <SeletorSentido
           sentido={sentido}
           onChange={setSentido}
@@ -667,32 +657,29 @@ export default function AgendaTab({
           </Card>
         )}
 
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Package size={16} style={{ color: C.inkSoft }} />
-              <div className="text-sm font-semibold" style={{ color: C.ink }}>
-                Encomendas do dia{" "}
-                {encomendasAgendadas.length > 0 && (
-                  <span style={{ color: C.inkFaint }}>({encomendasAgendadas.length})</span>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEncomendaModal({})}
-              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
-              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
-            >
-              <Plus size={13} /> Nova
-            </button>
+        {/* encomendas do dia numa linha só (crítica de design, issue #393) */}
+        <div
+          className="flex items-center justify-between gap-2 border-y py-1"
+          style={{ borderColor: C.panel2 }}
+        >
+          <div className="flex items-center gap-2 text-[13px] min-w-0" style={{ color: C.inkSoft }}>
+            <Package size={15} />
+            <span className="truncate">
+              {encomendasAgendadas.length === 0
+                ? "Nenhuma encomenda hoje"
+                : `${encomendasAgendadas.length} encomenda(s) — no ponto de embarque`}
+            </span>
           </div>
-          <p className="text-xs" style={{ color: C.inkFaint }}>
-            {encomendasAgendadas.length === 0
-              ? `Nenhuma encomenda agendada pra ${fmtDate(data)}.`
-              : `${encomendasAgendadas.length} encomenda(s) pra ${fmtDate(data)} — aparecem na viagem, no ponto de embarque, junto das passagens.`}
-          </p>
-        </Card>
+          <button
+            type="button"
+            onClick={() => setEncomendaModal({})}
+            aria-label="Nova encomenda"
+            className="btn-press flex items-center gap-1 text-[13px] px-2 min-h-[40px] rounded-lg font-semibold"
+            style={{ color: C.ink }}
+          >
+            <Plus size={15} /> Nova
+          </button>
+        </div>
 
         {[sentido].map((dir) => (
           <ViagemOperacional
@@ -975,11 +962,12 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
   const nome = r.nome || (ehEnc ? r.telefone : "") || "—";
-  const principal = endereco || (ehEnc ? `contato: ${nome}` : nome);
+  // crítica de design: nome em cima; quantidade, endereço/bairro e valor embaixo
+  const principal = ehEnc ? `contato: ${nome}` : nome;
   const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
   // o que vem embaixo, separado por " · "
   const detalhes = [
-    endereco ? (ehEnc ? `contato: ${nome}` : nome) : null,
+    endereco || null,
     ehEnc ? resumoDaEncomenda(r) : r.pago ? "✓ Pago" : r.valorTotal ? fmtBRL(r.valorTotal) : null,
     pagamentoEmDestaque && !r.pago ? rotuloPagamento(r.pagamento) : null,
     r.desembarque ? `desce: ${r.desembarque}` : null,
@@ -1031,28 +1019,28 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       </button>
       <div className="min-w-0 py-0.5">
         <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="text-[13px] font-bold shrink-0" style={{ color: corTexto }}>
-            {ehEnc ? "ENC" : `${r.quantidade}P`}
-          </span>
           <span
-            className="text-[15px] font-semibold leading-snug line-clamp-2"
+            className="text-[15px] font-semibold leading-snug truncate"
             style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
           >
             {principal}
           </span>
         </div>
-        {(detalhes.length > 0 || modoBusca) && (
+        {
           <div
             className="text-[12.5px] leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5"
             style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
           >
-            {detalhes.map((d, i) => (
+            <span className="font-bold" style={{ color: corTexto }}>
+              {ehEnc ? "ENC" : `${r.quantidade}P`}
+            </span>
+            {detalhes.map((d) => (
               <span
                 key={d}
                 className={d === "✓ Pago" ? "font-semibold" : ""}
                 style={d === "✓ Pago" ? { color: C.ink } : undefined}
               >
-                {i > 0 ? "· " : ""}
+                {"· "}
                 {d}
               </span>
             ))}
@@ -1065,7 +1053,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
               </span>
             )}
           </div>
-        )}
+        }
         {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
       </div>
       <div className="flex items-center">
@@ -1184,7 +1172,7 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
           className="btn-press shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
           style={{
             background: !texto.trim() || salvando ? C.border : C.amberSoft,
-            color: !texto.trim() || salvando ? C.inkFaint : C.amber,
+            color: !texto.trim() || salvando ? C.inkFaint : C.brandText,
           }}
         >
           <RefreshCw size={13} className={salvando ? "animate-spin" : "hidden"} />
@@ -1292,6 +1280,80 @@ function resumoDoPonto(itens, encomendas) {
   if (encomendas.length > 0) partes.push(`${encomendas.length} encomenda(s)`);
   return partes.length > 0 ? partes.join(" · ") : "sem reservas";
 }
+// "Celular" = a largura em que o app mostra o topo e a barra de baixo (abaixo de 768 px).
+function useNoCelular() {
+  const consulta = "(max-width: 767px)";
+  const [sim, setSim] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia(consulta).matches
+      : false,
+  );
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const m = window.matchMedia(consulta);
+    const ao = () => setSim(m.matches);
+    m.addEventListener("change", ao);
+    return () => m.removeEventListener("change", ao);
+  }, []);
+  return sim;
+}
+
+// Dia da Agenda com setas (crítica de design, issue #393): "‹ Sex 13/11 ›". Tocar no dia abre o
+// calendário do aparelho; fora de hoje, a linha "Voltar para hoje" aparece embaixo do topo.
+function BarraDoDia({ data, setData }) {
+  const hoje = todayStr();
+  const rotulo =
+    data === hoje ? "Hoje" : data === deslocarDia(hoje, 1) ? "Amanhã" : diaSemana(data).slice(0, 3);
+  return (
+    <div className="flex items-center gap-1 w-full" data-testid="dia-da-agenda">
+      <button
+        type="button"
+        onClick={() => setData(deslocarDia(data, -1))}
+        aria-label="Dia anterior"
+        className="btn-press w-9 h-10 rounded-xl shrink-0 flex items-center justify-center border"
+        style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+      >
+        <ChevronLeft size={18} />
+      </button>
+      {/* o dia escrito por inteiro; o campo de data, invisível por cima, abre o calendário */}
+      <div
+        className="toque-at relative flex-1 min-w-0 flex items-center justify-center gap-1.5 h-10 rounded-xl border px-2"
+        style={{ background: C.panel, borderColor: C.border }}
+      >
+        <span className="text-[14px] font-bold capitalize truncate" style={{ color: C.ink }}>
+          {rotulo}{" "}
+          <span style={{ color: C.inkSoft }}>{`${data.slice(8, 10)}/${data.slice(5, 7)}`}</span>
+        </span>
+
+        <input
+          type="date"
+          value={data}
+          onChange={(e) => e.target.value && setData(e.target.value)}
+          onClick={(e) => {
+            try {
+              e.currentTarget.showPicker?.();
+            } catch {
+              /* sem showPicker: o toque no campo já abre o calendário */
+            }
+          }}
+          aria-label="Dia da Agenda"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          style={{ colorScheme: "dark" }}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => setData(deslocarDia(data, 1))}
+        aria-label="Próximo dia"
+        className="btn-press w-9 h-10 rounded-xl shrink-0 flex items-center justify-center border"
+        style={{ background: C.panel, borderColor: C.border, color: C.ink }}
+      >
+        <ChevronRight size={18} />
+      </button>
+    </div>
+  );
+}
+
 // Seletor Ida/Volta (crítica de design, issue #393): as duas viagens lado a lado, com a hora e
 // as vagas; a escolhida fica em painel com um traço vermelho embaixo. Uma viagem por vez.
 function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade, horaIda, horaVolta }) {

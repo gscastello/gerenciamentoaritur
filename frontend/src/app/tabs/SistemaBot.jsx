@@ -144,7 +144,7 @@ function GuiaDeEstilo({ valor, onSalvar, salvando }) {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MessageSquareText size={16} style={{ color: C.amber }} /> Como o bot fala com o cliente
+        <MessageSquareText size={16} style={{ color: C.brandText }} /> Como o bot fala com o cliente
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Descreva o tom que combina com o seu público: se trata por "você" ou "senhor/senhora", se
@@ -187,7 +187,7 @@ function ContatoDoMotorista({ valor, onSalvar, salvando }) {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <PhoneCall size={16} style={{ color: C.amber }} /> Contato do motorista
+        <PhoneCall size={16} style={{ color: C.brandText }} /> Contato do motorista
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         O bot informa só a previsão pelo horário. Se o cliente insistir em saber onde a van está,
@@ -308,7 +308,7 @@ export default function SistemaBot() {
 
       <Card>
         <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <BookOpen size={16} style={{ color: C.amber }} /> O que o bot sabe sobre a empresa
+          <BookOpen size={16} style={{ color: C.brandText }} /> O que o bot sabe sobre a empresa
         </div>
         <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
           Um assunto por item (bagagem, crianças, cancelamento, atraso…). O bot usa estes textos

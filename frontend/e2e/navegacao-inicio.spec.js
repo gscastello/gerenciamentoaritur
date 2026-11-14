@@ -30,6 +30,9 @@ test("barra do celular: Atendimento no lugar do Bloco de notas", async ({ page }
 test("ações rápidas levam ao Assistente e às Pendências", async ({ page }) => {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
+  // o "+" de ações rápidas fica no Início (#391); nas telas de trabalho é o botão da tela (#393)
+  const inicio = page.getByRole("button", { name: /^Início$/ }).first();
+  await inicio.click();
   const fab = page.getByRole("button", { name: "Ações rápidas", exact: true });
   await fab.click();
   await fab
@@ -41,6 +44,7 @@ test("ações rápidas levam ao Assistente e às Pendências", async ({ page }) 
     "aria-selected",
     "true",
   );
+  await inicio.click();
   await fab.click();
   await fab.locator("..").getByRole("button", { name: "Assistente" }).click();
   await expect(page.getByRole("heading", { name: /Assistente/ }).first()).toBeVisible();

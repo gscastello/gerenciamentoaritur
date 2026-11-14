@@ -107,7 +107,7 @@ export function LancarPorFoto({ destino = "despesa" }) {
         </ErrorBanner>
       )}
       {aviso && !erro && (
-        <output className="block text-xs mt-2" style={{ color: form ? C.amber : C.green }}>
+        <output className="block text-xs mt-2" style={{ color: form ? C.brandText : C.green }}>
           {aviso}
         </output>
       )}

@@ -134,6 +134,8 @@ function GlobalStyles() {
       /* Letra única do app (issue #391): Inter, feita para tela; números de mesma largura
          para horários e valores ficarem alinhados em coluna. */
       body { font-family: ${FONTE}; font-variant-numeric: tabular-nums; }
+      /* cores do sistema de movimento no tom do app (barra de progresso e esqueleto) — #393 */
+      :root { --amber: ${C.brand}; --panel2: ${C.border}; --skeleton-base: ${C.panel2}; }
       /* ---- visual aprovado (issue #391) ---- */
       /* filete vermelho escuro no alto de todo cartão */
       :where(.cartao-at) { position: relative; }
@@ -457,6 +459,27 @@ function FabItem({ icon: Icon, label, onClick, accent = C.panel }) {
   );
 }
 
+// Botão principal da tela (crítica de design, issue #393): escrito, vermelho, ao alcance do
+// polegar. "+ Reserva" na Agenda e na Lista; "+ Lançar" no Financeiro. No Início continua o "+"
+// de ações rápidas (#391).
+function FabPrincipal({ rotulo, aria, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={aria}
+      className="btn-press fixed z-30 right-4 md:right-6 bottom-[calc(76px+env(safe-area-inset-bottom))] md:bottom-6 flex items-center gap-2 h-[52px] pl-4 pr-5 rounded-2xl text-[15px] font-bold anim-pop"
+      style={{
+        background: C.brand,
+        color: C.onBrand,
+        boxShadow: "0 12px 26px -10px rgba(228,18,31,.7), inset 0 1px 0 rgba(255,255,255,.16)",
+      }}
+    >
+      <Plus size={19} strokeWidth={2.6} /> {rotulo}
+    </button>
+  );
+}
+
 function QuickActionsFab({
   onBuscar,
   onAgendar,
@@ -488,7 +511,8 @@ function QuickActionsFab({
             : "calc(76px + env(safe-area-inset-bottom))",
           transition: "bottom .3s cubic-bezier(.2,0,0,1)",
         }}
-        className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[var(--fab-bottom)] md:bottom-6">
+        className="fixed z-30 flex flex-col items-end gap-2.5 right-4 md:right-6 bottom-[var(--fab-bottom)] md:bottom-6"
+      >
         {aberto && (
           <div className="flex flex-col items-end gap-2.5 anim-fadeUp">
             {/* atalhos em todas as telas (dono, 12/11 — issue #353) */}
@@ -911,9 +935,11 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
         )}
       </span>
       <span
-        className={grande
+        className={
+          grande
             ? "text-[11px]"
-            : "text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"}
+            : "text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"
+        }
         style={{ fontWeight: active ? 700 : 500 }}
       >
         {n.label}
@@ -1063,6 +1089,10 @@ function AppInner() {
   const [buscaAberta, setBuscaAberta] = useState(false);
   // folha "Mais" do celular: aberta pelo botão do topo (issue #391)
   const [maisAberto, setMaisAberto] = useState(false);
+  // contagem nas abas do Atendimento (aguardando resposta, prontas para lançar) — issue #393
+  const [contagensAtendimento, setContagensAtendimento] = useState({});
+  // "+ Lançar" do Financeiro: abre o formulário mesmo que a tela ainda esteja carregando
+  const [pedidoLancar, setPedidoLancar] = useState(null);
   const [agendarAberto, setAgendarAberto] = useState(false);
   // preenchimento vindo do endereço de costume do passageiro (#228)
   const [agendarInicial, setAgendarInicial] = useState(null);
@@ -1215,7 +1245,7 @@ function AppInner() {
               {/* arrastar para baixo no topo atualiza, sem fechar e abrir o app (issue #353) */}
               <PuxarParaAtualizar onAtualizar={atualizarApp} cor={C.amber} fundo={C.panel} />
               {/* no Assistente o "+" cobriria o campo do pedido (issue #288) */}
-              {tab !== "assistente" && (
+              {noInicio && (
                 <QuickActionsFab
                   noInicio={noInicio}
                   onBuscar={() => setBuscaAberta(true)}
@@ -1232,6 +1262,20 @@ function AppInner() {
                       : null
                   }
                   pendencias={pendenciasCount}
+                />
+              )}
+              {!noInicio && (tab === "agenda" || tab === "lista") && podeAgendar && (
+                <FabPrincipal
+                  rotulo="Reserva"
+                  aria="Nova reserva"
+                  onClick={() => setAgendarAberto(true)}
+                />
+              )}
+              {tab === "financeiro" && (
+                <FabPrincipal
+                  rotulo="Lançar"
+                  aria="Novo lançamento"
+                  onClick={() => setPedidoLancar({ at: Date.now() })}
                 />
               )}
               {buscaAberta && (
@@ -1404,9 +1448,6 @@ function AppInner() {
                       <LogOut size={15} />
                     </button>
                   </div>
-                  <div className="mt-2.5 text-[10px] leading-snug" style={{ color: C.inkFaint }}>
-                    Mais que transporte, <span style={{ color: C.brand }}>conectamos pessoas.</span>
-                  </div>
                 </div>
                 <BusSilhueta
                   className="absolute pointer-events-none bus-drift"
@@ -1439,7 +1480,9 @@ function AppInner() {
                   style={{ paddingTop: "max(0.55rem, env(safe-area-inset-top))" }}
                 >
                   <AriturMark size={noInicio ? 46 : 34} />
-                  <div className="flex-1 min-w-0">
+                  {/* a Agenda põe aqui a data com setas (crítica de design, issue #393) */}
+                  {tab === "agenda" && <div id="topo-slot" className="flex-1 min-w-0" />}
+                  <div className={tab === "agenda" ? "sr-only" : "flex-1 min-w-0"}>
                     <h1
                       className="truncate"
                       style={{
@@ -1458,6 +1501,17 @@ function AppInner() {
                       </p>
                     )}
                   </div>
+                  {!noInicio && tab !== "agenda" && (
+                    <button
+                      type="button"
+                      onClick={() => setBuscaAberta(true)}
+                      aria-label="Buscar"
+                      className="btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ color: C.inkSoft }}
+                    >
+                      <Search size={19} />
+                    </button>
+                  )}
                   <SinoNotificacoes />
                   <button
                     type="button"
@@ -1502,7 +1556,7 @@ function AppInner() {
                     telas={grupoAtual.telas.filter((t) => TELAS.includes(t.id))}
                     ativa={tab}
                     onChange={mudarAba}
-                    badges={{ pendencias: pendenciasCount }}
+                    badges={{ pendencias: pendenciasCount, ...contagensAtendimento }}
                   />
                 )}
                 {loading || !ready || !tabPermitida ? (
@@ -1512,6 +1566,7 @@ function AppInner() {
                     <div className="anim-fadeIn">
                       {["atendimento", "para_lancar", "bot"].includes(tab) && (
                         <AtendimentoTab
+                          onContagens={setContagensAtendimento}
                           vista={{ para_lancar: "lancar", bot: "bot" }[tab] ?? "conversas"}
                           modoAtendimento={modoAtendimento}
                           onNavigate={irParaBusca}
@@ -1568,6 +1623,7 @@ function AppInner() {
                         <FinanceiroTab
                           pix={cfgSettings.pix}
                           deepLink={deepLink}
+                          pedidoLancar={pedidoLancar}
                           atalhos={[
                             { id: "fechamento", label: "Fechamento", Icon: ClipboardList },
                             { id: "extrato", label: "Extrato", Icon: Landmark },

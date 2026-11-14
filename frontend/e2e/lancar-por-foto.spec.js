@@ -37,7 +37,9 @@ async function simularLeitura(page, leitura) {
   return chamadas;
 }
 
-test("Financeiro: foto da nota preenche a despesa e só lança depois de conferir", async ({ page }) => {
+test("Financeiro: foto da nota preenche a despesa e só lança depois de conferir", async ({
+  page,
+}) => {
   await mockSupabase(page, { role: "admin" });
   const chamadas = await simularLeitura(page, {
     tipo: "despesa",
@@ -51,8 +53,12 @@ test("Financeiro: foto da nota preenche a despesa e só lança depois de conferi
   });
   await page.goto("/");
   await abrirTela(page, "financeiro");
+  await page.getByRole("button", { name: "Novo lançamento" }).click();
 
-  await page.getByTestId("foto-da-nota").first().setInputFiles({ name: "nota.png", mimeType: "image/png", buffer: PNG });
+  await page
+    .getByTestId("foto-da-nota")
+    .first()
+    .setInputFiles({ name: "nota.png", mimeType: "image/png", buffer: PNG });
   const conferir = page.getByTestId("conferir-nota");
   await expect(conferir).toBeVisible();
   expect(chamadas.leitura[0].media_type).toBe("image/jpeg");
@@ -74,7 +80,10 @@ test("Financeiro: foto da nota preenche a despesa e só lança depois de conferi
     description: "Pedágio · Pedágio BR-135",
   });
   await expect.poll(() => chamadas.marcados.length).toBe(1);
-  expect(chamadas.marcados[0].body).toMatchObject({ status: "lancado", financial_entry_id: "fe-novo" });
+  expect(chamadas.marcados[0].body).toMatchObject({
+    status: "lancado",
+    financial_entry_id: "fe-novo",
+  });
   await expect(page.getByText("Despesa lançada.")).toBeVisible();
   await expect(conferir).toHaveCount(0);
 });
@@ -95,7 +104,10 @@ test("Operação: cupom de diesel vira abastecimento e pede os km rodados", asyn
   await page.goto("/");
   await abrirTela(page, "operacao");
 
-  await page.getByTestId("foto-da-nota").first().setInputFiles({ name: "diesel.png", mimeType: "image/png", buffer: PNG });
+  await page
+    .getByTestId("foto-da-nota")
+    .first()
+    .setInputFiles({ name: "diesel.png", mimeType: "image/png", buffer: PNG });
   const conferir = page.getByTestId("conferir-nota");
   await expect(conferir.getByLabel("Litros")).toHaveValue("100");
   await conferir.getByRole("button", { name: "Lançar" }).click();
@@ -105,7 +117,12 @@ test("Operação: cupom de diesel vira abastecimento e pede os km rodados", asyn
   await conferir.getByLabel("Km rodados desde o último").fill("420");
   await conferir.getByRole("button", { name: "Lançar" }).click();
   await expect.poll(() => chamadas.abastecimentos.length).toBe(1);
-  expect(chamadas.abastecimentos[0]).toMatchObject({ record_date: "2026-11-11", km: 420, liters: 100, cost: 600 });
+  expect(chamadas.abastecimentos[0]).toMatchObject({
+    record_date: "2026-11-11",
+    km: 420,
+    liters: 100,
+    cost: 600,
+  });
   await expect(page.getByText(/Abastecimento lançado/)).toBeVisible();
 });
 
@@ -114,7 +131,11 @@ test("descartar não lança nada e marca a leitura como descartada", async ({ pa
   const chamadas = await simularLeitura(page, { tipo: "despesa", legivel: false, valor: null });
   await page.goto("/");
   await abrirTela(page, "financeiro");
-  await page.getByTestId("foto-da-nota").first().setInputFiles({ name: "x.png", mimeType: "image/png", buffer: PNG });
+  await page.getByRole("button", { name: "Novo lançamento" }).click();
+  await page
+    .getByTestId("foto-da-nota")
+    .first()
+    .setInputFiles({ name: "x.png", mimeType: "image/png", buffer: PNG });
   await expect(page.getByText(/Não deu para ler tudo/)).toBeVisible();
   await page.getByTestId("conferir-nota").getByRole("button", { name: "Descartar" }).click();
   await expect(page.getByTestId("conferir-nota")).toHaveCount(0);

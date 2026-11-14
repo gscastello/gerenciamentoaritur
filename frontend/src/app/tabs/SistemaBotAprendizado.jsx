@@ -330,7 +330,7 @@ export default function SistemaBotAprendizado() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Eye size={16} style={{ color: C.amber }} /> Aprendizado do bot
+        <Eye size={16} style={{ color: C.brandText }} /> Aprendizado do bot
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Isto é o treino do bot para o modo automático: tudo o que ele aprende aqui é o que ele vai

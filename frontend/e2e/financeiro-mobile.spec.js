@@ -161,7 +161,7 @@ test("Financeiro: lançamentos do dia em cards no celular, sem tabela cortada", 
   // estar visível no celular. Escopa a busca do texto na lista de cards
   // (não na <td> escondida, que tem o mesmo texto).
   await expect(page.locator("table")).not.toBeVisible();
-  const listaCards = page.locator(".sm\\:hidden.space-y-2");
+  const listaCards = page.getByTestId("lancamentos-do-dia");
   await expect(listaCards.getByText("Abastecimento posto BR")).toBeVisible();
 
   await listaCards.getByLabel("Editar lançamento").click();

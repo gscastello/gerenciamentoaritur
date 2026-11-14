@@ -8,8 +8,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 async function novaReservaEmOutros(page, local) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Outros" });
   await page.getByLabel("Nome (ou telefone)").fill("Cliente Aeroporto Teste");
   await page.getByLabel("Telefone (ou nome)").fill("98999990000");

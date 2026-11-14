@@ -73,7 +73,7 @@ function CardDoDas({ das, simples, onSalvarSimples, salvando }) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="text-sm font-semibold flex items-center gap-2">
-            <Receipt size={16} style={{ color: C.amber }} /> DAS do Simples Nacional — estimativa
+            <Receipt size={16} style={{ color: C.brandText }} /> DAS do Simples Nacional — estimativa
           </div>
           <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
             Apuração {mesAno(das.mes)}
@@ -230,7 +230,7 @@ export default function VencimentosTab() {
         <Card>
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="text-sm font-semibold flex items-center gap-2">
-              <CalendarClock size={16} style={{ color: C.amber }} /> Próximos vencimentos
+              <CalendarClock size={16} style={{ color: C.brandText }} /> Próximos vencimentos
             </div>
             {!form && (
               <button

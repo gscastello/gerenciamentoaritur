@@ -54,7 +54,7 @@ function ConfirmacaoAoCliente() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium flex items-center gap-2">
-            <MessageCircleMore size={15} style={{ color: C.amber }} /> Confirmar ao cliente
+            <MessageCircleMore size={15} style={{ color: C.brandText }} /> Confirmar ao cliente
           </div>
           <p className="text-xs mt-1" style={{ color: C.inkSoft }}>
             Depois do "Agendado ☑️", o bot manda ao cliente o resumo da vaga (dia, sentido, embarque,
@@ -99,7 +99,7 @@ export default function SistemaBotAcerto() {
     <Card>
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="text-sm font-semibold flex items-center gap-2">
-          <Gauge size={16} style={{ color: C.amber }} /> Acerto do bot
+          <Gauge size={16} style={{ color: C.brandText }} /> Acerto do bot
         </div>
         <fieldset className="flex gap-1 border-0 p-0 m-0" aria-label="Período do acerto">
           {PERIODOS_DO_ACERTO.map((d) => (
@@ -111,7 +111,7 @@ export default function SistemaBotAcerto() {
               className="btn-press text-xs px-2 py-1 rounded-md"
               style={
                 dias === d
-                  ? { background: C.amberSoft, color: C.amber, border: `1px solid ${C.amber}66` }
+                  ? { background: C.amberSoft, color: C.brandText, border: `1px solid ${C.amber}66` }
                   : { background: C.panel2, color: C.inkSoft, border: `1px solid ${C.border}` }
               }
             >

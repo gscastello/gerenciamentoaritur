@@ -4,19 +4,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Fuel,
   Landmark,
   MessageCircle,
   Pencil,
   Plus,
   Receipt,
-  Route,
   Save,
   TrendingUp,
   Wallet,
   X,
 } from "lucide-react";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { mensagemDeRemocao, resumoDaRemocao } from "../../domain/financeiroRemocao.js";
 import { montarRelatorioFinanceiro } from "../../domain/relatorioFinanceiro.js";
 import { validarData, validarValor } from "../../domain/validacao.js";
@@ -52,13 +50,25 @@ import {
 } from "../tabShared.jsx";
 import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
-export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
+export default function FinanceiroTab({ pix, deepLink, atalhos = [], pedidoLancar = null }) {
   const [subview, setSubview] = useState("lancamentos");
   useDeepLinkSubview(deepLink, setSubview);
   const [mesRef, setMesRef] = useState(new Date());
   const [diaSel, setDiaSel] = useState(todayStr());
   // crítica de design (issue #393): o calendário grande vira a lista do dia; ele abre ao tocar no mês
   const [calAberto, setCalAberto] = useState(false);
+  // crítica de design (issue #393): o formulário de lançar abre pelo "+ Lançar" da tela
+  const [lancarAberto, setLancarAberto] = useState(false);
+  // pedido recente (até 5 s) vale também se a tela montou depois do toque
+  useEffect(() => {
+    if (!pedidoLancar || Date.now() - pedidoLancar.at > 5000) return;
+    setSubview("lancamentos");
+    setLancarAberto(true);
+    setTimeout(
+      () => document.getElementById("financeiro-lancar")?.scrollIntoView({ block: "start" }),
+      60,
+    );
+  }, [pedidoLancar]);
   const [novo, setNovo] = useState({
     tipo: "receita",
     categoria: "passagem",
@@ -178,9 +188,6 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
   const despesaDia = doDia.filter((f) => f.tipo === "despesa").reduce((s, f) => s + f.valor, 0);
   // combustível e manutenção já entram como 'despesa' via trigger do banco —
   // então despesaDia já é o total real; "lucro real" = receita − despesa.
-  const despesaAutoDia = doDia
-    .filter((f) => f.tipo === "despesa" && f.auto)
-    .reduce((s, f) => s + f.valor, 0);
   const lucroReal = receitaDia - despesaDia;
   return (
     <div>
@@ -285,7 +292,7 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
               />
             </svg>
             <div className="text-[11px] uppercase tracking-[.06em]" style={{ color: C.inkFaint }}>
-              Resultado do mês
+              Resultado antes do imposto
             </div>
             <div
               className="mt-0.5"
@@ -340,8 +347,11 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
             <button
               type="button"
               onClick={() => {
-                document.getElementById("financeiro-lancar")?.scrollIntoView({ block: "start" });
-                document.getElementById("lancar-por-foto")?.click();
+                setLancarAberto(true);
+                setTimeout(() => {
+                  document.getElementById("financeiro-lancar")?.scrollIntoView({ block: "start" });
+                  document.getElementById("lancar-por-foto")?.click();
+                }, 60);
               }}
               className="btn-press toque-at flex flex-col items-start gap-1.5 rounded-xl border p-2.5 min-h-[64px] text-left text-[12.5px] font-semibold"
               style={{ background: C.panel, borderColor: C.border, color: C.ink }}
@@ -427,140 +437,131 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
                 <span className="text-xs" style={{ color: C.inkFaint }}>
                   {doDia.length} {doDia.length === 1 ? "lançamento" : "lançamentos"}
                 </span>
+                <span className="ml-auto text-xs" style={{ color: C.inkSoft }}>
+                  lucro do dia <b style={{ color: C.ink }}>{fmtBRL(lucroReal)}</b>
+                </span>
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                <StatCard
-                  label={`Faturamento ${fmtDate(diaSel)}`}
-                  value={fmtBRL(receitaDia)}
-                  icon={Wallet}
-                  accent={C.green}
-                />
-                <StatCard
-                  label="Despesas (total)"
-                  value={fmtBRL(despesaDia)}
-                  icon={TrendingUp}
-                  accent={C.red}
-                />
-                <StatCard
-                  label="Combustível + manut."
-                  value={fmtBRL(despesaAutoDia)}
-                  icon={Fuel}
-                  accent={C.warn}
-                />
-                <StatCard
-                  label="Lucro do dia"
-                  value={fmtBRL(lucroReal)}
-                  icon={Route}
-                  accent={lucroReal >= 0 ? C.blue : C.red}
-                />
-              </div>
-              <Card>
-                <div id="financeiro-lancar" className="text-sm font-semibold mb-3 scroll-mt-24">
-                  Lançar em {fmtDate(diaSel)}
-                </div>
-                {/* issue #362: a foto da nota preenche valor, data e categoria */}
-                <LancarPorFoto destino="despesa" />
-                <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
-                  Despesa rápida — escolhe a categoria e só falta o valor
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {cats.despesa.map((c) => {
-                    const Icon = iconeCategoria(c.icon);
-                    const ativo = novo.tipo === "despesa" && novo.categoria === c.slug;
-                    return (
-                      <button
-                        key={c.slug}
-                        type="button"
-                        onClick={() => {
-                          setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.slug }));
-                          document.getElementById("financeiro-valor-input")?.focus();
-                        }}
-                        className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
-                        style={{
-                          background: ativo ? C.panel2 : "transparent",
-                          color: ativo ? C.ink : C.inkSoft,
-                          fontWeight: ativo ? 600 : 500,
-                          border: `1px solid ${ativo ? C.inkSoft : C.border}`,
-                        }}
+              {lancarAberto && (
+                <Card className="anim-slideDown">
+                  <div
+                    id="financeiro-lancar"
+                    className="flex items-center justify-between text-sm font-semibold mb-3 scroll-mt-24"
+                  >
+                    Lançar em {fmtDate(diaSel)}
+                    <button
+                      type="button"
+                      onClick={() => setLancarAberto(false)}
+                      aria-label="Fechar o lançamento"
+                      className="btn-press w-9 h-9 rounded-lg flex items-center justify-center"
+                      style={{ color: C.inkSoft }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  {/* issue #362: a foto da nota preenche valor, data e categoria */}
+                  <LancarPorFoto destino="despesa" />
+                  <div className="text-xs mb-1.5" style={{ color: C.inkFaint }}>
+                    Despesa rápida — escolhe a categoria e só falta o valor
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {cats.despesa.map((c) => {
+                      const Icon = iconeCategoria(c.icon);
+                      const ativo = novo.tipo === "despesa" && novo.categoria === c.slug;
+                      return (
+                        <button
+                          key={c.slug}
+                          type="button"
+                          onClick={() => {
+                            setNovo((n) => ({ ...n, tipo: "despesa", categoria: c.slug }));
+                            document.getElementById("financeiro-valor-input")?.focus();
+                          }}
+                          className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
+                          style={{
+                            background: ativo ? C.panel2 : "transparent",
+                            color: ativo ? C.ink : C.inkSoft,
+                            fontWeight: ativo ? 600 : 500,
+                            border: `1px solid ${ativo ? C.inkSoft : C.border}`,
+                          }}
+                        >
+                          <Icon size={13} />
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid sm:grid-cols-3 gap-2">
+                    <Select
+                      value={novo.tipo}
+                      onChange={(e) => {
+                        const tipo = e.target.value;
+                        setNovo((n) => ({
+                          ...n,
+                          tipo,
+                          categoria:
+                            tipo === "receita" ? "passagem" : (cats.despesa[0]?.slug ?? "outro"),
+                        }));
+                      }}
+                    >
+                      <option value="receita">Receita</option>
+                      <option value="despesa">Despesa</option>
+                    </Select>
+                    {novo.tipo === "despesa" ? (
+                      <Select
+                        value={novo.categoria}
+                        onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
                       >
-                        <Icon size={13} />
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="grid sm:grid-cols-3 gap-2">
-                  <Select
-                    value={novo.tipo}
-                    onChange={(e) => {
-                      const tipo = e.target.value;
-                      setNovo((n) => ({
-                        ...n,
-                        tipo,
-                        categoria:
-                          tipo === "receita" ? "passagem" : (cats.despesa[0]?.slug ?? "outro"),
-                      }));
+                        {cats.despesa.map((c) => (
+                          <option key={c.slug} value={c.slug}>
+                            {c.label}
+                          </option>
+                        ))}
+                        {!cats.existe(novo.categoria) && novo.categoria ? (
+                          <option value={novo.categoria}>{novo.categoria}</option>
+                        ) : null}
+                      </Select>
+                    ) : (
+                      <Select
+                        value={novo.categoria}
+                        onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
+                      >
+                        {CATEGORIAS_RECEITA.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    <TextInput
+                      id="financeiro-valor-input"
+                      placeholder="Valor"
+                      type="number"
+                      value={novo.valor}
+                      onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
+                      onKeyDown={(e) => e.key === "Enter" && add()}
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <TextInput
+                      placeholder="Descrição"
+                      className="w-full"
+                      value={novo.descricao}
+                      onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
+                      onKeyDown={(e) => e.key === "Enter" && add()}
+                    />
+                  </div>
+                  <button
+                    onClick={add}
+                    disabled={salvando || !novo.valor}
+                    className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+                    style={{
+                      background: salvando || !novo.valor ? C.border : C.amber,
+                      color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
                     }}
                   >
-                    <option value="receita">Receita</option>
-                    <option value="despesa">Despesa</option>
-                  </Select>
-                  {novo.tipo === "despesa" ? (
-                    <Select
-                      value={novo.categoria}
-                      onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
-                    >
-                      {cats.despesa.map((c) => (
-                        <option key={c.slug} value={c.slug}>
-                          {c.label}
-                        </option>
-                      ))}
-                      {!cats.existe(novo.categoria) && novo.categoria ? (
-                        <option value={novo.categoria}>{novo.categoria}</option>
-                      ) : null}
-                    </Select>
-                  ) : (
-                    <Select
-                      value={novo.categoria}
-                      onChange={(e) => setNovo({ ...novo, categoria: e.target.value })}
-                    >
-                      {CATEGORIAS_RECEITA.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                  <TextInput
-                    id="financeiro-valor-input"
-                    placeholder="Valor"
-                    type="number"
-                    value={novo.valor}
-                    onChange={(e) => setNovo({ ...novo, valor: e.target.value })}
-                    onKeyDown={(e) => e.key === "Enter" && add()}
-                  />
-                </div>
-                <div className="mt-2">
-                  <TextInput
-                    placeholder="Descrição"
-                    className="w-full"
-                    value={novo.descricao}
-                    onChange={(e) => setNovo({ ...novo, descricao: e.target.value })}
-                    onKeyDown={(e) => e.key === "Enter" && add()}
-                  />
-                </div>
-                <button
-                  onClick={add}
-                  disabled={salvando || !novo.valor}
-                  className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-                  style={{
-                    background: salvando || !novo.valor ? C.border : C.amber,
-                    color: salvando || !novo.valor ? C.inkFaint : C.onBrand,
-                  }}
-                >
-                  <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
-                </button>
-              </Card>
+                    <Plus size={14} /> {salvando ? "Salvando…" : "Lançar"}
+                  </button>
+                </Card>
+              )}
               {/* Lista de cards no celular em vez de <table>: 5 colunas
                   (tipo/categoria/valor/descrição/ação) não cabem numa tela
                   estreita — o Card tinha overflow:hidden (não scroll), então
@@ -616,7 +617,7 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
                   </button>
                 </div>
               )}
-              <div className="sm:hidden space-y-2">
+              <div className="sm:hidden" data-testid="lancamentos-do-dia">
                 {[...doDia].reverse().map((f) =>
                   editId === f.id ? (
                     <Card key={f.id} className="anim-slideDown space-y-2">
@@ -665,7 +666,11 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
                       </button>
                     </Card>
                   ) : (
-                    <Card key={f.id} className="flex items-start justify-between gap-3">
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between gap-3 py-2.5 border-b"
+                      style={{ borderColor: C.panel2 }}
+                    >
                       <input
                         type="checkbox"
                         className="mt-1 shrink-0"
@@ -674,21 +679,26 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
                         aria-label={`Selecionar ${f.descricao || fmtBRL(f.valor)}`}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Pill
-                            color={f.tipo === "receita" ? C.green : C.red}
-                            bg={f.tipo === "receita" ? C.greenSoft : C.redSoft}
-                          >
-                            {f.tipo}
-                          </Pill>
-                          <span className="font-semibold">{fmtBRL(f.valor)}</span>
+                        <div
+                          className="text-[14px] font-semibold truncate"
+                          style={{ color: C.ink }}
+                        >
+                          {f.descricao ||
+                            (f.tipo === "despesa" ? cats.rotulo(f.categoria) : "Receita")}
                         </div>
-                        <div className="text-xs mt-1" style={{ color: C.inkSoft }}>
-                          {f.tipo === "despesa" ? cats.rotulo(f.categoria) : "—"}
-                          {f.descricao ? ` · ${f.descricao}` : ""}
-                          {f.auto ? <span style={{ color: C.inkFaint }}> · automático</span> : ""}
+                        <div className="text-xs mt-0.5" style={{ color: C.inkFaint }}>
+                          {f.tipo === "receita" ? "Receita" : "Despesa"}
+                          {f.tipo === "despesa" ? ` · ${cats.rotulo(f.categoria)}` : ""}
+                          {f.auto ? " · automático" : ""}
                         </div>
                       </div>
+                      <span
+                        className="text-[14px] font-semibold shrink-0"
+                        style={{ color: f.tipo === "receita" ? C.ink : C.inkSoft }}
+                      >
+                        {f.tipo === "receita" ? "+ " : "− "}
+                        {fmtBRL(f.valor)}
+                      </span>
                       {f.auto ? (
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px]" style={{ color: C.inkFaint }}>
@@ -723,15 +733,13 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [] }) {
                           </button>
                         </div>
                       )}
-                    </Card>
+                    </div>
                   ),
                 )}
                 {doDia.length === 0 && (
-                  <Card>
-                    <p className="text-center py-4 text-xs" style={{ color: C.inkFaint }}>
-                      Nenhum lançamento neste dia.
-                    </p>
-                  </Card>
+                  <p className="py-4 text-[13px]" style={{ color: C.inkFaint }}>
+                    Nenhum lançamento neste dia. Toque em “+ Lançar”.
+                  </p>
                 )}
               </div>
               <Card className="hidden sm:block" style={{ padding: 0, overflow: "hidden" }}>
@@ -1026,7 +1034,7 @@ function RelatorioFinanceiroView() {
               onClick={() => exportar("xlsx")}
               disabled={finAno.loading || semDados || baixando}
               className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg disabled:opacity-40"
-              style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
+              style={{ background: C.amberSoft, color: C.brandText, fontWeight: 600 }}
             >
               <Download size={13} /> {baixando ? "Gerando…" : "Baixar Excel"}
             </button>
@@ -1341,7 +1349,11 @@ function ContasReceberView({ pix }) {
                               onClick={salvarAjuste}
                               disabled={registrando || !ajusteVal.valor}
                               className="btn-press text-xs px-3 py-1.5 rounded-md"
-                              style={{ background: C.amberSoft, color: C.amber, fontWeight: 600 }}
+                              style={{
+                                background: C.amberSoft,
+                                color: C.brandText,
+                                fontWeight: 600,
+                              }}
                             >
                               Registrar
                             </button>
