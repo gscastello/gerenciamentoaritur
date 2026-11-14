@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Lista do Dia → Desembarque: anotar à mão durante a viagem (issue #383).
+// Rota → Desembarque (antiga Lista do Dia): anotar à mão durante a viagem (issue #383).
 // Começa em branco, não muda a reserva e funciona sem internet.
 
 // depois do reload o service worker passaria a atender as chamadas e o page.route não
@@ -32,10 +32,10 @@ function simular(page) {
 
 async function abrirDesembarque(page) {
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
-  await page.getByRole("button", { name: "Desembarque (rota)" }).click();
+  await page.getByRole("button", { name: "Desembarque", exact: true }).click();
   await page.getByRole("button", { name: "Ida", exact: true }).click();
 }
 

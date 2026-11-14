@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Issue #212: reordenar rápido as reservas de cada seção da Lista do Dia
+// Issue #212: reordenar rápido as reservas de cada seção da Rota (antiga Lista do Dia)
 // (setas, topo, digitar a posição) e gravar a ordem (rpc_reorder_pickup).
 
 const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
 
 const base = {
   data: hoje,
-  direcao: "ida",
-  pontoId: "rodoviaria",
+  direcao: "volta",
+  pontoId: "cantanhede",
   quantidade: 1,
   valorUnit: 60,
   valorTotal: 60,
@@ -48,7 +48,7 @@ async function abrirLista(page) {
   await mockSupabase(page, { role: "admin", occupancy: {}, reservations: RESERVAS });
   await page.goto("/");
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
   await page.locator('input[type="date"]').first().fill(hoje);

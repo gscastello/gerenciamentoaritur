@@ -269,7 +269,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
-- **Desembarque anotado na viagem** (issue #383, Lista do Dia → Desembarque, `database/106`): lista livre por dia e
+- **Rota** (issue #411, antiga Lista do Dia): só o embarque da **Volta** — quem buscamos em casa em Pirapemas e
+  Cantanhede, na ordem da rota. A Ida não aparece. O desembarque é só a lista anotada abaixo (bloco de notas); o
+  desembarque ligado às reservas (baldes por área) saiu e volta numa versão melhor.
+- **Desembarque anotado na viagem** (issue #383, Rota → Desembarque, `database/106`): lista livre por dia e
   sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
   e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
   `apagada`) — mesma regra de `domain/listaDesembarque.js`. Dois aparelhos na mesma viagem não se apagam.
