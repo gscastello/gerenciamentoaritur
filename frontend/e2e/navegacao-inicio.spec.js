@@ -55,10 +55,10 @@ test("puxar para baixo no topo atualiza e volta na mesma aba", async ({ page }, 
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
-  await expect(page.getByRole("heading", { name: /Lista/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Rota$/ }).first()).toBeVisible();
   const recarregou = page.waitForEvent("load");
   await page.evaluate(() => {
     const alvo = document.querySelector("main") ?? document.body;
@@ -76,7 +76,7 @@ test("puxar para baixo no topo atualiza e volta na mesma aba", async ({ page }, 
   });
   await recarregou;
   // depois de recarregar o app sobe do zero (login, dados, aba): no CI pode demorar
-  await expect(page.getByRole("heading", { name: /Lista/ }).first()).toBeVisible({
+  await expect(page.getByRole("heading", { name: /^Rota$/ }).first()).toBeVisible({
     timeout: 20000,
   });
 });

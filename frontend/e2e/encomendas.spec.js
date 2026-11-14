@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Agendar encomendas na Agenda e na Lista do Dia (database/42): uma
+// Agendar encomendas na Agenda e na Rota (antiga Lista do Dia) (database/42): uma
 // encomenda pendente (vinda do bot, sem viagem ainda) ganha uma viagem/
 // ponto reais e aparece nas duas telas, sem nunca ocupar vaga. Depois de
 // agendada, a encomenda é exibida como uma passagem normal (issue #220): dentro
@@ -107,7 +107,7 @@ test("Agenda: cria uma encomenda nova do zero", async ({ page }) => {
   expect(chamadas[0].p_unit_price).toBe(0);
 });
 
-test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({ page }) => {
+test("Rota: mostra a encomenda agendada na Volta e marca como entregue", async ({ page }) => {
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
@@ -115,9 +115,9 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
       encomendaPendente({
         id: "res-enc-agendada-1",
         data: hoje,
-        direcao: "ida",
-        pontoId: "rodoviaria",
-        desembarque: "Pirapemas centro",
+        direcao: "volta",
+        pontoId: "cantanhede",
+        desembarque: "Centro, São Luís",
         status: "confirmada",
       }),
     ],
@@ -125,12 +125,12 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   });
   await page.goto("/");
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
 
   // a encomenda entra na seção do ponto, com a linha do motorista, e não conta como passageiro
-  await expect(page.getByText(/Documentos · entrega: Pirapemas centro/)).toBeVisible();
+  await expect(page.getByText(/Documentos · entrega: Centro, São Luís/)).toBeVisible();
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
   await expect(page.getByText("0 pax · 1 encomenda", { exact: true })).toBeVisible();
 
@@ -142,7 +142,7 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   expect(chamadas[0].p_status).toBe("embarcado");
 });
 
-// Dia que a Agenda abre por padrão (calendário de Fortaleza; depois das 14h, o seguinte).
+// Dia que a Agenda abre por padrão (calendário de Fortaleza; o relógio dos testes fica às 6h).
 function diaDaAgenda() {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -157,7 +157,7 @@ function diaDaAgenda() {
       .map((x) => [x.type, x.value]),
   );
   const d = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), 12));
-  if (Number(p.hour) >= 14) d.setUTCDate(d.getUTCDate() + 1);
+  // o relógio dos testes fica às 6h (mockSupabase): a Agenda abre no próprio dia
   return d.toISOString().slice(0, 10);
 }
 

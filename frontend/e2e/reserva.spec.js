@@ -83,49 +83,6 @@ test("Bloco de notas: cria, edita, fixa e apaga uma nota", async ({ page }) => {
   await expect(page.getByText("Nenhuma nota ainda.")).toBeVisible();
 });
 
-// Quem busca em casa (issue #96): chip cicla Táxi → Nós → Motorista.
-test("Lista do Dia: chip de quem busca o passageiro em casa cicla", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
-    new Date(),
-  );
-  await mockSupabase(page, {
-    role: "admin",
-    reservations: [
-      {
-        id: "res-busca-1",
-        data: hoje,
-        direcao: "ida",
-        pontoId: "busca",
-        bairro: "Cohama",
-        nome: "Cliente Busca E2E",
-        telefone: "98999998888",
-        quantidade: 1,
-        valorUnit: 80,
-        valorTotal: 80,
-        pagamento: "dinheiro",
-        status: "confirmada",
-        tipo: "passagem",
-        pago: false,
-        temEmbarcado: false,
-        buscaPor: "taxi",
-        criadoEm: new Date().toISOString(),
-      },
-    ],
-  });
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: /Lista do Dia/ })
-    .first()
-    .click();
-
-  const chip = page.getByRole("button", { name: "Mudar quem busca este passageiro" });
-  await expect(chip).toHaveText(/Táxi/);
-  await chip.click();
-  await expect(chip).toHaveText(/Gustavo/);
-  await chip.click();
-  await expect(chip).toHaveText(/Maurício/);
-});
-
 test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ page }) => {
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
     new Date(),

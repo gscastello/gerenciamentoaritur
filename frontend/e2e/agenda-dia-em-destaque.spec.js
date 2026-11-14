@@ -29,7 +29,7 @@ function diaEsperadoNoOpen() {
       .map((x) => [x.type, x.value]),
   );
   const alvo = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), 12));
-  if (Number(p.hour) >= 14) alvo.setUTCDate(alvo.getUTCDate() + 1);
+  // o relógio dos testes fica às 6h (mockSupabase): a Agenda abre no próprio dia
   return alvo;
 }
 

@@ -4,7 +4,6 @@ import {
   Bus,
   Calendar,
   CheckCircle2,
-  ClipboardList,
   Inbox,
   Landmark,
   LayoutDashboard,
@@ -14,6 +13,7 @@ import {
   NotebookPen,
   Plus,
   RefreshCw,
+  Route,
   Search,
   ShieldCheck,
   Sparkles,
@@ -311,8 +311,9 @@ const DESTINOS_BUSCA = [
   { tab: "agenda", label: "Agenda de viagens", termos: "viagens dia pendentes confirmar" },
   {
     tab: "lista",
-    label: "Lista do dia",
-    termos: "embarque desembarque motorista rota passageiros do dia",
+    label: "Rota",
+    termos:
+      "lista do dia embarque desembarque motorista rota volta pirapemas cantanhede buscar em casa",
   },
   { tab: "financeiro", label: "Financeiro", termos: "caixa receita despesa lucro lançamento" },
   {
@@ -689,9 +690,9 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
                 }
               />
               <ItemResultado
-                icon={ClipboardList}
-                titulo={`Lista do dia — ${fmtDate(dataAlvo)}`}
-                sub="Embarque e desembarque"
+                icon={Route}
+                titulo={`Rota — ${fmtDate(dataAlvo)}`}
+                sub="Embarque da Volta e desembarque"
                 onClick={() =>
                   onNavigate({ tab: "lista", deepLink: { kind: "data", data: dataAlvo } })
                 }
@@ -811,7 +812,8 @@ const TAB_ROLES = {
 const NAV_ITENS = [
   { id: "dashboard", label: "Início", icon: LayoutDashboard, grupo: "Principal" },
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
-  { id: "lista", label: "Lista do Dia", icon: ClipboardList, grupo: "Operação" },
+  // "Rota" (issue #411): o embarque da Volta em Pirapemas/Cantanhede e o desembarque anotado
+  { id: "lista", label: "Rota", icon: Route, grupo: "Operação" },
   // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
   { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   // Financeiro + Gestão + Operação numa tela só, com abas no topo (issue #360, SubAbas.jsx)

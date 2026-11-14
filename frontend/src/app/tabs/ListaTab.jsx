@@ -1,8 +1,6 @@
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
-  ChevronUp,
   ClipboardList,
   ListOrdered,
   MapPin,
@@ -19,32 +17,26 @@ import { rotuloPagamento } from "../../domain/format.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   BUSCA_MODOS,
-  BUSCA_PROXIMO,
   BotaoAgendar,
   BuscaChip,
   C,
   Card,
-  DirecaoDivisor,
   ErrorBanner,
   Header,
-  IDA_PRIORIDADE,
   OCUPA_VAGA,
   Pill,
   SeloCidadeIntermediaria,
   StatusPill,
   SubTabs,
   TextInput,
-  detalheDesembarque,
   diaSemana,
   digitos,
   enderecoEmbarque,
   fmtBRL,
-  inferirBaldeDesembarque,
   linhaReserva,
   todayStr,
   useCidadeIntermediaria,
   useDeepLinkData,
-  useDropoff,
 } from "../tabShared.jsx";
 import ListaDesembarqueAnotada from "./ListaDesembarqueAnotada.jsx";
 import OrdemDaListaEditor from "./OrdemDaListaEditor.jsx";
@@ -62,8 +54,10 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
       r.status !== "cancelada" &&
       r.status !== "espera",
   );
-  const pendentes = doDia.filter((r) => r.status === "pendente");
-  const ativos = doDia.filter((r) => OCUPA_VAGA.includes(r.status));
+  // a Rota é a da VOLTA (issue #411): quem buscamos em Pirapemas e Cantanhede para iniciar a viagem
+  const daVolta = doDia.filter((r) => r.direcao === "volta");
+  const pendentes = daVolta.filter((r) => r.status === "pendente");
+  const ativos = daVolta.filter((r) => OCUPA_VAGA.includes(r.status));
   // Encomendas agendadas pro dia — não entram em `doDia` (não são
   // "passageiro", nunca contam como pax), mas aparecem nas seções do ponto de
   // embarque, com a mesma linha das passagens: quem tá na rua precisa ver o
@@ -127,16 +121,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
       setErro(mensagemAmigavel(e, "Não foi possível atualizar o passageiro."));
     }
   };
-  // Quem busca em casa: cicla Táxi → Nós → Motorista → Táxi (issue #96).
   const salvarOrdem = (ids) => R.reorderPickup(ids);
-  const ciclarBusca = async (id, atual) => {
-    setErro("");
-    try {
-      await R.setPickupTransport(id, BUSCA_PROXIMO[atual ?? "taxi"] ?? "proprio");
-    } catch (e) {
-      setErro(mensagemAmigavel(e, "Não foi possível mudar quem busca."));
-    }
-  };
   // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
   // mas o motorista ainda vê e pode reverter).
   const naRota = [
@@ -147,14 +132,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   // cada seção segue a ordem de sempre.
   const comOrdemSalva = (itens) =>
     itens.some((r) => r.buscaSeq != null) ? ordenarBusca(itens) : itens;
-  const buscaItens = ordenarBusca(
-    naRota.filter((r) => r.direcao === "ida" && r.pontoId === "busca"),
-  );
-  const agrupadosIda = comOrdemSalva(
-    naRota
-      .filter((r) => r.direcao === "ida" && r.pontoId !== "busca")
-      .sort((a, b) => (IDA_PRIORIDADE[a.pontoId] ?? 3) - (IDA_PRIORIDADE[b.pontoId] ?? 3)),
-  );
   const cantanhedeItens = comOrdemSalva(
     naRota.filter((r) => r.direcao === "volta" && r.pontoId === "cantanhede"),
   );
@@ -166,8 +143,8 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   return (
     <div>
       <Header
-        title="Lista do Dia"
-        subtitle='Anotações por local — busca em casa no formato "NP - BAIRRO - TELEFONE".'
+        title="Rota"
+        subtitle="Volta: quem buscamos em casa em Pirapemas e Cantanhede, na ordem da rota."
       />
       <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
@@ -205,10 +182,11 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
           onChange={setSubview}
           options={[
             { id: "embarque", label: "Embarque", Icon: ClipboardList },
-            { id: "desembarque", label: "Desembarque (rota)", Icon: MapPin },
+            { id: "desembarque", label: "Desembarque", Icon: MapPin },
           ]}
         />
-        {subview === "desembarque" && <DesembarqueView reservas={reservas} R={R} data={data} />}
+        {/* desembarque: só a lista anotada à mão, como bloco de notas (issue #411) */}
+        {subview === "desembarque" && <ListaDesembarqueAnotada data={data} />}
         {subview === "embarque" && (
           <>
             {pendentes.length > 0 && (
@@ -232,25 +210,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
                 </div>
               </Card>
             )}
-            <DirecaoDivisor label="IDA" cor={C.inkSoft} />
-            <ListaSecao
-              onOrdenar={salvarOrdem}
-              titulo="BUSCAR EM CASA"
-              itens={buscaItens}
-              trips={trips}
-              marcar={marcar}
-              buscar={ciclarBusca}
-              onAbrir={setResumo}
-            />
-            <ListaSecao
-              onOrdenar={salvarOrdem}
-              titulo="RODOVIÁRIA / RETORNO / POSTO CARONE / BR / OUTROS"
-              itens={agrupadosIda}
-              trips={trips}
-              marcar={marcar}
-              onAbrir={setResumo}
-            />
-            <DirecaoDivisor label="VOLTA" cor={C.inkSoft} />
             <ListaSecao
               onOrdenar={salvarOrdem}
               titulo="CANTANHEDE"
@@ -282,190 +241,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
         />
       )}
     </div>
-  );
-}
-
-/* --- Desembarque: rota de entrega do motorista, editável (issue: rota) --- */
-function DesembarqueView({ reservas, R, data }) {
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const dropoff = useDropoff();
-
-  const doDia = useMemo(
-    () =>
-      reservas.filter(
-        (r) =>
-          r.data === data &&
-          !["frete", "encomenda"].includes(r.tipo) &&
-          OCUPA_VAGA.includes(r.status),
-      ),
-    [reservas, data],
-  );
-
-  const acao = async (p) => {
-    setErro("");
-    setSalvando(true);
-    try {
-      await p;
-    } catch (e) {
-      setErro(mensagemAmigavel(e, "Não foi possível salvar."));
-    } finally {
-      setSalvando(false);
-    }
-  };
-  const mudarBalde = (r, area) => acao(R.setDropoff(r.id, { area, detail: detalheDesembarque(r) }));
-  const mudarDetalhe = (r, detalhe) => {
-    if ((detalhe || "") === (detalheDesembarque(r) || "")) return;
-    acao(R.setDropoff(r.id, { area: inferirBaldeDesembarque(r), detail: detalhe }));
-  };
-  const reordenar = (idsNaOrdem) => acao(R.reorderDropoff(idsNaOrdem));
-
-  const temAlguem = doDia.length > 0;
-
-  return (
-    <div className="space-y-6">
-      <ListaDesembarqueAnotada data={data} />
-      <div className="text-xs" style={{ color: C.inkFaint }}>
-        Ordem de entrega por local, editável. Base: o desembarque que o cliente informou no
-        agendamento — ajuste o balde e a ordem para montar a rota.
-        {salvando && " · salvando…"}
-      </div>
-      {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
-      {!temAlguem && (
-        <div className="text-sm" style={{ color: C.inkFaint }}>
-          Nenhum passageiro confirmado nesse dia.
-        </div>
-      )}
-      {temAlguem &&
-        ["ida", "volta"].map((direcao) => {
-          const itens = doDia.filter((r) => r.direcao === direcao);
-          if (itens.length === 0) return null;
-          return (
-            <div key={direcao} className="space-y-3">
-              <DirecaoDivisor
-                label={direcao === "ida" ? "IDA — DESEMBARQUE" : "VOLTA — DESEMBARQUE"}
-                cor={C.inkSoft}
-              />
-              {dropoff.porDirecao(direcao).map((balde) => {
-                const doBalde = itens
-                  .filter((r) => inferirBaldeDesembarque(r) === balde.code)
-                  .sort(
-                    (a, b) =>
-                      (a.desembarqueSeq ?? 9999) - (b.desembarqueSeq ?? 9999) ||
-                      (a.nome || "").localeCompare(b.nome || ""),
-                  );
-                return (
-                  <DesembarqueBalde
-                    key={balde.code}
-                    balde={balde}
-                    direcao={direcao}
-                    itens={doBalde}
-                    salvando={salvando}
-                    onBalde={mudarBalde}
-                    onDetalhe={mudarDetalhe}
-                    onReordenar={reordenar}
-                  />
-                );
-              })}
-            </div>
-          );
-        })}
-    </div>
-  );
-}
-
-function DesembarqueBalde({ balde, direcao, itens, salvando, onBalde, onDetalhe, onReordenar }) {
-  const dropoff = useDropoff();
-  const pax = itens.reduce((s, r) => s + (r.quantidade || 1), 0);
-  const mover = (idx, dir) => {
-    const alvo = idx + dir;
-    if (alvo < 0 || alvo >= itens.length) return;
-    const ids = itens.map((r) => r.id);
-    [ids[idx], ids[alvo]] = [ids[alvo], ids[idx]];
-    onReordenar(ids);
-  };
-  const placeholder = dropoff.detalhe(direcao, balde.code).label;
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-bold tracking-wide" style={{ color: C.inkSoft }}>
-          {balde.label.toUpperCase()}
-        </div>
-        <Pill color={C.blue}>{pax} pax</Pill>
-      </div>
-      {itens.length === 0 ? (
-        <div className="text-xs" style={{ color: C.inkFaint }}>
-          — ninguém —
-        </div>
-      ) : (
-        <ol className="list-none space-y-1.5">
-          {itens.map((r, idx) => (
-            <li key={r.id} className="px-1 py-2 border-b" style={{ borderColor: C.panel2 }}>
-              <div className="flex items-start gap-2">
-                <span
-                  className="tabular-nums shrink-0 mt-0.5 text-sm"
-                  style={{ color: C.inkFaint }}
-                >
-                  {idx + 1}.
-                </span>
-                <span
-                  className="font-bold text-[15px] leading-snug flex-1 min-w-0"
-                  style={{ color: C.ink, overflowWrap: "anywhere" }}
-                >
-                  {r.nome || "—"}
-                </span>
-                <span className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    disabled={idx === 0 || salvando}
-                    onClick={() => mover(idx, -1)}
-                    aria-label="Entregar antes"
-                    style={{ opacity: idx === 0 ? 0.3 : 1 }}
-                  >
-                    <ChevronUp size={16} style={{ color: C.inkSoft }} />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={idx === itens.length - 1 || salvando}
-                    onClick={() => mover(idx, 1)}
-                    aria-label="Entregar depois"
-                    style={{ opacity: idx === itens.length - 1 ? 0.3 : 1 }}
-                  >
-                    <ChevronDown size={16} style={{ color: C.inkSoft }} />
-                  </button>
-                </span>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-1.5">
-                <input
-                  key={`${r.id}:${detalheDesembarque(r)}`}
-                  defaultValue={detalheDesembarque(r)}
-                  onFocus={(e) => e.target.select()}
-                  onBlur={(e) => onDetalhe(r, e.target.value.trim())}
-                  placeholder={placeholder}
-                  aria-label="Endereço de desembarque"
-                  className="w-full sm:flex-1 min-w-0 text-[13px] rounded px-2.5 py-2 outline-none"
-                  style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.ink }}
-                />
-                <select
-                  value={balde.code}
-                  onChange={(e) => onBalde(r, e.target.value)}
-                  aria-label="Área de desembarque"
-                  className="w-full sm:w-auto text-xs rounded px-1 py-2 outline-none shrink-0"
-                  style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.inkSoft }}
-                >
-                  {dropoff.porDirecao(direcao).map((b) => (
-                    <option key={b.code} value={b.code}>
-                      {b.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Card>
   );
 }
 
