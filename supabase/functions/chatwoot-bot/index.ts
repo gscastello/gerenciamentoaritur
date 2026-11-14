@@ -44,7 +44,8 @@ import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
-import { ehMarcaDeAgendado } from "../_shared/rascunhoPuro.ts";
+import { ehMarcaDeAgendado, ehMarcaDeCorrecao } from "../_shared/rascunhoPuro.ts";
+import { revisarPelaMarca } from "../_shared/revisor.ts";
 import {
   atualizarReservasAConfirmar,
   lancarPeloAgendado,
@@ -152,6 +153,26 @@ async function processar(body: any) {
       mensagemId: atividade.mensagemId,
       telefone: atividade.telefone,
     });
+  }
+
+  // a equipe pediu "Atualizado ☑️": as reservas do cliente ficam como a conversa combinou, NA HORA (issue #410).
+  // Sem reserva futura, a marca vale como Agendado ☑️ (lança o que foi pedido).
+  if (
+    atividade?.autor === "equipe" &&
+    atividade.texto &&
+    atividade.mensagemId &&
+    conversaEspelhada &&
+    ehMarcaDeCorrecao(atividade.texto)
+  ) {
+    const r = await revisarPelaMarca({ telefone: atividade.telefone, chatwootConversationId: atividade.chatwootConversationId });
+    if (r.semReserva) {
+      await lancarPeloAgendado({
+        conversationId: conversaEspelhada,
+        chatwootConversationId: atividade.chatwootConversationId,
+        mensagemId: atividade.mensagemId,
+        telefone: atividade.telefone,
+      });
+    }
   }
 
   // o cliente completou depois do Agendado ☑️ (dia, quantidade…) e ele não tinha lançado: tenta de novo (issue #286)

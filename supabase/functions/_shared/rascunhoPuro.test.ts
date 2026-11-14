@@ -1017,3 +1017,14 @@ Deno.test("#401: bairro achado tira a marca e a nota de 'reservada sem endereço
   const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["LOTADO"] });
   assertStringIncludes(aviso?.detalhe ?? "", "lotada");
 });
+
+Deno.test("#410: 'Atualizado ☑️' é a marca de correção; não é Agendado; pergunta não conta", async () => {
+  const { ehMarcaDeCorrecao, ehMarcaDeAgendado } = await import("./rascunhoPuro.ts");
+  for (const t of ["Atualizado ☑️", "atualizado ✅", "Corrigido ☑️", "Alterado ✅", "Remarcado ☑️", "Reserva atualizada ☑️"]) {
+    assert(ehMarcaDeCorrecao(t), t);
+    assert(!ehMarcaDeAgendado(t), t);
+  }
+  assert(!ehMarcaDeCorrecao("Atualizado"), "sem o ☑️ não é a marca");
+  assert(!ehMarcaDeCorrecao("Atualizado ☑️?"), "pergunta");
+  assert(!ehMarcaDeCorrecao("Agendado ☑️"));
+});

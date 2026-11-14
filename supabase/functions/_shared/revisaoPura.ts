@@ -201,6 +201,11 @@ export function decidirRevisao(
     horaAgora?: string | null;
     /** por reserva, quando uma pessoa mudou cada campo (camposMudadosPelaEquipe) — issue #389 */
     mudancasDaEquipe?: Record<string, Partial<Record<CampoDaRevisao, string>>>;
+    /**
+     * A equipe marcou "Atualizado ☑️" (issue #410): é a confirmação de que a conversa vale. Corrige
+     * com certeza média ou alta, inclusive dia e sentido, sem esperar prova escrita depois da reserva.
+     */
+    confirmadoPelaEquipe?: boolean;
   },
 ): { correcoes: Correcao[]; pendencias: Achado[]; descartados: Achado[] } {
   const porId = new Map(ctx.reservas.map((r) => [r.id, r]));
@@ -231,19 +236,24 @@ export function decidirRevisao(
     // a equipe (ou o Assistente) mudou este campo à mão: vence o que o cliente escreveu ANTES.
     // Só se o cliente escreveu DEPOIS da mudança vira pendência; o revisor nunca desfaz sozinho (#389)
     const mudouEm = ctx.mudancasDaEquipe?.[r.id]?.[a.campo];
+    const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     if (mudouEm) {
-      if (hora && Date.parse(hora) > Date.parse(mudouEm)) pendencias.push(a);
-      else descartados.push(a);
-      continue;
+      // com o "Atualizado ☑️", o que o cliente escreveu depois da mudança à mão vale (issue #410)
+      const depoisDaMudanca = !!hora && Date.parse(hora) > Date.parse(mudouEm);
+      if (!(ctx.confirmadoPelaEquipe && depoisDaMudanca)) {
+        if (depoisDaMudanca) pendencias.push(a);
+        else descartados.push(a);
+        continue;
+      }
     }
     // o cliente (ou a equipe) corrigiu DEPOIS de a reserva ser criada: é a confirmação (issue #343)
-    const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     const mudaAViagem = a.campo === "data" || a.campo === "sentido";
     let ok = CORRIGE_SOZINHO.includes(a.campo) &&
-      (a.certeza === "alta" || (a.certeza === "media" && posterior && !mudaAViagem));
+      (a.certeza === "alta" || (a.certeza === "media" && (ctx.confirmadoPelaEquipe || (posterior && !mudaAViagem))));
     // dia e sentido mudam a viagem inteira: só sozinho se o cliente/equipe disse DEPOIS da reserva
     // ("na verdade é dia 15"). Prova anterior pode ser de outro pedido — a equipe confere.
-    if (ok && mudaAViagem) ok = posterior;
+    // Com o "Atualizado ☑️" a equipe já conferiu (issue #410).
+    if (ok && mudaAViagem && !ctx.confirmadoPelaEquipe) ok = posterior;
     const c = correcoes.get(r.id) ?? { reserva_id: r.id, motivos: [] };
     if (ok) {
       switch (a.campo) {

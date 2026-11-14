@@ -57,6 +57,17 @@ export function ehMarcaDeAgendado(texto: string | null | undefined): boolean {
 }
 
 /**
+ * "Atualizado ☑️" (também "Corrigido", "Alterado", "Remarcado" com ☑️/✅): a equipe pede que as
+ * reservas do cliente fiquem como a conversa diz, na hora (issue #410). Pergunta não conta.
+ */
+export function ehMarcaDeCorrecao(texto: string | null | undefined): boolean {
+  const t = semAcento(String(texto ?? ""));
+  if (!/\b(atualizad|corrigid|alterad|remarcad)[oa]s?\b/.test(t) || !RE_CHECK.test(t)) return false;
+  if (ehMarcaDeAgendado(texto)) return false;
+  return !/\?\s*$/.test(t.replace(/[☑✅✔️\s]+$/u, ""));
+}
+
+/**
  * O que o Agendado lança (issue #387): só os rascunhos que a leitura FINAL gravou. Quando
  * o Agendado relê a conversa com o modelo capaz, um rascunho que só a primeira leitura
  * criou (e que a releitura não confirmou) ficava "pronto" e era lançado sem as travas

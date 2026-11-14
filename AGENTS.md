@@ -415,7 +415,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
   cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
   Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
-  **Revisor de reservas** (issue #339, `database/97`, função `revisor-reservas`, `revisaoPura.ts`): a cada 15 min
+  **Revisor de reservas** (issue #339, `database/97`, função `revisor-reservas`, `revisaoPura.ts`): a cada **minuto** (#410)
   (`pg_cron` → `pg_net`, chave da rotina no Vault, só o hash em `rotinas_chaves`) o bot revê cada passageiro com reserva
   futura em que algo mudou (`fn_clientes_para_revisar`: assinatura = reservas + última mensagem; reserva com menos de
   3 min espera o Agendado). O modelo capaz relê a conversa inteira e aponta erros (do bot, do cliente ou da equipe) com
@@ -424,6 +424,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
   **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
   o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
+  **Correção na hora** (issue #410, `database/109`): reserva nova espera 1 min e cliente que ainda
+  escreve espera 45 s sem mensagem nova; a marca `andamento` impede duas rodadas no mesmo passageiro. A equipe escreve
+  **"Atualizado ☑️"** (ou Corrigido/Alterado/Remarcado com ☑️/✅) na conversa e o revisor corrige NA HORA, com a marca
+  como confirmação: certeza média basta, inclusive para dia e sentido (`confirmadoPelaEquipe`). Sem reserva futura, vale
+  como Agendado; nada a mudar vira pendência "Atualizado ☑️ não mudou nada".
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
