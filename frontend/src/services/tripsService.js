@@ -70,6 +70,42 @@ export const tripsService = {
     return data;
   },
 
+  /** Viagens de um intervalo com o veículo e os lugares de cada uma (issue #408). */
+  async listCapacidades(de, ate) {
+    return handle(
+      supabase
+        .from("trips")
+        .select("id, trip_date, direction, capacity, vehicle_id, status")
+        .is("deleted_at", null)
+        .gte("trip_date", de)
+        .lte("trip_date", ate)
+        .order("trip_date"),
+      "listCapacidades",
+    );
+  },
+
+  /**
+   * Troca o veículo de UMA viagem (dia + sentido) — a van reserva num dia (issue #408). O banco
+   * recusa se a viagem já tem mais passageiros do que o veículo leva, ou se já saiu.
+   */
+  async trocarVeiculo(tripDate, direction, vehicleId) {
+    const { data, error } = await supabase.rpc("rpc_veiculo_da_viagem", {
+      p_trip_date: tripDate,
+      p_direction: direction,
+      p_vehicle_id: vehicleId,
+    });
+    if (error)
+      throw new ServiceError(`trocarVeiculo: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível trocar o veículo.", {
+        code: data?.code,
+      });
+    return data;
+  },
+
   async assignDriver(tripId, driverId) {
     const actor = await getCurrentUserId();
     return handle(

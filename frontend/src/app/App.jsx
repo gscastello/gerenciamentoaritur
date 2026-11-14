@@ -33,6 +33,7 @@ import { usePendencias } from "../hooks/usePendencias.js";
 import { useReservationsWindow } from "../hooks/useReservations.js";
 import { useRouteConfig } from "../hooks/useRouteConfig.js";
 import { useSettings } from "../hooks/useSettings.js";
+import { useViagensDoPeriodo } from "../hooks/useViagensDoPeriodo.js";
 
 import { useVehicles } from "../hooks/useVehicles.js";
 
@@ -1074,6 +1075,8 @@ function AppInner() {
   const dropoff = useDropoffAreas();
   const modoAtendimento = cfgSettings.attendanceMode;
   const capacidadeAtiva = defaultVehicle?.capacity ?? 31;
+  // vagas de cada viagem (ônibus 31, van reserva 15 num dia escolhido na Operação — issue #408)
+  const { capacidadeDe } = useViagensDoPeriodo(defaultVehicle);
   const trips = cfg.trips;
 
   const usuario = profile?.name || "—";
@@ -1243,6 +1246,7 @@ function AppInner() {
                     dataInicial={deepLink?.kind === "data" ? deepLink.data : todayStr()}
                     trips={trips}
                     capacidade={capacidadeAtiva}
+                    capacidadeDe={capacidadeDe}
                     onCriar={R.createReservation}
                     inicial={agendarInicial}
                     onEncomenda={() => {
@@ -1540,6 +1544,7 @@ function AppInner() {
                           reservas={reservas}
                           R={R}
                           capacidade={capacidadeAtiva}
+                          capacidadeDe={capacidadeDe}
                           trips={trips}
                           segundaAtiva={cfg.segundaAtiva}
                           segundaHoras={cfg.segundaHoras}
@@ -1590,6 +1595,7 @@ function AppInner() {
                         <DashboardTab
                           reservas={reservas}
                           capacidade={capacidadeAtiva}
+                          capacidadeDe={capacidadeDe}
                           trips={trips}
                           pendencias={pendenciasCount}
                           onIr={irParaBusca}

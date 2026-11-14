@@ -296,6 +296,8 @@ export async function mockSupabase(page, opts = {}) {
     ]
   ).map((v) => ({ ...v }));
   let vehicleSeq = 0;
+  // viagens com veículo e lugares (issue #408): a van reserva num dia escolhido na Operação
+  let tripsRows = (opts.trips ?? []).map((t) => ({ ...t }));
   let maintenanceRows = (opts.maintenance ?? []).map((m) => ({ ...m }));
   let maintenanceSeq = 0;
   let maintenanceTypesRows = (
@@ -439,6 +441,43 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json({ success: true, reservas: 1 }));
       }
       if (fn === "rpc_ensure_trips") return route.fulfill(json({ success: true, created: 0 }));
+      if (fn === "rpc_veiculo_da_viagem") {
+        const b = req.postDataJSON?.() ?? {};
+        const veiculo = vehiclesRows.find((v) => v.id === b.p_vehicle_id);
+        const ocupados = occupancy[`${b.p_trip_date}|${b.p_direction}`]?.occupied ?? 0;
+        if (veiculo && ocupados > veiculo.capacity) {
+          return route.fulfill(
+            json({
+              success: false,
+              code: "LOTACAO_MAIOR",
+              message: `Essa viagem já tem ${ocupados} passageiros e ${veiculo.name} leva ${veiculo.capacity}. Mova ou cancele ${ocupados - veiculo.capacity} antes de trocar.`,
+            }),
+          );
+        }
+        const existe = tripsRows.find(
+          (t) => t.trip_date === b.p_trip_date && t.direction === b.p_direction,
+        );
+        if (existe) {
+          existe.vehicle_id = veiculo.id;
+          existe.capacity = veiculo.capacity;
+        } else {
+          tripsRows = [
+            ...tripsRows,
+            {
+              id: `trip-${b.p_trip_date}-${b.p_direction}`,
+              trip_date: b.p_trip_date,
+              direction: b.p_direction,
+              vehicle_id: veiculo.id,
+              capacity: veiculo.capacity,
+              status: "agendada",
+            },
+          ];
+        }
+        opts.onTrocarVeiculo?.(b);
+        return route.fulfill(
+          json({ success: true, message: "updated", capacity: veiculo.capacity }),
+        );
+      }
       if (fn === "rpc_set_pickup_transport_many") {
         const b = req.postDataJSON?.() ?? {};
         for (const id of b.p_ids ?? []) buscaOverride[id] = b.p_mode;
@@ -724,7 +763,7 @@ export async function mockSupabase(page, opts = {}) {
         const [trip_date, direction] = k.split("|");
         return { trip_id: `trip-${k}`, trip_date, direction, ...v };
       });
-    } else if (table === "trips") rows = [];
+    } else if (table === "trips") rows = tripsRows;
     else if (table === "vehicles" && req.method() === "POST") {
       const body = req.postDataJSON?.() ?? {};
       vehicleSeq += 1;
