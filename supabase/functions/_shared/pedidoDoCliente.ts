@@ -34,7 +34,53 @@ const unico = <T>(valores: T[]): T | null => {
 /** "pra São Luís", "de Pirapemas pra…" = volta; "pra Pirapemas", "saindo de São Luís" = ida. Os dois = null. */
 /** O cliente falou das duas viagens ("ida e volta", "e volto domingo", "a volta é…")? */
 export function falouDasDuasViagens(textos: string[]): boolean {
-  return textos.some((t) => / (ida e volta|volta|voltar|volto|voltando|vou e volto|regresso|retornar|retorno pra|retorno para) /.test(` ${normalizarTexto(t)} `));
+  // "e retorno segunda-feira", "retorno no domingo" é a outra viagem; "no retorno" sozinho é o ponto (issue #401)
+  return textos.some((t) =>
+    / (ida e volta|volta|voltar|volto|voltando|vou e volto|regresso|retornar|retornando|retorno pra|retorno para|e retorno) /.test(` ${normalizarTexto(t)} `) ||
+    / retorno (no|na|dia|em|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha) /.test(` ${normalizarTexto(t)} `)
+  );
+}
+
+type PedidoDoPar = {
+  tipo?: string | null;
+  data?: string | null;
+  direcao?: string | null;
+  ponto?: string | null;
+  bairro?: string | null;
+  endereco?: string | null;
+  desembarque?: string | null;
+  cidade_dita?: string | null;
+  duvida?: string | null;
+};
+
+/**
+ * "Uma de Ida para Cantanhede e outra de volta" e a leitura trouxe DUAS viagens de dias
+ * diferentes no MESMO sentido (o cliente colou o mesmo formulário duas vezes): a segunda é
+ * a outra viagem, com embarque e desembarque trocados (issue #401). Só com exatamente duas
+ * passagens; senão devolve a mesma lista.
+ */
+export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], textos: string[]): P[] {
+  if (pedidos.length !== 2 || !falouDasDuasViagens(textos)) return pedidos;
+  const [a, b] = [...pedidos].sort((x, y) => String(x.data ?? "").localeCompare(String(y.data ?? "")));
+  const sentido = a.direcao;
+  if ((a.tipo ?? "passagem") === "encomenda" || (b.tipo ?? "passagem") === "encomenda") return pedidos;
+  if (!a.data || !b.data || a.data === b.data || (sentido !== "ida" && sentido !== "volta") || b.direcao !== sentido) return pedidos;
+  const outro = sentido === "ida" ? "volta" : "ida";
+  const deSaoLuis = [b.endereco, b.bairro].filter(Boolean).join(", ") || null;
+  const virada: P = {
+    ...b,
+    direcao: outro,
+    ponto: null,
+    bairro: null,
+    // Ida → Volta: sobe onde a Ida descia e desce no endereço de São Luís; Volta → Ida: o contrário
+    endereco: b.desembarque ?? null,
+    desembarque: outro === "volta" ? deSaoLuis : (b.endereco ?? null),
+    cidade_dita: outro === "volta" ? (b.cidade_dita ?? null) : null,
+    duvida: [b.duvida, `O cliente pediu ida e volta e as duas viagens vieram no mesmo sentido: a de ${b.data.split("-").reverse().slice(0, 2).join("/")} ficou na ${outro === "volta" ? "Volta" : "Ida"}, com embarque e desembarque trocados. Confira.`]
+      .filter(Boolean)
+      .join(" "),
+  };
+  return pedidos.map((p) => (p === b ? virada : p));
 }
 
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
@@ -141,7 +187,10 @@ export function quantidadeEscrita(textos: string[]): number | null {
 export function pontoEscrito(textos: string[], pontos: string[]): string | null {
   const achados: string[] = [];
   for (const t of textos) {
+    // pergunta ("Desce na rodoviária ou na casa?") e fala de onde DESCE não dizem onde ele embarca (issue #401)
+    if (t.includes("?")) continue;
     const n = ` ${normalizarTexto(t)} `;
+    if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
     // "parada das vans" é o Retorno das Vans, não a rodoviária (dono, 11/11 — issue #333)
     if (/ retorno | (parada|ponto) das? vans? /.test(n)) achados.push("retorno");

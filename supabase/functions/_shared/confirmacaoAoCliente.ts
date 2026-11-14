@@ -46,6 +46,7 @@ function limpar(t: string | null | undefined): string {
   return String(t ?? "")
     .replace(/endereço a confirmar|bairro a confirmar/gi, "")
     .replace(/·?\s*confirmar com o cliente se a volta é no mesmo dia/gi, "")
+    .replace(/\s*\(\s*\)/g, "") // "Avenida São Luís Rei de França ()" (issue #401)
     .replace(/\s*[·,;-]\s*$/g, "")
     .replace(/^\s*[·,;-]\s*/g, "")
     .replace(/\s{2,}/g, " ")

@@ -298,6 +298,23 @@ export function decidirRevisao(
       }
       continue;
     }
+    // Ida ↔ Volta: quem sobe vira quem desce. O endereço de São Luís passa para o outro lado
+    // junto com o sentido, senão a Volta "sai do condomínio e desce na praça" (issue #401)
+    if (c.sentido && c.sentido !== r.direcao && !("embarque" in c && "desembarque" in c)) {
+      const saoLuis = [r.embarque, r.bairro].filter(Boolean).join(", ") || null;
+      const interior = r.desembarque || null;
+      if (saoLuis || interior) {
+        // o lado que o revisor já corrigiu com prova fica; o outro troca com o sentido
+        if (!("embarque" in c)) c.embarque = c.sentido === "volta" ? interior : saoLuis;
+        if (!("desembarque" in c)) c.desembarque = c.sentido === "volta" ? saoLuis : interior;
+        if (c.sentido === "volta") c.bairro = null;
+        c.motivos.push(`embarque e desembarque trocados com o sentido: "${r.embarque ?? "—"}" ↔ "${r.desembarque ?? "—"}"`);
+        for (const a of achados.filter((x) => x.reserva_id === c.reserva_id && (x.campo === "embarque" || x.campo === "desembarque"))) {
+          const i = pendencias.indexOf(a);
+          if (i >= 0) pendencias.splice(i, 1);
+        }
+      }
+    }
     finais.push(c);
   }
   return { correcoes: finais, pendencias, descartados };

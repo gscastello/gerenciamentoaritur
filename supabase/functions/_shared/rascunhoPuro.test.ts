@@ -989,3 +989,31 @@ Deno.test("#387: o Agendado só lança o que a leitura final confirmou; sobra da
   assertEquals(aviso?.assunto, "Agendado ☑️ lançou só parte");
   assertStringIncludes(aviso?.detalhe ?? "", "leitura final do Agendado não a confirmou");
 });
+
+Deno.test("#401: o que veio logo depois do Agendado antigo ('desce na rodoviária?') fica no pedido de antes", async () => {
+  const { inicioDoPedidoAtual } = await import("./rascunhoPuro.ts");
+  const m = (quem: string, texto: string, em: string) => ({ quem, texto, em });
+  const conversa = [
+    m("cliente", "Amanhã vou com vocês de Cantanhede pra São Luís", "2026-11-12T18:54:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-12T19:30:00Z"),
+    m("cliente", "Desce na rodoviária ou na casa?", "2026-11-12T19:31:00Z"),
+    m("equipe", "Ok tranquilo", "2026-11-12T20:50:00Z"),
+    m("cliente", "Pode confirmar minha ida pra Cantanhde na segunda, tudo bem?", "2026-11-14T13:03:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-14T13:26:00Z"),
+  ];
+  assertEquals(inicioDoPedidoAtual(conversa, "2026-11-14T13:26:00Z"), "2026-11-12T20:50:00Z");
+});
+
+Deno.test("#401: bairro achado tira a marca e a nota de 'reservada sem endereço'; recusa do banco legível", async () => {
+  const { enderecoSemMarcaDeBairro, notasSemReservaSemEndereco, codigoDaRecusa, avisoDoAgendado } = await import("./rascunhoPuro.ts");
+  assertEquals(enderecoSemMarcaDeBairro("Residencial Mali, Ap 202 (bairro a confirmar)"), "Residencial Mali, Ap 202");
+  assertEquals(enderecoSemMarcaDeBairro(" (bairro a confirmar)"), null);
+  const n = notasSemReservaSemEndereco("Reservada sem endereço (Agendado ☑️): sem valor até o cliente confirmar onde embarca. Bairro pelos lugares.", "Turu");
+  assert(!n.includes("sem valor"));
+  assertStringIncludes(n, "bairro Turu");
+  assertEquals(codigoDaRecusa(undefined, "CAPACIDADE_EXCEDIDA: viagem x já tem 31 de 31 lugares ocupados", "rejected"), "LOTADO");
+  assertEquals(codigoDaRecusa(undefined, "algo", "rejected"), "recusada");
+  assertEquals(codigoDaRecusa("RESERVA_DUPLICADA", "", "rejected"), "RESERVA_DUPLICADA");
+  const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["LOTADO"] });
+  assertStringIncludes(aviso?.detalhe ?? "", "lotada");
+});

@@ -239,3 +239,30 @@ Deno.test("#377: prova que junta a pergunta da equipe e a resposta do cliente co
   assertEquals(partesDaEvidencia("oi / ok"), []);
   assertEquals(evidenciaNaConversa("oi / ok", conv), false);
 });
+
+Deno.test("#401: Ida virou Volta: embarque e desembarque trocam junto com o sentido", () => {
+  const ida = {
+    ...base,
+    id: "r22",
+    data: "2026-11-22",
+    ponto: "busca",
+    bairro: "Cohab Anil III",
+    embarque: "Condomínio home Practice",
+    desembarque: "Praça da Cruz",
+    criada_em: "2026-11-14T13:01:00Z",
+  };
+  const falas = [{ em: "2026-11-14T13:05:00Z", texto: "Volta - Cantanhede para São Luís - 22/11" }];
+  const achados = achadosValidos([
+    { reserva_id: "r22", campo: "sentido", valor_correto: "volta", evidencia: "Volta - Cantanhede para São Luís - 22/11", certeza: "alta" },
+    { reserva_id: "r22", campo: "ponto", valor_correto: "cantanhede", evidencia: "Volta - Cantanhede para São Luís - 22/11", certeza: "alta" },
+    { reserva_id: "r22", campo: "embarque", valor_correto: "Praça da Cruz", evidencia: "Volta - Cantanhede para São Luís", certeza: "media" },
+  ]);
+  const r = decidirRevisao(achados, { reservas: [ida], conversa: falas[0].texto, hoje: "2026-11-14", pontos, falas, horaAgora: "10:15" });
+  assertEquals(r.correcoes.length, 1);
+  const c = r.correcoes[0];
+  assertEquals(c.sentido, "volta");
+  assertEquals(c.embarque, "Praça da Cruz");
+  assertEquals(c.desembarque, "Condomínio home Practice, Cohab Anil III");
+  assertEquals(c.bairro, null);
+  assertEquals(r.pendencias.length, 0);
+});

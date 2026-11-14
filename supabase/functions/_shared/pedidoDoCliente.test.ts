@@ -251,3 +251,41 @@ Deno.test("#351: reagendar só a Ida não lança uma Volta que o cliente não pe
   const comVolta = [...msgs, { texto: "e volto domingo", em: "2026-11-12T19:09:00Z" }];
   assertEquals(conferenciaFinal({ trip_date: "2026-11-15", direction: "volta", quantity: 1, route_point_code: "pirapemas" }, comVolta, { ...ctx, hoje: "2026-11-12" }).filter((x) => x.includes("não foi pedida")), []);
 });
+
+Deno.test("#401: pergunta e fala de onde desce não dizem o embarque; 'e retorno segunda' é a outra viagem", async () => {
+  const { falouDasDuasViagens } = await import("./pedidoDoCliente.ts");
+  // caso real: "Desce na rodoviária ou na casa?" era sobre a Volta; o pedido novo é busca em casa
+  assertEquals(pontoEscrito(["Desce na rodoviária ou na casa?", "Pode confirmar minha ida pra Cantanhde na segunda"], pontosIda), null);
+  assertEquals(pontoEscrito(["me deixa na rodoviária"], pontosIda), null);
+  assertEquals(pontoEscrito(["vou estar na rodoviária"], pontosIda), "rodoviaria");
+  assert(falouDasDuasViagens(["passagem pra São Luís amanhã a tarde e retorno segunda-feira de manhã"]));
+  assert(falouDasDuasViagens(["Uma de Ida para Cantanhede e outra de volta..."]));
+  assert(!falouDasDuasViagens(["vou estar no retorno das vans"]));
+});
+
+Deno.test("#401: formulário de Ida colado duas vezes + 'outra de volta': a segunda vira a Volta com os endereços trocados", async () => {
+  const { segundaViagemEhAOutra } = await import("./pedidoDoCliente.ts");
+  const ida = (data: string) => ({
+    tipo: "passagem",
+    data,
+    direcao: "ida",
+    ponto: "busca",
+    bairro: "Cohab Anil III",
+    endereco: "Condomínio Home Practice",
+    desembarque: "Praça da Cruz",
+  });
+  const lidos = [ida("2026-11-22"), ida("2026-11-20")];
+  const textos = ["Data da viagem: 20/11 de São Luís para Cantanhede.", "Data da viagem: 22/11 de São Luís para Cantanhede.", "Uma de Ida para Cantanhede e outra de volta..."];
+  const r = segundaViagemEhAOutra(lidos, textos);
+  const volta = r.find((p) => p.data === "2026-11-22");
+  const primeira = r.find((p) => p.data === "2026-11-20");
+  assertEquals(primeira?.direcao, "ida");
+  assertEquals(volta?.direcao, "volta");
+  assertEquals(volta?.endereco, "Praça da Cruz");
+  assertEquals(volta?.desembarque, "Condomínio Home Practice, Cohab Anil III");
+  assertEquals(volta?.bairro, null);
+  // sem falar em volta, ou já em sentidos diferentes: não mexe
+  assertEquals(segundaViagemEhAOutra(lidos, ["20/11 e 22/11 pra Cantanhede"]), lidos);
+  const certos = [ida("2026-11-20"), { ...ida("2026-11-22"), direcao: "volta" }];
+  assertEquals(segundaViagemEhAOutra(certos, textos), certos);
+});

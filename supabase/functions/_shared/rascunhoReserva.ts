@@ -61,6 +61,9 @@ import {
   rascunhosDoAgendado,
   deveRelerAgendado,
   deveLerDeNovoNoFim,
+  codigoDaRecusa,
+  enderecoSemMarcaDeBairro,
+  notasSemReservaSemEndereco,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
@@ -73,6 +76,7 @@ import {
   datasConfirmadas,
   datasSemPedido,
   sentidoEscrito,
+  segundaViagemEhAOutra,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -300,10 +304,13 @@ async function lerEGravar(
   const lidos = await lerPedidos(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
-  const pedidos = juntarPedidosDaMesmaViagem(lidos.pedidos);
+  const juntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
+  // "uma de ida e outra de volta" com as duas lidas no mesmo sentido: a segunda é a outra viagem (issue #401)
+  const pedidos = segundaViagemEhAOutra(juntos, textosDoCliente);
+  if (pedidos !== juntos) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
   // cliente e equipe na ordem: a resposta do cliente vale para o que a equipe perguntou (issue #320)
   const falasDoPedido = recentes
@@ -479,6 +486,16 @@ async function lerEGravar(
         r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
       }
     }
+    // o cliente deu o endereço e o bairro foi achado (tabela, memória, lugares ou internet): a
+    // reserva tem endereço e valor; o bairro vai com aviso e na confirmação ao cliente (issue #401)
+    if (r.route_point_code === "busca" && bairroDaTabela(r.pickup_neighborhood, ctx.bairrosTabela)) {
+      const semMarca = enderecoSemMarcaDeBairro(r.pickup_detail);
+      if (semMarca !== r.pickup_detail && semMarca && v.aConfirmar.includes("endereco")) {
+        r.pickup_detail = semMarca;
+        v.aConfirmar.splice(v.aConfirmar.indexOf("endereco"), 1);
+        r.notes = notasSemReservaSemEndereco(r.notes, r.pickup_neighborhood as string);
+      }
+    }
     // Volta: o lugar citado (rua, referência, casa) existe nas duas cidades, ou só na outra? avisa no "Conferir" (issue #274)
     if (r.type === "passagem" && r.direction === "volta" && r.pickup_detail) {
       const aviso = avisoDosLugares(await lugaresNasCidades(r.pickup_detail), v.cidadeIncerta ? null : r.route_point_code);
@@ -510,8 +527,10 @@ async function lerEGravar(
     if (v.cidadeIncerta) {
       pendencia ??= { motivo: "a cidade de embarque (Pirapemas ou Cantanhede) não foi dita na conversa", codigo: "cidade" };
     }
-    // o que foi lido contradiz o que o cliente escreveu: o Agendado não lança errado (issue #303)
-    if (opcoes.confirmadoPelaEquipe && avisosDoCliente.length) {
+    // o que foi lido contradiz o que o cliente escreveu (issue #303): na 1ª leitura, faz o Agendado reler
+    // com o modelo capaz. Na releitura o que sobrou de embarque/bairro vai como "Conferir" na reserva e
+    // na confirmação ao cliente; dia, sentido, quantidade e cidade continuam na trava final (issue #401)
+    if (opcoes.confirmadoPelaEquipe && avisosDoCliente.length && !opcoes.modelo) {
       pendencia ??= { motivo: `o que foi lido não bate com o que o cliente escreveu: ${avisosDoCliente.join("; ")}`, codigo: "conferir" };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
@@ -551,6 +570,9 @@ async function lerEGravar(
       .eq("direction", r.direction)
       .eq("status", "pronta");
     busca = linha.phone ? busca.eq("phone", linha.phone) : busca.is("phone", null);
+    // duas viagens no mesmo sentido NESTA leitura (Ida dia 20 e Ida dia 22) são dois rascunhos: a
+    // segunda não pode apagar a primeira (issue #401)
+    if (gravados.length) busca = busca.not("id", "in", `(${gravados.join(",")})`);
     const { data: aberto } = await busca.order("updated_at", { ascending: false }).limit(1).maybeSingle();
     const { data: salvo, error } = aberto
       ? await supabaseAdmin.from("reservation_drafts").update(linha).eq("id", aberto.id).select("id").single()
@@ -740,7 +762,7 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       if (error || !res?.success) {
         const motivo = error?.message ?? res?.message ?? "reserva recusada";
         await anotarPendencia(d.id, motivo);
-        pendentes.push(res?.code ?? res?.status ?? "recusada");
+        pendentes.push(codigoDaRecusa(res?.code, motivo, res?.status));
         continue;
       }
       // o gatilho do banco fecha o rascunho; aqui só conta
