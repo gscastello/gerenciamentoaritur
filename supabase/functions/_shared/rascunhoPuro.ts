@@ -231,6 +231,8 @@ export function validarPedidoExtraido(
     sentidoDito?: "ida" | "volta" | null;
     /** endereço de costume do cliente por sentido: completa o embarque que ele não disse */
     costume?: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null;
+    /** passageiro recorrente sem sentido dito: o sentido pelo hábito (sentidoPeloHabito, issue #416) */
+    sentidoDoHabito?: "ida" | "volta" | null;
     /**
      * "Agendado ☑️" da equipe (dono, 10/11): a reserva é feita como está, mesmo faltando
      * informação — sem endereço vira "Endereço a confirmar" (sem valor); o que falta vai em aConfirmar.
@@ -253,6 +255,11 @@ export function validarPedidoExtraido(
   if (!direcao && pontoBruto) {
     if (ctx.pontos.ida.includes(pontoBruto)) direcao = "ida";
     else if (ctx.pontos.volta.includes(pontoBruto)) direcao = "volta";
+  }
+  // "guarde uma vaga pra mim amanhã" de passageiro recorrente: o sentido sai do hábito (issue #416)
+  if (!direcao && ctx.sentidoDoHabito) {
+    direcao = ctx.sentidoDoHabito;
+    avisos.push(`Sentido pelo hábito do passageiro (${direcao === "ida" ? "Ida" : "Volta"}): confira.`);
   }
   if (!direcao) return { ok: false, motivo: "sem_sentido" };
 
@@ -411,6 +418,38 @@ export function validarPedidoExtraido(
   };
 }
 
+/**
+ * Sentido de um pedido sem sentido dito, pelo HÁBITO do passageiro recorrente (issue #416): "guarde
+ * uma vaga pra mim amanhã". Só com endereço de costume. Já tem reserva naquele dia num sentido → o
+ * outro; senão o oposto da última viagem antes do dia; costume de um sentido só → esse. Sem pista = null.
+ */
+export function sentidoPeloHabito(
+  data: string | null | undefined,
+  viagens: { data: string; direcao: string }[],
+  costume: { ida?: CostumeDoSentido; volta?: CostumeDoSentido } | null | undefined,
+): "ida" | "volta" | null {
+  if (!data || !costume) return null;
+  const tem = {
+    ida: !!(costume.ida?.route_point_code || costume.ida?.dropoff_location),
+    volta: !!(costume.volta?.route_point_code || costume.volta?.dropoff_location),
+  };
+  if (!tem.ida && !tem.volta) return null;
+  const oposto = (d: string): "ida" | "volta" => (d === "ida" ? "volta" : "ida");
+  const noDia = [...new Set(viagens.filter((v) => v.data === data).map((v) => v.direcao))];
+  if (noDia.length === 2) return null;
+  if (noDia.length === 1) {
+    const o = oposto(noDia[0]);
+    return tem[o] ? o : null;
+  }
+  const antes = viagens.filter((v) => v.data < data).sort((a, b) => (a.data < b.data ? 1 : -1))[0];
+  if (antes) {
+    const o = oposto(antes.direcao);
+    return tem[o] ? o : null;
+  }
+  if (tem.ida !== tem.volta) return tem.ida ? "ida" : "volta";
+  return null;
+}
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",
@@ -489,6 +528,7 @@ ${quando}
 - O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta. Volta: cidade_dita = Pirapemas ou Cantanhede (de onde sai), o endereço dela em endereco e o destino em desembarque. Ida que sobe numa cidade do interior ("de Cantanhede pra Pirapemas"): ponto "outro" com a cidade e o endereço em endereco, destino em desembarque. Nunca é busca em casa em São Luís. Vale também quando a equipe disse o trecho e o cliente confirmou ("De pirapemas pra Cantanhede, certo?" → "Isso").
 - Sem origem dita, o DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
 - Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
+- Passageiro RECORRENTE (tem ENDEREÇO DE COSTUME) que só pede "guarde uma vaga pra mim amanhã", sem dizer o sentido: registre o pedido com o dia e deixe direcao vazia (o sistema decide pelo hábito dele) e o local vazio (vem do costume). Não deixe de registrar por faltar sentido ou endereço.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
 - Disse HOJE: o dia é hoje, nunca troque por amanhã. Se a viagem daquele sentido já saiu, pense na outra: as cidades do caminho (Bacabeira, Santa Rita, Miranda, Matões…) têm as duas viagens. Ex.: às 9h "hoje, indo pra Miranda" é a VOLTA de hoje (sai à tarde de Pirapemas/Cantanhede e passa por Miranda), não a Ida de amanhã. Veja nas CONVERSAS ANTERIORES de onde ele costuma sair nesse trecho.

@@ -1028,3 +1028,42 @@ Deno.test("#410: 'Atualizado ☑️' é a marca de correção; não é Agendado;
   assert(!ehMarcaDeCorrecao("Atualizado ☑️?"), "pergunta");
   assert(!ehMarcaDeCorrecao("Agendado ☑️"));
 });
+
+Deno.test("#416: passageiro recorrente — 'guarde uma vaga pra mim amanhã' sai pelo hábito, com embarque e desembarque de costume", async () => {
+  const { sentidoPeloHabito, validarPedidoExtraido } = await import("./rascunhoPuro.ts");
+  const costume = {
+    ida: { fonte: "manual", route_point_code: "busca", neighborhood: "Cohatrac", detail: "Condomínio Marsil", dropoff_location: "São Patrício, Cantanhede" },
+    volta: { fonte: "manual", route_point_code: "cantanhede", detail: "São Patrício", dropoff_location: "Condomínio Marsil, Cohatrac" },
+  };
+  const viagens = [{ data: "2026-11-16", direcao: "ida" }];
+  // depois da Ida de segunda, "amanhã" (terça) é a Volta
+  assertEquals(sentidoPeloHabito("2026-11-17", viagens, costume), "volta");
+  // já tem a Ida no dia: é a Volta do mesmo dia
+  assertEquals(sentidoPeloHabito("2026-11-16", viagens, costume), "volta");
+  // sem viagem antes e costume dos dois lados: não chuta
+  assertEquals(sentidoPeloHabito("2026-11-20", [], costume), null);
+  // costume de um lado só: esse
+  assertEquals(sentidoPeloHabito("2026-11-20", [], { volta: costume.volta }), "volta");
+  // sem costume: nada
+  assertEquals(sentidoPeloHabito("2026-11-17", viagens, null), null);
+
+  const v = validarPedidoExtraido(
+    { tipo: "passagem", data: "2026-11-17", quantidade: 1 },
+    {
+      hoje: "2026-11-14",
+      pontos: { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] },
+      costume,
+      sentidoDoHabito: "volta",
+      agendado: true,
+    },
+  );
+  assert(v.ok);
+  if (v.ok) {
+    assertEquals(v.rascunho.direction, "volta");
+    assertEquals(v.rascunho.route_point_code, "cantanhede");
+    assertEquals(v.rascunho.pickup_detail, "São Patrício");
+    assertEquals(v.rascunho.dropoff_location, "Condomínio Marsil, Cohatrac");
+    assertEquals(v.cidadeIncerta, false);
+    assertEquals(v.aConfirmar, []);
+  }
+});

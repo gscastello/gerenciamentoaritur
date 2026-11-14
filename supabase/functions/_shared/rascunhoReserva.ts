@@ -49,6 +49,7 @@ import {
   type PedidoExtraido,
   pareceTerPedido,
   validarPedidoExtraido,
+  sentidoPeloHabito,
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
   perguntaAoCliente,
@@ -219,6 +220,20 @@ function textoDoCostume(c: CostumeDoCliente): string {
   return [linha("Ida", c.ida), linha("Volta", c.volta)].filter(Boolean).join("\n");
 }
 
+/** Viagens do passageiro de 60 dias para trás até 60 à frente (sem as canceladas) — para o hábito (issue #416). */
+async function viagensRecentes(customerId: string): Promise<{ data: string; direcao: string }[]> {
+  const hoje = diaCivil(new Date());
+  const { data } = await supabaseAdmin
+    .from("reservations")
+    .select("status, trips!inner(trip_date, direction)")
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .neq("status", "cancelada")
+    .gte("trips.trip_date", somarDias(hoje, -60))
+    .lte("trips.trip_date", somarDias(hoje, 60));
+  return ((data ?? []) as Bloco[]).map((r) => ({ data: String(r.trips.trip_date), direcao: String(r.trips.direction) }));
+}
+
 /** Viagens (data|sentido) em que o cliente já tem reserva ativa. */
 async function viagensJaReservadas(customerId: string | null, hoje: string): Promise<Set<string>> {
   if (!customerId) return new Set();
@@ -292,6 +307,7 @@ async function lerEGravar(
 
   const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const costume = cliente ? await costumeDoCliente(cliente.id) : null;
+  const viagensDoPassageiro = costume && cliente ? await viagensRecentes(cliente.id) : [];
   const instrucoesDoCliente = cliente ? await instrucoesDaEquipe(cliente.id) : "";
   const system = instrucoesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
@@ -464,6 +480,8 @@ async function lerEGravar(
       // "passagem para hoje" sem sentido depois que a viagem saiu = a outra de hoje (issue #387)
       sentidoDito: sentidoEscrito(textosDoCliente),
       costume,
+      // passageiro recorrente sem sentido dito: o sentido pelo hábito (issue #416)
+      sentidoDoHabito: p.direcao ? null : sentidoPeloHabito(p.data, viagensDoPassageiro, costume),
       agendado: opcoes.confirmadoPelaEquipe,
     });
     if (!v.ok) {

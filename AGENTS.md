@@ -358,7 +358,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Cliente recorrente / endereço de costume** (issue #228, `WHATSAPP.md §6d`): por cliente e sentido, fixado pela
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
-  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data. **Passageiro
+  recorrente** (issue #416, `sentidoPeloHabito`): "guarde uma vaga pra mim amanhã" sem sentido dito → o sentido sai do
+  hábito (já tem reserva no dia → o outro sentido; senão o oposto da última viagem; costume de um lado só → esse) e
+  embarque/desembarque vêm do costume: o Agendado lança, sem pendência.
 - **Preço da Volta pelo lugar onde deixamos o cliente** (issue #349, dono 12/11): na Ida o valor é o do lugar onde
   buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
   pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
