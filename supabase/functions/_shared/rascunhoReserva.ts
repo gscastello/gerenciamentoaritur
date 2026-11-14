@@ -27,6 +27,8 @@ import {
   formatarHistorico,
   type MensagemDaConversa,
   bairroEscritoNoEndereco,
+  bairroPelosLugares,
+  type LugarDeSaoLuis,
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import {
@@ -67,8 +69,11 @@ import {
   codigoDaRecusa,
   enderecoSemMarcaDeBairro,
   notasSemReservaSemEndereco,
+  sentidoPeloLugarDoEmbarque,
+  idaPeloEmbarqueEmSaoLuis,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
+import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
 import {
   conferenciaFinal,
   conferirPeloCliente,
@@ -84,6 +89,9 @@ import {
   pedidosPelaOrigem,
   outraViagemDoPar,
   pedidosPeloSentidoDoDia,
+  bairroEscrito,
+  cidadeDoEnderecoEscrito,
+  voltaPeloEnderecoDoInterior,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -344,28 +352,39 @@ async function lerEGravar(
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
-  // "uma de ida e outra de volta" com as duas lidas no mesmo sentido: a segunda é a outra viagem (issue #401)
-  const pares = segundaViagemEhAOutra(juntos, textosDoCliente);
-  if (pares !== juntos) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
   const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto }));
   // a ORIGEM decide: saindo de Pirapemas/Cantanhede é Volta, de São Luís é Ida (dono, 14/11 — #407)
   const origem = origemDoPedido(falasDoTrecho);
-  const pelaOrigem = pedidosPelaOrigem(pares, origem);
-  if (pelaOrigem !== pares) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
+  const pelaOrigem = pedidosPelaOrigem(juntos, origem);
+  if (pelaOrigem !== juntos) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
   // "segunda pra ir e terça pra volta" com só uma viagem lida: monta a outra (issue #415)
   // "Volta na terça de Cantanhede pro X": o sentido escrito para aquele dia vale para a viagem daquele dia
   const peloDia = pedidosPeloSentidoDoDia(pelaOrigem, mensagensDoCliente);
   if (peloDia !== pelaOrigem) evento("bot_sentido_do_dia", { conversa: entrada.chatwootConversationId });
-  const pedidos = outraViagemDoPar(peloDia, mensagensDoCliente, hoje);
-  if (pedidos !== peloDia) evento("bot_outra_viagem_do_par", { conversa: entrada.chatwootConversationId });
+  const comOPar = outraViagemDoPar(peloDia, mensagensDoCliente, hoje);
+  // "uma de ida e outra de volta" com as duas lidas no mesmo sentido: a outra viagem (issues #401 e
+  // #419) — depois das regras do dia, que não sabem do par (formulário colado duas vezes)
+  const pares = segundaViagemEhAOutra(comOPar, textosDoCliente);
+  if (pares !== comOPar) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
+  // Volta que embarca num lugar de São Luís (trecho da BR: Pedrinhas, Estiva…) é a Ida (issue #419)
+  const naBr = idaPeloEmbarqueEmSaoLuis(pares, ctx.locaisDeOutros);
+  if (naBr !== pares) evento("bot_volta_na_br_e_ida", { conversa: entrada.chatwootConversationId });
+  // "Agendado ☑️ seg Ida Estiva 2P": o que a EQUIPE escreveu na marca vence a leitura (issue #420)
+  const marca = opcoes.confirmadoPelaEquipe ? mensagens.find((m) => m.id === entrada.mensagemId) : undefined;
+  const dadosMarca = marca
+    ? dadosDaMarca(marca.texto, marca.em, { pontosIda: ctx.pontos.ida, bairros: ctx.bairrosTabela, locaisDeOutros: ctx.locaisDeOutros })
+    : {};
+  const pedidos = aplicarDadosDaMarca(naBr, dadosMarca);
+  if (pedidos !== naBr) evento("bot_dados_da_marca", { conversa: entrada.chatwootConversationId, campos: Object.keys(dadosMarca) });
+  if (comOPar !== peloDia) evento("bot_outra_viagem_do_par", { conversa: entrada.chatwootConversationId });
   // cliente e equipe na ordem: a resposta do cliente vale para o que a equipe perguntou (issue #320)
   const falasDoPedido = recentes
     .filter((m) => m.quem === "cliente" || m.quem === "equipe")
     .map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
   const recusadas = sugestoesRecusadas(falasDoPedido);
   // "A ida é sábado, certo?" → "Isso": vale como dito pelo cliente (issue #335)
-  const confirmadas = datasConfirmadas(falasDoPedido);
+  const confirmadas = [...datasConfirmadas(falasDoPedido), ...(dadosMarca.data ? [dadosMarca.data] : [])];
 
   const jaReservadas = await viagensJaReservadas(cliente?.id ?? null, hoje, simular?.reservasAntesDe);
   const telefone = normalizarTelefone(entrada.telefone);
@@ -378,6 +397,10 @@ async function lerEGravar(
   const aConfirmar = new Map<string, ItemAConfirmar[]>();
   /** pedidos em que só o cliente sabe se é a Volta de hoje ou a Ida de amanhã (issue #314) */
   const qualViagem = new Set<PedidoExtraido>();
+  /** endereço conhecido em Pirapemas/Cantanhede e algo de São Luís também: Ida ou Volta? (issue #419) */
+  const ondeEmbarca = new Set<PedidoExtraido>();
+  // o trecho dito decide o sentido só quando há UMA viagem (várias: vale a do dia — issue #419)
+  const origemUnica = pedidos.length === 1 ? origem : null;
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -386,9 +409,45 @@ async function lerEGravar(
       pontosIda: ctx.pontos.ida,
       bairros: ctx.bairrosTabela,
       pedidosLidos: pedidos.length,
-      origem,
+      origem: origemUnica,
+      sentidoDaEquipe: dadosMarca.direcao ?? null,
     });
     Object.assign(p, conferido.pedido);
+    // busca em casa num endereço de Pirapemas/Cantanhede não existe: é a Volta saindo de lá (issue #419)
+    if (
+      (p.tipo ?? "passagem") !== "encomenda" &&
+      p.direcao === "ida" &&
+      (!p.ponto || p.ponto === "busca") &&
+      !origemUnica &&
+      !dadosMarca.direcao
+    ) {
+      const escrita = pedidos.length === 1 && sentidoEscrito(textosDoCliente) !== "ida" ? cidadeDoEnderecoEscrito(textosDoCliente) : null;
+      if (escrita) {
+        Object.assign(p, voltaPeloEnderecoDoInterior(p, escrita, `O cliente escreveu o endereço em ${escrita.cidade === "pirapemas" ? "Pirapemas" : "Cantanhede"}`));
+        evento("bot_volta_pelo_endereco", { conversa: entrada.chatwootConversationId, fonte: "escrito" });
+      } else if (p.endereco) {
+        const lugares = await lugaresNasCidades(p.endereco);
+        const { data: deSaoLuis } = await supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: String(p.endereco).slice(0, 300) });
+        const decisao = sentidoPeloLugarDoEmbarque({
+          lugares,
+          bairroDeSaoLuisEscrito: !!bairroEscrito(textosDoCliente, ctx.bairrosTabela),
+          lugarDeSaoLuis: !!bairroPelosLugares((deSaoLuis ?? []) as LugarDeSaoLuis[]),
+        });
+        if (decisao === "duvida") {
+          ondeEmbarca.add(p);
+        } else if (decisao) {
+          Object.assign(
+            p,
+            voltaPeloEnderecoDoInterior(
+              p,
+              { cidade: decisao.cidade, linha: p.endereco },
+              `${decisao.nome} só aparece em ${decisao.cidade === "pirapemas" ? "Pirapemas" : "Cantanhede"} (${decisao.reservas} reservas)`,
+            ),
+          );
+        }
+        if (decisao) evento("bot_volta_pelo_endereco", { conversa: entrada.chatwootConversationId, fonte: "lugares", decisao: decisao === "duvida" ? "duvida" : "volta" });
+      }
+    }
     const avisosDoCliente = conferido.avisos;
     // "Na usina, certo?" → "Não": a sugestão da equipe sai do embarque (issue #320)
     if (p.endereco && recusadas.length) {
@@ -582,6 +641,12 @@ async function lerEGravar(
       r.notes = [r.notes, "Já tem reserva no mesmo sentido na véspera: confira se não é repetida."].filter(Boolean).join(" ").slice(0, 300);
       pendencia = { motivo: "o cliente já tem reserva no mesmo sentido na véspera (confira se não é repetida)", codigo: "vespera" };
     }
+    if (ondeEmbarca.has(p) && opcoes.confirmadoPelaEquipe) {
+      pendencia ??= {
+        motivo: "o endereço é conhecido em Pirapemas/Cantanhede, mas o cliente também citou São Luís (Ida ou Volta?)",
+        codigo: "onde_embarca",
+      };
+    }
     if (qualViagem.has(p) && opcoes.confirmadoPelaEquipe) {
       pendencia ??= {
         motivo: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede (Volta de hoje ou Ida de amanhã?)",
@@ -613,9 +678,10 @@ async function lerEGravar(
     const naoBate = conferenciaFinal(r, mensagensDoCliente, {
       hoje,
       pedidosLidos: pedidos.length,
-      cidadeEscrita: cidadeEscritaPeloCliente(textosDoCliente),
+      cidadeEscrita: dadosMarca.cidade ?? cidadeEscritaPeloCliente(textosDoCliente),
       datasConfirmadas: confirmadas,
-      origem,
+      origem: origemUnica,
+      sentidoDaEquipe: dadosMarca.direcao ?? null,
     });
     if (naoBate.length) {
       evento("bot_conferencia_final", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe, nao_bate: naoBate.length });
