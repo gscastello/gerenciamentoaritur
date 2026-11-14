@@ -450,6 +450,15 @@ export function sentidoPeloHabito(
   return null;
 }
 
+/**
+ * Mensagem do cliente sem texto nem anexo (tipo que o bot não lê: editada, enquete, "ver uma vez"…)
+ * fica registrada com esta marca, em vez de sumir (issue #417).
+ */
+export const MENSAGEM_ILEGIVEL = "[o cliente mandou uma mensagem que o bot não conseguiu ler — confira no WhatsApp]";
+export const ehMensagemIlegivel = (t: string | null | undefined) => String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler");
+/** Texto guardado quando o cliente EDITA uma mensagem (o Chatwoot avisa por message_updated). */
+export const textoEditado = (t: string) => `(editou a mensagem anterior) ${t}`;
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",
@@ -897,6 +906,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   recusada: "o banco recusou a reserva (veja o motivo no rascunho)",
   RESERVA_DUPLICADA: "o cliente já tem reserva nesse dia e sentido",
   conferir: "o que foi lido não bate com o que o cliente escreveu (dia, quantidade, embarque ou bairro)",
+  dia_ilegivel: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
 };
 
 /**

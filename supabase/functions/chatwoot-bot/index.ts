@@ -44,7 +44,7 @@ import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
 import { registrarObservacao } from "../_shared/observacoes.ts";
-import { ehMarcaDeAgendado, ehMarcaDeCorrecao } from "../_shared/rascunhoPuro.ts";
+import { MENSAGEM_ILEGIVEL, ehMarcaDeAgendado, ehMarcaDeCorrecao, textoEditado } from "../_shared/rascunhoPuro.ts";
 import { revisarPelaMarca } from "../_shared/revisor.ts";
 import {
   atualizarReservasAConfirmar,
@@ -116,8 +116,50 @@ async function processar(body: any) {
       campos: Object.keys(body.attachments[0] ?? {}),
     });
   }
+  // mensagem EDITADA pelo cliente ou pela equipe (issue #417): o texto novo entra na conversa
+  if (body?.event === "message_updated" && !body.private && typeof body.content === "string" && body.content.trim()) {
+    const tipo = body.message_type;
+    const autor = tipo === "incoming" || tipo === 0 ? "cliente" : tipo === "outgoing" || tipo === 1 ? (body.sender?.type === "agent_bot" ? null : "equipe") : null;
+    const conv = Number(body.conversation?.id);
+    if (autor && conv) {
+      const { data: original } = await supabaseAdmin
+        .from("bot_observations")
+        .select("conversation_id, content")
+        .eq("chatwoot_message_id", Number(body.id))
+        .maybeSingle();
+      if (original && original.content !== body.content.trim()) {
+        await registrarObservacao({
+          conversationId: original.conversation_id ?? undefined,
+          chatwootConversationId: conv,
+          author: autor,
+          content: textoEditado(body.content.trim()),
+        });
+        evento("bot_mensagem_editada", { conversa: conv, autor });
+      }
+    }
+    return;
+  }
   const atividade = extrairAtividade(body, INBOX_ID);
   const conversaEspelhada = atividade ? await espelhar(atividade) : undefined;
+  // mensagem do cliente sem texto nem anexo: o bot não lê esse tipo — registra para não sumir (issue #417)
+  if (
+    atividade?.autor === "cliente" && !atividade.texto && conversaEspelhada &&
+    !(Array.isArray(body.attachments) && body.attachments.length)
+  ) {
+    evento("bot_mensagem_sem_texto", {
+      conversa: atividade.chatwootConversationId,
+      campos: Object.keys(body ?? {}),
+      atributos: Object.keys(body?.content_attributes ?? {}),
+      tipo_conteudo: body?.content_type ?? null,
+    });
+    await registrarObservacao({
+      conversationId: conversaEspelhada,
+      chatwootConversationId: atividade.chatwootConversationId,
+      chatwootMessageId: atividade.mensagemId,
+      author: "cliente",
+      content: MENSAGEM_ILEGIVEL,
+    });
+  }
 
   const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "attendance_mode").maybeSingle();
   const modo: string = cfg?.value?.mode ?? "ia";

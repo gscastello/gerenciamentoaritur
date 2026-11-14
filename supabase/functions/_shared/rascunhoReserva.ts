@@ -50,6 +50,7 @@ import {
   pareceTerPedido,
   validarPedidoExtraido,
   sentidoPeloHabito,
+  ehMensagemIlegivel,
   agendadoPrecisaReler,
   cidadeEscritaPeloCliente,
   perguntaAoCliente,
@@ -566,6 +567,17 @@ async function lerEGravar(
     // na confirmação ao cliente; dia, sentido, quantidade e cidade continuam na trava final (issue #401)
     if (opcoes.confirmadoPelaEquipe && avisosDoCliente.length && !opcoes.modelo) {
       pendencia ??= { motivo: `o que foi lido não bate com o que o cliente escreveu: ${avisosDoCliente.join("; ")}`, codigo: "conferir" };
+    }
+    // o cliente não escreveu o dia e mandou uma mensagem que o bot não lê (editada, enquete…): o dia
+    // pode estar nela — não lança na próxima viagem por suposição (issue #417)
+    if (
+      opcoes.confirmadoPelaEquipe && !datasEscritas(mensagensDoCliente).length && !confirmadas.length &&
+      doCliente.some((m) => ehMensagemIlegivel(m.texto))
+    ) {
+      pendencia ??= {
+        motivo: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
+        codigo: "dia_ilegivel",
+      };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
     // desfazer o que o cliente escreveu sem ninguém ver (issue #309)

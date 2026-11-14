@@ -1067,3 +1067,12 @@ Deno.test("#416: passageiro recorrente — 'guarde uma vaga pra mim amanhã' sai
     assertEquals(v.aConfirmar, []);
   }
 });
+
+Deno.test("#417: mensagem que o bot não lê fica marcada; editada vira texto novo; pendência legível", async () => {
+  const { MENSAGEM_ILEGIVEL, ehMensagemIlegivel, textoEditado, avisoDoAgendado } = await import("./rascunhoPuro.ts");
+  assert(ehMensagemIlegivel(MENSAGEM_ILEGIVEL));
+  assert(!ehMensagemIlegivel("Se tiver vaga para Cantanhede, guarde uma pra mim"));
+  assertEquals(textoEditado("é pra segunda"), "(editou a mensagem anterior) é pra segunda");
+  const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["dia_ilegivel"] });
+  assertStringIncludes(aviso?.detalhe ?? "", "confira o dia no WhatsApp");
+});
