@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  nomeDaAnotacaoSemTelefone,
   parseAnotacaoEncomenda,
   parseAnotacaoRapida,
   parseLinhaEncomenda,
@@ -71,10 +72,45 @@ describe("parseAnotacaoRapida", () => {
     expect(parseAnotacaoRapida(undefined).ok).toBe(false);
   });
 
-  it("sem telefone reconhecível => erro", () => {
-    const r = parseAnotacaoRapida("1P Cohatrac");
+  it("só o nome, sem número nenhum => ok sem telefone (issue #404)", () => {
+    const r = parseAnotacaoRapida("2P Maria Silva");
+    expect(r).toEqual({
+      ok: true,
+      quantidade: 2,
+      local: "",
+      telefone: "",
+      nome: "Maria Silva",
+      semTelefone: true,
+    });
+    expect(parseAnotacaoRapida("Dona Justa").nome).toBe("Dona Justa");
+  });
+
+  it("com números e sem telefone reconhecível => erro (telefone digitado errado)", () => {
+    const r = parseAnotacaoRapida("1P Cohatrac Rua 7");
     expect(r.ok).toBe(false);
     expect(r.erro).toMatch(/telefone/i);
+  });
+
+  it("só o nome na busca em casa: bairro da tabela no começo, o resto é o nome (issue #404)", () => {
+    const nomesDeBairros = ["Cohatrac", "Alto do Turu"];
+    expect(
+      nomeDaAnotacaoSemTelefone("Cohatrac Maria Silva", { ehBairro: true, nomesDeBairros }),
+    ).toEqual({
+      ok: true,
+      bairro: "Cohatrac",
+      nome: "Maria Silva",
+    });
+    expect(
+      nomeDaAnotacaoSemTelefone("alto do turu Ana", { ehBairro: true, nomesDeBairros }).bairro,
+    ).toBe("alto do turu");
+    // fora da busca em casa, o texto todo é o nome
+    expect(
+      nomeDaAnotacaoSemTelefone("Cohatrac Maria", { ehBairro: false, nomesDeBairros }).nome,
+    ).toBe("Cohatrac Maria");
+    // só o bairro, sem nome: erro
+    const so = nomeDaAnotacaoSemTelefone("Cohatrac", { ehBairro: true, nomesDeBairros });
+    expect(so.ok).toBe(false);
+    expect(so.erro).toMatch(/nome ou o telefone/);
   });
 
   it("telefone inválido (poucos dígitos) => erro da própria validação de telefone", () => {

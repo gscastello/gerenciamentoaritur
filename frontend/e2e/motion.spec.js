@@ -25,11 +25,12 @@ test("prefers-reduced-motion desliga as animações (login + app)", async ({ bro
   const p2 = await ctx2.newPage();
   await mockSupabase(p2, { role: "admin", occupancy: {} });
   await p2.goto("/");
-  await p2.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await p2
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   await expect(p2.getByRole("heading", { name: "Agenda" })).toBeVisible();
-  await expect
-    .poll(() => p2.evaluate(() => document.documentElement.dataset.motion))
-    .toBe("off");
+  await expect.poll(() => p2.evaluate(() => document.documentElement.dataset.motion)).toBe("off");
   const comSessao = await p2.evaluate(() => {
     const hero = document.querySelector(".aritur-hero");
     const beforeDur = hero
@@ -56,12 +57,13 @@ test('preferência "Ligado" reativa as animações mesmo com reduced-motion', as
   });
   await mockSupabase(page, { role: "admin", occupancy: {} });
   await page.goto("/");
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
   await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible();
 
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.dataset.motion))
-    .toBe("on");
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.motion)).toBe("on");
   // com data-motion="on", a estrada/faixas animadas dos heros voltam a rodar
   const anyAnimating = await page.evaluate(() => {
     const hero = document.querySelector(".aritur-hero");
@@ -84,8 +86,12 @@ test('preferência "Ligado" reativa as animações mesmo com reduced-motion', as
 // não é suficiente (a camada composta em will-change pode ficar presa no
 // frame inicial, opacity:0, "sumindo" com os dados). Precisam de
 // animation:none de verdade, não só duração ~0.
-test("Desligado: classes de entrada do conteúdo usam animation:none (não só duração ~0)", async ({ page }) => {
-  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
+test("Desligado: classes de entrada do conteúdo usam animation:none (não só duração ~0)", async ({
+  page,
+}) => {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+    new Date(),
+  );
   await mockSupabase(page, {
     role: "admin",
     occupancy: {},
@@ -93,8 +99,8 @@ test("Desligado: classes de entrada do conteúdo usam animation:none (não só d
       {
         id: "res-motion-1",
         data: hoje,
-        direcao: "ida",
-        pontoId: "rodoviaria",
+        direcao: "volta",
+        pontoId: "cantanhede",
         nome: "Cliente Motion E2E",
         telefone: "98999990000",
         quantidade: 2,
@@ -117,11 +123,12 @@ test("Desligado: classes de entrada do conteúdo usam animation:none (não só d
   });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.dataset.motion))
-    .toBe("off");
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.motion)).toBe("off");
 
-  await page.getByRole("button", { name: /Lista do Dia/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Rota$/ })
+    .first()
+    .click();
   // a reserva mockada precisa continuar visível — é o que sumia (issue relatada)
   await expect(page.getByText("Cliente Motion E2E")).toBeVisible();
 

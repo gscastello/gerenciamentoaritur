@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { formatarTelefoneBR } from "../../domain/agendaLinha.js";
 import { moverNaLista, moverParaIndice, moverParaPosicao } from "../../domain/buscaEmCasa.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
+import { useArrastarParaOrdenar } from "../../ui/useArrastarParaOrdenar.js";
 import { C, enderecoEmbarque } from "../tabShared.jsx";
 
 /**
@@ -14,7 +15,8 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar })
   const original = useMemo(() => itens.map((r) => r.id), [itens]);
   const porId = useMemo(() => Object.fromEntries(itens.map((r) => [r.id, r])), [itens]);
   const [ordem, setOrdem] = useState(original);
-  const [arrastando, setArrastando] = useState(null);
+  // arrastar com o dedo ou o mouse pela alça ⋮⋮ (issue #413)
+  const { arrastando, alca } = useArrastarParaOrdenar(ordem, setOrdem, moverParaPosicao);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -84,17 +86,12 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar })
           return (
             <li
               key={id}
-              draggable
-              onDragStart={() => setArrastando(id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (arrastando && arrastando !== id)
-                  setOrdem(moverParaPosicao(ordem, arrastando, id));
-                setArrastando(null);
-              }}
-              onDragEnd={() => setArrastando(null)}
+              data-ordem-id={id}
               className="flex items-stretch gap-2 rounded-md pl-2 pr-1.5 py-2"
-              style={{ background: C.panel2, opacity: arrastando === id ? 0.5 : 1 }}
+              style={{
+                background: C.panel2,
+                boxShadow: arrastando === id ? `0 0 0 2px ${C.brand}` : "none",
+              }}
             >
               <input
                 type="number"
@@ -132,7 +129,16 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar })
                 </span>
               </span>
               <div className="flex items-center gap-1 shrink-0">
-                <GripVertical size={14} style={{ color: C.inkFaint }} aria-hidden="true" />
+                <button
+                  type="button"
+                  {...alca(id)}
+                  tabIndex={-1}
+                  aria-label={`Arrastar ${r.nome}`}
+                  className="w-10 h-10 rounded-md flex items-center justify-center select-none"
+                  style={{ ...alca(id).style, color: C.inkSoft }}
+                >
+                  <GripVertical size={18} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   aria-label={`Mover ${r.nome} para o topo`}

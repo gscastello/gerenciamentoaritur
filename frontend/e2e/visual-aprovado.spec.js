@@ -90,7 +90,7 @@ test.describe("celular", () => {
       await conferir("Agenda");
       await abrirMenu(page, "Início");
       await conferir("Início");
-      await abrirMenu(page, "Lista do Dia");
+      await abrirMenu(page, "Rota");
       await conferir("Lista");
       await abrirTela(page, "atendimento");
       await conferir("Atendimento");

@@ -389,18 +389,11 @@ export const BUSCA_MODOS = {
   motorista: { label: "Maurício", Icon: Bus, cor: "#34D399" },
   ari: { label: "Ari", Icon: User, cor: "#A78BFA" },
 };
-export const BUSCA_PROXIMO = {
-  taxi: "proprio",
-  proprio: "motorista",
-  motorista: "ari",
-  ari: "taxi",
-};
 
 /* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
  * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
 // Ida: só Buscar em Casa, Rodoviária, Retorno e Outros (issue #261) — BR, Posto
 // Carone, aeroporto… são "Outros", com o local que o cliente citou.
-export const IDA_PRIORIDADE = { rodoviaria: 0, retorno: 1, outro: 2 };
 export const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "outro"];
 export const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
 
@@ -505,41 +498,6 @@ export function SeloCidadeIntermediaria({ cidade }) {
 // Realtime só) e consumido pelo <SinoNotificacoes> dentro do <Header>.
 export const NotificacoesContext = React.createContext(null);
 export const useNotificacoesCtx = () => useContext(NotificacoesContext);
-
-// Balde da reserva: usa a classificação manual (dropoff_area) se existir;
-// senão chuta pelo texto livre que o cliente deu no agendamento.
-const CIDADES_DE_REVISAO = [
-  ["campestre", "campestre"],
-  ["matoes", "matoes"],
-  ["miranda", "miranda"],
-  ["bacabeira", "bacabeira"],
-  ["santa rita", "santa_rita"],
-];
-export function inferirBaldeDesembarque(r) {
-  if (r.desembarqueArea) return r.desembarqueArea;
-  const t = normalizar(`${r.desembarque || ""} ${r.referencia || ""} ${r.rua || ""}`);
-  const cidade = CIDADES_DE_REVISAO.find(([chave]) => t.includes(chave));
-  if (cidade) return cidade[1];
-  if (r.direcao === "ida") {
-    if (t.includes("cantanhede")) return "cantanhede";
-    if (t.includes("pirapemas")) return "pirapemas";
-    return "outro";
-  }
-  if (t.includes("rodovi")) return "rodoviaria";
-  if (t.includes("retorno")) return "retorno";
-  if (/(^|\s)br($|\s|-)|br135|(^|\s)km(\s|$)/.test(t)) return "br";
-  return "casa";
-}
-
-// Texto que o motorista precisa pra achar o endereço (detalhe manual ou o
-// melhor palpite a partir do que já foi informado).
-export function detalheDesembarque(r) {
-  if (r.desembarqueDetalhe) return r.desembarqueDetalhe;
-  const balde = inferirBaldeDesembarque(r);
-  if (balde === "casa") return r.bairro || r.desembarque || "";
-  if (balde === "br") return r.referencia || r.desembarque || r.rua || "";
-  return r.desembarque || r.referencia || "";
-}
 
 /* ============================= animation shell ============================= */
 
@@ -915,20 +873,6 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
         </div>
       )}
     </Card>
-  );
-}
-
-// Divisor de direção (IDA / VOLTA) com "estrada" tracejada dos dois lados.
-// Divisória Ida / Volta (auditoria, issue #397): título com um fio até a borda. A "estrada" do
-// visual antigo saiu e a pílula ficava solta no meio do nada.
-export function DirecaoDivisor({ label, cor = C.inkSoft }) {
-  return (
-    <div className="flex items-center gap-3 pt-2">
-      <h2 className="text-[13px] font-bold tracking-[0.12em] uppercase" style={{ color: cor }}>
-        {label}
-      </h2>
-      <span aria-hidden="true" className="flex-1 h-px" style={{ background: C.border }} />
-    </div>
   );
 }
 

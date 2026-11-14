@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   REGRA_DE_CONSUMO,
+  capacidadeDaViagem,
   consumoForaDoNormal,
   custoPorKm,
   kmPorLitro,
   textoDoConsumo,
+  viagensForaDoPadrao,
 } from "../frota.js";
 
 // Consumo fora do normal (issue #369) — a mesma regra do trigger em database/103.
@@ -96,5 +98,30 @@ describe("consumo fora do normal", () => {
       janela: 8,
       minimoAnteriores: 3,
     });
+  });
+});
+
+describe("lugares de cada viagem (issue #408)", () => {
+  const viagens = [
+    { id: "a", trip_date: "2026-11-21", direction: "volta", capacity: 15, vehicle_id: "van" },
+    { id: "b", trip_date: "2026-11-21", direction: "ida", capacity: 15, vehicle_id: "van" },
+    { id: "c", trip_date: "2026-11-20", direction: "ida", capacity: 31, vehicle_id: "onibus" },
+  ];
+  it("usa a capacidade da viagem; sem viagem, a do padrão", () => {
+    expect(capacidadeDaViagem(viagens, "2026-11-21", "ida", 31)).toBe(15);
+    expect(capacidadeDaViagem(viagens, "2026-11-20", "ida", 31)).toBe(31);
+    expect(capacidadeDaViagem(viagens, "2026-11-22", "ida", 31)).toBe(31);
+    expect(
+      capacidadeDaViagem(
+        [{ trip_date: "2026-11-22", direction: "ida", capacity: 0 }],
+        "2026-11-22",
+        "ida",
+        31,
+      ),
+    ).toBe(31);
+  });
+  it("lista as viagens fora do veículo padrão por data e sentido", () => {
+    expect(viagensForaDoPadrao(viagens, "onibus").map((t) => t.id)).toEqual(["b", "a"]);
+    expect(viagensForaDoPadrao(viagens, null)).toEqual([]);
   });
 });

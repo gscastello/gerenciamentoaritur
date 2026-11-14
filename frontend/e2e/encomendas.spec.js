@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Agendar encomendas na Agenda e na Lista do Dia (database/42): uma
+// Agendar encomendas na Agenda e na Rota (antiga Lista do Dia) (database/42): uma
 // encomenda pendente (vinda do bot, sem viagem ainda) ganha uma viagem/
 // ponto reais e aparece nas duas telas, sem nunca ocupar vaga. Depois de
 // agendada, a encomenda é exibida como uma passagem normal (issue #220): dentro
@@ -107,7 +107,7 @@ test("Agenda: cria uma encomenda nova do zero", async ({ page }) => {
   expect(chamadas[0].p_unit_price).toBe(0);
 });
 
-test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({ page }) => {
+test("Rota: mostra a encomenda agendada na Volta e marca como entregue", async ({ page }) => {
   const chamadas = [];
   await mockSupabase(page, {
     role: "admin",
@@ -115,9 +115,9 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
       encomendaPendente({
         id: "res-enc-agendada-1",
         data: hoje,
-        direcao: "ida",
-        pontoId: "rodoviaria",
-        desembarque: "Pirapemas centro",
+        direcao: "volta",
+        pontoId: "cantanhede",
+        desembarque: "Centro, São Luís",
         status: "confirmada",
       }),
     ],
@@ -125,12 +125,12 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   });
   await page.goto("/");
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
 
   // a encomenda entra na seção do ponto, com a linha do motorista, e não conta como passageiro
-  await expect(page.getByText(/Documentos · entrega: Pirapemas centro/)).toBeVisible();
+  await expect(page.getByText(/Documentos · entrega: Centro, São Luís/)).toBeVisible();
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
   await expect(page.getByText("0 pax · 1 encomenda", { exact: true })).toBeVisible();
 

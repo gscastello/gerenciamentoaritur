@@ -31,6 +31,7 @@ import {
 } from "../../domain/agendaLinha.js";
 import {
   localEhONome,
+  nomeDaAnotacaoSemTelefone,
   parseAnotacaoEncomenda,
   parseAnotacaoRapida,
   parseLinhaEncomenda,
@@ -121,6 +122,7 @@ export default function AgendaTab({
   reservas,
   R,
   capacidade,
+  capacidadeDe = null,
   trips,
   segundaAtiva,
   segundaHoras,
@@ -130,6 +132,8 @@ export default function AgendaTab({
 }) {
   const [data, setData] = useState(diaAgendaPadrao());
   useDeepLinkData(deepLink, setData);
+  // lugares da viagem do dia em cada sentido: ônibus 31 ou van reserva 15 (issue #408)
+  const capDe = (dir) => capacidadeDe?.(data, dir) ?? capacidade;
   // Seletor Ida/Volta (issue #391): uma viagem por vez. Abre na que ainda vai sair —
   // hoje depois das 9h (a Ida já chegou) é a Volta; o Início escolhe pelo cartão tocado.
   const [sentido, setSentido] = useState(() =>
@@ -385,6 +389,43 @@ export default function AgendaTab({
 
     const lido = parseAnotacaoRapida(texto);
     if (!lido.ok) return { ok: false, erro: lido.erro };
+    // só o nome (issue #404): "1P Maria Silva"; na busca em casa, "1P Cohatrac Maria Silva".
+    // Telefone e endereço se completam depois editando a reserva.
+    if (lido.semTelefone) {
+      const ehBairro = ponto.campo === "bairro";
+      const s = nomeDaAnotacaoSemTelefone(lido.nome, {
+        ehBairro,
+        nomesDeBairros: bairrosAnotacao.nomes,
+      });
+      if (!s.ok) return { ok: false, erro: s.erro };
+      const precoSemTelefone = ehBairro
+        ? (bairrosAnotacao.preco(s.bairro) ?? 80)
+        : (ponto.valor ?? 60);
+      try {
+        const res = await criarConfirmandoDuplicada(R.createReservation, {
+          tripDate: data,
+          direction: direcao,
+          customerName: s.nome,
+          customerPhone: null,
+          routePointCode: ponto.id,
+          quantity: lido.quantidade,
+          unitPrice: precoSemTelefone,
+          paymentMethod: "dinheiro",
+          pickupNeighborhood: ehBairro ? s.bairro || null : null,
+          pickupDetail: null,
+          status: "confirmada",
+          extraData: { origem: "anotacao_agenda", so_nome: true },
+        });
+        emit(EVENTS.RESERVA_CRIADA, {
+          via: "anotacao_agenda_so_nome",
+          status: res?.status || "confirmada",
+          duplicada: res?.message === "duplicate_ignored",
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, erro: mensagemAmigavel(e, "Não foi possível criar a reserva.") };
+      }
+    }
     // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
     let nomeExistente = null;
     try {
@@ -481,7 +522,8 @@ export default function AgendaTab({
           onChange={setSentido}
           paxIda={paxIda}
           paxVolta={paxVolta}
-          capacidade={capacidade}
+          capIda={capDe("ida")}
+          capVolta={capDe("volta")}
           horaIda={horaDaViagem("ida")}
           horaVolta={horaDaViagem("volta")}
         />
@@ -668,7 +710,7 @@ export default function AgendaTab({
             segunda={segunda}
             segundaHoras={segundaHoras}
             doDia={doDia}
-            capacidade={capacidade}
+            capacidade={capDe(dir)}
             trips={trips}
             onStatus={atualizarStatus}
             onEditar={setEditando}
@@ -715,6 +757,7 @@ export default function AgendaTab({
           extraInicial
           trips={trips}
           capacidade={capacidade}
+          capacidadeDe={capacidadeDe}
           onCriar={R.createReservation}
           onClose={() => setExtraModal(null)}
         />
@@ -1133,7 +1176,7 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
             if (erro) setErro("");
           }}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
-          placeholder="Anotar — 1P Endereço 98999998888 Nome · encomenda: E Endereço 98999998888"
+          placeholder="Anotar — 1P Endereço 98999998888 Nome · só o nome: 1P Maria · encomenda: E Endereço 98999998888"
           aria-label={`Anotar reserva — ${nomePonto}`}
           className="text-xs py-1.5"
           readOnly={salvando}
@@ -1266,10 +1309,19 @@ function BarraDoDia({ data, setData }) {
 
 // Seletor Ida/Volta (crítica de design, issue #393): as duas viagens lado a lado, com a hora e
 // as vagas; a escolhida fica em painel com um traço vermelho embaixo. Uma viagem por vez.
-function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade, horaIda, horaVolta }) {
+function SeletorSentido({
+  sentido,
+  onChange,
+  paxIda,
+  paxVolta,
+  capIda,
+  capVolta,
+  horaIda,
+  horaVolta,
+}) {
   const itens = [
-    { id: "ida", rotulo: "Ida", hora: horaIda, pax: paxIda },
-    { id: "volta", rotulo: "Volta", hora: horaVolta, pax: paxVolta },
+    { id: "ida", rotulo: "Ida", hora: horaIda, pax: paxIda, capacidade: capIda },
+    { id: "volta", rotulo: "Volta", hora: horaVolta, pax: paxVolta, capacidade: capVolta },
   ];
   return (
     <div
@@ -1281,7 +1333,7 @@ function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade, horaI
     >
       {itens.map((it) => {
         const ativo = sentido === it.id;
-        const vagas = Math.max(0, capacidade - it.pax);
+        const vagas = Math.max(0, it.capacidade - it.pax);
         return (
           <button
             key={it.id}
@@ -1306,7 +1358,7 @@ function SeletorSentido({ sentido, onChange, paxIda, paxVolta, capacidade, horaI
               {it.hora ? ` · ${it.hora}` : ""}
             </span>
             <span className="block text-xs" style={{ color: C.inkFaint }}>
-              {it.pax}/{capacidade} · {vagas} {vagas === 1 ? "vaga" : "vagas"}
+              {it.pax}/{it.capacidade} · {vagas} {vagas === 1 ? "vaga" : "vagas"}
             </span>
           </button>
         );
@@ -1880,6 +1932,7 @@ export function NovaReservaModal({
   onClose,
   onCriar,
   capacidade = 31,
+  capacidadeDe = null,
   extraInicial = false,
   inicial = null,
   onEncomenda = null,
@@ -1973,7 +2026,8 @@ export function NovaReservaModal({
   const aplicarLinha = (texto) => {
     setLinha(texto);
     const a = parseAnotacaoRapida(texto);
-    if (!a.ok) return;
+    // a linha do modal preenche pelo telefone; o nome sozinho vai no campo Nome (issue #404)
+    if (!a.ok || a.semTelefone) return;
     setF((atual) => {
       const campo = viagem.pontos.find((p) => p.id === atual.pontoId)?.campo;
       const { bairro, detalhe } =
@@ -2042,7 +2096,8 @@ export function NovaReservaModal({
       f.telefone.trim() ? validarTelefone(f.telefone) : null,
       f.telefone2.trim() ? validarTelefone(f.telefone2) : null,
       validarData(f.data, { min: todayStr() }),
-      validarQuantidade(qtd, { min: 1, max: capacidade }),
+      // lugares da viagem escolhida (van reserva 15, ônibus 31 — issue #408)
+      validarQuantidade(qtd, { min: 1, max: capacidadeDe?.(f.data, f.direcao) ?? capacidade }),
       validarValor(valorUnit, { min: 0 }),
     ]);
     if (problema) {

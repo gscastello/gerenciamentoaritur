@@ -4,6 +4,7 @@ import { consumoForaDoNormal, textoDoConsumo } from "../../domain/frota.js";
 import { useMaintenanceTypes } from "../../hooks/useMaintenanceTypes.js";
 import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useDrivers, useVehicles } from "../../hooks/useVehicles.js";
+import { useViagensDoPeriodo } from "../../hooks/useViagensDoPeriodo.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
   C,
@@ -19,6 +20,7 @@ import {
   mapManut,
   todayStr,
 } from "../tabShared.jsx";
+import { EscalarVeiculo, ViagensForaDoPadrao } from "./EscalaDoVeiculo.jsx";
 import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
 /* ============================= 6. OPERAÇÃO (combustível + manutenção preventiva) ============================= */
@@ -27,6 +29,9 @@ export default function OperacaoTab() {
   const { vehicles, defaultVehicle, setDefault, updateVehicle, addVehicle, removeVehicle } =
     useVehicles();
   const { drivers, addDriver, updateDriver, removeDriver } = useDrivers();
+  // van reserva por dia (issue #408): o veículo tocado abre "Usar em: dia + sentido"
+  const escala = useViagensDoPeriodo(defaultVehicle);
+  const [escalando, setEscalando] = useState(null);
   const tiposManut = useMaintenanceTypes();
   const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState(null);
   const veiculoId = veiculoSelecionadoId ?? defaultVehicle?.id ?? null;
@@ -412,9 +417,9 @@ export default function OperacaoTab() {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      run(() => setDefault(v.id), "Não foi possível trocar o veículo padrão.")
-                    }
+                    onClick={() => setEscalando((atual) => (atual === v.id ? null : v.id))}
+                    aria-expanded={escalando === v.id}
+                    aria-label={`Usar ${v.name} num dia`}
                     className="btn-press w-full text-left flex items-center justify-between pr-20"
                   >
                     <div>
@@ -427,13 +432,44 @@ export default function OperacaoTab() {
                       </div>
                     </div>
                   </button>
+                  {!ativo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Tornar ${v.name} (${v.capacity} lugares) o veículo PADRÃO? Todas as viagens criadas daqui em diante saem com ele. Para usar só num dia, toque no veículo e escolha o dia.`,
+                          )
+                        )
+                          run(() => setDefault(v.id), "Não foi possível trocar o veículo padrão.");
+                      }}
+                      className="btn-press mt-2 text-xs px-3 min-h-[36px] rounded-lg border font-semibold"
+                      style={{ background: C.panel, borderColor: C.border, color: C.inkSoft }}
+                    >
+                      Tornar padrão
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
+          <EscalarVeiculo
+            key={escalando ?? "nenhum"}
+            veiculo={vehicles.find((v) => v.id === escalando) ?? null}
+            padrao={defaultVehicle}
+            trocarVeiculo={escala.trocarVeiculo}
+            onFechar={() => setEscalando(null)}
+          />
+          <ViagensForaDoPadrao
+            foraDoPadrao={escala.foraDoPadrao}
+            vehicles={vehicles}
+            padrao={defaultVehicle}
+            trocarVeiculo={escala.trocarVeiculo}
+          />
           <div className="text-xs mt-3" style={{ color: C.inkFaint }}>
-            Trocar o veículo padrão só afeta viagens criadas a partir de agora — a capacidade das
-            viagens já agendadas é um "retrato" e não muda.
+            Toque num veículo para escolher o dia e o sentido em que ele roda (ex.: a van reserva
+            num sábado): só aquela viagem muda de lugares. O padrão vale para as viagens criadas
+            daqui em diante.
           </div>
         </Card>
 

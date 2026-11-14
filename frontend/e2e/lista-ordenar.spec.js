@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Issue #212: reordenar rápido as reservas de cada seção da Lista do Dia
+// Issue #212: reordenar rápido as reservas de cada seção da Rota (antiga Lista do Dia)
 // (setas, topo, digitar a posição) e gravar a ordem (rpc_reorder_pickup).
 
 const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
 
 const base = {
   data: hoje,
-  direcao: "ida",
-  pontoId: "rodoviaria",
+  direcao: "volta",
+  pontoId: "cantanhede",
   quantidade: 1,
   valorUnit: 60,
   valorTotal: 60,
@@ -48,7 +48,7 @@ async function abrirLista(page) {
   await mockSupabase(page, { role: "admin", occupancy: {}, reservations: RESERVAS });
   await page.goto("/");
   await page
-    .getByRole("button", { name: /Lista do Dia/ })
+    .getByRole("button", { name: /^Rota$/ })
     .first()
     .click();
   await page.locator('input[type="date"]').first().fill(hoje);
@@ -101,4 +101,54 @@ test("Cancelar edição descarta e não grava nada", async ({ page }) => {
   await page.getByRole("button", { name: "Cancelar edição" }).click();
   await expect(page.getByRole("button", { name: "Salvar ordem" })).toHaveCount(0);
   expect(chamou).toBe(false);
+});
+
+// Issue #413: arrastar pela alça ⋮⋮ funciona no celular (o arrastar do navegador só ia com mouse)
+test("ORGANIZAR: arrastar pela alça reordena e salva", async ({ page }) => {
+  let corpo = null;
+  page.on("request", (r) => {
+    if (r.url().includes("/rpc/rpc_reorder_pickup")) corpo = r.postDataJSON?.();
+  });
+  await abrirLista(page);
+  await page.getByRole("button", { name: "ORGANIZAR" }).first().click();
+  expect(await nomesNaOrdem(page)).toEqual(["Primeiro", "Segundo", "Terceiro"]);
+
+  const alca = page.getByRole("button", { name: "Arrastar Terceiro Pax" });
+  const primeiro = page.locator('[data-ordem-id="r1"]');
+  const de = await alca.boundingBox();
+  const para = await primeiro.boundingBox();
+  await page.mouse.move(de.x + de.width / 2, de.y + de.height / 2);
+  await page.mouse.down();
+  for (let passo = 1; passo <= 8; passo += 1) {
+    const y = de.y + de.height / 2 + ((para.y + 5 - (de.y + de.height / 2)) * passo) / 8;
+    await page.mouse.move(de.x + de.width / 2, y);
+  }
+  await page.mouse.up();
+  expect(await nomesNaOrdem(page)).toEqual(["Terceiro", "Primeiro", "Segundo"]);
+
+  await page.getByRole("button", { name: "Salvar ordem" }).click();
+  await expect.poll(() => corpo?.p_ids).toEqual(["r3", "r1", "r2"]);
+});
+
+test("ORGANIZAR: arrastar com o DEDO (toque) reordena", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "toque só no celular");
+  await abrirLista(page);
+  await page.getByRole("button", { name: "ORGANIZAR" }).first().click();
+
+  const de = await page.getByRole("button", { name: "Arrastar Primeiro Pax" }).boundingBox();
+  const para = await page.locator('[data-ordem-id="r3"]').boundingBox();
+  const x = de.x + de.width / 2;
+  const y0 = de.y + de.height / 2;
+  const y1 = para.y + para.height - 5;
+  const cdp = await page.context().newCDPSession(page);
+  const toque = (type, y) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+    });
+  await toque("touchStart", y0);
+  for (let passo = 1; passo <= 10; passo += 1)
+    await toque("touchMove", y0 + ((y1 - y0) * passo) / 10);
+  await toque("touchEnd", y1);
+  expect(await nomesNaOrdem(page)).toEqual(["Segundo", "Terceiro", "Primeiro"]);
 });

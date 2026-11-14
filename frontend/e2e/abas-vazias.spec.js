@@ -6,7 +6,7 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // é o estado normal de uma operação nova (ou de um dia parado). Cobre
 // especialmente Financeiro/Gestão/Operação, que não tinham nenhum e2e.
 
-const TABS = ["Início", "Agenda", "Lista do Dia", "Bloco de notas", "Passageiros", "Sistema"];
+const TABS = ["Início", "Agenda", "Rota", "Bloco de notas", "Passageiros", "Sistema"];
 // telas dentro de um grupo do menu (issue #360): abertas pela aba no topo
 const TELAS_DE_GRUPO = [
   "financeiro",
@@ -69,7 +69,7 @@ test("as abas do motorista abrem sem erro com reservas/clientes vazios", async (
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible();
 
-  for (const nome of ["Agenda", "Lista do Dia"]) {
+  for (const nome of ["Agenda", "Rota"]) {
     const botao = page.getByRole("button", { name: new RegExp(`^${nome}$`) });
     await expect(botao.first()).toBeVisible({ timeout: 5000 });
     await botao.first().click();

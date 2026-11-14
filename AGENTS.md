@@ -269,7 +269,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
-- **Desembarque anotado na viagem** (issue #383, Lista do Dia → Desembarque, `database/106`): lista livre por dia e
+- **Rota** (issue #411, antiga Lista do Dia): só o embarque da **Volta** — quem buscamos em casa em Pirapemas e
+  Cantanhede, na ordem da rota. A Ida não aparece. O desembarque é só a lista anotada abaixo (bloco de notas); o
+  desembarque ligado às reservas (baldes por área) saiu e volta numa versão melhor.
+- **Desembarque anotado na viagem** (issue #383, Rota → Desembarque, `database/106`): lista livre por dia e
   sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
   e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
   `apagada`) — mesma regra de `domain/listaDesembarque.js`. Dois aparelhos na mesma viagem não se apagam.
@@ -524,6 +527,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   anteriores do veículo (sem litros: custo por km acima de 120%; menos de 3 anteriores não avisa). Regra única em
   `domain/frota.js` (tela Operação) e no trigger de `fuel_records` (aviso `consumo` no sino). Manutenção a 80% do
   intervalo de km vai para Pendências e para o sino (`manutencao`); documentos e licenças são vencimentos (#366).
+- **Veículo de cada viagem** (issue #408, `database/108`): cada viagem guarda o veículo e os lugares (ônibus 31, van
+  reserva 15). Na Operação, tocar no veículo pede o **dia e o sentido** em que ele roda (`rpc_veiculo_da_viagem`, só
+  admin; recusa se a viagem já tem mais passageiros do que o veículo leva). O veículo padrão só vale para as viagens
+  criadas daqui em diante, e trocá-lo pede confirmação. Agenda, Início e Nova reserva usam os lugares da viagem do dia
+  (`capacidadeDaViagem`), nunca os do veículo padrão.
 - **Extrato do banco** (issue #364, aba Gestão → Extrato, `database/104`): o dono manda o OFX/CSV do mês; cada
   movimento é guardado UMA vez em `extrato_linhas` (chave = id do banco ou data+valor+descrição+ordem) e a conferência
   (`domain/extrato.js`) separa: bate (mesmo valor, ±3 dias), pagamento de reserva já pago no Pix/cartão, **Pix dentro

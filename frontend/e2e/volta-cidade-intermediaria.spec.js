@@ -25,7 +25,7 @@ const reservations = [
   { ...base, id: "r-2", nome: "Vai até o Fim", desembarque: "Cohama" },
 ];
 
-for (const aba of ["Agenda", "Lista do Dia"]) {
+for (const aba of ["Agenda", "Rota"]) {
   test(`${aba}: destaca só a reserva que desce em cidade intermediária`, async ({ page }) => {
     await mockSupabase(page, { role: "admin", occupancy: {}, reservations });
     await page.goto("/");
