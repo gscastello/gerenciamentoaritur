@@ -612,6 +612,7 @@ const NOTIF_META = {
   mudanca_desembarque: { label: "Mudança de desembarque", Icon: MapPin },
   pendencia: { label: "Pendência", Icon: Inbox },
   vencimento: { label: "Vencimento", Icon: CalendarClock },
+  fechamento: { label: "Fechamento do mês", Icon: CalendarClock },
   consumo: { label: "Consumo", Icon: Fuel },
   manutencao: { label: "Manutenção", Icon: Wrench },
 };

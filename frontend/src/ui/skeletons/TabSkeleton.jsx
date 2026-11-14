@@ -192,6 +192,7 @@ const MAP = {
   gestao: GestaoSkel,
   vencimentos: GestaoSkel,
   extrato: GestaoSkel,
+  fechamento: GestaoSkel,
   operacao: OperacaoSkel,
   dashboard: DashboardSkel,
   sistema: SistemaSkel,
