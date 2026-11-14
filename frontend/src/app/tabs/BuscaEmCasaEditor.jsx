@@ -10,6 +10,7 @@ import {
   responsavelDaBusca,
 } from "../../domain/buscaEmCasa.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
+import { useArrastarParaOrdenar } from "../../ui/useArrastarParaOrdenar.js";
 import { BUSCA_MODOS, C, enderecoEmbarque } from "../tabShared.jsx";
 
 /**
@@ -29,7 +30,8 @@ export default function BuscaEmCasaEditor({ itens, trips, onSalvar, onFechar }) 
   const [ordem, setOrdem] = useState(original);
   const [modos, setModos] = useState(modosOriginais);
   const [sel, setSel] = useState(() => new Set());
-  const [arrastando, setArrastando] = useState(null);
+  // arrastar com o dedo ou o mouse pela alça ⋮⋮ (issue #413)
+  const { arrastando, alca } = useArrastarParaOrdenar(ordem, setOrdem, moverParaPosicao);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -166,21 +168,13 @@ export default function BuscaEmCasaEditor({ itens, trips, onSalvar, onFechar }) 
           return (
             <li
               key={id}
-              draggable
-              onDragStart={() => setArrastando(id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (arrastando && arrastando !== id)
-                  setOrdem(moverParaPosicao(ordem, arrastando, id));
-                setArrastando(null);
-              }}
-              onDragEnd={() => setArrastando(null)}
+              data-ordem-id={id}
               className="flex items-stretch gap-1.5 rounded-md pl-2 pr-1.5 py-2"
               style={{
                 background: `${m.cor}14`,
                 borderLeft: `3px solid ${m.cor}`,
                 outline: selecionada ? `2px solid ${m.cor}` : "none",
-                opacity: arrastando === id ? 0.5 : 1,
+                boxShadow: arrastando === id ? `0 0 0 2px ${C.brand}` : "none",
               }}
             >
               <label className="flex items-start gap-2 flex-1 min-w-0 cursor-pointer">
@@ -222,7 +216,16 @@ export default function BuscaEmCasaEditor({ itens, trips, onSalvar, onFechar }) 
                 </span>
               </label>
               <div className="flex flex-col items-center justify-center gap-1 shrink-0">
-                <GripVertical size={14} style={{ color: C.inkFaint }} aria-hidden="true" />
+                <button
+                  type="button"
+                  {...alca(id)}
+                  tabIndex={-1}
+                  aria-label={`Arrastar ${r.nome}`}
+                  className="w-10 h-10 rounded-md flex items-center justify-center select-none"
+                  style={{ ...alca(id).style, color: C.inkSoft }}
+                >
+                  <GripVertical size={18} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   aria-label={`Subir ${r.nome}`}
