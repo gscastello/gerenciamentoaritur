@@ -83,10 +83,17 @@ export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], texto
   return pedidos.map((p) => (p === b ? virada : p));
 }
 
+/** "de Pirapemas pra Cantanhede" (ou Campestre): a Volta, que sai de Pirapemas e passa por lá (issue #406). */
+const DE_PIRAPEMAS_PRA_CANTANHEDE = / (de|saindo de|sair de|saio de) pirapemas (pra|para|p|a|ate) (cantanhede|campestre) /;
+
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   const achados: ("ida" | "volta")[] = [];
   for (const t of textos) {
     const n = ` ${normalizarTexto(t)} `;
+    if (DE_PIRAPEMAS_PRA_CANTANHEDE.test(n)) {
+      achados.push("volta");
+      continue;
+    }
     // "sou de Pirapemas" não diz o sentido: só "saindo de…" ou "de X pra Y"
     if (
       / (pra|para|p|ate|ir pra|ir para) (sao luis|slz) /.test(n) ||
@@ -104,6 +111,57 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
     }
   }
   return unico(achados);
+}
+
+/**
+ * O trecho Pirapemas → Cantanhede (ou Campestre) foi pedido? Vale o que o CLIENTE escreveu ou
+ * o que a EQUIPE disse e ele confirmou logo depois ("De pirapemas pra Cantanhede, certo?" →
+ * "Isso") — issue #406.
+ */
+export function pediuPirapemasParaCantanhede(falas: { quem: string; texto: string }[]): boolean {
+  for (let i = 0; i < falas.length; i++) {
+    const m = falas[i];
+    if (!DE_PIRAPEMAS_PRA_CANTANHEDE.test(` ${normalizarTexto(m.texto)} `)) continue;
+    if (m.quem === "cliente") return true;
+    if (m.quem !== "equipe") continue;
+    for (let k = i + 1; k < falas.length && k <= i + 3; k++) {
+      const r = falas[k];
+      if (r.quem === "equipe") break;
+      if (r.quem !== "cliente") continue;
+      if (/^(sim|isso|certo|exato|correto|isso mesmo|e isso|pode ser|ok|blz|beleza|s)\b/.test(normalizarTexto(r.texto))) return true;
+      break;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pedido lido como Ida (busca em casa em São Luís, ponto, "pra Cantanhede") quando o trecho é
+ * Pirapemas → Cantanhede: vira a Volta saindo de Pirapemas com desembarque em Cantanhede. O
+ * endereço dito fica como embarque em Pirapemas; o bairro de São Luís sai (issue #406).
+ */
+export function pedidosDePirapemasParaCantanhede<P extends PedidoDoPar>(pedidos: P[], falas: { quem: string; texto: string }[]): P[] {
+  if (!pediuPirapemasParaCantanhede(falas)) return pedidos;
+  let mudou = false;
+  const out = pedidos.map((p) => {
+    if ((p.tipo ?? "passagem") === "encomenda" || p.direcao === "volta") return p;
+    const destino = normalizarTexto(p.desembarque ?? "");
+    if (destino && !/(cantanhede|campestre)/.test(destino)) return p;
+    mudou = true;
+    return {
+      ...p,
+      direcao: "volta",
+      ponto: null,
+      bairro: null,
+      cidade_dita: "pirapemas",
+      endereco: p.endereco ?? null,
+      desembarque: p.desembarque || "Cantanhede",
+      duvida: [p.duvida, "Trecho de Pirapemas para Cantanhede: é a Volta saindo de Pirapemas, com desembarque em Cantanhede."]
+        .filter(Boolean)
+        .join(" "),
+    };
+  });
+  return mudou ? out : pedidos;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +308,14 @@ export type CamposDoPedido = {
 export function conferirPeloCliente<P extends CamposDoPedido>(
   p: P,
   mensagens: MensagemDoCliente[],
-  ctx: { hoje: string; pontosIda: string[]; bairros: { neighborhood: string }[]; pedidosLidos: number },
+  ctx: {
+    hoje: string;
+    pontosIda: string[];
+    bairros: { neighborhood: string }[];
+    pedidosLidos: number;
+    /** trecho Pirapemas → Cantanhede pedido (escrito ou confirmado com a equipe): é a Volta (issue #406) */
+    trechoDePirapemas?: boolean;
+  },
 ): { pedido: P; completados: string[]; avisos: string[] } {
   const textos = mensagens.map((m) => m.texto);
   const pedido = { ...p };
@@ -258,7 +323,7 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
   const avisos: string[] = [];
   if (pedido.tipo === "encomenda") return { pedido, completados, avisos };
 
-  const sentido = sentidoEscrito(textos);
+  const sentido = ctx.trechoDePirapemas ? "volta" : sentidoEscrito(textos);
   if (!pedido.direcao && sentido) {
     pedido.direcao = sentido;
     completados.push(`sentido ${sentido}`);
@@ -333,10 +398,13 @@ export function conferenciaFinal(
     cidadeEscrita?: string | null;
     /** datas de perguntas da equipe que o cliente confirmou ("A ida é sábado, certo?" → "Isso") — issue #335 */
     datasConfirmadas?: string[];
+    /** trecho Pirapemas → Cantanhede: Volta saindo de Pirapemas; "pra Cantanhede" não contradiz (issue #406) */
+    trechoDePirapemas?: boolean;
   },
 ): string[] {
   if (r.type === "encomenda") return [];
   const textos = mensagens.map((m) => m.texto);
+  if (ctx.trechoDePirapemas) ctx = { ...ctx, cidadeEscrita: "pirapemas" };
   const naoBate: string[] = [];
 
   const datas = [...new Set([...datasEscritas(mensagens), ...(ctx.datasConfirmadas ?? [])])]
@@ -346,7 +414,7 @@ export function conferenciaFinal(
     naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
   }
 
-  const sentido = sentidoEscrito(textos);
+  const sentido = ctx.trechoDePirapemas ? "volta" : sentidoEscrito(textos);
   if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
     naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
   }

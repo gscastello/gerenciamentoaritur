@@ -289,3 +289,39 @@ Deno.test("#401: formulário de Ida colado duas vezes + 'outra de volta': a segu
   const certos = [ida("2026-11-20"), { ...ida("2026-11-22"), direcao: "volta" }];
   assertEquals(segundaViagemEhAOutra(certos, textos), certos);
 });
+
+Deno.test("#406: Pirapemas → Cantanhede é a Volta saindo de Pirapemas (escrito ou confirmado com a equipe)", async () => {
+  const { pediuPirapemasParaCantanhede, pedidosDePirapemasParaCantanhede, conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  // caso real: o cliente só escreveu "Pra Cantanhede"; a equipe disse o trecho e ele confirmou
+  const falas = [
+    { quem: "cliente", texto: "Agenda minha passagem pra amanhã, por favor!" },
+    { quem: "cliente", texto: "Pra Cantanhede" },
+    { quem: "equipe", texto: "Buscar na rua do Sol certo? De pirapemas pra Cantanhede" },
+    { quem: "cliente", texto: "Isso" },
+    { quem: "equipe", texto: "Agendado ☑️" },
+  ];
+  assert(pediuPirapemasParaCantanhede(falas));
+  assert(!pediuPirapemasParaCantanhede([{ quem: "equipe", texto: "De pirapemas pra Cantanhede?" }, { quem: "cliente", texto: "não, de São Luís" }]));
+  assert(pediuPirapemasParaCantanhede([{ quem: "cliente", texto: "uma passagem de Pirapemas para Cantanhede" }]));
+  assertEquals(sentidoEscrito(["uma passagem de Pirapemas para Cantanhede"]), "volta");
+
+  const lidos: { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string; desembarque: string; cidade_dita?: string | null }[] = [
+    { tipo: "passagem", data: "2026-11-15", direcao: "ida", ponto: "busca", bairro: "Turu", endereco: "Rua do Sol", desembarque: "Cantanhede" },
+  ];
+  const [p] = pedidosDePirapemasParaCantanhede(lidos, falas);
+  assertEquals(p.direcao, "volta");
+  assertEquals(p.cidade_dita, "pirapemas");
+  assertEquals(p.bairro, null);
+  assertEquals(p.ponto, null);
+  assertEquals(p.endereco, "Rua do Sol");
+  assertEquals(p.desembarque, "Cantanhede");
+  // sem o trecho, não mexe
+  assertEquals(pedidosDePirapemasParaCantanhede(lidos, falas.slice(0, 2)), lidos);
+
+  // a conferência final não trava a Volta de Pirapemas pelo "pra Cantanhede" do cliente
+  const msgs = [msg("Agenda minha passagem pra amanhã, por favor!"), msg("Pra Cantanhede")];
+  const r = { trip_date: "2026-11-12", direction: "volta", quantity: 1, route_point_code: "pirapemas" };
+  const base = { hoje: "2026-11-11", pedidosLidos: 1, cidadeEscrita: "cantanhede" };
+  assert(conferenciaFinal(r, msgs, base).length > 0);
+  assertEquals(conferenciaFinal(r, msgs, { ...base, trechoDePirapemas: true }), []);
+});

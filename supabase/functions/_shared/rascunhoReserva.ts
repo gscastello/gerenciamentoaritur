@@ -77,6 +77,8 @@ import {
   datasSemPedido,
   sentidoEscrito,
   segundaViagemEhAOutra,
+  pedidosDePirapemasParaCantanhede,
+  pediuPirapemasParaCantanhede,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -309,8 +311,13 @@ async function lerEGravar(
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
   // "uma de ida e outra de volta" com as duas lidas no mesmo sentido: a segunda é a outra viagem (issue #401)
-  const pedidos = segundaViagemEhAOutra(juntos, textosDoCliente);
-  if (pedidos !== juntos) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
+  const pares = segundaViagemEhAOutra(juntos, textosDoCliente);
+  if (pares !== juntos) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
+  // "de Pirapemas pra Cantanhede" (escrito ou confirmado com a equipe) é a Volta, não a Ida (issue #406)
+  const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto }));
+  const trechoDePirapemas = pediuPirapemasParaCantanhede(falasDoTrecho);
+  const pedidos = pedidosDePirapemasParaCantanhede(pares, falasDoTrecho);
+  if (pedidos !== pares) evento("bot_trecho_pirapemas_cantanhede", { conversa: entrada.chatwootConversationId });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
   // cliente e equipe na ordem: a resposta do cliente vale para o que a equipe perguntou (issue #320)
   const falasDoPedido = recentes
@@ -339,6 +346,7 @@ async function lerEGravar(
       pontosIda: ctx.pontos.ida,
       bairros: ctx.bairrosTabela,
       pedidosLidos: pedidos.length,
+      trechoDePirapemas,
     });
     Object.assign(p, conferido.pedido);
     const avisosDoCliente = conferido.avisos;
@@ -540,6 +548,7 @@ async function lerEGravar(
       pedidosLidos: pedidos.length,
       cidadeEscrita: cidadeEscritaPeloCliente(textosDoCliente),
       datasConfirmadas: confirmadas,
+      trechoDePirapemas,
     });
     if (naoBate.length) {
       evento("bot_conferencia_final", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe, nao_bate: naoBate.length });
