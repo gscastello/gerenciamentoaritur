@@ -77,7 +77,8 @@ function linha(r: ReservaParaConfirmar, hoje: string): string {
   }
   const qtd = `${r.quantidade} ${r.quantidade === 1 ? "passagem" : "passagens"}`;
   const de = embarque(r);
-  return `🚐 ${quem}${sentido} ${dia}: ${de ? `sai de ${de}` : "embarque a confirmar"}${desce ? ` e desce em ${desce}` : ""} · ${qtd}`;
+  // passagem: não cita onde o passageiro desce (dono, 14/11 — issue #403)
+  return `🚐 ${quem}${sentido} ${dia}: ${de ? `sai de ${de}` : "embarque a confirmar"} · ${qtd}`;
 }
 
 /** Só a primeira palavra do nome do cadastro ("Auristelia Coutinho" → "Auristelia"). */
