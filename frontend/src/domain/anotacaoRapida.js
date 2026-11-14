@@ -7,6 +7,7 @@
 //   "1P Cohatrac Rua 7 98999998888 Maria Silva"
 //   "2P - Miranda - 98 8516-6052 - João"   (" - " entre as partes também vale)
 //   "1P Cohatrac 98999998888"               (sem nome: como sempre foi)
+//   "1P Maria Silva"                        (só o nome, sem telefone — issue #404)
 //   "E Rua 7 Centro 98999998888"            (encomenda — ver parseAnotacaoEncomenda)
 //
 // A quantidade (NP) é opcional (assume 1). O telefone é o trecho numérico
@@ -85,7 +86,7 @@ export function parseAnotacaoRapida(textoBruto) {
   const texto = String(textoBruto ?? "")
     .replace(RE_INVISIVEIS, "")
     .trim();
-  if (!texto) return { ok: false, erro: "Escreva ao menos o telefone do passageiro." };
+  if (!texto) return { ok: false, erro: "Escreva o nome ou o telefone do passageiro." };
 
   let quantidade = 1;
   let resto = texto;
@@ -101,6 +102,18 @@ export function parseAnotacaoRapida(textoBruto) {
   const palavras = limparSeparadores(resto).split(" ").filter(Boolean);
   const achado = acharTelefone(palavras);
   if (!achado.valor) {
+    // só o nome (issue #404): sem número nenhum, o texto é o passageiro. Com números e sem
+    // telefone válido, quase sempre é telefone digitado errado — avisa
+    if (palavras.length && !palavras.some((p) => /\d/.test(p))) {
+      return {
+        ok: true,
+        quantidade,
+        local: "",
+        telefone: "",
+        nome: palavras.join(" "),
+        semTelefone: true,
+      };
+    }
     return {
       ok: false,
       erro: achado.erro ?? "Não encontrei um telefone na anotação.",
@@ -114,6 +127,33 @@ export function parseAnotacaoRapida(textoBruto) {
     telefone: achado.valor,
     nome: palavras.slice(achado.fim + 1).join(" "),
   };
+}
+
+/**
+ * Anotação só com o nome (issue #404). Em "Buscar em casa", um bairro da tabela no
+ * começo é o bairro ("1P Cohatrac Maria Silva"); o resto é o nome. Sem nome = erro.
+ * @returns {{ok:true, bairro:string, nome:string} | {ok:false, erro:string}}
+ */
+export function nomeDaAnotacaoSemTelefone(texto, { ehBairro = false, nomesDeBairros = [] } = {}) {
+  const palavras = String(texto ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const conhecidos = new Set((nomesDeBairros ?? []).map(normalizar));
+  let bairro = "";
+  let resto = palavras;
+  if (ehBairro) {
+    for (let n = palavras.length; n >= 1; n -= 1) {
+      if (conhecidos.has(normalizar(palavras.slice(0, n).join(" ")))) {
+        bairro = palavras.slice(0, n).join(" ");
+        resto = palavras.slice(n);
+        break;
+      }
+    }
+  }
+  const nome = resto.join(" ");
+  if (nome.length < 2) return { ok: false, erro: "Escreva o nome ou o telefone do passageiro." };
+  return { ok: true, bairro, nome };
 }
 
 /**

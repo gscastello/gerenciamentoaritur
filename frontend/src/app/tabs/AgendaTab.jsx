@@ -31,6 +31,7 @@ import {
 } from "../../domain/agendaLinha.js";
 import {
   localEhONome,
+  nomeDaAnotacaoSemTelefone,
   parseAnotacaoEncomenda,
   parseAnotacaoRapida,
   parseLinhaEncomenda,
@@ -385,6 +386,40 @@ export default function AgendaTab({
 
     const lido = parseAnotacaoRapida(texto);
     if (!lido.ok) return { ok: false, erro: lido.erro };
+    // só o nome (issue #404): "1P Maria Silva"; na busca em casa, "1P Cohatrac Maria Silva".
+    // Telefone e endereço se completam depois editando a reserva.
+    if (lido.semTelefone) {
+      const ehBairro = ponto.campo === "bairro";
+      const s = nomeDaAnotacaoSemTelefone(lido.nome, { ehBairro, nomesDeBairros: bairrosAnotacao.nomes });
+      if (!s.ok) return { ok: false, erro: s.erro };
+      const precoSemTelefone = ehBairro
+        ? (bairrosAnotacao.preco(s.bairro) ?? 80)
+        : (ponto.valor ?? 60);
+      try {
+        const res = await criarConfirmandoDuplicada(R.createReservation, {
+          tripDate: data,
+          direction: direcao,
+          customerName: s.nome,
+          customerPhone: null,
+          routePointCode: ponto.id,
+          quantity: lido.quantidade,
+          unitPrice: precoSemTelefone,
+          paymentMethod: "dinheiro",
+          pickupNeighborhood: ehBairro ? s.bairro || null : null,
+          pickupDetail: null,
+          status: "confirmada",
+          extraData: { origem: "anotacao_agenda", so_nome: true },
+        });
+        emit(EVENTS.RESERVA_CRIADA, {
+          via: "anotacao_agenda_so_nome",
+          status: res?.status || "confirmada",
+          duplicada: res?.message === "duplicate_ignored",
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, erro: mensagemAmigavel(e, "Não foi possível criar a reserva.") };
+      }
+    }
     // nome digitado na anotação ("... 98999998888 Maria") dispensa a consulta pelo telefone
     let nomeExistente = null;
     try {
@@ -1133,7 +1168,7 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
             if (erro) setErro("");
           }}
           onKeyDown={(e) => e.key === "Enter" && salvar()}
-          placeholder="Anotar — 1P Endereço 98999998888 Nome · encomenda: E Endereço 98999998888"
+          placeholder="Anotar — 1P Endereço 98999998888 Nome · só o nome: 1P Maria · encomenda: E Endereço 98999998888"
           aria-label={`Anotar reserva — ${nomePonto}`}
           className="text-xs py-1.5"
           readOnly={salvando}
@@ -1973,7 +2008,8 @@ export function NovaReservaModal({
   const aplicarLinha = (texto) => {
     setLinha(texto);
     const a = parseAnotacaoRapida(texto);
-    if (!a.ok) return;
+    // a linha do modal preenche pelo telefone; o nome sozinho vai no campo Nome (issue #404)
+    if (!a.ok || a.semTelefone) return;
     setF((atual) => {
       const campo = viagem.pontos.find((p) => p.id === atual.pontoId)?.campo;
       const { bairro, detalhe } =
