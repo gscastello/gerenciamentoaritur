@@ -251,3 +251,135 @@ Deno.test("#351: reagendar só a Ida não lança uma Volta que o cliente não pe
   const comVolta = [...msgs, { texto: "e volto domingo", em: "2026-11-12T19:09:00Z" }];
   assertEquals(conferenciaFinal({ trip_date: "2026-11-15", direction: "volta", quantity: 1, route_point_code: "pirapemas" }, comVolta, { ...ctx, hoje: "2026-11-12" }).filter((x) => x.includes("não foi pedida")), []);
 });
+
+Deno.test("#401: pergunta e fala de onde desce não dizem o embarque; 'e retorno segunda' é a outra viagem", async () => {
+  const { falouDasDuasViagens } = await import("./pedidoDoCliente.ts");
+  // caso real: "Desce na rodoviária ou na casa?" era sobre a Volta; o pedido novo é busca em casa
+  assertEquals(pontoEscrito(["Desce na rodoviária ou na casa?", "Pode confirmar minha ida pra Cantanhde na segunda"], pontosIda), null);
+  assertEquals(pontoEscrito(["me deixa na rodoviária"], pontosIda), null);
+  assertEquals(pontoEscrito(["vou estar na rodoviária"], pontosIda), "rodoviaria");
+  assert(falouDasDuasViagens(["passagem pra São Luís amanhã a tarde e retorno segunda-feira de manhã"]));
+  assert(falouDasDuasViagens(["Uma de Ida para Cantanhede e outra de volta..."]));
+  assert(!falouDasDuasViagens(["vou estar no retorno das vans"]));
+});
+
+Deno.test("#401: formulário de Ida colado duas vezes + 'outra de volta': a segunda vira a Volta com os endereços trocados", async () => {
+  const { segundaViagemEhAOutra } = await import("./pedidoDoCliente.ts");
+  const ida = (data: string) => ({
+    tipo: "passagem",
+    data,
+    direcao: "ida",
+    ponto: "busca",
+    bairro: "Cohab Anil III",
+    endereco: "Condomínio Home Practice",
+    desembarque: "Praça da Cruz",
+  });
+  const lidos = [ida("2026-11-22"), ida("2026-11-20")];
+  const textos = ["Data da viagem: 20/11 de São Luís para Cantanhede.", "Data da viagem: 22/11 de São Luís para Cantanhede.", "Uma de Ida para Cantanhede e outra de volta..."];
+  const r = segundaViagemEhAOutra(lidos, textos);
+  const volta = r.find((p) => p.data === "2026-11-22");
+  const primeira = r.find((p) => p.data === "2026-11-20");
+  assertEquals(primeira?.direcao, "ida");
+  assertEquals(volta?.direcao, "volta");
+  assertEquals(volta?.endereco, "Praça da Cruz");
+  assertEquals(volta?.desembarque, "Condomínio Home Practice, Cohab Anil III");
+  assertEquals(volta?.bairro, null);
+  // sem falar em volta, ou já em sentidos diferentes: não mexe
+  assertEquals(segundaViagemEhAOutra(lidos, ["20/11 e 22/11 pra Cantanhede"]), lidos);
+  const certos = [ida("2026-11-20"), { ...ida("2026-11-22"), direcao: "volta" }];
+  assertEquals(segundaViagemEhAOutra(certos, textos), certos);
+});
+
+Deno.test("#406/#407: o sentido sai da ordem das paradas (São Luís … Cantanhede → Campestre → Pirapemas)", async () => {
+  const { origemEscrita, origemDoPedido, pedidosPelaOrigem, conferenciaFinal, sentidoDoTrecho } = await import("./pedidoDoCliente.ts");
+  // destino depois da origem na Ida = Ida; antes = Volta
+  assertEquals(sentidoDoTrecho("pirapemas", "cantanhede"), "volta");
+  assertEquals(sentidoDoTrecho("cantanhede", "pirapemas"), "ida"); // a Volta já passou por Cantanhede vinda de Pirapemas
+  assertEquals(sentidoDoTrecho("cantanhede", "miranda"), "volta");
+  assertEquals(sentidoDoTrecho("miranda", "cantanhede"), "ida");
+  assertEquals(sentidoDoTrecho("campestre", "pirapemas"), "ida");
+  assertEquals(sentidoDoTrecho("sao luis", "matoes"), "ida");
+
+  assertEquals(sentidoEscrito(["uma passagem de Pirapemas para Cantanhede"]), "volta");
+  assertEquals(sentidoEscrito(["de Cantanhede pra Pirapemas amanhã"]), "ida");
+  assertEquals(sentidoEscrito(["de Cantanhede para Matões do Norte"]), "volta");
+  assertEquals(sentidoEscrito(["saindo de Cantanhede"]), "volta");
+  assertEquals(sentidoEscrito(["de São Luís pra Miranda"]), "ida");
+  assertEquals(sentidoEscrito(["saindo de slz"]), "ida");
+  // sem origem, o destino diz
+  assertEquals(sentidoEscrito(["Pra Cantanhede"]), "ida");
+  assertEquals(sentidoEscrito(["quero ir pra São Luís"]), "volta");
+  // "sou de Pirapemas" não é origem do trecho
+  assertEquals(origemEscrita("sou de Pirapemas"), null);
+  assertEquals(origemEscrita("de Cantanhede pra Pirapemas"), { sentido: "ida", de: "cantanhede", para: "pirapemas" });
+
+  // caso real (#406): o cliente só escreveu "Pra Cantanhede"; a equipe disse o trecho e ele confirmou
+  const falas = [
+    { quem: "cliente", texto: "Agenda minha passagem pra amanhã, por favor!" },
+    { quem: "cliente", texto: "Pra Cantanhede" },
+    { quem: "equipe", texto: "Buscar na rua do Sol certo? De pirapemas pra Cantanhede" },
+    { quem: "cliente", texto: "Isso" },
+    { quem: "equipe", texto: "Agendado ☑️" },
+  ];
+  const origem = origemDoPedido(falas);
+  assertEquals(origem, { sentido: "volta", de: "pirapemas", para: "cantanhede" });
+  // a equipe sugeriu e o cliente negou: não vale a sugestão
+  assertEquals(
+    origemDoPedido([{ quem: "equipe", texto: "De pirapemas pra Cantanhede?" }, { quem: "cliente", texto: "não, de São Luís pra Cantanhede" }])?.sentido,
+    "ida",
+  );
+
+  type Lido = { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string | null; desembarque: string | null; cidade_dita?: string | null };
+  const lidos: Lido[] = [{ tipo: "passagem", data: "2026-11-15", direcao: "ida", ponto: "busca", bairro: "Turu", endereco: "Rua do Sol", desembarque: "Cantanhede" }];
+  const [p] = pedidosPelaOrigem(lidos, origem);
+  assertEquals([p.direcao, p.cidade_dita, p.bairro, p.ponto, p.endereco, p.desembarque], ["volta", "pirapemas", null, null, "Rua do Sol", "Cantanhede"]);
+  // sem trecho dito, não mexe
+  assertEquals(pedidosPelaOrigem(lidos, origemDoPedido(falas.slice(0, 2))), lidos);
+
+  // de Cantanhede pra Pirapemas: Ida, embarque Outros em Cantanhede, desembarque Pirapemas
+  const [c] = pedidosPelaOrigem(
+    [{ ...lidos[0], direcao: "volta", ponto: "cantanhede", bairro: null, endereco: "Praça da Cruz", desembarque: null, cidade_dita: "cantanhede" }],
+    origemDoPedido([{ quem: "cliente", texto: "de Cantanhede pra Pirapemas" }]),
+  );
+  assertEquals([c.direcao, c.ponto, c.endereco, c.desembarque, c.cidade_dita], ["ida", "outro", "Cantanhede, Praça da Cruz", "Pirapemas", null]);
+  // de Miranda pra São Luís: Volta no ponto Cantanhede com a cidade no endereço (#326)
+  const [m] = pedidosPelaOrigem([{ ...lidos[0], endereco: "perto do posto", desembarque: null }], origemDoPedido([{ quem: "cliente", texto: "de Miranda pra São Luís" }]));
+  assertEquals([m.direcao, m.cidade_dita, m.endereco, m.desembarque], ["volta", "cantanhede", "Miranda do Norte, perto do posto", "São Luís"]);
+
+  // a conferência final não trava a Volta de Pirapemas pelo "pra Cantanhede" do cliente
+  const msgs = [msg("Agenda minha passagem pra amanhã, por favor!"), msg("Pra Cantanhede")];
+  const r = { trip_date: "2026-11-12", direction: "volta", quantity: 1, route_point_code: "pirapemas" };
+  const base = { hoje: "2026-11-11", pedidosLidos: 1, cidadeEscrita: "cantanhede" };
+  assert(conferenciaFinal(r, msgs, base).length > 0);
+  assertEquals(conferenciaFinal(r, msgs, { ...base, origem }), []);
+});
+
+Deno.test("#415: 'segunda pra ir e terça pra volta' — monta a Volta que faltou; 'Volta na terça de Cantanhede pro X' é Volta", async () => {
+  const { outraViagemDoPar, pedidosPeloSentidoDoDia, origemEscrita } = await import("./pedidoDoCliente.ts");
+  // sexta 14/11/2026, 18h em São Luís
+  const SEXTA = "2026-11-14T21:43:00Z";
+  const m = (texto: string, em = SEXTA) => ({ texto, em });
+  const conversa = [
+    m("Ainda tem vaga de são Luís pra Cantanhede na segunda feira"),
+    m("Agenda uma passagem na segunda feira pra ir e na terça feira pra volta"),
+    m("Condomínio masil"),
+  ];
+  type Lido = { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string | null; desembarque: string | null; cidade_dita?: string | null };
+  const ida: Lido = { tipo: "passagem", data: "2026-11-16", direcao: "ida", ponto: "busca", bairro: "Cohatrac", endereco: "Condomínio Marsil", desembarque: "Cantanhede" };
+  const [i, v] = outraViagemDoPar([ida], conversa, "2026-11-14");
+  assertEquals(i, ida);
+  assertEquals([v.data, v.direcao, v.cidade_dita, v.endereco, v.desembarque], ["2026-11-17", "volta", "cantanhede", null, "Condomínio Marsil, Cohatrac"]);
+  // sem falar das duas viagens, ou com as duas já lidas: não mexe
+  assertEquals(outraViagemDoPar([ida], [m("segunda e terça pra Cantanhede")], "2026-11-14").length, 1);
+  assertEquals(outraViagemDoPar([ida, { ...ida, data: "2026-11-17", direcao: "volta" }], conversa, "2026-11-14").length, 2);
+
+  // "Volta na terça feira de Cantanhede pro marsil" (lida como Ida de terça) → Volta saindo de Cantanhede
+  assertEquals(origemEscrita("Volta na terça feira de Cantanhede pro marsil")?.sentido, "volta");
+  assertEquals(sentidoEscrito(["Volta na terça feira de Cantanhede pro marsil"]), "volta");
+  assertEquals(sentidoEscrito(["segunda pra ir e terça pra volta"]), null);
+  const lidaErrada: Lido = { tipo: "passagem", data: "2026-11-17", direcao: "ida", ponto: "busca", bairro: null, endereco: "Cantanhede", desembarque: "Condomínio Marsil" };
+  const [c] = pedidosPeloSentidoDoDia([lidaErrada], [...conversa, m("Volta na terça feira de Cantanhede pro marsil")]);
+  assertEquals([c.direcao, c.cidade_dita, c.endereco, c.ponto], ["volta", "cantanhede", null, null]);
+  // a mensagem que cita os dois dias não decide nenhum deles
+  assertEquals(pedidosPeloSentidoDoDia([ida], conversa), [ida]);
+});

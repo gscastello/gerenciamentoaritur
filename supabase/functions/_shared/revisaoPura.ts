@@ -201,6 +201,11 @@ export function decidirRevisao(
     horaAgora?: string | null;
     /** por reserva, quando uma pessoa mudou cada campo (camposMudadosPelaEquipe) — issue #389 */
     mudancasDaEquipe?: Record<string, Partial<Record<CampoDaRevisao, string>>>;
+    /**
+     * A equipe marcou "Atualizado ☑️" (issue #410): é a confirmação de que a conversa vale. Corrige
+     * com certeza média ou alta, inclusive dia e sentido, sem esperar prova escrita depois da reserva.
+     */
+    confirmadoPelaEquipe?: boolean;
   },
 ): { correcoes: Correcao[]; pendencias: Achado[]; descartados: Achado[] } {
   const porId = new Map(ctx.reservas.map((r) => [r.id, r]));
@@ -231,19 +236,24 @@ export function decidirRevisao(
     // a equipe (ou o Assistente) mudou este campo à mão: vence o que o cliente escreveu ANTES.
     // Só se o cliente escreveu DEPOIS da mudança vira pendência; o revisor nunca desfaz sozinho (#389)
     const mudouEm = ctx.mudancasDaEquipe?.[r.id]?.[a.campo];
+    const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     if (mudouEm) {
-      if (hora && Date.parse(hora) > Date.parse(mudouEm)) pendencias.push(a);
-      else descartados.push(a);
-      continue;
+      // com o "Atualizado ☑️", o que o cliente escreveu depois da mudança à mão vale (issue #410)
+      const depoisDaMudanca = !!hora && Date.parse(hora) > Date.parse(mudouEm);
+      if (!(ctx.confirmadoPelaEquipe && depoisDaMudanca)) {
+        if (depoisDaMudanca) pendencias.push(a);
+        else descartados.push(a);
+        continue;
+      }
     }
     // o cliente (ou a equipe) corrigiu DEPOIS de a reserva ser criada: é a confirmação (issue #343)
-    const posterior = !!hora && Date.parse(hora) > Date.parse(r.criada_em);
     const mudaAViagem = a.campo === "data" || a.campo === "sentido";
     let ok = CORRIGE_SOZINHO.includes(a.campo) &&
-      (a.certeza === "alta" || (a.certeza === "media" && posterior && !mudaAViagem));
+      (a.certeza === "alta" || (a.certeza === "media" && (ctx.confirmadoPelaEquipe || (posterior && !mudaAViagem))));
     // dia e sentido mudam a viagem inteira: só sozinho se o cliente/equipe disse DEPOIS da reserva
     // ("na verdade é dia 15"). Prova anterior pode ser de outro pedido — a equipe confere.
-    if (ok && mudaAViagem) ok = posterior;
+    // Com o "Atualizado ☑️" a equipe já conferiu (issue #410).
+    if (ok && mudaAViagem && !ctx.confirmadoPelaEquipe) ok = posterior;
     const c = correcoes.get(r.id) ?? { reserva_id: r.id, motivos: [] };
     if (ok) {
       switch (a.campo) {
@@ -297,6 +307,23 @@ export function decidirRevisao(
         if (!pendencias.includes(a)) pendencias.push(a);
       }
       continue;
+    }
+    // Ida ↔ Volta: quem sobe vira quem desce. O endereço de São Luís passa para o outro lado
+    // junto com o sentido, senão a Volta "sai do condomínio e desce na praça" (issue #401)
+    if (c.sentido && c.sentido !== r.direcao && !("embarque" in c && "desembarque" in c)) {
+      const saoLuis = [r.embarque, r.bairro].filter(Boolean).join(", ") || null;
+      const interior = r.desembarque || null;
+      if (saoLuis || interior) {
+        // o lado que o revisor já corrigiu com prova fica; o outro troca com o sentido
+        if (!("embarque" in c)) c.embarque = c.sentido === "volta" ? interior : saoLuis;
+        if (!("desembarque" in c)) c.desembarque = c.sentido === "volta" ? saoLuis : interior;
+        if (c.sentido === "volta") c.bairro = null;
+        c.motivos.push(`embarque e desembarque trocados com o sentido: "${r.embarque ?? "—"}" ↔ "${r.desembarque ?? "—"}"`);
+        for (const a of achados.filter((x) => x.reserva_id === c.reserva_id && (x.campo === "embarque" || x.campo === "desembarque"))) {
+          const i = pendencias.indexOf(a);
+          if (i >= 0) pendencias.splice(i, 1);
+        }
+      }
     }
     finais.push(c);
   }
@@ -363,7 +390,7 @@ export function instrucoesDoRevisor(ctx: { pontos: string; hoje: string; extras?
 Você recebe as reservas FUTURAS de um passageiro e a conversa do WhatsApp dele com a equipe. Compare CADA campo de cada reserva com o que foi pedido e combinado na conversa e aponte TODO erro, por menor que seja — do bot, do cliente (ex.: escreveu o dia errado e corrigiu depois) ou da equipe.
 
 O que conferir em cada reserva:
-- dia e sentido (Ida = sai de São Luís; Volta = sai de Pirapemas/Cantanhede para São Luís). "Hoje", "amanhã", "sexta" contam do dia em que a mensagem foi escrita. O que o cliente corrigiu depois vale ("não, é dia 15").
+- dia e sentido (Ida = sai de São Luís; Volta = sai de Pirapemas/Cantanhede). O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta. "Hoje", "amanhã", "sexta" contam do dia em que a mensagem foi escrita. O que o cliente corrigiu depois vale ("não, é dia 15").
 - ponto de embarque (códigos abaixo), bairro (busca em casa), embarque (rua/referência), desembarque, quantidade, tipo (passagem/encomenda).
 - endereço trocado de lugar: rua/referência da cidade de embarque gravada como desembarque (na Volta, rua de Cantanhede/Pirapemas no desembarque), ou o NOME do passageiro lido como lugar ("De Cantanhede pra Luís / Maria Souza / Rua X perto do banco": "Luís" = São Luís, "Maria Souza" = nome, a rua = embarque). Confira cada parte do que o cliente escreveu e onde ela foi parar. Rua com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a rua, não a cidade do caminho.
 - quantidade: é o número que o cliente PEDIU. Frase de costume ("eu e minhas filhas viajamos sempre com vocês") não pede mais vagas: não aponte. N passagens com desembarques diferentes na mesma viagem formam UMA reserva de N (todas têm de estar reservadas).

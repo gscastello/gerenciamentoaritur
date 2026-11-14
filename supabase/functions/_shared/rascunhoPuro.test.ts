@@ -989,3 +989,90 @@ Deno.test("#387: o Agendado só lança o que a leitura final confirmou; sobra da
   assertEquals(aviso?.assunto, "Agendado ☑️ lançou só parte");
   assertStringIncludes(aviso?.detalhe ?? "", "leitura final do Agendado não a confirmou");
 });
+
+Deno.test("#401: o que veio logo depois do Agendado antigo ('desce na rodoviária?') fica no pedido de antes", async () => {
+  const { inicioDoPedidoAtual } = await import("./rascunhoPuro.ts");
+  const m = (quem: string, texto: string, em: string) => ({ quem, texto, em });
+  const conversa = [
+    m("cliente", "Amanhã vou com vocês de Cantanhede pra São Luís", "2026-11-12T18:54:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-12T19:30:00Z"),
+    m("cliente", "Desce na rodoviária ou na casa?", "2026-11-12T19:31:00Z"),
+    m("equipe", "Ok tranquilo", "2026-11-12T20:50:00Z"),
+    m("cliente", "Pode confirmar minha ida pra Cantanhde na segunda, tudo bem?", "2026-11-14T13:03:00Z"),
+    m("equipe", "Agendado ☑️", "2026-11-14T13:26:00Z"),
+  ];
+  assertEquals(inicioDoPedidoAtual(conversa, "2026-11-14T13:26:00Z"), "2026-11-12T20:50:00Z");
+});
+
+Deno.test("#401: bairro achado tira a marca e a nota de 'reservada sem endereço'; recusa do banco legível", async () => {
+  const { enderecoSemMarcaDeBairro, notasSemReservaSemEndereco, codigoDaRecusa, avisoDoAgendado } = await import("./rascunhoPuro.ts");
+  assertEquals(enderecoSemMarcaDeBairro("Residencial Mali, Ap 202 (bairro a confirmar)"), "Residencial Mali, Ap 202");
+  assertEquals(enderecoSemMarcaDeBairro(" (bairro a confirmar)"), null);
+  const n = notasSemReservaSemEndereco("Reservada sem endereço (Agendado ☑️): sem valor até o cliente confirmar onde embarca. Bairro pelos lugares.", "Turu");
+  assert(!n.includes("sem valor"));
+  assertStringIncludes(n, "bairro Turu");
+  assertEquals(codigoDaRecusa(undefined, "CAPACIDADE_EXCEDIDA: viagem x já tem 31 de 31 lugares ocupados", "rejected"), "LOTADO");
+  assertEquals(codigoDaRecusa(undefined, "algo", "rejected"), "recusada");
+  assertEquals(codigoDaRecusa("RESERVA_DUPLICADA", "", "rejected"), "RESERVA_DUPLICADA");
+  const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["LOTADO"] });
+  assertStringIncludes(aviso?.detalhe ?? "", "lotada");
+});
+
+Deno.test("#410: 'Atualizado ☑️' é a marca de correção; não é Agendado; pergunta não conta", async () => {
+  const { ehMarcaDeCorrecao, ehMarcaDeAgendado } = await import("./rascunhoPuro.ts");
+  for (const t of ["Atualizado ☑️", "atualizado ✅", "Corrigido ☑️", "Alterado ✅", "Remarcado ☑️", "Reserva atualizada ☑️"]) {
+    assert(ehMarcaDeCorrecao(t), t);
+    assert(!ehMarcaDeAgendado(t), t);
+  }
+  assert(!ehMarcaDeCorrecao("Atualizado"), "sem o ☑️ não é a marca");
+  assert(!ehMarcaDeCorrecao("Atualizado ☑️?"), "pergunta");
+  assert(!ehMarcaDeCorrecao("Agendado ☑️"));
+});
+
+Deno.test("#416: passageiro recorrente — 'guarde uma vaga pra mim amanhã' sai pelo hábito, com embarque e desembarque de costume", async () => {
+  const { sentidoPeloHabito, validarPedidoExtraido } = await import("./rascunhoPuro.ts");
+  const costume = {
+    ida: { fonte: "manual", route_point_code: "busca", neighborhood: "Cohatrac", detail: "Condomínio Marsil", dropoff_location: "São Patrício, Cantanhede" },
+    volta: { fonte: "manual", route_point_code: "cantanhede", detail: "São Patrício", dropoff_location: "Condomínio Marsil, Cohatrac" },
+  };
+  const viagens = [{ data: "2026-11-16", direcao: "ida" }];
+  // depois da Ida de segunda, "amanhã" (terça) é a Volta
+  assertEquals(sentidoPeloHabito("2026-11-17", viagens, costume), "volta");
+  // já tem a Ida no dia: é a Volta do mesmo dia
+  assertEquals(sentidoPeloHabito("2026-11-16", viagens, costume), "volta");
+  // sem viagem antes e costume dos dois lados: não chuta
+  assertEquals(sentidoPeloHabito("2026-11-20", [], costume), null);
+  // costume de um lado só: esse
+  assertEquals(sentidoPeloHabito("2026-11-20", [], { volta: costume.volta }), "volta");
+  // sem costume: nada
+  assertEquals(sentidoPeloHabito("2026-11-17", viagens, null), null);
+
+  const v = validarPedidoExtraido(
+    { tipo: "passagem", data: "2026-11-17", quantidade: 1 },
+    {
+      hoje: "2026-11-14",
+      pontos: { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] },
+      costume,
+      sentidoDoHabito: "volta",
+      agendado: true,
+    },
+  );
+  assert(v.ok);
+  if (v.ok) {
+    assertEquals(v.rascunho.direction, "volta");
+    assertEquals(v.rascunho.route_point_code, "cantanhede");
+    assertEquals(v.rascunho.pickup_detail, "São Patrício");
+    assertEquals(v.rascunho.dropoff_location, "Condomínio Marsil, Cohatrac");
+    assertEquals(v.cidadeIncerta, false);
+    assertEquals(v.aConfirmar, []);
+  }
+});
+
+Deno.test("#417: mensagem que o bot não lê fica marcada; editada vira texto novo; pendência legível", async () => {
+  const { MENSAGEM_ILEGIVEL, ehMensagemIlegivel, textoEditado, avisoDoAgendado } = await import("./rascunhoPuro.ts");
+  assert(ehMensagemIlegivel(MENSAGEM_ILEGIVEL));
+  assert(!ehMensagemIlegivel("Se tiver vaga para Cantanhede, guarde uma pra mim"));
+  assertEquals(textoEditado("é pra segunda"), "(editou a mensagem anterior) é pra segunda");
+  const aviso = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: [], pendentes: ["dia_ilegivel"] });
+  assertStringIncludes(aviso?.detalhe ?? "", "confira o dia no WhatsApp");
+});

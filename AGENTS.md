@@ -329,7 +329,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
   `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
-  valor na tabela continua indo para a equipe; cidade fora da rota também. **Rua com nome de cidade é rua** (issue #341,
+  valor na tabela continua indo para a equipe; cidade fora da rota também. **O sentido sai da ordem das paradas** (dono, 14/11 — issues #406 e
+  #407): Ida = São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas;
+  Volta = o contrário. Destino depois da origem = Ida, antes = Volta: de Pirapemas pra Cantanhede é Volta, de Cantanhede
+  pra Pirapemas é Ida (ponto Outros). Vale o trecho escrito pelo cliente ou dito pela equipe e confirmado por ele
+  (`ORDEM_DA_IDA`, `origemDoPedido`, `pedidosPelaOrigem`). **Rua com nome de cidade é rua** (issue #341,
   `semLogradouros` em `grafia.ts`): "Rua Santa Rita de Cássia", "Av. Colombo" não são as cidades do caminho.
   **Mesma viagem, uma reserva** (issue #345, `juntarPedidosDaMesmaViagem`): N passagens do mesmo passageiro no mesmo
   dia e sentido, mesmo com desembarques diferentes ("2 ficam no Santo Antônio e 2 na Estrada da Maioba"), são UMA
@@ -357,7 +361,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Cliente recorrente / endereço de costume** (issue #228, `WHATSAPP.md §6d`): por cliente e sentido, fixado pela
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
-  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data. **Passageiro
+  recorrente** (issue #416, `sentidoPeloHabito`): "guarde uma vaga pra mim amanhã" sem sentido dito → o sentido sai do
+  hábito (já tem reserva no dia → o outro sentido; senão o oposto da última viagem; costume de um lado só → esse) e
+  embarque/desembarque vêm do costume: o Agendado lança, sem pendência.
 - **Preço da Volta pelo lugar onde deixamos o cliente** (issue #349, dono 12/11): na Ida o valor é o do lugar onde
   buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
   pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
@@ -394,10 +401,14 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pendente com o motivo. A leitura pega até 60 mensagens do pedido com até 2.000 letras cada.
   **Conferência final** (issue #309, `conferenciaFinal`): com a reserva PRONTA, depois de todas as regras, dia,
   sentido, quantidade e cidade da Volta são comparados de novo com o que o cliente escreveu; não bate → o Agendado não
-  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega. Com **vários pedidos**, viagem no sentido que o cliente não
+  lança calado (pendente `conferir`). Regra nova que mexe na reserva não precisa de trava própria: a final pega. **Quem tem os dados, lança** (issue #401): depois da releitura com o modelo capaz, divergência só de
+  embarque/bairro vai como "Conferir" na reserva (e o cliente vê na confirmação), não trava; endereço dado com o bairro
+  achado pelo sistema entra com o valor do bairro; duas viagens no mesmo sentido na mesma leitura são dois rascunhos
+  ("uma de ida e outra de volta" vira a Volta com os endereços trocados); o que veio logo depois do Agendado antigo é
+  do pedido antigo; o revisor que troca Ida↔Volta troca junto embarque e desembarque. Com **vários pedidos**, viagem no sentido que o cliente não
   escreveu (e sem falar em volta) também não passa (issue #351): "agendar de novo" = refazer a reserva cancelada.
   **Confirmação ao cliente** (issue #310, `confirmacaoAoCliente.ts`): depois que o Agendado lança, o bot manda ao
-  cliente o resumo (sentido, dia, embarque, desembarque, quantidade; **nunca valor**, nunca o nome do perfil) e pede o
+  cliente o resumo (sentido, dia, embarque, quantidade; **nunca valor** nem onde o passageiro desce — dono, 14/11, #403, nunca o nome do perfil) e pede o
   que faltou (endereço, dia da volta). Uma vez por reserva criada; desliga em `settings.agendado_confirmacao`
   (`{"ativo": false}`). É a única mensagem automática ao cliente fora do modo `ia`, autorizada pelo dono (11/11).
   **Próxima viagem e dúvida perguntada ao cliente** (issue #314): pedido lido como Ida de hoje depois que a Ida saiu,
@@ -410,7 +421,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   revisão; `EMBARQUES_INTERMEDIARIOS_DA_VOLTA`), lugar que só existe numa cidade na base (qualquer número de reservas),
   cidades das reservas anteriores do cliente e cidade que ele cita em TODAS as conversas guardadas (`whatsapp_messages`).
   Todas apontam a mesma → vale, com aviso (e a confirmação ao cliente mostra a cidade); discordam → pergunta ao cliente.
-  **Revisor de reservas** (issue #339, `database/97`, função `revisor-reservas`, `revisaoPura.ts`): a cada 15 min
+  **Revisor de reservas** (issue #339, `database/97`, função `revisor-reservas`, `revisaoPura.ts`): a cada **minuto** (#410)
   (`pg_cron` → `pg_net`, chave da rotina no Vault, só o hash em `rotinas_chaves`) o bot revê cada passageiro com reserva
   futura em que algo mudou (`fn_clientes_para_revisar`: assinatura = reservas + última mensagem; reserva com menos de
   3 min espera o Agendado). O modelo capaz relê a conversa inteira e aponta erros (do bot, do cliente ou da equipe) com
@@ -419,6 +430,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   do modelo (zerado → tabela; valor do bot diferente da tabela → tabela; valor mudado à mão pela equipe fica).
   **O que uma pessoa mudou à mão (equipe ou Assistente) vence a conversa anterior** (issue #389, lido no `audit_logs`):
   o revisor não desfaz; só se o cliente escreveu depois da mudança vira pendência.
+  **Correção na hora** (issue #410, `database/109`): reserva nova espera 1 min e cliente que ainda
+  escreve espera 45 s sem mensagem nova; a marca `andamento` impede duas rodadas no mesmo passageiro. A equipe escreve
+  **"Atualizado ☑️"** (ou Corrigido/Alterado/Remarcado com ☑️/✅) na conversa e o revisor corrige NA HORA, com a marca
+  como confirmação: certeza média basta, inclusive para dia e sentido (`confirmadoPelaEquipe`). Sem reserva futura, vale
+  como Agendado; nada a mudar vira pendência "Atualizado ☑️ não mudou nada".
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
