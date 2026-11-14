@@ -61,7 +61,6 @@ test("Agenda: agenda uma encomenda pendente numa viagem/ponto real", async ({ pa
   await page.getByRole("button", { name: "Agendar", exact: true }).last().click();
 
   await expect(page.getByText(/Encomenda: Documentos/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Nova encomenda" })).toBeVisible();
   // agora aparece dentro da viagem, no ponto de embarque, como uma passagem
   await expect(page.getByText(/contato: Maria Receptora/)).toBeVisible();
   await expect(page.getByText(/Documentos · entrega: Pirapemas centro/)).toBeVisible();
@@ -90,7 +89,8 @@ test("Agenda: cria uma encomenda nova do zero", async ({ page }) => {
     .first()
     .click();
 
-  await page.getByRole("button", { name: "Nova encomenda" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).first().click();
+  await page.getByRole("button", { name: "Encomenda", exact: true }).click();
   await page.getByLabel("Onde buscar (endereço) *").fill("Rua 7, Centro");
   await page.getByLabel("Telefone do contato *").fill("98977776666");
   await page.getByLabel("Nome do contato (opcional)").fill("João Remetente");
@@ -132,8 +132,7 @@ test("Lista do Dia: mostra a encomenda agendada e marca como entregue", async ({
   // a encomenda entra na seção do ponto, com a linha do motorista, e não conta como passageiro
   await expect(page.getByText(/Documentos · entrega: Pirapemas centro/)).toBeVisible();
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
-  await expect(page.getByText("1 encomenda", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 pax").first()).toBeVisible();
+  await expect(page.getByText("0 pax · 1 encomenda", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Marcar entrega" }).click();
   // espera a UI refletir a entrega antes de checar a chamada — o click só
@@ -203,8 +202,8 @@ test("Agenda: encomenda agendada aparece no ponto da viagem como uma passagem, s
   await expect(page.getByRole("link", { name: /WhatsApp/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Mais ações/ }).first()).toBeVisible();
   // cabeçalho do ponto conta a encomenda à parte; nenhuma passagem
-  await expect(page.getByText("1 encomenda(s)", { exact: true })).toBeVisible();
-  await expect(page.getByText(/passagem\(ns\)/)).toHaveCount(0);
+  await expect(page.getByText("1 encomenda", { exact: true })).toBeVisible();
+  await expect(page.getByText(/\d passage(m|ns)\b/)).toHaveCount(0);
 });
 
 test("Agenda: a caixa da linha marca a entrega da encomenda", async ({ page }) => {
@@ -275,7 +274,8 @@ test("Agenda: nova encomenda pela linha rápida (só onde buscar e telefone)", a
     .first()
     .click();
 
-  await page.getByRole("button", { name: "Nova encomenda" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).first().click();
+  await page.getByRole("button", { name: "Encomenda", exact: true }).click();
   await page
     .getByLabel("Linha rápida: onde buscar, telefone e nome")
     .fill("Rua 7 Centro 98977776666");
@@ -299,7 +299,8 @@ test("Agenda: encomenda sem onde buscar ou sem telefone não envia", async ({ pa
     .getByRole("button", { name: /Agenda/ })
     .first()
     .click();
-  await page.getByRole("button", { name: "Nova encomenda" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).first().click();
+  await page.getByRole("button", { name: "Encomenda", exact: true }).click();
   const criar = page.getByRole("button", { name: "Criar" });
   await page.getByLabel("Telefone do contato *").fill("98977776666");
   await expect(criar).toBeDisabled();

@@ -60,12 +60,14 @@ test("Agenda: endereço em destaque, nome em segundo plano e telefone secundári
 
   const linha = page.locator("div.row-hover", { hasText: "João do Bairro Teste" });
   const tamanho = (loc) => loc.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
-  // crítica de design (issue #393): o nome em cima; "1P · bairro · valor" embaixo, menor
+  // dono (issue #399): o endereço em destaque em cima; o nome embaixo, menor, inteiro
   const nome = linha.getByText("João do Bairro Teste", { exact: true });
   const endereco = linha.getByText(/Cohatrac/).last();
   await expect(endereco).toBeVisible();
   await expect(nome).toBeVisible();
-  expect(await tamanho(nome)).toBeGreaterThan(await tamanho(endereco));
+  expect(await tamanho(endereco)).toBeGreaterThan(await tamanho(nome));
+  const topo = async (loc) => (await loc.boundingBox()).y;
+  expect(await topo(endereco)).toBeLessThan(await topo(nome));
 
   // o principal é o ícone de ligar; o 2º telefone fica no menu "⋯" (issue #393)
   await expect(linha.getByRole("link", { name: /98987654321/ }).first()).toBeVisible();

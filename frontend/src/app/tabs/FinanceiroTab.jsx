@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  Camera,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -50,7 +49,7 @@ import {
 } from "../tabShared.jsx";
 import { LancarPorFoto } from "./LancarPorFoto.jsx";
 
-export default function FinanceiroTab({ pix, deepLink, atalhos = [], pedidoLancar = null }) {
+export default function FinanceiroTab({ pix, deepLink, pedidoLancar = null }) {
   const [subview, setSubview] = useState("lancamentos");
   useDeepLinkSubview(deepLink, setSubview);
   const [mesRef, setMesRef] = useState(new Date());
@@ -224,7 +223,7 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [], pedidoLanca
           onChange={setSubview}
           options={[
             { id: "lancamentos", label: "Lançamentos", Icon: Wallet },
-            { id: "contas_receber", label: "Contas a receber", Icon: MessageCircle },
+            { id: "contas_receber", label: "A receber", Icon: MessageCircle },
             { id: "relatorio", label: "Relatório", Icon: Receipt },
           ]}
         />
@@ -338,37 +337,6 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [], pedidoLanca
                 </div>
               </div>
             </div>
-          </div>
-          {/* atalhos do que é novo: lançar por foto, fechamento e extrato, a um toque */}
-          <div
-            className="grid gap-2 md:max-w-md"
-            style={{ gridTemplateColumns: `repeat(${1 + atalhos.length}, minmax(0,1fr))` }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setLancarAberto(true);
-                setTimeout(() => {
-                  document.getElementById("financeiro-lancar")?.scrollIntoView({ block: "start" });
-                  document.getElementById("lancar-por-foto")?.click();
-                }, 60);
-              }}
-              className="btn-press toque-at flex flex-col items-start gap-1.5 rounded-xl border p-2.5 min-h-[64px] text-left text-[12.5px] font-semibold"
-              style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-            >
-              <Camera size={17} style={{ color: C.inkSoft }} /> Lançar por foto
-            </button>
-            {atalhos.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={a.onClick}
-                className="btn-press toque-at flex flex-col items-start gap-1.5 rounded-xl border p-2.5 min-h-[64px] text-left text-[12.5px] font-semibold"
-                style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-              >
-                <a.Icon size={17} style={{ color: C.inkSoft }} /> {a.label}
-              </button>
-            ))}
           </div>
           <div className={calAberto ? "grid lg:grid-cols-[340px_1fr] gap-6" : "space-y-5"}>
             {calAberto && (
@@ -680,7 +648,7 @@ export default function FinanceiroTab({ pix, deepLink, atalhos = [], pedidoLanca
                       />
                       <div className="min-w-0 flex-1">
                         <div
-                          className="text-[14px] font-semibold truncate"
+                          className="text-[14px] font-semibold break-words"
                           style={{ color: C.ink }}
                         >
                           {f.descricao ||
@@ -976,7 +944,7 @@ function RelatorioFinanceiroView() {
   const semDados = !finAno.loading && relatorio.linhas.length === 0;
 
   return (
-    <div className="px-4 md:px-10 pb-10 space-y-5">
+    <div className="px-4 md:px-10 pb-10 space-y-4">
       <Presence when={!!(erro || finAno.error)}>
         <div
           className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"

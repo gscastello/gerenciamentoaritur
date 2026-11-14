@@ -125,7 +125,11 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
           </ErrorBanner>
         )}
         {/* total numa linha (auditoria, issue #397: o cartão de destaque antigo saiu) */}
-        <p className="text-[13px] mb-3" style={{ color: C.inkSoft }} data-testid="total-de-passageiros">
+        <p
+          className="text-[13px] mb-3"
+          style={{ color: C.inkSoft }}
+          data-testid="total-de-passageiros"
+        >
           <b style={{ color: C.ink }}>
             {total} {total === 1 ? "passageiro" : "passageiros"}
           </b>{" "}
@@ -313,14 +317,14 @@ function PassageiroCard({
             {iniciais}
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-medium truncate">
+            <span className="block text-sm font-medium break-words">
               {p.nome}{" "}
               <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
                 · {p.telefone}
                 {p.telefone2 ? ` · ${p.telefone2}` : ""}
               </span>
             </span>
-            <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
+            <span className="block text-xs mt-0.5 break-words" style={{ color: C.inkSoft }}>
               {p.ultima_data ? `última ${fmtDate(p.ultima_data)}` : "sem viagens"} ·{" "}
               <b style={{ color: C.brandText }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
             </span>

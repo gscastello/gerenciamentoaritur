@@ -50,7 +50,7 @@ test("o extra aparece na seção EXTRAS e não entra na lotação", async ({ pag
   await abrirAgenda(page);
   const secao = page.getByText("EXTRAS", { exact: true }).first();
   await expect(secao).toBeVisible();
-  await expect(page.getByText("3 passagem(ns) · fora das vagas").first()).toBeVisible();
+  await expect(page.getByText("3 passagens · fora das vagas").first()).toBeVisible();
   // lotação da ida = só os 2 normais (31 vagas): 29 livres, extras à parte
   await expect(page.getByTestId("seletor-sentido")).toContainText("2/31");
   await expect(page.locator("div.row-hover", { hasText: "Estrada Extra" })).toBeVisible();
@@ -66,7 +66,7 @@ test("'Tornar extra' marca a reserva e ela vai para EXTRAS", async ({ page }) =>
   await linha.getByRole("button", { name: /^Mais ações/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Tornar extra" }).click();
   await expect.poll(() => corpo).toMatchObject({ p_reservation_id: "n-1", p_extra: true });
-  await expect(page.getByText("5 passagem(ns) · fora das vagas").first()).toBeVisible();
+  await expect(page.getByText("5 passagens · fora das vagas").first()).toBeVisible();
 });
 
 test("'Voltar às vagas' recusado (viagem lotada) mostra o motivo", async ({ page }) => {

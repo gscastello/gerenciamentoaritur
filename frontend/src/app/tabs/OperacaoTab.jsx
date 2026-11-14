@@ -1,17 +1,4 @@
-import {
-  AlertTriangle,
-  Bus,
-  CheckCircle2,
-  Fuel,
-  Pencil,
-  Plus,
-  Route,
-  Save,
-  TrendingUp,
-  Wallet,
-  Wrench,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Bus, Pencil, Plus, Save, Wrench, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { consumoForaDoNormal, textoDoConsumo } from "../../domain/frota.js";
 import { useMaintenanceTypes } from "../../hooks/useMaintenanceTypes.js";
@@ -24,7 +11,6 @@ import {
   Header,
   Pill,
   Select,
-  StatCard,
   SubTabs,
   TextInput,
   fmtBRL,
@@ -277,7 +263,7 @@ export default function OperacaoTab() {
           ) : null
         }
       />
-      <div className="px-4 md:px-10 pb-10 space-y-5">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {(erro || fuel.error || manut.error) && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -301,10 +287,10 @@ export default function OperacaoTab() {
             <button
               type="button"
               onClick={() => setCriandoVeiculo((s) => !s)}
-              className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
-              style={{ background: C.amberSoft, color: C.brandText }}
+              className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-xl border font-semibold"
+              style={{ background: C.panel2, borderColor: C.border, color: C.ink }}
             >
-              <Plus size={13} /> Novo veículo
+              <Plus size={14} /> Novo veículo
             </button>
           </div>
           {criandoVeiculo && (
@@ -397,30 +383,30 @@ export default function OperacaoTab() {
                   key={v.id}
                   className="border rounded-lg px-4 py-3 relative"
                   style={{
-                    borderColor: ativo ? C.amber : C.border,
-                    background: ativo ? C.amberSoft : C.panel2,
+                    borderColor: ativo ? C.inkFaint : C.border,
+                    background: C.panel2,
                   }}
                 >
-                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                  <div className="absolute top-1 right-1 flex items-center">
                     <button
                       type="button"
                       onClick={() => {
                         setEditandoVeiculo(v.id);
                         setVeiculoForm({ name: v.name, plate: v.plate, capacity: v.capacity });
                       }}
-                      className="btn-press"
-                      title="Editar veículo"
+                      className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
+                      aria-label="Editar veículo"
                     >
-                      <Pencil size={12} style={{ color: C.inkFaint }} />
+                      <Pencil size={14} style={{ color: C.inkSoft }} />
                     </button>
                     {!ativo && (
                       <button
                         type="button"
                         onClick={() => removerVeiculo(v)}
-                        className="btn-press"
-                        title="Remover veículo"
+                        className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
+                        aria-label="Remover veículo"
                       >
-                        <X size={13} style={{ color: C.red }} />
+                        <X size={15} style={{ color: C.inkSoft }} />
                       </button>
                     )}
                   </div>
@@ -429,18 +415,17 @@ export default function OperacaoTab() {
                     onClick={() =>
                       run(() => setDefault(v.id), "Não foi possível trocar o veículo padrão.")
                     }
-                    className="btn-press w-full text-left flex items-center justify-between"
+                    className="btn-press w-full text-left flex items-center justify-between pr-20"
                   >
                     <div>
                       <div className="text-sm font-medium flex items-center gap-1.5">
-                        <Bus size={14} style={{ color: ativo ? C.brandText : C.inkSoft }} />{" "}
-                        {v.name} {ativo && <Pill color={C.blue}>padrão</Pill>}
+                        <Bus size={14} style={{ color: C.inkSoft }} /> {v.name}{" "}
+                        {ativo && <Pill color={C.blue}>padrão</Pill>}
                       </div>
                       <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
                         {v.plate} · {v.capacity} lugares
                       </div>
                     </div>
-                    {ativo && <CheckCircle2 size={16} style={{ color: C.brandText }} />}
                   </button>
                 </div>
               );
@@ -484,37 +469,33 @@ export default function OperacaoTab() {
             </>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-          <StatCard
-            label={`Km (${periodo})`}
-            value={totalKm.toLocaleString("pt-BR")}
-            icon={Route}
-          />
-          <StatCard
-            label="Combustível"
-            value={fmtBRL(totalCombustivel)}
-            icon={Fuel}
-            accent={C.warn}
-          />
-          <StatCard
-            label="Manutenção"
-            value={fmtBRL(totalManutencao)}
-            icon={Wrench}
-            accent={C.red}
-          />
-          <StatCard
-            label="Consumo médio"
-            value={consumoMedio ? `${consumoMedio} km/L` : "—"}
-            icon={TrendingUp}
-            accent={C.blue}
-          />
-          <StatCard
-            label="Custo por km"
-            value={fmtBRL(custoPorKm)}
-            icon={Wallet}
-            accent={C.green}
-          />
-        </div>
+        {/* totais num cartão só, em lista (issue #399): cinco quadradinhos deixavam um sozinho
+            na última linha */}
+        <Card className="!py-1">
+          {[
+            [
+              `Km (${{ dia: "hoje", mes: "este mês", ano: "este ano" }[periodo]})`,
+              totalKm.toLocaleString("pt-BR"),
+            ],
+            ["Combustível", fmtBRL(totalCombustivel)],
+            ["Manutenção", fmtBRL(totalManutencao)],
+            ["Consumo médio", consumoMedio ? `${consumoMedio} km/L` : "—"],
+            ["Custo por km", fmtBRL(custoPorKm)],
+          ].map(([rotulo, valor], i) => (
+            <div
+              key={rotulo}
+              className={`flex items-center justify-between gap-3 py-2.5 ${i > 0 ? "border-t" : ""}`}
+              style={{ borderColor: C.borderSoft }}
+            >
+              <span className="text-[13px]" style={{ color: C.inkSoft }}>
+                {rotulo}
+              </span>
+              <span className="text-[15px] font-semibold tabular-nums" style={{ color: C.ink }}>
+                {valor}
+              </span>
+            </div>
+          ))}
+        </Card>
 
         {vehicles.length > 1 && (
           <Card>
@@ -614,7 +595,7 @@ export default function OperacaoTab() {
           <button
             type="button"
             onClick={addMotorista}
-            className="btn-press mt-3 text-xs flex items-center gap-1"
+            className="btn-press mt-2 text-xs flex items-center gap-1 min-h-[40px]"
             style={{ color: C.brandText }}
           >
             <Plus size={12} /> Adicionar motorista
@@ -750,11 +731,21 @@ export default function OperacaoTab() {
                     )}
                   </span>
                   <div className="flex gap-2">
-                    <button onClick={() => iniciarEdicaoReg(r)}>
-                      <Pencil size={12} style={{ color: C.inkFaint }} />
+                    <button
+                      type="button"
+                      aria-label="Editar abastecimento"
+                      className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
+                      onClick={() => iniciarEdicaoReg(r)}
+                    >
+                      <Pencil size={14} style={{ color: C.inkSoft }} />
                     </button>
-                    <button onClick={() => removerRegistro(r.id)}>
-                      <X size={12} style={{ color: C.red }} />
+                    <button
+                      type="button"
+                      aria-label="Remover abastecimento"
+                      className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
+                      onClick={() => removerRegistro(r.id)}
+                    >
+                      <X size={15} style={{ color: C.inkSoft }} />
                     </button>
                   </div>
                 </div>
@@ -833,7 +824,7 @@ export default function OperacaoTab() {
               </div>
               {novoTipoManut !== null && (
                 <div
-                  className="mt-2 flex flex-wrap items-end gap-2 rounded-lg p-3"
+                  className="mt-2 form-linha flex flex-wrap items-end gap-2 rounded-lg p-3"
                   style={{ background: C.panel2 }}
                 >
                   <TextInput
@@ -961,16 +952,20 @@ export default function OperacaoTab() {
                         </Pill>
                       )}
                       <button
+                        type="button"
                         onClick={() => iniciarEdicaoManut(m)}
                         aria-label={`Editar manutenção: ${m.tipo}`}
+                        className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
                       >
-                        <Pencil size={12} style={{ color: C.inkFaint }} />
+                        <Pencil size={14} style={{ color: C.inkSoft }} />
                       </button>
                       <button
+                        type="button"
                         onClick={() => removerManutencao(m.id)}
                         aria-label={`Remover manutenção: ${m.tipo}`}
+                        className="btn-press w-10 h-10 rounded-lg flex items-center justify-center"
                       >
-                        <X size={12} style={{ color: C.red }} />
+                        <X size={15} style={{ color: C.inkSoft }} />
                       </button>
                     </div>
                   </div>

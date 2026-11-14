@@ -3,7 +3,7 @@ import { campoAnotar } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #258: microfone na anotação rápida (reconhecimento de voz do navegador)
-// e atalhos dos pontos de embarque no topo da Agenda.
+// (os atalhos dos pontos no topo da Agenda saíram na issue #399).
 
 // Reconhecimento de voz falso: ao começar, "ouve" a frase de window.__FALA__.
 const VOZ_FALSA = () => {
@@ -77,22 +77,11 @@ test("Agenda: navegador sem reconhecimento de voz não mostra o microfone", asyn
   await expect(page.getByRole("button", { name: /Ditar reserva/ })).toHaveCount(0);
 });
 
-test("Agenda: atalhos no topo levam a cada ponto da Ida e da Volta", async ({ page }) => {
+test("Agenda: sem atalhos dos pontos nem Iniciar viagem no topo (issue #399)", async ({ page }) => {
   await mockSupabase(page, { role: "admin", occupancy: {} });
   await abrirAgenda(page);
-
-  const atalhos = page.getByTestId("atalhos-pontos");
-  await expect(atalhos).toBeVisible();
-  await expect(
-    atalhos.getByRole("button", { name: /Ir para Buscar em Casa \(Ida\)/ }),
-  ).toBeVisible();
-  await expect(atalhos.getByRole("button", { name: /\(Volta\)/ }).first()).toBeVisible();
-
-  // o último ponto da Volta fica lá embaixo: o atalho rola até ele
-  const ultimoVolta = atalhos.getByRole("button", { name: /\(Volta\)/ }).last();
-  const nome = (await ultimoVolta.getAttribute("aria-label")).match(/Ir para (.+) \(Volta\)/)[1];
-  const alvo = page.locator(`[id^="ponto-volta-"]`).filter({ hasText: nome.toUpperCase() });
-  await expect(alvo).not.toBeInViewport();
-  await ultimoVolta.click();
-  await expect(alvo).toBeInViewport();
+  await expect(page.locator('[id^="ponto-ida-"]').first()).toBeVisible();
+  await expect(page.getByTestId("atalhos-pontos")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Iniciar viagem/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Nova encomenda" })).toHaveCount(0);
 });

@@ -39,7 +39,7 @@ export default function SistemaLocaisOutros() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <MapPin size={16} style={{ color: C.brandText }} /> Locais em Outros com preço próprio
+        <MapPin size={16} style={{ color: C.inkSoft }} /> Locais em Outros com preço próprio
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Embarque em Outros cujo local bate com um item daqui usa este valor (o app e o bot). Os
@@ -58,7 +58,7 @@ export default function SistemaLocaisOutros() {
         </ErrorBanner>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 mb-3">
+      <div className="form-linha flex flex-wrap items-end gap-2 mb-3">
         <div>
           <label htmlFor="local-outros" className="text-[10px] block" style={{ color: C.inkFaint }}>
             Local

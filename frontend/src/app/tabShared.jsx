@@ -554,7 +554,7 @@ export function BuscaChip({ r, onCycle, dense = false }) {
       type="button"
       onClick={() => onCycle(r.id, modo)}
       className={`btn-press inline-flex items-center gap-1 rounded-full font-semibold ${
-        dense ? "text-[10px] px-1.5 py-0.5" : "text-[11px] px-2 py-1"
+        dense ? "text-[10px] px-1.5 py-0.5" : "text-[11px] px-2.5 min-h-[32px]"
       }`}
       style={{ background: `${m.cor}22`, color: m.cor, border: `1px solid ${m.cor}66` }}
       aria-label="Mudar quem busca este passageiro"
@@ -796,7 +796,7 @@ export function Header({ title, subtitle, right }) {
     // z-30: o painel do sino (dentro deste cabeçalho animado) fica por cima do conteúdo
     // da tela, como o cartão do topo da Agenda (issue #353)
     <div
-      className={`relative z-30 px-4 md:px-10 md:pr-16 pt-3 md:pt-8 pb-3 md:pb-5 items-start justify-between flex-wrap gap-3 anim-fadeUp ${
+      className={`relative z-30 px-4 md:px-10 md:pr-16 pt-0 md:pt-8 pb-4 md:pb-5 items-start justify-between flex-wrap gap-3 anim-fadeUp ${
         right ? "flex" : "hidden md:flex"
       }`}
     >
@@ -940,7 +940,13 @@ export function SubTabs({ value, onChange, options }) {
   // auditoria (issue #397): sem a caixa em volta — quando quebra linha, são etiquetas soltas, não
   // uma caixa partida; ícone só a partir do tablet, para caber mais numa linha no celular.
   return (
-    <div className="flex flex-wrap gap-1.5 max-w-full" role="group">
+    <div
+      className="grid sm:flex sm:flex-wrap gap-1.5 w-full sm:w-auto max-w-full"
+      style={{
+        gridTemplateColumns: `repeat(${options.length <= 3 ? options.length : 2}, minmax(0, 1fr))`,
+      }}
+      role="group"
+    >
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
         return (
@@ -949,7 +955,7 @@ export function SubTabs({ value, onChange, options }) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(id)}
-            className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-full border"
+            className="btn-press flex items-center justify-center gap-1.5 text-[13px] leading-tight text-center px-3 sm:px-3.5 min-h-[40px] rounded-full border"
             style={{
               background: active ? C.panel2 : "transparent",
               borderColor: active ? C.inkFaint : C.border,
@@ -1337,7 +1343,7 @@ export function BotaoAgendar({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-xl font-semibold shrink-0"
+      className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-xl font-semibold shrink-0 whitespace-nowrap"
       style={{ background: C.brand, color: C.onBrand }}
     >
       <Plus size={15} /> Nova reserva

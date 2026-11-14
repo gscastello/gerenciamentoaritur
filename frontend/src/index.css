@@ -7,3 +7,24 @@ html,
 body {
   overscroll-behavior-y: contain;
 }
+
+/* Formulários em linha (issue #399): no celular, um campo por linha na largura toda e o botão
+   embaixo, centralizado — antes os campos de largura fixa quebravam linha soltos, meio a meio. */
+@media (max-width: 639px) {
+  .form-linha {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .form-linha > *,
+  .form-linha input:not([type="checkbox"]):not([type="radio"]),
+  .form-linha select,
+  .form-linha textarea {
+    width: 100%;
+    max-width: none;
+  }
+  .form-linha > button {
+    justify-content: center;
+    min-height: 44px;
+  }
+}

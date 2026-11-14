@@ -48,7 +48,7 @@ export default function LixeiraReservas({ reservas, trips, onRestaurar }) {
         type="button"
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
-        className="w-full flex items-center justify-between gap-2 text-left"
+        className="w-full min-h-[44px] flex items-center justify-between gap-2 text-left"
       >
         <span className="flex items-center gap-2 text-sm font-semibold">
           <Trash2 size={15} style={{ color: C.inkSoft }} /> Lixeira — reservas canceladas

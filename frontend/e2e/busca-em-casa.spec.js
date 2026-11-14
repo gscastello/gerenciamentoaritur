@@ -118,7 +118,7 @@ test("só Buscar em casa tem copiar e o botão EDITAR", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.mouse.click(5, 5);
   // um único EDITAR: o da seção Buscar em casa
-  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Editar lista" })).toHaveCount(1);
 });
 
 test("EDITAR: seleciona reservas e define quem busca em lote (Ari) — só grava ao salvar", async ({
@@ -133,7 +133,7 @@ test("EDITAR: seleciona reservas e define quem busca em lote (Ari) — só grava
     }
   });
   await abrir(page);
-  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("button", { name: "Editar lista" }).click();
 
   // sem seleção, os botões de responsável ficam desligados
   await expect(page.getByRole("button", { name: "Atribuir a Ari" })).toBeDisabled();
@@ -154,7 +154,7 @@ test("EDITAR: seleciona reservas e define quem busca em lote (Ari) — só grava
   expect([...corpo.p_ids].sort()).toEqual(["b1", "b2"]);
 
   // saiu do modo edição e a linha ficou como Ari
-  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar lista" })).toBeVisible();
   await expect(linha(page, "Ana Taxi").getByText("Ari", { exact: true })).toBeVisible();
 });
 
@@ -164,7 +164,7 @@ test("EDITAR: Cancelar descarta o rascunho", async ({ page }) => {
     if (r.url().includes("/rpc/rpc_set_pickup_transport_many")) gravou = true;
   });
   await abrir(page);
-  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("button", { name: "Editar lista" }).click();
   await page.getByRole("checkbox", { name: "Selecionar Ana Taxi" }).check();
   await page.getByRole("button", { name: "Atribuir a Maurício" }).click();
   await page.getByRole("button", { name: "Cancelar edição" }).click();
@@ -179,7 +179,7 @@ test("EDITAR: reordena com as setas e grava a nova ordem", async ({ page }) => {
     if (r.url().includes("/rpc/rpc_reorder_pickup")) ordem = r.postDataJSON?.().p_ids;
   });
   await abrir(page);
-  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("button", { name: "Editar lista" }).click();
 
   await page.getByRole("button", { name: "Subir Caio Gustavo" }).click();
   await page.getByRole("button", { name: "Subir Caio Gustavo" }).click();
@@ -187,7 +187,7 @@ test("EDITAR: reordena com as setas e grava a nova ordem", async ({ page }) => {
 
   await expect.poll(() => ordem).toEqual(["b3", "b1", "b2"]);
   // volta ao modo normal e a lista já aparece na nova ordem
-  await expect(page.getByRole("button", { name: "EDITAR LISTA" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar lista" })).toBeVisible();
   const nomes = await page.locator("div.row-hover").allInnerTexts();
   const posicao = (nome) => nomes.findIndex((t) => t.includes(nome));
   expect(posicao("Caio Gustavo")).toBeLessThan(posicao("Ana Taxi"));
@@ -196,7 +196,7 @@ test("EDITAR: reordena com as setas e grava a nova ordem", async ({ page }) => {
 
 test("EDITAR: Agrupar por quem busca junta Táxi, Gustavo, Maurício e Ari", async ({ page }) => {
   await abrir(page);
-  await page.getByRole("button", { name: "EDITAR LISTA" }).click();
+  await page.getByRole("button", { name: "Editar lista" }).click();
   await page.getByRole("checkbox", { name: "Selecionar Ana Taxi" }).check();
   await page.getByRole("button", { name: "Atribuir a Ari" }).click();
   await page.getByRole("button", { name: "Agrupar por quem busca" }).click();

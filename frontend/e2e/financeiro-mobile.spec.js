@@ -45,7 +45,7 @@ test('"Contas a receber" sem pendências mostra a mensagem inteira, sem tabela l
   page,
 }) => {
   await abrirFinanceiro(page);
-  await page.getByRole("button", { name: "Contas a receber" }).click();
+  await page.getByRole("button", { name: "A receber" }).click();
 
   const msg = page.getByText("Nenhuma conta pendente — tudo em dia.");
   await expect(msg).toBeVisible();

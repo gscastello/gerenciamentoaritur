@@ -98,7 +98,7 @@ export default function SistemaTrechos() {
   return (
     <Card>
       <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-        <Route size={16} style={{ color: C.brandText }} /> Preços por trecho
+        <Route size={16} style={{ color: C.inkSoft }} /> Preços por trecho
       </div>
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         Quando o embarque e o desembarque batem com um trecho daqui, nos dois sentidos, o bot usa
@@ -136,7 +136,7 @@ export default function SistemaTrechos() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 mb-3">
+      <div className="form-linha flex flex-wrap items-end gap-2 mb-3">
         <div>
           <label
             htmlFor="trecho-origem"

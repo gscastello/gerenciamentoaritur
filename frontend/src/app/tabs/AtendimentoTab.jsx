@@ -178,7 +178,7 @@ function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <span
-              className="text-sm font-medium truncate"
+              className="text-sm font-medium break-words"
               style={{ fontSize: 15, fontWeight: 600, color: C.ink }}
             >
               {n.principal}
@@ -673,7 +673,7 @@ export default function AtendimentoTab({
                 <button
                   type="button"
                   onClick={() => onNavigate({ tab: "sistema", deepLink: { secao: "bot" } })}
-                  className="btn-press text-xs px-3 py-1.5 rounded-md"
+                  className="btn-press text-xs px-3 min-h-[40px] rounded-lg"
                   style={{
                     background: C.panel2,
                     color: C.inkSoft,
