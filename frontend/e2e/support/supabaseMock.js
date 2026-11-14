@@ -197,7 +197,17 @@ export async function mockSupabase(page, opts = {}) {
     },
     notifications = [],
     pendencias = [],
+    // relógio dos testes: hoje às 6h em São Luís (antes de a Ida sair). A Agenda abre na Volta
+    // depois das 9h (#391); sem isso, os testes da Ida falhavam conforme a hora em que rodavam.
+    // `hora: null` usa o relógio de verdade.
+    hora = "06:00",
   } = opts;
+  if (hora) {
+    const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
+      new Date(),
+    );
+    await page.clock.setFixedTime(new Date(`${hoje}T${hora}:00-03:00`));
+  }
   // mutável: rpc_edit_reservation aplica mudanças simples no array
   let reservations = (opts.reservations ?? []).map((r) => ({ ...r }));
 

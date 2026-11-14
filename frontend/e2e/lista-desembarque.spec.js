@@ -40,7 +40,7 @@ async function abrirDesembarque(page) {
 }
 
 test("Desembarque: anota, marca, apaga e guarda no aparelho sem internet", async ({ page }) => {
-  await mockSupabase(page, { role: "admin" });
+  await mockSupabase(page, { role: "admin", hora: null }); // a lista junta pela hora de cada mudança: relógio de verdade
   const servidor = simular(page);
   await page.goto("/");
   await abrirDesembarque(page);

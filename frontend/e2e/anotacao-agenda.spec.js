@@ -93,11 +93,41 @@ test("Agenda: anotação sem telefone reconhecível mostra erro e não chama a R
     .click();
 
   const campo = await campoAnotar(page, "Buscar em Casa");
-  await campo.fill("1P Cohatrac");
+  // com número e sem telefone válido: é telefone digitado errado, não um nome (issue #404)
+  await campo.fill("1P Cohatrac Rua 7");
   await campo.press("Enter");
 
   await expect(page.getByText(/telefone/i)).toBeVisible();
   expect(chamouRpc).toBe(false);
+});
+
+test("Agenda: anotação só com o nome cria a reserva sem telefone (issue #404)", async ({
+  page,
+}) => {
+  let corpo = null;
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    onCreate: (route) => {
+      corpo = JSON.parse(route.request().postData() || "{}");
+    },
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
+
+  const campo = await campoAnotar(page, "Rodoviária");
+  await campo.fill("2P Maria Silva");
+  await campo.press("Enter");
+
+  await expect.poll(() => corpo?.p_customer_name).toBe("Maria Silva");
+  expect(corpo.p_customer_phone).toBeNull();
+  expect(corpo.p_route_point_code).toBe("rodoviaria");
+  expect(corpo.p_quantity).toBe(2);
+  expect(corpo.p_status).toBe("confirmada");
+  await expect(campo).toHaveValue("");
 });
 
 // Issue #202: ordem NP - Endereço - telefone - nome na própria linha.
