@@ -84,27 +84,71 @@ export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], texto
 }
 
 /**
- * A ORIGEM decide o sentido (dono, 14/11 — issues #406 e #407): saindo de Pirapemas ou Cantanhede,
- * para qualquer lugar (inclusive a outra cidade), é sempre VOLTA; saindo de São Luís é sempre IDA.
- * Vale sobre o destino ("de Pirapemas pra Cantanhede" não é Ida por dizer "pra Cantanhede").
+ * O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11 — issues #406 e #407). A Ida sai de São Luís e
+ * vai até Pirapemas; a Volta sai de Pirapemas e vai até São Luís, pelo mesmo caminho:
+ *   São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas
+ * Destino DEPOIS da origem nessa ordem = Ida; destino ANTES = Volta. "De Cantanhede pra Pirapemas" é
+ * Ida (a Volta já passou por Cantanhede vinda de Pirapemas); "de Pirapemas pra Cantanhede" é Volta.
+ * Só a origem: São Luís = Ida; Pirapemas/Cantanhede = Volta (o mais comum). Vale sobre o destino
+ * sozinho ("pra Cantanhede" de quem sai de Pirapemas não é Ida).
  */
-const ORIGEM_INTERIOR =
-  / (de|saindo de|sair de|saio de|vindo de|venho de|daqui de) (pirapemas|cantanhede)( (pra|para|p|a|ate|ir pra|ir para) ([a-z]+( [a-z]+)?))? /;
-const ORIGEM_SAO_LUIS =
-  / (de|saindo de|sair de|saio de|daqui de) (sao luis|slz)( (pra|para|p|a|ate|ir pra|ir para) ([a-z]+( [a-z]+)?))? /;
+export const ORDEM_DA_IDA = ["sao luis", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "cantanhede", "campestre", "pirapemas"] as const;
+type Parada = (typeof ORDEM_DA_IDA)[number];
 
-export type OrigemDoTrecho = { sentido: "ida" | "volta"; cidade: "pirapemas" | "cantanhede" | null; destino: string | null };
+const NOME_DA_PARADA: Record<Parada, string> = {
+  "sao luis": "São Luís",
+  bacabeira: "Bacabeira",
+  "santa rita": "Santa Rita",
+  entroncamento: "Entroncamento",
+  miranda: "Miranda do Norte",
+  matoes: "Matões do Norte",
+  cantanhede: "Cantanhede",
+  campestre: "Campestre",
+  pirapemas: "Pirapemas",
+};
 
-/** Origem escrita numa frase: "de Pirapemas pra Cantanhede", "saindo de São Luís". "Sou de Pirapemas" sozinho não conta. */
+const PARADA = "(sao luis|slz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|cantanhede|campestre|pirapemas)";
+const RE_DE_PARA = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} (?:pra|para|p|a|ate|ir pra|ir para) ${PARADA} `);
+const RE_SO_ORIGEM = new RegExp(` (de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} `);
+
+function parada(t: string): Parada | null {
+  const n = t.replace(/ do norte$/, "");
+  if (n === "slz") return "sao luis";
+  return (ORDEM_DA_IDA as readonly string[]).includes(n) ? (n as Parada) : null;
+}
+
+export type OrigemDoTrecho = {
+  sentido: "ida" | "volta";
+  /** de onde sai (parada da rota) */
+  de: Parada;
+  /** para onde vai, se disse */
+  para: Parada | null;
+};
+
+/** O sentido do trecho pela ordem das paradas (null = mesma parada). */
+export function sentidoDoTrecho(de: Parada, para: Parada): "ida" | "volta" | null {
+  const a = ORDEM_DA_IDA.indexOf(de);
+  const b = ORDEM_DA_IDA.indexOf(para);
+  return a === b ? null : a < b ? "ida" : "volta";
+}
+
+/** Origem escrita numa frase: "de Cantanhede pra Pirapemas", "saindo de São Luís". "Sou de Pirapemas" sozinho não conta. */
 export function origemEscrita(texto: string): OrigemDoTrecho | null {
   const n = ` ${normalizarTexto(texto)} `;
-  const interior = n.match(ORIGEM_INTERIOR);
-  // "de Pirapemas" só vale com destino ("de Pirapemas pra…") ou com "saindo/vindo de"
-  if (interior && (interior[3] || interior[1] !== "de")) {
-    return { sentido: "volta", cidade: interior[2] as "pirapemas" | "cantanhede", destino: interior[5] ?? null };
+  const trecho = n.match(RE_DE_PARA);
+  if (trecho) {
+    const de = parada(trecho[1]);
+    const para = parada(trecho[2]);
+    const sentido = de && para ? sentidoDoTrecho(de, para) : null;
+    if (de && para && sentido) return { sentido, de, para };
   }
-  const saoLuis = n.match(ORIGEM_SAO_LUIS);
-  if (saoLuis && (saoLuis[3] || saoLuis[1] !== "de")) return { sentido: "ida", cidade: null, destino: saoLuis[5] ?? null };
+  // só a origem: precisa de "saindo/vindo de" ("de Pirapemas" sozinho pode ser "sou de Pirapemas")
+  const so = n.match(RE_SO_ORIGEM);
+  if (so && so[1] !== "de") {
+    const de = parada(so[2]);
+    if (de === "sao luis") return { sentido: "ida", de, para: null };
+    if (de === "pirapemas" || de === "cantanhede") return { sentido: "volta", de, para: null };
+  }
   return null;
 }
 
@@ -127,8 +171,9 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
 const RESPOSTA_DE_SIM = /^(sim|isso|certo|exato|correto|isso mesmo|e isso|pode ser|ok|blz|beleza|s)\b/;
 
 /**
- * A origem do trecho pedido: o que o CLIENTE escreveu, ou o que a EQUIPE disse e ele confirmou
- * logo depois ("De pirapemas pra Cantanhede, certo?" → "Isso"). Sentidos diferentes = null.
+ * O trecho pedido: o que o CLIENTE escreveu, ou o que a EQUIPE disse e ele confirmou logo
+ * depois ("De pirapemas pra Cantanhede, certo?" → "Isso"). Vale o mais recente; sentidos
+ * diferentes = null.
  */
 export function origemDoPedido(falas: { quem: string; texto: string }[]): OrigemDoTrecho | null {
   const achadas: OrigemDoTrecho[] = [];
@@ -149,46 +194,70 @@ export function origemDoPedido(falas: { quem: string; texto: string }[]): Origem
       break;
     }
   }
-  const sentidos = [...new Set(achadas.map((a) => a.sentido))];
-  if (sentidos.length !== 1) return null;
-  const cidades = [...new Set(achadas.map((a) => a.cidade).filter(Boolean))];
-  const destinos = achadas.map((a) => a.destino).filter(Boolean) as string[];
-  return {
-    sentido: sentidos[0],
-    cidade: cidades.length === 1 ? (cidades[0] as "pirapemas" | "cantanhede") : null,
-    destino: destinos.at(-1) ?? null,
-  };
+  if (new Set(achadas.map((a) => a.sentido)).size !== 1) return null;
+  return achadas.at(-1) ?? null;
 }
 
-const NOME_DA_CIDADE_DO_TRECHO: Record<string, string> = { cantanhede: "Cantanhede", pirapemas: "Pirapemas", campestre: "Campestre" };
+/** Cidade de embarque da Volta (o ponto): Campestre vai no ponto Pirapemas; outra cidade do caminho, no Cantanhede (#326). */
+export function pontoDaVoltaPelaOrigem(de: Parada): "pirapemas" | "cantanhede" | null {
+  if (de === "pirapemas" || de === "campestre") return "pirapemas";
+  if (de === "sao luis") return null;
+  return "cantanhede";
+}
+
+const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "sao luis" ? "sao luis" : p);
 
 /**
- * Pedido lido no sentido contrário ao da origem dita: vira o sentido da origem (issue #407).
- * Saindo de Pirapemas/Cantanhede = Volta com a cidade de embarque e o destino no desembarque
- * (o bairro de São Luís lido por engano sai); saindo de São Luís = Ida.
+ * O pedido segue o trecho dito (issue #407): sentido pela ordem das paradas, embarque na cidade de
+ * onde sai e desembarque na de destino. Volta: o ponto é a cidade (Campestre = Pirapemas; outras do
+ * caminho = Cantanhede, com a cidade no endereço) e o bairro de São Luís lido por engano sai. Ida
+ * saindo de uma cidade do interior ("de Cantanhede pra Pirapemas"): ponto Outros com a cidade.
  */
 export function pedidosPelaOrigem<P extends PedidoDoPar>(pedidos: P[], origem: OrigemDoTrecho | null): P[] {
   if (!origem) return pedidos;
   let mudou = false;
-  const destinoDito = origem.destino ? (NOME_DA_CIDADE_DO_TRECHO[origem.destino.split(" ")[0]] ?? null) : null;
+  const destino = origem.para ? NOME_DA_PARADA[origem.para] : null;
+  const nomeDe = NOME_DA_PARADA[origem.de];
   const out = pedidos.map((p) => {
-    if ((p.tipo ?? "passagem") === "encomenda" || p.direcao === origem.sentido) return p;
+    if ((p.tipo ?? "passagem") === "encomenda") return p;
+    const naCidade = (end: string | null | undefined) => (temANome(end, origem.de) ? (end ?? null) : [nomeDe, end].filter(Boolean).join(", "));
+    let novo: P | null = null;
+    if (origem.sentido === "volta") {
+      const ponto = pontoDaVoltaPelaOrigem(origem.de);
+      const doCaminho = origem.de !== "pirapemas" && origem.de !== "cantanhede";
+      if (p.direcao !== "volta" || p.bairro || (ponto && cidadeDaVoltaTexto(p.cidade_dita) !== ponto)) {
+        novo = {
+          ...p,
+          direcao: "volta",
+          ponto: null,
+          bairro: null,
+          cidade_dita: ponto,
+          endereco: doCaminho ? naCidade(p.endereco) : (p.endereco ?? null),
+          desembarque: p.desembarque || destino,
+        };
+      }
+    } else if (origem.de === "sao luis") {
+      if (p.direcao !== "ida") {
+        novo = { ...p, direcao: "ida", ponto: null, cidade_dita: null, desembarque: p.desembarque || destino };
+      }
+    } else if (p.direcao !== "ida" || p.ponto !== "outro" || p.bairro) {
+      // Ida que sobe numa cidade do interior: ponto Outros, com a cidade no endereço
+      novo = { ...p, direcao: "ida", ponto: "outro", bairro: null, cidade_dita: null, endereco: naCidade(p.endereco), desembarque: p.desembarque || destino };
+    }
+    if (!novo) return p;
     mudou = true;
-    const aviso = origem.sentido === "volta"
-      ? `Saindo de ${origem.cidade ? NOME_DA_CIDADE_DO_TRECHO[origem.cidade] : "Pirapemas/Cantanhede"}: é a Volta (a origem decide o sentido).`
-      : "Saindo de São Luís: é a Ida (a origem decide o sentido).";
+    const trecho = `${nomeDe}${destino ? ` para ${destino}` : ""}`;
     return {
-      ...p,
-      direcao: origem.sentido,
-      ponto: null,
-      bairro: origem.sentido === "volta" ? null : (p.bairro ?? null),
-      cidade_dita: origem.sentido === "volta" ? (origem.cidade ?? p.cidade_dita ?? null) : null,
-      endereco: p.endereco ?? null,
-      desembarque: p.desembarque || destinoDito,
-      duvida: [p.duvida, aviso].filter(Boolean).join(" "),
+      ...novo,
+      duvida: [p.duvida, `Trecho ${trecho}: é a ${origem.sentido === "ida" ? "Ida" : "Volta"} (pela ordem das paradas).`].filter(Boolean).join(" "),
     };
   });
   return mudou ? out : pedidos;
+}
+
+function cidadeDaVoltaTexto(v: string | null | undefined): string | null {
+  const n = normalizarTexto(v ?? "");
+  return n.includes("pirapemas") ? "pirapemas" : n.includes("cantanhede") ? "cantanhede" : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -431,7 +500,7 @@ export function conferenciaFinal(
 ): string[] {
   if (r.type === "encomenda") return [];
   const textos = mensagens.map((m) => m.texto);
-  if (ctx.origem?.sentido === "volta" && ctx.origem.cidade) ctx = { ...ctx, cidadeEscrita: ctx.origem.cidade };
+  if (ctx.origem?.sentido === "volta") ctx = { ...ctx, cidadeEscrita: pontoDaVoltaPelaOrigem(ctx.origem.de) };
   const naoBate: string[] = [];
 
   const datas = [...new Set([...datasEscritas(mensagens), ...(ctx.datasConfirmadas ?? [])])]

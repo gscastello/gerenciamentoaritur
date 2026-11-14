@@ -326,9 +326,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   vagas depois da reserva), para não faltar lugar a quem vai até São Luís (`trechoPrecisaDeConfirmacao`, ajustável em
   `settings.intermediate_review` = `{valor_minimo, vagas_minimas}`). Volta com embarque numa cidade do caminho = ponto
   Cantanhede com a cidade no embarque e o valor do trecho; Campestre vai no ponto Pirapemas, com o valor de Pirapemas/Cantanhede. Trecho sem
-  valor na tabela continua indo para a equipe; cidade fora da rota também. **A origem decide o sentido** (dono, 14/11 — issues #406 e #407):
-  saindo de Pirapemas ou Cantanhede, para qualquer lugar (inclusive a outra cidade), é sempre Volta; saindo de São Luís é
-  sempre Ida — escrito pelo cliente ou dito pela equipe e confirmado por ele (`origemDoPedido`/`pedidosPelaOrigem`). **Rua com nome de cidade é rua** (issue #341,
+  valor na tabela continua indo para a equipe; cidade fora da rota também. **O sentido sai da ordem das paradas** (dono, 14/11 — issues #406 e
+  #407): Ida = São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas;
+  Volta = o contrário. Destino depois da origem = Ida, antes = Volta: de Pirapemas pra Cantanhede é Volta, de Cantanhede
+  pra Pirapemas é Ida (ponto Outros). Vale o trecho escrito pelo cliente ou dito pela equipe e confirmado por ele
+  (`ORDEM_DA_IDA`, `origemDoPedido`, `pedidosPelaOrigem`). **Rua com nome de cidade é rua** (issue #341,
   `semLogradouros` em `grafia.ts`): "Rua Santa Rita de Cássia", "Av. Colombo" não são as cidades do caminho.
   **Mesma viagem, uma reserva** (issue #345, `juntarPedidosDaMesmaViagem`): N passagens do mesmo passageiro no mesmo
   dia e sentido, mesmo com desembarques diferentes ("2 ficam no Santo Antônio e 2 na Estrada da Maioba"), são UMA
