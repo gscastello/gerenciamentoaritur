@@ -80,7 +80,8 @@ test("Agenda: navegador sem reconhecimento de voz não mostra o microfone", asyn
 test("Agenda: sem atalhos dos pontos nem Iniciar viagem no topo (issue #399)", async ({ page }) => {
   await mockSupabase(page, { role: "admin", occupancy: {} });
   await abrirAgenda(page);
-  await expect(page.locator('[id^="ponto-ida-"]').first()).toBeVisible();
+  // a Agenda abre na Volta depois que a Ida do dia sai: qualquer ponto serve
+  await expect(page.locator('[id^="ponto-ida-"], [id^="ponto-volta-"]').first()).toBeVisible();
   await expect(page.getByTestId("atalhos-pontos")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Iniciar viagem/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Nova encomenda" })).toHaveCount(0);
