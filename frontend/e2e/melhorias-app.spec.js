@@ -60,12 +60,12 @@ test("Agenda: endereço em destaque, nome em segundo plano e telefone secundári
 
   const linha = page.locator("div.row-hover", { hasText: "João do Bairro Teste" });
   const tamanho = (loc) => loc.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
-  const endereco = linha.getByText("Cohatrac", { exact: true });
+  // crítica de design (issue #393): o nome em cima; "1P · bairro · valor" embaixo, menor
   const nome = linha.getByText("João do Bairro Teste", { exact: true });
+  const endereco = linha.getByText(/Cohatrac/).last();
   await expect(endereco).toBeVisible();
   await expect(nome).toBeVisible();
-  // o endereço é maior que o nome
-  expect(await tamanho(endereco)).toBeGreaterThan(await tamanho(nome));
+  expect(await tamanho(nome)).toBeGreaterThan(await tamanho(endereco));
 
   // o principal é o ícone de ligar; o 2º telefone fica no menu "⋯" (issue #393)
   await expect(linha.getByRole("link", { name: /98987654321/ }).first()).toBeVisible();
@@ -87,8 +87,7 @@ test("Agendar passagem: cidade que exige revisão nasce pendente e leva o telefo
     },
   });
   await abrirAgenda(page);
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
@@ -120,8 +119,7 @@ test("Agendar passagem: cidade padrão continua confirmada direto", async ({ pag
     },
   });
   await abrirAgenda(page);
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
   await page.getByLabel("Nome (ou telefone)").fill("Cliente Cantanhede E2E");

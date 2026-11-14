@@ -17,8 +17,7 @@ test("nova reserva: agenda pagando com cartão", async ({ page }) => {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
 
   const modal = page.locator("div.anim-pop");
   await modal.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });

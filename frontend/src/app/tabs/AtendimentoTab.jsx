@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FILTROS_DA_FILA,
   aguardandoDeVerdade,
@@ -149,59 +149,77 @@ function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
     chatwootUrl && c.chatwoot_conversation_id
       ? `${chatwootUrl}/conversations/${c.chatwoot_conversation_id}`
       : null;
+  const Area = link ? "a" : "div";
+  const areaProps = link
+    ? {
+        href: link,
+        target: "_blank",
+        rel: "noreferrer",
+        "aria-label": `Abrir no Chatwoot a conversa de ${n.principal}`,
+      }
+    : {};
   return (
     <div
-      className="row-hover grid gap-3 py-2.5 border-b"
-      style={{ gridTemplateColumns: "40px minmax(0,1fr) auto", borderColor: C.panel2 }}
+      className="row-hover grid gap-1 border-b"
+      style={{ gridTemplateColumns: "minmax(0,1fr) auto", borderColor: C.panel2 }}
     >
-      <span
-        aria-hidden="true"
-        className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold"
-        style={{ background: C.panel2, color: C.inkSoft }}
+      <Area
+        {...areaProps}
+        className="toque-at grid gap-3 py-2.5 min-w-0"
+        style={{ gridTemplateColumns: "40px minmax(0,1fr)" }}
       >
-        {iniciais(n.principal)}
-      </span>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span
-            className="text-sm font-medium truncate"
-            style={{ fontSize: 15, fontWeight: 600, color: C.ink }}
-          >
-            {n.principal}
-          </span>
-          {n.semCadastro && (
+        <span
+          aria-hidden="true"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold"
+          style={{ background: C.panel2, color: C.inkSoft }}
+        >
+          {iniciais(n.principal)}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span
-              className="text-[11px] px-1.5 rounded shrink-0"
-              style={{ border: `1px dashed ${C.inkFaint}`, color: C.inkSoft }}
+              className="text-sm font-medium truncate"
+              style={{ fontSize: 15, fontWeight: 600, color: C.ink }}
             >
-              sem cadastro
+              {n.principal}
             </span>
-          )}
-        </div>
-        {c.previa && (
-          <div className="text-[13px] truncate" style={{ color: C.inkSoft }} title={c.previa}>
-            {autor && <span style={{ color: C.ink }}>{autor}: </span>}
-            {c.previa}
+            {n.semCadastro && (
+              <span
+                className="text-[11px] px-1.5 rounded shrink-0"
+                style={{ border: `1px dashed ${C.inkFaint}`, color: C.inkSoft }}
+              >
+                sem cadastro
+              </span>
+            )}
           </div>
-        )}
-        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs">
-          {aguardando ? (
-            <span className="inline-flex items-center gap-1 font-semibold" style={{ color: C.ink }}>
-              <Clock size={13} />
-              <span>Aguardando resposta</span>
+          {c.previa && (
+            <div className="text-[13px] truncate" style={{ color: C.inkSoft }} title={c.previa}>
+              {autor && <span style={{ color: C.ink }}>{autor}: </span>}
+              {c.previa}
+            </div>
+          )}
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs">
+            {aguardando ? (
+              <span
+                className="inline-flex items-center gap-1 font-semibold"
+                style={{ color: C.ink }}
+              >
+                <Clock size={13} />
+                <span>Aguardando resposta</span>
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1" style={{ color: C.inkFaint }}>
+              {comEquipe ? <Users size={12} /> : <Bot size={12} />}
+              <span>{comEquipe ? "Com a equipe" : "Com o bot"}</span>
             </span>
-          ) : null}
-          <span className="inline-flex items-center gap-1" style={{ color: C.inkFaint }}>
-            {comEquipe ? <Users size={12} /> : <Bot size={12} />}
-            <span>{comEquipe ? "Com a equipe" : "Com o bot"}</span>
-          </span>
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
+            {fmtTelefone(c.phone)}
+            {n.perfil && <> · perfil do WhatsApp: {n.perfil}</>}
+          </div>
         </div>
-        <div className="text-[11px] mt-0.5" style={{ color: C.inkFaint }}>
-          {fmtTelefone(c.phone)}
-          {n.perfil && <> · perfil do WhatsApp: {n.perfil}</>}
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-0.5">
+      </Area>
+      <div className="flex flex-col items-end gap-0.5 py-2.5">
         {c.last_message_at && (
           <span className="text-xs" style={{ color: C.inkFaint }}>
             {tempoRelativo(c.last_message_at)}
@@ -219,19 +237,6 @@ function ConversaItem({ c, chatwootUrl, onVerCadastro }) {
             >
               <Users size={17} />
             </button>
-          )}
-          {link && (
-            <a
-              href={link}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Abrir no Chatwoot"
-              title="Abrir no Chatwoot"
-              className="btn-press w-11 h-11 rounded-xl flex items-center justify-center"
-              style={{ color: C.inkSoft }}
-            >
-              <ExternalLink size={17} />
-            </a>
           )}
         </div>
       </div>
@@ -288,7 +293,10 @@ function RascunhoItem({ r, trips, chatwootUrl, onLancar, onDescartar, onCopiar }
           </div>
         )}
         {r.notes && (
-          <div className="text-[11px] mt-1" style={{ color: C.amber, overflowWrap: "anywhere" }}>
+          <div
+            className="text-[11px] mt-1"
+            style={{ color: C.brandText, overflowWrap: "anywhere" }}
+          >
             Conferir: {r.notes}
           </div>
         )}
@@ -490,6 +498,7 @@ function FiltroDaFila({ filtro, onFiltro, contagem }) {
  * Pendências, que é a PendenciasTab) são montadas pelo App.
  */
 export default function AtendimentoTab({
+  onContagens,
   vista = "conversas",
   modoAtendimento,
   onNavigate,
@@ -497,7 +506,8 @@ export default function AtendimentoTab({
   onAgendar,
 }) {
   const at = useAtendimento();
-  const rasc = useRascunhosDeReserva({ enabled: vista === "lancar" });
+  // sempre ligado: a aba "Para lançar" mostra quantas estão prontas (crítica de design, #393)
+  const rasc = useRascunhosDeReserva({ enabled: true });
   const kb = useBotKnowledge();
   const cfg = useSettings();
   const [erro, setErro] = useState("");
@@ -531,27 +541,16 @@ export default function AtendimentoTab({
   const modo = MODOS[modoAtendimento] || MODOS.manual;
   const fila = filaDeConversas(at.conversas, filtro);
   const contagem = contagemDaFila(at.conversas);
+  const nAguardando = contagem.aguardando ?? 0;
+  const nParaLancar = rasc.rascunhos.length;
+  useEffect(() => {
+    onContagens?.({ atendimento: nAguardando, para_lancar: nParaLancar });
+  }, [nAguardando, nParaLancar, onContagens]);
   const chatwootUrl = cfg.chatwootUrl;
 
   return (
     <div>
-      <Header
-        title="Atendimento"
-        subtitle={RESUMOS[vista] ?? RESUMOS.conversas}
-        right={
-          chatwootUrl && (
-            <a
-              href={chatwootUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-lg font-medium border"
-              style={{ background: C.panel, color: C.ink, borderColor: C.border }}
-            >
-              <ExternalLink size={14} /> Abrir Chatwoot
-            </a>
-          )
-        }
-      />
+      <Header title="Atendimento" subtitle={RESUMOS[vista] ?? RESUMOS.conversas} right={null} />
       <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
 
@@ -593,6 +592,17 @@ export default function AtendimentoTab({
                 </FadeIn>
               ))}
             </div>
+            {chatwootUrl && (
+              <a
+                href={chatwootUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-press inline-flex items-center gap-1.5 text-[13px] mt-3 min-h-[44px]"
+                style={{ color: C.inkSoft }}
+              >
+                <ExternalLink size={14} /> Abrir o Chatwoot
+              </a>
+            )}
           </Secao>
         )}
 
@@ -652,7 +662,7 @@ export default function AtendimentoTab({
             <Card>
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0">
-                  <modo.icon size={18} style={{ color: C.amber, marginTop: 2 }} />
+                  <modo.icon size={18} style={{ color: C.brandText, marginTop: 2 }} />
                   <div className="min-w-0">
                     <div className="text-sm font-semibold">Bot: {modo.label}</div>
                     <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>

@@ -55,7 +55,7 @@ function NotaCard({ nota, onChange, onBlur, onTogglePin, onRemove }) {
             type="button"
             onClick={() => onTogglePin(nota.id, nota.pinned)}
             className="btn-press rounded-md p-1.5"
-            style={{ color: nota.pinned ? C.brand : C.inkFaint }}
+            style={{ color: nota.pinned ? C.brandText : C.inkFaint }}
             aria-label={nota.pinned ? "Desafixar" : "Fixar"}
             title={nota.pinned ? "Desafixar" : "Fixar"}
           >

@@ -242,7 +242,7 @@ export default function ExtratoTab() {
             onClick={() => inputRef.current?.click()}
             disabled={ext.importando}
             className="btn-press w-full flex items-center justify-center gap-2 text-sm px-3 py-2.5 rounded-lg font-semibold disabled:opacity-60"
-            style={{ background: C.amberSoft, color: C.amber, border: `1px dashed ${C.amber}` }}
+            style={{ background: C.amberSoft, color: C.brandText, border: `1px dashed ${C.amber}` }}
           >
             <Upload size={16} />{" "}
             {ext.importando ? "Lendo o extrato…" : "Enviar extrato (OFX ou CSV)"}
@@ -266,7 +266,7 @@ export default function ExtratoTab() {
         <Card>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
             <div className="text-sm font-semibold flex items-center gap-2">
-              <Landmark size={16} style={{ color: C.amber }} /> Conferência do mês
+              <Landmark size={16} style={{ color: C.brandText }} /> Conferência do mês
             </div>
             <TextInput
               type="month"

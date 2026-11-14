@@ -330,7 +330,7 @@ export default function OperacaoTab() {
               type="button"
               onClick={() => setCriandoVeiculo((s) => !s)}
               className="btn-press flex items-center gap-1 text-xs px-2 py-1.5 rounded-md font-medium"
-              style={{ background: C.amberSoft, color: C.amber }}
+              style={{ background: C.amberSoft, color: C.brandText }}
             >
               <Plus size={13} /> Novo veículo
             </button>
@@ -461,14 +461,14 @@ export default function OperacaoTab() {
                   >
                     <div>
                       <div className="text-sm font-medium flex items-center gap-1.5">
-                        <Bus size={14} style={{ color: ativo ? C.amber : C.inkSoft }} /> {v.name}{" "}
+                        <Bus size={14} style={{ color: ativo ? C.brandText : C.inkSoft }} /> {v.name}{" "}
                         {ativo && <Pill color={C.blue}>padrão</Pill>}
                       </div>
                       <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
                         {v.plate} · {v.capacity} lugares
                       </div>
                     </div>
-                    {ativo && <CheckCircle2 size={16} style={{ color: C.amber }} />}
+                    {ativo && <CheckCircle2 size={16} style={{ color: C.brandText }} />}
                   </button>
                 </div>
               );
@@ -643,7 +643,7 @@ export default function OperacaoTab() {
             type="button"
             onClick={addMotorista}
             className="btn-press mt-3 text-xs flex items-center gap-1"
-            style={{ color: C.amber }}
+            style={{ color: C.brandText }}
           >
             <Plus size={12} /> Adicionar motorista
           </button>
@@ -782,7 +782,7 @@ export default function OperacaoTab() {
 
         <Card>
           <div className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Wrench size={15} style={{ color: C.amber }} /> Manutenção preventiva
+            <Wrench size={15} style={{ color: C.brandText }} /> Manutenção preventiva
           </div>
           <div className="text-xs mb-3" style={{ color: C.inkFaint }}>
             A despesa da manutenção entra sozinha no Financeiro do dia.

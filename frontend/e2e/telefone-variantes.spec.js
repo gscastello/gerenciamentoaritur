@@ -9,8 +9,7 @@ async function abrirNovaReserva(page) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   return page.locator("div.anim-pop");
 }
 

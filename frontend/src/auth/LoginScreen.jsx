@@ -180,7 +180,7 @@ export function LoginScreen() {
         >
           {busy ? "Entrando…" : "Entrar"}
         </button>
-        {busy && <ProgressBar />}
+        {busy && <ProgressBar color="#E4121F" trackColor="#2A2C31" />}
       </form>
       <style>{`
         .login-entrar { transition: transform .12s cubic-bezier(.2,0,0,1), background-color .15s ease; }

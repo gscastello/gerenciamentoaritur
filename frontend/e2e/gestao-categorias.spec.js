@@ -38,6 +38,8 @@ test("Gestão: cria categoria de Caixa do dia e ela aparece no Financeiro", asyn
   await expect(cardDespesa.getByText("Pedágio de viagem", { exact: true })).toBeVisible();
 
   await abrirTela(page, "financeiro");
+  // o formulário de lançar abre pelo "+ Lançar" (crítica de design, issue #393)
+  await page.getByRole("button", { name: "Novo lançamento" }).click();
   await expect(page.getByRole("button", { name: /Pedágio de viagem/ })).toBeVisible();
 });
 

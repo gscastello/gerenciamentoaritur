@@ -7,11 +7,11 @@
 //   - autenticado com papel ........ o app
 
 import { isSupabaseConfigured } from "../lib/supabaseClient.js";
-import { Skeleton } from "../ui/motion/index.js";
+import { ProgressBar } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 import { LoginScreen } from "./LoginScreen.jsx";
 
-const C = { bg: "#000000", ink: "#F4F5F7", inkSoft: "#A6AAB2", amber: "#E4121F" };
+const C = { bg: "#0A0B0D", ink: "#F3F4F6", inkSoft: "#A7ABB3", amber: "#E4121F" };
 
 export function AuthGate({ children }) {
   const { loading, isAuthenticated, profile, signOut } = useAuth();
@@ -42,25 +42,63 @@ export function AuthGate({ children }) {
     );
   }
 
+  // Abertura do app (crítica de design, issue #393): a mesma foto do ônibus do login, com a logo,
+  // enquanto a sessão é conferida — é a primeira coisa que o sócio vê ao abrir o app.
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, padding: "32px 24px" }}>
+      <div
+        data-testid="abertura"
+        style={{
+          position: "relative",
+          minHeight: "100dvh",
+          overflow: "hidden",
+          background: "#0A0B0D",
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+        }}
+      >
+        <img
+          src="/brand/login-onibus.webp"
+          alt=""
+          aria-hidden="true"
+          width={900}
+          height={1600}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "50% 30%",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(180deg, rgba(10,11,13,0) 30%, rgba(10,11,13,.8) 60%, #0A0B0D 78%)",
+          }}
+        />
         <div
           style={{
-            maxWidth: 960,
-            margin: "0 auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
+            position: "relative",
+            width: "min(220px, 60vw)",
+            paddingBottom: "max(48px, env(safe-area-inset-bottom))",
           }}
         >
-          <Skeleton height={28} width={220} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} height={80} rounded={12} />
-            ))}
+          <img
+            src="/brand/logo-fundo-escuro.webp"
+            alt="AriTur Transportes — carregando"
+            width={560}
+            height={542}
+            style={{ width: "100%", height: "auto", display: "block" }}
+          />
+          <div style={{ marginTop: 18 }}>
+            <ProgressBar label="Abrindo o app" color="#E4121F" trackColor="#2A2C31" />
           </div>
-          <Skeleton height={320} rounded={12} />
         </div>
       </div>
     );

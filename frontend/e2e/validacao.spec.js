@@ -13,8 +13,7 @@ test("Agendar passagem: telefone inválido barra o envio", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
 
   // abre "Agendar passagem" pelo botão flutuante
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Nome (ou telefone)").fill("Maria Teste");

@@ -20,8 +20,7 @@ test("Agendar passagem: anotação escrita à mão vai pro pickup_detail", async
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   // ponto que NÃO é "Buscar em Casa" (sem bairro) — Outros, precisa só da anotação

@@ -90,7 +90,7 @@ function Sentido({
       >
         {ROTULO[direcao]}
         {destaque && (
-          <span className="normal-case" style={{ color: C.brand }}>
+          <span className="normal-case" style={{ color: C.brandText }}>
             · sugerida agora
           </span>
         )}

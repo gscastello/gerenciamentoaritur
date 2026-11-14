@@ -14,8 +14,7 @@ async function abrirAgendar(page, onCreate) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
   await page.getByLabel("Telefone (ou nome)").fill("98999990001");
 }

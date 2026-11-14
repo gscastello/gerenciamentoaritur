@@ -154,7 +154,7 @@ export default function BackupReservasDoDia() {
                     disabled={ocupado === `${d.id}:csv`}
                     aria-label={`Baixar CSV de ${fmtDate(d.backup_date)}`}
                     className="btn-press px-2 py-1 rounded-md"
-                    style={{ background: C.amberSoft, color: C.amber }}
+                    style={{ background: C.amberSoft, color: C.brandText }}
                   >
                     CSV
                   </button>

@@ -329,7 +329,7 @@ function PassageiroCard({
             className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
             style={{
               background: C.amberSoft,
-              color: C.brand,
+              color: C.brandText,
               border: `1px solid ${C.brandDim}55`,
             }}
           >
@@ -345,7 +345,7 @@ function PassageiroCard({
             </span>
             <span className="block text-xs mt-0.5 truncate" style={{ color: C.inkSoft }}>
               {p.ultima_data ? `última ${fmtDate(p.ultima_data)}` : "sem viagens"} ·{" "}
-              <b style={{ color: C.brand }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
+              <b style={{ color: C.brandText }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
             </span>
           </span>
         </button>

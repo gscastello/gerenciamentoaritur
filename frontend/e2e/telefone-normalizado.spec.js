@@ -27,8 +27,7 @@ test("Agenda: Agendar passagem manual também normaliza o telefone antes de envi
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
   await page.getByRole("button", { name: /^Agenda$/ }).first().click();
 
-  await page.getByRole("button", { name: "Ações rápidas" }).click();
-  await page.getByRole("button", { name: "Agendar passagem" }).click();
+  await page.getByRole("button", { name: "Nova reserva" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
 
   await page.getByLabel("Categoria de embarque").selectOption({ label: "Rodoviária" });
