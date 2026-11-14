@@ -353,3 +353,33 @@ Deno.test("#406/#407: o sentido sai da ordem das paradas (São Luís … Cantanh
   assert(conferenciaFinal(r, msgs, base).length > 0);
   assertEquals(conferenciaFinal(r, msgs, { ...base, origem }), []);
 });
+
+Deno.test("#415: 'segunda pra ir e terça pra volta' — monta a Volta que faltou; 'Volta na terça de Cantanhede pro X' é Volta", async () => {
+  const { outraViagemDoPar, pedidosPeloSentidoDoDia, origemEscrita } = await import("./pedidoDoCliente.ts");
+  // sexta 14/11/2026, 18h em São Luís
+  const SEXTA = "2026-11-14T21:43:00Z";
+  const m = (texto: string, em = SEXTA) => ({ texto, em });
+  const conversa = [
+    m("Ainda tem vaga de são Luís pra Cantanhede na segunda feira"),
+    m("Agenda uma passagem na segunda feira pra ir e na terça feira pra volta"),
+    m("Condomínio masil"),
+  ];
+  type Lido = { tipo: string; data: string; direcao: string; ponto: string | null; bairro: string | null; endereco: string | null; desembarque: string | null; cidade_dita?: string | null };
+  const ida: Lido = { tipo: "passagem", data: "2026-11-16", direcao: "ida", ponto: "busca", bairro: "Cohatrac", endereco: "Condomínio Marsil", desembarque: "Cantanhede" };
+  const [i, v] = outraViagemDoPar([ida], conversa, "2026-11-14");
+  assertEquals(i, ida);
+  assertEquals([v.data, v.direcao, v.cidade_dita, v.endereco, v.desembarque], ["2026-11-17", "volta", "cantanhede", null, "Condomínio Marsil, Cohatrac"]);
+  // sem falar das duas viagens, ou com as duas já lidas: não mexe
+  assertEquals(outraViagemDoPar([ida], [m("segunda e terça pra Cantanhede")], "2026-11-14").length, 1);
+  assertEquals(outraViagemDoPar([ida, { ...ida, data: "2026-11-17", direcao: "volta" }], conversa, "2026-11-14").length, 2);
+
+  // "Volta na terça feira de Cantanhede pro marsil" (lida como Ida de terça) → Volta saindo de Cantanhede
+  assertEquals(origemEscrita("Volta na terça feira de Cantanhede pro marsil")?.sentido, "volta");
+  assertEquals(sentidoEscrito(["Volta na terça feira de Cantanhede pro marsil"]), "volta");
+  assertEquals(sentidoEscrito(["segunda pra ir e terça pra volta"]), null);
+  const lidaErrada: Lido = { tipo: "passagem", data: "2026-11-17", direcao: "ida", ponto: "busca", bairro: null, endereco: "Cantanhede", desembarque: "Condomínio Marsil" };
+  const [c] = pedidosPeloSentidoDoDia([lidaErrada], [...conversa, m("Volta na terça feira de Cantanhede pro marsil")]);
+  assertEquals([c.direcao, c.cidade_dita, c.endereco, c.ponto], ["volta", "cantanhede", null, null]);
+  // a mensagem que cita os dois dias não decide nenhum deles
+  assertEquals(pedidosPeloSentidoDoDia([ida], conversa), [ida]);
+});

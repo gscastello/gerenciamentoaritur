@@ -79,6 +79,8 @@ import {
   segundaViagemEhAOutra,
   origemDoPedido,
   pedidosPelaOrigem,
+  outraViagemDoPar,
+  pedidosPeloSentidoDoDia,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -316,9 +318,15 @@ async function lerEGravar(
   const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto }));
   // a ORIGEM decide: saindo de Pirapemas/Cantanhede é Volta, de São Luís é Ida (dono, 14/11 — #407)
   const origem = origemDoPedido(falasDoTrecho);
-  const pedidos = pedidosPelaOrigem(pares, origem);
-  if (pedidos !== pares) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
+  const pelaOrigem = pedidosPelaOrigem(pares, origem);
+  if (pelaOrigem !== pares) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));
+  // "segunda pra ir e terça pra volta" com só uma viagem lida: monta a outra (issue #415)
+  // "Volta na terça de Cantanhede pro X": o sentido escrito para aquele dia vale para a viagem daquele dia
+  const peloDia = pedidosPeloSentidoDoDia(pelaOrigem, mensagensDoCliente);
+  if (peloDia !== pelaOrigem) evento("bot_sentido_do_dia", { conversa: entrada.chatwootConversationId });
+  const pedidos = outraViagemDoPar(peloDia, mensagensDoCliente, hoje);
+  if (pedidos !== peloDia) evento("bot_outra_viagem_do_par", { conversa: entrada.chatwootConversationId });
   // cliente e equipe na ordem: a resposta do cliente vale para o que a equipe perguntou (issue #320)
   const falasDoPedido = recentes
     .filter((m) => m.quem === "cliente" || m.quem === "equipe")
