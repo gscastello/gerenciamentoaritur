@@ -102,3 +102,33 @@ export function textoDoConsumo(c) {
     ? `consumo fora do normal: ${br(c.atual, 1)} km/l (normal ${br(c.normal, 1)})`
     : `custo por km acima do normal: R$ ${br(c.atual, 2)} (normal R$ ${br(c.normal, 2)})`;
 }
+
+/**
+ * Lugares de UMA viagem (issue #408): a capacidade gravada na própria viagem (ônibus 31,
+ * van reserva 15 — escolhida por dia na Operação). Sem a viagem cadastrada, a do veículo padrão.
+ * @param {{trip_date:string, direction:string, capacity:number}[]} viagens
+ */
+export function capacidadeDaViagem(viagens, data, direcao, padrao = 31) {
+  const v = (viagens ?? []).find((t) => t.trip_date === data && t.direction === direcao);
+  const cap = Number(v?.capacity);
+  return cap > 0 ? cap : padrao;
+}
+
+/**
+ * Viagens marcadas com outro veículo que não o padrão (a van reserva), por data e sentido.
+ * @param {{trip_date:string, direction:string, vehicle_id:string|null}[]} viagens
+ */
+export function viagensForaDoPadrao(viagens, padraoId) {
+  if (!padraoId) return [];
+  return (viagens ?? [])
+    .filter((t) => t.vehicle_id && t.vehicle_id !== padraoId)
+    .sort((a, b) =>
+      a.trip_date === b.trip_date
+        ? a.direction === "ida"
+          ? -1
+          : 1
+        : a.trip_date < b.trip_date
+          ? -1
+          : 1,
+    );
+}

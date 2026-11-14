@@ -185,8 +185,18 @@ function ItemPrecisa({ Icon, titulo, detalhe, acao, onClick }) {
   );
 }
 
-export default function DashboardTab({ reservas, capacidade, trips, pendencias = 0, onIr }) {
+export default function DashboardTab({
+  reservas,
+  capacidade,
+  capacidadeDe = null,
+  trips,
+  pendencias = 0,
+  onIr,
+}) {
   const hoje = todayStr();
+  // lugares de cada viagem de hoje (van reserva num dia — issue #408)
+  const capIdaHoje = capacidadeDe?.(hoje, "ida") ?? capacidade;
+  const capVoltaHoje = capacidadeDe?.(hoje, "volta") ?? capacidade;
   const notif = useNotificacoesCtx();
   // Financeiro do mês atual + anterior (a janela de 7 dias pode cruzar o mês).
   const now = new Date();
@@ -318,13 +328,13 @@ export default function DashboardTab({ reservas, capacidade, trips, pendencias =
           <CartaoViagem
             rotulo="Ida"
             passageiros={paxIdaHoje}
-            capacidade={capacidade}
+            capacidade={capIdaHoje}
             onClick={() => ir("agenda", { kind: "data", data: hoje, sentido: "ida" })}
           />
           <CartaoViagem
             rotulo="Volta"
             passageiros={paxVoltaHoje}
-            capacidade={capacidade}
+            capacidade={capVoltaHoje}
             onClick={() => ir("agenda", { kind: "data", data: hoje, sentido: "volta" })}
           />
         </div>
