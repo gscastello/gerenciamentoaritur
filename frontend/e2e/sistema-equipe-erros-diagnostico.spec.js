@@ -5,20 +5,25 @@ import { mockSupabase } from "./support/supabaseMock.js";
 // existente, resolver uma entrada do log de erros, e um achado de
 // diagnóstico com data de viagem ganha um link pra Agenda.
 
-async function abrirSistema(page) {
+async function abrirSistema(page, secao = "Dados e backup") {
   await expect(page.getByRole("button", { name: /^Início$/ }).first()).toBeVisible();
   const sistema = page.getByRole("button", { name: /^Sistema$/ });
   if ((await sistema.count()) === 0) {
     await page.getByRole("button", { name: "Mais" }).click();
   }
   await page.getByRole("button", { name: /^Sistema$/ }).click();
-  await expect(page.getByText("Equipe e logins")).toBeVisible();
+  // a tela Sistema tem abas (issue #397)
+  await page.getByRole("button", { name: secao, exact: true }).click();
+  await expect(page.getByRole("button", { name: secao, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 }
 
 test("Sistema: redefine a senha de um usuário da equipe", async ({ page }) => {
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
-  await abrirSistema(page);
+  await abrirSistema(page, "Equipe");
 
   await page.getByRole("button", { name: "redefinir senha de Motorista E2E" }).click();
   const celula = page.getByRole("cell", { name: "Nova senha de Motorista E2E:" });

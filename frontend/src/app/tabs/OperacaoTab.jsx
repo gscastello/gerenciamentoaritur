@@ -22,7 +22,6 @@ import {
   C,
   Card,
   Header,
-  HeroFX,
   Pill,
   Select,
   StatCard,
@@ -84,6 +83,9 @@ export default function OperacaoTab() {
     data: todayStr(),
   });
   const [erro, setErro] = useState("");
+  // formulários fechados até a pessoa pedir (auditoria, issue #397)
+  const [abastAberto, setAbastAberto] = useState(false);
+  const [manutAberta, setManutAberta] = useState(false);
 
   const registros = useMemo(() => (fuel.records || []).map(mapFuel), [fuel.records]);
   const manutencoes = useMemo(() => (manut.records || []).map(mapManut), [manut.records]);
@@ -275,7 +277,7 @@ export default function OperacaoTab() {
           ) : null
         }
       />
-      <div className="px-6 md:px-10 pb-10 space-y-5">
+      <div className="px-4 md:px-10 pb-10 space-y-5">
         {(erro || fuel.error || manut.error) && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -291,36 +293,6 @@ export default function OperacaoTab() {
                 <X size={13} />
               </button>
             )}
-          </div>
-        )}
-        {defaultVehicle && (
-          <div
-            className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 flex flex-wrap items-center justify-between gap-4"
-            style={{ borderColor: C.brandDim }}
-          >
-            <HeroFX />
-            <div className="relative flex items-center gap-3">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: "rgba(0,0,0,.35)" }}
-              >
-                <Bus size={20} style={{ color: "#fff" }} />
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "1.15rem",
-                    color: "#fff",
-                  }}
-                >
-                  {defaultVehicle.name}
-                </div>
-                <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
-                  {defaultVehicle.plate} · {defaultVehicle.capacity} lugares · veículo padrão
-                </div>
-              </div>
-            </div>
           </div>
         )}
         <Card className="anim-fadeUp">
@@ -461,8 +433,8 @@ export default function OperacaoTab() {
                   >
                     <div>
                       <div className="text-sm font-medium flex items-center gap-1.5">
-                        <Bus size={14} style={{ color: ativo ? C.brandText : C.inkSoft }} /> {v.name}{" "}
-                        {ativo && <Pill color={C.blue}>padrão</Pill>}
+                        <Bus size={14} style={{ color: ativo ? C.brandText : C.inkSoft }} />{" "}
+                        {v.name} {ativo && <Pill color={C.blue}>padrão</Pill>}
                       </div>
                       <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
                         {v.plate} · {v.capacity} lugares
@@ -653,52 +625,68 @@ export default function OperacaoTab() {
           <div className="text-sm font-semibold mb-3">Registrar abastecimento / viagem</div>
           {/* issue #369: a foto da nota do diesel (ou da oficina) preenche sozinho */}
           <LancarPorFoto destino="abastecimento" />
-          <div className="text-xs mb-3" style={{ color: C.inkFaint }}>
-            A despesa de combustível entra sozinha no Financeiro do dia.
-          </div>
-          <div className="grid sm:grid-cols-5 gap-2">
-            <TextInput
-              type="date"
-              value={reg.data}
-              onChange={(e) => setReg({ ...reg, data: e.target.value })}
-            />
-            <Select
-              value={reg.direcao}
-              onChange={(e) => setReg({ ...reg, direcao: e.target.value })}
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="text-xs" style={{ color: C.inkFaint }}>
+              A despesa de combustível entra sozinha no Financeiro do dia.
+            </div>
+            <button
+              type="button"
+              onClick={() => setAbastAberto((v) => !v)}
+              aria-expanded={abastAberto}
+              className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-xl border font-semibold"
+              style={{ background: C.panel2, borderColor: C.border, color: C.ink }}
             >
-              <option value="ida">Ida</option>
-              <option value="volta">Volta</option>
-            </Select>
-            <TextInput
-              placeholder="Km rodados"
-              type="number"
-              value={reg.km}
-              onChange={(e) => setReg({ ...reg, km: e.target.value })}
-            />
-            <TextInput
-              placeholder="Litros"
-              type="number"
-              value={reg.litros}
-              onChange={(e) => setReg({ ...reg, litros: e.target.value })}
-            />
-            <TextInput
-              placeholder="Combustível R$"
-              type="number"
-              value={reg.combustivel}
-              onChange={(e) => setReg({ ...reg, combustivel: e.target.value })}
-            />
+              {abastAberto ? <X size={14} /> : <Plus size={14} />}
+              {abastAberto ? "Fechar" : "Digitar"}
+            </button>
           </div>
-          <button
-            onClick={addRegistro}
-            disabled={!reg.km || !veiculoId}
-            className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-            style={{
-              background: !reg.km || !veiculoId ? C.border : C.amber,
-              color: !reg.km || !veiculoId ? C.inkFaint : C.onBrand,
-            }}
-          >
-            <Plus size={14} /> Registrar
-          </button>
+          {abastAberto && (
+            <div className="anim-slideDown mt-2">
+              <div className="grid sm:grid-cols-5 gap-2">
+                <TextInput
+                  type="date"
+                  value={reg.data}
+                  onChange={(e) => setReg({ ...reg, data: e.target.value })}
+                />
+                <Select
+                  value={reg.direcao}
+                  onChange={(e) => setReg({ ...reg, direcao: e.target.value })}
+                >
+                  <option value="ida">Ida</option>
+                  <option value="volta">Volta</option>
+                </Select>
+                <TextInput
+                  placeholder="Km rodados"
+                  type="number"
+                  value={reg.km}
+                  onChange={(e) => setReg({ ...reg, km: e.target.value })}
+                />
+                <TextInput
+                  placeholder="Litros"
+                  type="number"
+                  value={reg.litros}
+                  onChange={(e) => setReg({ ...reg, litros: e.target.value })}
+                />
+                <TextInput
+                  placeholder="Combustível R$"
+                  type="number"
+                  value={reg.combustivel}
+                  onChange={(e) => setReg({ ...reg, combustivel: e.target.value })}
+                />
+              </div>
+              <button
+                onClick={addRegistro}
+                disabled={!reg.km || !veiculoId}
+                className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+                style={{
+                  background: !reg.km || !veiculoId ? C.border : C.amber,
+                  color: !reg.km || !veiculoId ? C.inkFaint : C.onBrand,
+                }}
+              >
+                <Plus size={14} /> Registrar
+              </button>
+            </div>
+          )}
           <div className="mt-4 space-y-1.5">
             {registros.slice(0, 20).map((r) => {
               // mesma regra do aviso no sino (domain/frota.js ⇄ database/103)
@@ -781,95 +769,113 @@ export default function OperacaoTab() {
         </Card>
 
         <Card>
-          <div className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Wrench size={15} style={{ color: C.brandText }} /> Manutenção preventiva
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="text-sm font-semibold flex items-center gap-2">
+              <Wrench size={15} style={{ color: C.inkSoft }} /> Manutenção preventiva
+            </div>
+            <button
+              type="button"
+              onClick={() => setManutAberta((v) => !v)}
+              aria-expanded={manutAberta}
+              className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-xl border font-semibold"
+              style={{ background: C.panel2, borderColor: C.border, color: C.ink }}
+            >
+              {manutAberta ? <X size={14} /> : <Plus size={14} />}
+              {manutAberta ? "Fechar" : "Registrar"}
+            </button>
           </div>
           <div className="text-xs mb-3" style={{ color: C.inkFaint }}>
             A despesa da manutenção entra sozinha no Financeiro do dia.
           </div>
-          <div className="grid sm:grid-cols-5 gap-2">
-            <Select
-              value={novaManut.tipo}
-              onChange={(e) =>
-                onTipoManutChange((v) => setNovaManut({ ...novaManut, tipo: v }))(e.target.value)
-              }
-              aria-label="Tipo de manutenção"
-            >
-              <option value="">Tipo…</option>
-              {tiposManut.tipos.map((t) => (
-                <option key={t.id} value={t.label}>
-                  {t.label}
-                </option>
-              ))}
-              <option value="__novo__">➕ Novo tipo…</option>
-            </Select>
-            <TextInput
-              type="date"
-              value={novaManut.data}
-              onChange={(e) => setNovaManut({ ...novaManut, data: e.target.value })}
-            />
-            <TextInput
-              placeholder="Intervalo (km)"
-              type="number"
-              value={novaManut.intervaloKm}
-              onChange={(e) => setNovaManut({ ...novaManut, intervaloKm: e.target.value })}
-            />
-            <TextInput
-              placeholder="Km na manutenção"
-              type="number"
-              value={novaManut.kmAtual}
-              onChange={(e) => setNovaManut({ ...novaManut, kmAtual: e.target.value })}
-            />
-            <TextInput
-              placeholder="Custo R$"
-              type="number"
-              value={novaManut.custo}
-              onChange={(e) => setNovaManut({ ...novaManut, custo: e.target.value })}
-            />
-          </div>
-          {novoTipoManut !== null && (
-            <div
-              className="mt-2 flex flex-wrap items-end gap-2 rounded-lg p-3"
-              style={{ background: C.panel2 }}
-            >
-              <TextInput
-                value={novoTipoManut}
-                onChange={(e) => setNovoTipoManut(e.target.value)}
-                placeholder="Nome do novo tipo"
-                className="w-48"
-              />
+          {manutAberta && (
+            <div className="anim-slideDown">
+              <div className="grid sm:grid-cols-5 gap-2">
+                <Select
+                  value={novaManut.tipo}
+                  onChange={(e) =>
+                    onTipoManutChange((v) => setNovaManut({ ...novaManut, tipo: v }))(
+                      e.target.value,
+                    )
+                  }
+                  aria-label="Tipo de manutenção"
+                >
+                  <option value="">Tipo…</option>
+                  {tiposManut.tipos.map((t) => (
+                    <option key={t.id} value={t.label}>
+                      {t.label}
+                    </option>
+                  ))}
+                  <option value="__novo__">➕ Novo tipo…</option>
+                </Select>
+                <TextInput
+                  type="date"
+                  value={novaManut.data}
+                  onChange={(e) => setNovaManut({ ...novaManut, data: e.target.value })}
+                />
+                <TextInput
+                  placeholder="Intervalo (km)"
+                  type="number"
+                  value={novaManut.intervaloKm}
+                  onChange={(e) => setNovaManut({ ...novaManut, intervaloKm: e.target.value })}
+                />
+                <TextInput
+                  placeholder="Km na manutenção"
+                  type="number"
+                  value={novaManut.kmAtual}
+                  onChange={(e) => setNovaManut({ ...novaManut, kmAtual: e.target.value })}
+                />
+                <TextInput
+                  placeholder="Custo R$"
+                  type="number"
+                  value={novaManut.custo}
+                  onChange={(e) => setNovaManut({ ...novaManut, custo: e.target.value })}
+                />
+              </div>
+              {novoTipoManut !== null && (
+                <div
+                  className="mt-2 flex flex-wrap items-end gap-2 rounded-lg p-3"
+                  style={{ background: C.panel2 }}
+                >
+                  <TextInput
+                    value={novoTipoManut}
+                    onChange={(e) => setNovoTipoManut(e.target.value)}
+                    placeholder="Nome do novo tipo"
+                    className="w-48"
+                  />
+                  <button
+                    type="button"
+                    disabled={!novoTipoManut.trim() || tiposManut.salvando}
+                    onClick={() =>
+                      criarTipoManut((label) => setNovaManut((s) => ({ ...s, tipo: label })))
+                    }
+                    className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
+                    style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+                  >
+                    Criar e usar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNovoTipoManut(null)}
+                    className="btn-press text-xs px-3 py-2 rounded-md"
+                    style={{ background: C.panel, color: C.inkSoft }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
               <button
-                type="button"
-                disabled={!novoTipoManut.trim() || tiposManut.salvando}
-                onClick={() =>
-                  criarTipoManut((label) => setNovaManut((s) => ({ ...s, tipo: label })))
-                }
-                className="btn-press text-xs px-3 py-2 rounded-md disabled:opacity-40"
-                style={{ background: C.amber, color: C.onBrand, fontWeight: 600 }}
+                onClick={addManutencao}
+                disabled={!novaManut.tipo || !veiculoId}
+                className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+                style={{
+                  background: !novaManut.tipo || !veiculoId ? C.border : C.amber,
+                  color: !novaManut.tipo || !veiculoId ? C.inkFaint : C.onBrand,
+                }}
               >
-                Criar e usar
-              </button>
-              <button
-                type="button"
-                onClick={() => setNovoTipoManut(null)}
-                className="btn-press text-xs px-3 py-2 rounded-md"
-                style={{ background: C.panel, color: C.inkSoft }}
-              >
-                Cancelar
+                <Plus size={14} /> Registrar manutenção
               </button>
             </div>
           )}
-          <button
-            onClick={addManutencao}
-            disabled={!novaManut.tipo || !veiculoId}
-            className="btn-press mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-            style={{
-              background: !novaManut.tipo || !veiculoId ? C.border : C.amber,
-              color: !novaManut.tipo || !veiculoId ? C.inkFaint : C.onBrand,
-            }}
-          >
-            <Plus size={14} /> Registrar manutenção
-          </button>
           <div className="mt-4 space-y-1.5">
             {manutencoes.map((m) => {
               const kmDesde = kmAcumuladoDesde(m.data);

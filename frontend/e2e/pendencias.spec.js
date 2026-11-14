@@ -31,7 +31,8 @@ test("Pendências: lista, abre manual e resolve", async ({ page }) => {
 
   await expect(page.getByText("Cliente pediu para falar com atendente")).toBeVisible();
 
-  // abre uma pendência manual
+  // abre uma pendência manual (o formulário abre no botão — issue #397)
+  await page.getByRole("button", { name: "Nova pendência" }).click();
   await page.getByPlaceholder("Assunto (ex.: ligar de volta)").fill("Ligar para o Sr. José");
   await page.getByRole("button", { name: "Abrir pendência" }).click();
   await expect(page.getByText("Ligar para o Sr. José")).toBeVisible();

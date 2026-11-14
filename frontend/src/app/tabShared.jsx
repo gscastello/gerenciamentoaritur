@@ -24,8 +24,10 @@ import {
   X,
 } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cidadeIntermediariaDaVolta } from "../domain/cidades.js";
 import { ehExtra } from "../domain/vagas.js";
+import { Presence, Skeleton, fadeSlideDown } from "../ui/motion/index.js";
 
 /* ============================================================================
  * Helpers, tokens, contexts and UI primitives shared by every tab.
@@ -563,42 +565,6 @@ export function BuscaChip({ r, onCycle, dense = false }) {
   );
 }
 
-export function HeroFX() {
-  return (
-    <div className="hero-fx" aria-hidden="true">
-      <div className="hero-fx-bus">
-        <svg
-          viewBox="0 0 232 84"
-          fill="none"
-          aria-hidden="true"
-          preserveAspectRatio="xMidYMid meet"
-        >
-          <path d="M226 42 L232 26 L232 62 Z" fill="#ffdca6" opacity="0.4" />
-          <path
-            d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v7c0 4-3 7-7 7h-12a15 15 0 0 0-30 0H70a15 15 0 0 0-30 0H14c-4 0-8-3-8-8V20Z"
-            fill="#050506"
-            stroke="rgba(228,18,31,0.55)"
-            strokeWidth="1.4"
-          />
-          <g fill="rgba(255,255,255,0.07)">
-            <rect x="20" y="20" width="24" height="16" rx="3" />
-            <rect x="50" y="20" width="24" height="16" rx="3" />
-            <rect x="80" y="20" width="24" height="16" rx="3" />
-            <rect x="110" y="20" width="24" height="16" rx="3" />
-            <rect x="140" y="20" width="22" height="16" rx="3" />
-          </g>
-          <rect x="6" y="43" width="196" height="3" rx="1.5" fill="#E4121F" opacity="0.85" />
-          <circle cx="54" cy="70" r="10" fill="#0b0b0d" stroke="#2b2b30" strokeWidth="2" />
-          <circle cx="186" cy="70" r="10" fill="#0b0b0d" stroke="#2b2b30" strokeWidth="2" />
-        </svg>
-      </div>
-      <span className="hero-fx-spark s1" />
-      <span className="hero-fx-spark s2" />
-      <span className="hero-fx-spark s3" />
-    </div>
-  );
-}
-
 /* ===================== BUSCA GLOBAL ============================= */
 // Lupa fixa no topo (todas as telas) + atalho "/" e Ctrl/⌘+K no desktop.
 // Resultados agrupados: passageiros, reservas, viagens e "ir para" (telas).
@@ -632,21 +598,50 @@ export function tempoRelativo(iso) {
 // Sino de notificações — usa o contexto provido no AppInner (uma
 // assinatura de Realtime). Painel com as últimas notificações da equipe:
 // lotação, cancelamento e mudança de embarque/desembarque.
+// Onde o painel abre (auditoria de design, issue #397): preso à tela, nunca ao sino — no celular o
+// sino não fica na borda (o "⋯" está ao lado) e o painel vazava pela esquerda.
+function posicaoDoPainel(botao) {
+  const vw = window.innerWidth;
+  const r = botao?.getBoundingClientRect();
+  const largura = Math.min(vw - 24, 380);
+  const topo = (r ? r.bottom : 56) + 8;
+  if (vw < 768)
+    return { top: topo, left: 12, right: 12, maxHeight: `calc(100dvh - ${topo + 96}px)` };
+  const direita = Math.min(Math.max(12, vw - (r ? r.right : vw - 12)), vw - 12 - largura);
+  return { top: topo, right: direita, width: largura, maxHeight: `calc(100dvh - ${topo + 24}px)` };
+}
+
 export function SinoNotificacoes() {
   const ctx = useNotificacoesCtx();
   const [aberto, setAberto] = useState(false);
+  const [pos, setPos] = useState(null);
+  const botaoRef = useRef(null);
+  useEffect(() => {
+    if (!aberto) return undefined;
+    const atualizar = () => setPos(posicaoDoPainel(botaoRef.current));
+    atualizar();
+    const tecla = (e) => e.key === "Escape" && setAberto(false);
+    window.addEventListener("resize", atualizar);
+    window.addEventListener("keydown", tecla);
+    return () => {
+      window.removeEventListener("resize", atualizar);
+      window.removeEventListener("keydown", tecla);
+    };
+  }, [aberto]);
   if (!ctx) return null;
   const { notificacoes, naoLidas, marcarLida, marcarTodasLidas, limparTodas, loading } = ctx;
   return (
     <div className="relative">
       <button
+        ref={botaoRef}
         type="button"
+        aria-expanded={aberto}
         onClick={() => setAberto((v) => !v)}
         aria-label={`Notificações${naoLidas ? ` (${naoLidas} não lidas)` : ""}`}
-        className="btn-press relative w-9 h-9 rounded-lg flex items-center justify-center"
+        className="btn-press relative w-11 h-11 md:w-9 md:h-9 rounded-xl md:rounded-lg flex items-center justify-center"
         style={{ background: C.panel2, border: `1px solid ${C.border}`, color: C.inkSoft }}
       >
-        <Bell size={16} />
+        <Bell size={17} />
         {naoLidas > 0 && (
           <span
             className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
@@ -656,147 +651,139 @@ export function SinoNotificacoes() {
           </span>
         )}
       </button>
-      {aberto && (
-        <>
-          <button
-            type="button"
-            aria-label="Fechar notificações"
-            className="fixed inset-0 z-40"
-            onClick={() => setAberto(false)}
-          />
-          <div
-            className="absolute right-0 mt-2 w-[min(92vw,360px)] max-h-[70vh] overflow-y-auto rounded-xl border shadow-xl z-50 anim-fadeUp"
-            style={{ background: C.panel, borderColor: C.border }}
-          >
-            <div
-              className="flex items-center justify-between px-3 py-2 border-b sticky top-0"
-              style={{ borderColor: C.borderSoft, background: C.panel }}
-            >
-              <span className="text-sm font-semibold" style={{ color: C.ink }}>
-                Notificações
-              </span>
-              <span className="flex items-center gap-1.5">
-                {naoLidas > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => marcarTodasLidas()}
-                    className="btn-press text-[11px] px-2 py-1 rounded-md"
-                    style={{ background: C.panel2, color: C.inkSoft }}
-                  >
-                    Marcar todas como lidas
-                  </button>
-                )}
-                {notificacoes.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => limparTodas()}
-                    className="btn-press text-[11px] px-2 py-1 rounded-md font-semibold"
-                    style={{ background: C.panel2, color: C.ink }}
-                  >
-                    Limpar
-                  </button>
-                )}
-              </span>
-            </div>
-            {loading && notificacoes.length === 0 && (
-              <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
-                carregando…
-              </div>
-            )}
-            {!loading && notificacoes.length === 0 && (
-              <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
-                Nenhuma notificação.
-              </div>
-            )}
-            <ul>
-              {notificacoes.map((n) => {
-                const meta = NOTIF_META[n.kind] || { label: n.kind, Icon: Bell };
-                const Icon = meta.Icon;
-                return (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => !n.lida && marcarLida(n.id)}
-                      className="w-full text-left px-3 py-2.5 flex gap-2.5 border-b"
-                      style={{
-                        borderColor: C.borderSoft,
-                        background: n.lida ? "transparent" : C.panel2,
-                      }}
-                    >
-                      <span
-                        className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
-                        style={{
-                          background: C.panel,
-                          border: `1px solid ${C.border}`,
-                          color: C.inkSoft,
-                        }}
+      {createPortal(
+        <Presence when={aberto && !!pos} duration={160} {...fadeSlideDown}>
+          {(_estado, estilo) => (
+            <>
+              <button
+                type="button"
+                aria-label="Fechar notificações"
+                className="fixed inset-0 z-[60] cursor-default"
+                style={{
+                  background: "rgba(0,0,0,.35)",
+                  ...(estilo && { opacity: estilo.opacity, transition: estilo.transition }),
+                }}
+                onClick={() => setAberto(false)}
+              />
+              <div
+                role="dialog"
+                aria-label="Notificações"
+                data-testid="painel-notificacoes"
+                className="fixed overflow-y-auto overscroll-contain rounded-2xl border z-[61]"
+                style={{
+                  ...pos,
+                  ...estilo,
+                  background: C.panel,
+                  borderColor: C.border,
+                  boxShadow: "0 18px 40px -12px rgba(0,0,0,.7)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-between gap-2 pl-4 pr-2 py-2 border-b sticky top-0"
+                  style={{ borderColor: C.borderSoft, background: C.panel }}
+                >
+                  <span className="text-sm font-semibold" style={{ color: C.ink }}>
+                    Notificações
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    {naoLidas > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => marcarTodasLidas()}
+                        className="btn-press text-[12px] px-2.5 min-h-[36px] rounded-lg"
+                        style={{ background: C.panel2, color: C.inkSoft }}
                       >
-                        <Icon size={14} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                          {!n.lida && (
-                            <span
-                              className="w-1.5 h-1.5 rounded-full shrink-0"
-                              style={{ background: C.brand }}
-                            />
-                          )}
+                        Marcar todas como lidas
+                      </button>
+                    )}
+                    {notificacoes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => limparTodas()}
+                        className="btn-press text-[12px] px-2.5 min-h-[36px] rounded-lg font-semibold"
+                        style={{ background: C.panel2, color: C.ink }}
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {loading && notificacoes.length === 0 && (
+                  <div className="px-4 py-4 space-y-3" aria-label="Carregando notificações">
+                    <Skeleton height={14} width="70%" />
+                    <Skeleton height={12} />
+                    <Skeleton height={14} width="55%" />
+                  </div>
+                )}
+                {!loading && notificacoes.length === 0 && (
+                  <div className="px-3 py-6 text-center text-xs" style={{ color: C.inkFaint }}>
+                    Nenhuma notificação.
+                  </div>
+                )}
+                <ul>
+                  {notificacoes.map((n) => {
+                    const meta = NOTIF_META[n.kind] || { label: n.kind, Icon: Bell };
+                    const Icon = meta.Icon;
+                    return (
+                      <li key={n.id}>
+                        <button
+                          type="button"
+                          onClick={() => !n.lida && marcarLida(n.id)}
+                          className="toque-at w-full text-left px-4 py-3 flex gap-3 border-b"
+                          style={{
+                            borderColor: C.borderSoft,
+                            background: n.lida ? "transparent" : C.panel2,
+                          }}
+                        >
                           <span
-                            className="text-[13px] font-semibold leading-snug"
-                            style={{ color: C.ink, overflowWrap: "anywhere" }}
+                            className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
+                            style={{
+                              background: C.panel,
+                              border: `1px solid ${C.border}`,
+                              color: C.inkSoft,
+                            }}
                           >
-                            {n.title}
+                            <Icon size={14} />
                           </span>
-                        </span>
-                        {n.body && (
-                          <span
-                            className="block text-xs mt-0.5 leading-snug"
-                            style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
-                          >
-                            {n.body}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              {!n.lida && (
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ background: C.brand }}
+                                />
+                              )}
+                              <span
+                                className="text-[13px] font-semibold leading-snug"
+                                style={{ color: C.ink, overflowWrap: "anywhere" }}
+                              >
+                                {n.title}
+                              </span>
+                            </span>
+                            {n.body && (
+                              <span
+                                className="block text-xs mt-0.5 leading-snug"
+                                style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+                              >
+                                {n.body}
+                              </span>
+                            )}
+                            <span className="block text-[10px] mt-1" style={{ color: C.inkFaint }}>
+                              {meta.label} · {tempoRelativo(n.created_at)}
+                            </span>
                           </span>
-                        )}
-                        <span className="block text-[10px] mt-1" style={{ color: C.inkFaint }}>
-                          {meta.label} · {tempoRelativo(n.created_at)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </>
+          )}
+        </Presence>,
+        document.body,
       )}
     </div>
-  );
-}
-// Silhueta de ônibus para decoração (rodapé da barra lateral, login, hero).
-export function BusSilhueta({ className = "", style, color = C.brand, opacity = 0.12 }) {
-  return (
-    <svg
-      className={className}
-      style={style}
-      viewBox="0 0 220 84"
-      fill="none"
-      aria-hidden="true"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <g fill={color} opacity={opacity}>
-        <path d="M6 20c0-6 4-10 10-10h150c22 0 40 12 48 30l4 9c1 3 2 6 2 9v9c0 4-3 7-7 7h-14a16 16 0 0 0-32 0H70a16 16 0 0 0-32 0H14c-4 0-8-3-8-8V20Z" />
-      </g>
-      <g fill={C.bg} opacity={Math.min(opacity + 0.05, 1)}>
-        <rect x="18" y="20" width="26" height="18" rx="3" />
-        <rect x="50" y="20" width="26" height="18" rx="3" />
-        <rect x="82" y="20" width="26" height="18" rx="3" />
-        <rect x="114" y="20" width="26" height="18" rx="3" />
-        <rect x="148" y="20" width="22" height="18" rx="3" />
-      </g>
-      <g fill={color} opacity={Math.min(opacity + 0.25, 1)}>
-        <circle cx="54" cy="72" r="11" />
-        <circle cx="186" cy="72" r="11" />
-      </g>
-    </svg>
   );
 }
 
@@ -870,7 +857,7 @@ export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19
 export function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`card-lift rounded-xl border p-4 md:p-5 ${className}`}
+      className={`rounded-xl border p-4 md:p-5 ${className}`}
       style={{ background: C.panel, borderColor: C.border, ...style }}
     >
       {children}
@@ -932,21 +919,15 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
 }
 
 // Divisor de direção (IDA / VOLTA) com "estrada" tracejada dos dois lados.
-export function DirecaoDivisor({ label, cor }) {
+// Divisória Ida / Volta (auditoria, issue #397): título com um fio até a borda. A "estrada" do
+// visual antigo saiu e a pílula ficava solta no meio do nada.
+export function DirecaoDivisor({ label, cor = C.inkSoft }) {
   return (
-    <div className="flex items-center gap-3 pt-1">
-      <span className="flex-1 aritur-road" style={{ opacity: 0.5 }} />
-      <span
-        className="px-3.5 py-1 rounded-full text-xs font-bold tracking-[0.15em]"
-        style={{
-          background: `${cor}1f`,
-          color: cor,
-          border: `1px solid ${cor}44`,
-        }}
-      >
+    <div className="flex items-center gap-3 pt-2">
+      <h2 className="text-[13px] font-bold tracking-[0.12em] uppercase" style={{ color: cor }}>
         {label}
-      </span>
-      <span className="flex-1 aritur-road" style={{ opacity: 0.5, transform: "scaleX(-1)" }} />
+      </h2>
+      <span aria-hidden="true" className="flex-1 h-px" style={{ background: C.border }} />
     </div>
   );
 }
@@ -956,13 +937,10 @@ export function SubTabs({ value, onChange, options }) {
   // flex-wrap em vez de rolagem horizontal: o dono não quer precisar
   // deslizar pra achar uma aba — se não couber tudo numa linha só, quebra
   // pra segunda linha, mas fica tudo à vista e clicável de cara.
+  // auditoria (issue #397): sem a caixa em volta — quando quebra linha, são etiquetas soltas, não
+  // uma caixa partida; ícone só a partir do tablet, para caber mais numa linha no celular.
   return (
-    <div
-      className="flex flex-wrap gap-1 rounded-xl p-1 max-w-full"
-      style={{ background: C.panel, border: `1px solid ${C.border}` }}
-    >
-      {/* crítica de design (issue #393): a escolhida em painel com traço vermelho embaixo,
-          como o seletor Ida/Volta — sem botão vermelho cheio */}
+    <div className="flex flex-wrap gap-1.5 max-w-full" role="group">
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
         return (
@@ -971,17 +949,15 @@ export function SubTabs({ value, onChange, options }) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(id)}
-            className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[40px] rounded-lg"
+            className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-full border"
             style={{
               background: active ? C.panel2 : "transparent",
+              borderColor: active ? C.inkFaint : C.border,
               color: active ? C.ink : C.inkSoft,
               fontWeight: active ? 600 : 500,
-              boxShadow: active
-                ? `inset 0 0 0 1px ${C.border}, inset 0 -2px 0 0 ${C.brand}`
-                : "none",
             }}
           >
-            {Icon && <Icon size={13} />}
+            {Icon && <Icon size={13} className="hidden sm:block" />}
             {label}
           </button>
         );
@@ -1243,7 +1219,7 @@ export function gerarInsightsIA(reservas, operacao, capacidade, trips) {
       insights.push({
         nivel: "alerta",
         emoji: "⚠️",
-        msg: `A viagem das ${horaRef} (${trips[dir].nome}) está com ${confirmados} passageiros — perto de lotar (${capacidade - confirmados} vaga(s)).`,
+        msg: `A viagem das ${horaRef} (${trips[dir].nome}) está com ${confirmados} passageiros — perto de lotar (${capacidade - confirmados === 1 ? "1 vaga" : `${capacidade - confirmados} vagas`}).`,
       });
   });
 
@@ -1252,7 +1228,7 @@ export function gerarInsightsIA(reservas, operacao, capacidade, trips) {
     insights.push({
       nivel: "alerta",
       emoji: "⚠️",
-      msg: `Existem ${pendentesHoje} reserva(s) pendente(s) aguardando confirmação hoje.`,
+      msg: `${pendentesHoje === 1 ? "1 reserva pendente" : `${pendentesHoje} reservas pendentes`} aguardando confirmação hoje.`,
     });
 
   const semPagar = doDiaHoje.filter((r) => OCUPA_VAGA.includes(r.status) && !r.pago);
@@ -1267,7 +1243,7 @@ export function gerarInsightsIA(reservas, operacao, capacidade, trips) {
     insights.push({
       nivel: "alerta",
       emoji: "⚠️",
-      msg: `+ ${semPagar.length - 3} outra(s) reserva(s) de hoje sem pagamento confirmado.`,
+      msg: `+ ${semPagar.length - 3 === 1 ? "1 outra reserva" : `${semPagar.length - 3} outras reservas`} de hoje sem pagamento confirmado.`,
     });
 
   (operacao.manutencoes || []).forEach((m) => {
@@ -1312,7 +1288,7 @@ export function gerarInsightsIA(reservas, operacao, capacidade, trips) {
     insights.push({
       nivel: "info",
       emoji: "⏳",
-      msg: `${emEspera} cliente(s) na lista de espera aguardando vaga.`,
+      msg: `${emEspera === 1 ? "1 cliente" : `${emEspera} clientes`} na lista de espera aguardando vaga.`,
     });
 
   const demanda = previsaoDemanda(reservas);
@@ -1361,10 +1337,10 @@ export function BotaoAgendar({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="btn-press flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium shrink-0"
-      style={{ background: C.amber, color: C.onBrand }}
+      className="btn-press flex items-center gap-1.5 text-[13px] px-3.5 min-h-[40px] rounded-xl font-semibold shrink-0"
+      style={{ background: C.brand, color: C.onBrand }}
     >
-      <Plus size={14} /> Agendar
+      <Plus size={15} /> Nova reserva
     </button>
   );
 }

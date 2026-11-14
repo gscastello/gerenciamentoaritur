@@ -63,7 +63,6 @@ const NovaReservaModal = React.lazy(() =>
 
 import {
   BairrosContext,
-  BusSilhueta,
   C,
   CategoriasContext,
   DropoffContext,
@@ -201,62 +200,8 @@ function GlobalStyles() {
       ::-webkit-scrollbar-thumb:hover { background:${C.brandDim}; }
       ::selection { background:${C.brand}; color:#fff; }
       body { background:${C.bg}; }
-      @keyframes roadDash { to { background-position: -48px 0; } }
-      .aritur-hero { position:relative; overflow:hidden;
-        background:
-          radial-gradient(120% 140% at 88% 20%, ${C.brandGlow} 0%, transparent 55%),
-          linear-gradient(105deg, ${C.brandDim} 0%, #6c0910 42%, ${C.panel} 100%); }
-      .aritur-road { height:3px; border-radius:3px;
-        background-image: linear-gradient(90deg, ${C.brand} 0 60%, transparent 60% 100%);
-        background-size: 24px 3px; background-repeat: repeat-x;
-        animation: roadDash 1.6s linear infinite; }
-
-      /* ---- hero cinematográfico do Dashboard ---- */
-      @keyframes heroTextIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-      .hero-t { animation: heroTextIn .45s cubic-bezier(.16,1,.3,1) both; }
-      .hero-t-1 { animation-delay: .02s; } .hero-t-2 { animation-delay: .07s; }
-      .hero-t-3 { animation-delay: .12s; } .hero-t-4 { animation-delay: .17s; }
-      .card-lift { transition: transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .2s ease; }
-      .card-lift:hover { transform: translateY(-3px); border-color: ${C.brandDim}; box-shadow: 0 14px 34px -18px rgba(0,0,0,.7); }
-      .bar-grow { transform-origin: bottom; animation: barGrow .45s cubic-bezier(.16,1,.3,1) both; }
-
-      /* ---- FX cinematográfico dos heros (toda tela que usa .aritur-hero) ---- */
-      @keyframes heroRoad   { to { background-position: -46px 82%; } }
-      @keyframes heroBreath { 0%,100% { opacity:.35; transform:scale(1) translateY(0); } 50% { opacity:.7; transform:scale(1.06) translateY(-4px); } }
-      @keyframes heroSpark  { 0% { transform: translate(0,0) scale(1); opacity:0; } 15% { opacity:.7; } 100% { transform: translate(-120px,-24px) scale(.4); opacity:0; } }
-      @keyframes busDrift   { 0%,100% { transform: translateY(0) rotate(-.5deg); } 50% { transform: translateY(-6px) rotate(.4deg); } }
-      .aritur-hero::before {
-        content:""; position:absolute; left:-6%; right:-6%; bottom:-8px; height:38%;
-        background: repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 16px, rgba(255,255,255,0) 16px 52px);
-        background-size: 52px 100%; background-position: 0 82%; background-repeat: repeat-x;
-        transform: perspective(360px) rotateX(58deg); transform-origin: bottom;
-        animation: heroRoad 1.1s linear infinite; opacity:.55; pointer-events:none;
-        mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
-      }
-      .aritur-hero::after {
-        content:""; position:absolute; top:-70%; right:-12%; width:56%; height:240%;
-        background: radial-gradient(circle at 66% 34%, ${C.brandGlow} 0%, transparent 62%);
-        filter: blur(26px); animation: heroBreath 8s ease-in-out infinite; pointer-events:none;
-      }
-      .hero-fx { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
-      .hero-fx-bus { position:absolute; bottom:-16%; right:-3%; width:min(210px, 42%);
-        animation: busDrift 6s ease-in-out infinite; will-change: transform;
-        filter: drop-shadow(0 -6px 20px rgba(0,0,0,.4)); opacity:.5; }
-      .hero-fx-bus svg { display:block; width:100%; }
-      .hero-fx-spark { position:absolute; right:16%; width:3px; height:3px; border-radius:50%;
-        background:#ff7a70; box-shadow:0 0 9px 1px ${C.brandGlow}; opacity:0;
-        animation: heroSpark 4s linear infinite; }
-      .hero-fx-spark.s1 { bottom:44%; animation-delay:0s; }
-      .hero-fx-spark.s2 { bottom:58%; right:26%; animation-delay:1.5s; }
-      .hero-fx-spark.s3 { bottom:34%; right:10%; animation-delay:3s; }
-      .bus-drift { animation: busDrift 6.5s ease-in-out infinite; will-change: transform; }
-
-      /* issue #391: os cartões de destaque das telas ficam em grafite, com o canto vinho
-         (saem o vermelho cheio, a estrada e o ônibus animados por trás) */
-      /* issue #393 (crítica de design): fora do Início, sem degradê nem traço decorativo */
-      .aritur-hero { background: ${C.panel} !important; border-color: ${C.border} !important; }
-      .aritur-hero::before, .aritur-hero::after, .hero-fx, .aritur-road { display: none !important; }
+      /* auditoria (issue #397): saíram a estrada, o ônibus e as faíscas animados do visual antigo,
+         e o cartão que subia ao passar o mouse (efeito sem função em todo cartão) */
       .safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
       @media (max-width: 640px) {
         /* Só em campo de formulário — cresce pra um alvo de toque melhor
@@ -276,9 +221,7 @@ function GlobalStyles() {
          rede de segurança para quem tem "reduzir movimento" no sistema. */
       html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
         animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-      html[data-motion="off"] :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark,.pulse-dot),
-      html[data-motion="off"] .aritur-hero::before, html[data-motion="off"] .aritur-hero::after { animation: none !important; }
-      html[data-motion="off"] .hero-fx-spark { opacity: 0 !important; }
+      html[data-motion="off"] .pulse-dot { animation: none !important; }
       /* .anim-fadeIn envolve o conteúdo de TODA aba (Atendimento, Agenda, Lista,
          Financeiro, Gestão...) e .anim-fadeUp/.anim-pop/.anim-slideDown/
          .stagger entram cards e listas — reduzir a duração pra ~0 (regra
@@ -291,8 +234,6 @@ function GlobalStyles() {
       @media (prefers-reduced-motion: reduce) {
         html:not([data-motion]) *, html:not([data-motion]) *::before, html:not([data-motion]) *::after {
           animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-        html:not([data-motion]) :is(.aritur-road,.bus-drift,.hero-fx-bus,.hero-fx-spark),
-        html:not([data-motion]) .aritur-hero::before, html:not([data-motion]) .aritur-hero::after { animation: none !important; }
         html:not([data-motion]) :is(.anim-fadeUp,.anim-fadeIn,.anim-pop,.anim-slideDown,.stagger > *) {
           animation: none !important; will-change: auto !important; }
       }
@@ -365,7 +306,7 @@ function termoParaData(termo) {
 
 // Telas / funcionalidades navegáveis pela busca (respeita o papel via NAV).
 const DESTINOS_BUSCA = [
-  { tab: "dashboard", label: "Dashboard", termos: "visão geral indicadores gráficos" },
+  { tab: "dashboard", label: "Início", termos: "visão geral indicadores gráficos dashboard" },
   { tab: "agenda", label: "Agenda de viagens", termos: "viagens dia pendentes confirmar" },
   {
     tab: "lista",
@@ -419,10 +360,22 @@ const DESTINOS_BUSCA = [
   },
   {
     tab: "sistema",
-    label: "Sistema / Configurações",
-    termos: "backup usuários pontos valores horários pix",
+    label: "Sistema — preços e rotas",
+    termos: "pontos valores horários bairros trechos cidades pix",
+    deepLink: { secao: "precos" },
   },
-  { tab: "sistema", label: "Backup completo", termos: "exportar json csv excel pdf cópia dados" },
+  {
+    tab: "sistema",
+    label: "Sistema — equipe",
+    termos: "usuários sócios senha acesso equipe",
+    deepLink: { secao: "equipe" },
+  },
+  {
+    tab: "sistema",
+    label: "Backup completo",
+    termos: "exportar json csv excel pdf cópia dados diagnóstico",
+    deepLink: { secao: "dados" },
+  },
   {
     tab: "atendimento",
     label: "Atendimento WhatsApp",
@@ -462,13 +415,13 @@ function FabItem({ icon: Icon, label, onClick, accent = C.panel }) {
 // Botão principal da tela (crítica de design, issue #393): escrito, vermelho, ao alcance do
 // polegar. "+ Reserva" na Agenda e na Lista; "+ Lançar" no Financeiro. No Início continua o "+"
 // de ações rápidas (#391).
-function FabPrincipal({ rotulo, aria, onClick }) {
+function FabPrincipal({ rotulo, aria, onClick, soCelular = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={aria}
-      className="btn-press fixed z-30 right-4 md:right-6 bottom-[calc(76px+env(safe-area-inset-bottom))] md:bottom-6 flex items-center gap-2 h-[52px] pl-4 pr-5 rounded-2xl text-[15px] font-bold anim-pop"
+      className={`btn-press fixed z-30 right-4 md:right-6 bottom-[calc(76px+env(safe-area-inset-bottom))] md:bottom-6 ${soCelular ? "flex sm:hidden" : "flex"} items-center gap-2 h-[52px] pl-4 pr-5 rounded-2xl text-[15px] font-bold anim-pop`}
       style={{
         background: C.brand,
         color: C.onBrand,
@@ -798,7 +751,7 @@ function GlobalSearchOverlay({ onClose, onNavigate, navIds }) {
                   onClick={() =>
                     onNavigate({
                       tab: d.tab,
-                      deepLink: d.sub ? { kind: "subview", sub: d.sub } : undefined,
+                      deepLink: d.sub ? { kind: "subview", sub: d.sub } : d.deepLink,
                     })
                   }
                 />
@@ -971,12 +924,8 @@ function MobileNav({
   if (nav.length > LIMITE) {
     visiveis = nav.slice(0, LIMITE);
     extras = nav.slice(LIMITE);
-    const ativoNosExtras = extras.find((n) => n.id === tab);
-    if (ativoNosExtras) {
-      const trocado = visiveis[visiveis.length - 1];
-      visiveis = [...visiveis.slice(0, -1), ativoNosExtras];
-      extras = [trocado, ...extras.filter((n) => n.id !== tab)];
-    }
+    // a barra fica sempre igual (auditoria, issue #397): a tela aberta pelo "Mais" não toma o lugar
+    // da Gestão nem aparece com o nome cortado; o topo já diz qual é a tela.
   }
   const escolher = (id) => {
     onSelect(id);
@@ -1268,6 +1217,7 @@ function AppInner() {
                 <FabPrincipal
                   rotulo="Reserva"
                   aria="Nova reserva"
+                  soCelular
                   onClick={() => setAgendarAberto(true)}
                 />
               )}
@@ -1449,11 +1399,6 @@ function AppInner() {
                     </button>
                   </div>
                 </div>
-                <BusSilhueta
-                  className="absolute pointer-events-none bus-drift"
-                  style={{ width: 240, bottom: -12, left: -30, opacity: 0.9 }}
-                  opacity={0.055}
-                />
               </div>
 
               <MobileNav
@@ -1654,6 +1599,7 @@ function AppInner() {
                           modoAtendimento={modoAtendimento}
                           onSetModo={cfgSettings.setAttendanceMode}
                           onNavigate={irParaBusca}
+                          deepLink={deepLink}
                         />
                       )}
                     </div>

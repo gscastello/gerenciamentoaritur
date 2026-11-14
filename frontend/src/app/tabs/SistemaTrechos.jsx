@@ -215,6 +215,7 @@ export default function SistemaTrechos() {
               <span className="flex items-center gap-2 shrink-0">
                 {fmtBRL(t.price)}
                 <button
+                  className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0"
                   type="button"
                   onClick={() =>
                     tentar(() => precos.remover(t.id), "Não foi possível remover (só admin).")

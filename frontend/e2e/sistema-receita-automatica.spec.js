@@ -11,6 +11,8 @@ async function abrirSistema(page) {
     await page.getByRole("button", { name: "Mais" }).click();
   }
   await page.getByRole("button", { name: /^Sistema$/ }).click();
+  // a tela Sistema tem abas (issue #397)
+  await page.getByRole("button", { name: "Dados e backup", exact: true }).click();
   await expect(page.getByText("Receita automática das passagens")).toBeVisible();
 }
 

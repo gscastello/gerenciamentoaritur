@@ -551,7 +551,7 @@ export default function AtendimentoTab({
   return (
     <div>
       <Header title="Atendimento" subtitle={RESUMOS[vista] ?? RESUMOS.conversas} right={null} />
-      <div className="px-3.5 md:px-10 pb-10 space-y-4 stagger">
+      <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
 
         {vista === "conversas" && (
@@ -672,7 +672,7 @@ export default function AtendimentoTab({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onNavigate({ tab: "sistema" })}
+                  onClick={() => onNavigate({ tab: "sistema", deepLink: { secao: "bot" } })}
                   className="btn-press text-xs px-3 py-1.5 rounded-md"
                   style={{
                     background: C.panel2,

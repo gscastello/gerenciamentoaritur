@@ -116,6 +116,7 @@ export default function SistemaLocaisOutros() {
               <span className="flex items-center gap-2 shrink-0">
                 {fmtBRL(l.price)}
                 <button
+                  className="btn-press w-9 h-9 inline-flex items-center justify-center rounded-lg shrink-0"
                   type="button"
                   onClick={() =>
                     tentar(() => locais.remover(l.id), "Não foi possível remover (só admin).")

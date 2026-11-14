@@ -41,7 +41,7 @@ export function SubAbas({ telas, ativa, onChange, badges = {} }) {
   if (!telas || telas.length < 2) return null;
   return (
     <div
-      className="px-3.5 md:px-10 pt-3 flex gap-1 overflow-x-auto"
+      className="px-4 md:px-10 pt-3 flex gap-1 overflow-x-auto"
       role="tablist"
       aria-label="Telas"
       data-sem-puxao

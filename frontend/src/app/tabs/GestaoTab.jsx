@@ -187,26 +187,30 @@ export default function GestaoTab({ deepLink }) {
         </div>
       )}
 
-      <div className="px-6 md:px-10 flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex items-center gap-2">
+      <div className="px-4 md:px-10 flex flex-wrap items-center gap-3 mb-4">
+        {/* mesmo seletor de mês do Financeiro (auditoria, issue #397) */}
+        <div className="flex items-center gap-2 w-full md:w-auto md:min-w-[320px]">
           <button
             type="button"
             onClick={() => setMesRef(new Date(ano, mes - 1, 1))}
-            className="btn-press p-1 rounded"
-            style={{ color: C.inkSoft }}
+            aria-label="Mês anterior"
+            className="btn-press w-11 h-11 rounded-xl flex items-center justify-center border shrink-0"
+            style={{ background: C.panel, borderColor: C.border, color: C.ink }}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={18} />
           </button>
-          <div className="text-sm font-semibold capitalize min-w-[150px] text-center">
-            {MESES_PT[mes]} de {ano}
+          <div className="flex-1 text-center text-[16px] font-bold" style={{ color: C.ink }}>
+            <span className="capitalize">{MESES_PT[mes]}</span>{" "}
+            <span style={{ color: C.inkSoft, fontWeight: 500 }}>{ano}</span>
           </div>
           <button
             type="button"
             onClick={() => setMesRef(new Date(ano, mes + 1, 1))}
-            className="btn-press p-1 rounded"
-            style={{ color: C.inkSoft }}
+            aria-label="Próximo mês"
+            className="btn-press w-11 h-11 rounded-xl flex items-center justify-center border shrink-0"
+            style={{ background: C.panel, borderColor: C.border, color: C.ink }}
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={18} />
           </button>
         </div>
         <SubTabs
@@ -221,7 +225,7 @@ export default function GestaoTab({ deepLink }) {
         />
       </div>
 
-      <div className="px-6 md:px-10 pb-10 space-y-6">
+      <div className="px-4 md:px-10 pb-10 space-y-6">
         {aba === "resultado" && (
           <GestaoResultado
             receita={receita}

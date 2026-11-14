@@ -24,10 +24,9 @@ const C = {
   blue: "#B9BDC6",
 };
 
-const brl = (n) =>
-  (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const brl = (n) => (n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const cardStyle = { border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 };
+const cardStyle = { border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 };
 const titleStyle = { fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.ink };
 const tooltipStyle = {
   background: C.panel2,
@@ -41,7 +40,8 @@ const tooltipStyle = {
  */
 export default function SevenDayCharts({ data }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+    // um embaixo do outro no celular (auditoria, issue #397: lado a lado os títulos quebravam em 3 linhas)
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
       <div style={cardStyle}>
         <div style={titleStyle}>Faturamento — últimos 7 dias</div>
         <ResponsiveContainer width="100%" height={220}>

@@ -92,6 +92,8 @@ test("Frota: cria um tipo de manutenção novo e usa no registro", async ({ page
   await page.goto("/");
   await abrirOperacao(page);
 
+  // o formulário de manutenção abre no botão (issue #397)
+  await page.getByRole("button", { name: "Registrar", exact: true }).click();
   await page.getByLabel("Tipo de manutenção").selectOption("__novo__");
   await page.getByPlaceholder("Nome do novo tipo").fill("Alinhamento");
   await page.getByRole("button", { name: "Criar e usar" }).click();

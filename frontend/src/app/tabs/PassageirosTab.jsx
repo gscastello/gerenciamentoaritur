@@ -11,7 +11,6 @@ import {
   ErrorBanner,
   Field,
   Header,
-  HeroFX,
   Pill,
   Select,
   TextInput,
@@ -119,41 +118,19 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
         title="Passageiros · CRM"
         subtitle="Histórico, valor gerado e notas de atendimento por cliente."
       />
-      <div className="px-6 md:px-10 pb-10">
+      <div className="px-4 md:px-10 pb-10">
         {erro && (
           <ErrorBanner onRetry={recarregar} className="mb-3">
             {erro}
           </ErrorBanner>
         )}
-        <div
-          className="aritur-hero relative overflow-hidden rounded-2xl border p-4 md:p-5 mb-4 flex flex-wrap items-center justify-between gap-4"
-          style={{ borderColor: C.brandDim }}
-        >
-          <HeroFX />
-          <div className="relative">
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: "1.2rem",
-                color: "#fff",
-              }}
-            >
-              {total} {total === 1 ? "passageiro" : "passageiros"}
-            </div>
-            <div className="text-xs" style={{ color: "rgba(255,255,255,.75)" }}>
-              ordenados por valor gerado
-            </div>
-          </div>
-          <div className="relative">
-            <div
-              className="text-[10px] uppercase tracking-wide"
-              style={{ color: "rgba(255,255,255,.6)" }}
-            >
-              Valor gerado (carregado)
-            </div>
-            <div style={{ color: "#fff", fontWeight: 700 }}>{fmtBRL(valorCarregado)}</div>
-          </div>
-        </div>
+        {/* total numa linha (auditoria, issue #397: o cartão de destaque antigo saiu) */}
+        <p className="text-[13px] mb-3" style={{ color: C.inkSoft }} data-testid="total-de-passageiros">
+          <b style={{ color: C.ink }}>
+            {total} {total === 1 ? "passageiro" : "passageiros"}
+          </b>{" "}
+          · {fmtBRL(valorCarregado)} em passagens · do que mais gerou ao que menos gerou
+        </p>
         <div className="relative max-w-sm mb-4">
           <Search
             size={15}

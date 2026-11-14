@@ -85,6 +85,10 @@ const das = { valor: 4500.5, mesesSemDado: 11 };
 describe("datas e nomes", () => {
   it("nome do mês e mês anterior (atravessa o ano)", () => {
     expect(nomeDoMes("2026-10")).toBe("outubro de 2026");
+    // sem mês (pacote incompleto): nunca "undefined de undefined" (issue #397)
+    expect(nomeDoMes(undefined)).toBe("");
+    expect(nomeDoMes("2026")).toBe("");
+    expect(montarFechamento({}).titulo).toBe("Fechamento do mês");
     expect(mesAnterior("2026-11-13")).toBe("2026-10");
     expect(mesAnterior("2027-01-01")).toBe("2026-12");
   });

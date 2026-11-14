@@ -17,15 +17,21 @@ import {
 import { FadeIn, ProgressBar, Skeleton, Spinner } from "../../ui/motion/index.js";
 import { C, Card, ErrorBanner, Header, TextInput, fmtBRL } from "../tabShared.jsx";
 
-function Botao({ icone: Icone, children, onClick, ocupado, disabled, testid }) {
+// Só o PDF é o botão principal (vermelho); planilha e fotos são secundários (auditoria, issue #397:
+// três botões vermelhos disputavam a atenção, e o desabilitado parecia vinho apagado).
+function Botao({ icone: Icone, children, onClick, ocupado, disabled, testid, principal = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={ocupado || disabled}
       data-testid={testid}
-      className="btn-press flex items-center justify-center gap-2 text-sm px-3 py-2.5 rounded-lg font-semibold disabled:opacity-60"
-      style={{ background: C.amber, color: C.onBrand }}
+      className="btn-press flex items-center justify-center gap-2 text-sm px-3 min-h-[44px] rounded-xl font-semibold border disabled:opacity-50"
+      style={
+        principal
+          ? { background: C.brand, color: C.onBrand, borderColor: C.brand }
+          : { background: C.panel2, color: C.ink, borderColor: C.border }
+      }
     >
       {ocupado ? <Spinner size={14} /> : <Icone size={16} />} {children}
     </button>
@@ -89,7 +95,7 @@ export default function FechamentoTab() {
         title="Fechamento do mês"
         subtitle="O pacote do mês para o contador: resultado, receitas, despesas, notas e a estimativa do DAS."
       />
-      <div className="px-6 md:px-10 pb-10 space-y-4">
+      <div className="px-4 md:px-10 pb-10 space-y-4">
         {(erro || fx.error) && (
           <ErrorBanner
             onDismiss={erro ? () => setErro("") : undefined}
@@ -173,6 +179,7 @@ export default function FechamentoTab() {
                   testid="baixar-pdf"
                   ocupado={ocupado === "pdf"}
                   disabled={!!ocupado}
+                  principal
                   onClick={fazer("pdf", () => abrirFechamentoPDF(f))}
                 >
                   PDF
