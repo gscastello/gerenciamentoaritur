@@ -96,6 +96,7 @@ import {
 } from "../tabShared.jsx";
 import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
 import LixeiraReservas from "./LixeiraReservas.jsx";
+import MapaDosLugares from "./MapaDosLugares.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
 // Reserva duplicada (issue #216): o banco recusa quando o mesmo contato já tem
@@ -1418,30 +1419,22 @@ function ViagemOperacional({
 
   return (
     <section className="relative" aria-label={`Viagem de ${viagem.nome}`}>
-      {/* lotação (crítica de design, issue #393): barra fina neutra e quatro números */}
-      <div className="mb-3" data-testid={`lotacao-${direcao}`}>
-        <div
-          className="h-1 rounded-full overflow-hidden"
-          style={{ background: C.panel2 }}
-          role="img"
-          aria-label={`Lotação da ${direcao === "ida" ? "Ida" : "Volta"}: ${confirmados} de ${capacidade}`}
-        >
-          <div
-            className="bar-fill h-full rounded-full"
-            style={{
-              width: `${capacidade ? Math.min(100, (confirmados / capacidade) * 100) : 0}%`,
-              background: C.inkSoft,
-            }}
-          />
-        </div>
-        {/* os quatro números numa linha (issue #399: os quadradinhos soltos saíram) */}
-        <p className="text-[13px] mt-2 leading-relaxed" style={{ color: C.inkSoft }}>
-          <b style={{ color: C.ink }}>
-            {confirmados} de {capacidade} vagas
-          </b>
+      {/* lotação (issue #430): o mapa dos lugares do veículo do dia, no lugar da barra fina */}
+      <div
+        className="rounded-xl px-3 py-3 mb-3"
+        style={{ background: C.panel2 }}
+        data-testid={`lotacao-${direcao}`}
+      >
+        <MapaDosLugares
+          capacidade={capacidade}
+          confirmados={confirmados}
+          pendentes={pendentesQtd}
+          direcao={direcao}
+        />
+        <p className="text-[13px] mt-3 leading-relaxed" style={{ color: C.inkSoft }}>
           {pendentesQtd > 0 &&
-            ` · ${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"}`}
-          {` · ${embarcados} ${embarcados === 1 ? "embarcado" : "embarcados"} · ${pagosQtd} ${pagosQtd === 1 ? "pago" : "pagos"}`}
+            `${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"} · `}
+          {`${embarcados} ${embarcados === 1 ? "embarcado" : "embarcados"} · ${pagosQtd} ${pagosQtd === 1 ? "pago" : "pagos"}`}
         </p>
         {extrasQtd > 0 && (
           <div className="text-xs mt-1.5" style={{ color: C.inkFaint }}>
