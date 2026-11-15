@@ -312,6 +312,21 @@ async function avisarCliente(chatwoot: number, reservas: ReservaRevisada[], nome
 }
 
 /** Revisa um passageiro. Devolve o resultado gravado. */
+/** Bairros e locais da BR de São Luís, para conferir se o lugar combina com o sentido (issue #426). */
+let geografiaEmCache: { bairros: { neighborhood: string }[]; locaisDeOutros: string[] } | null = null;
+async function geografiaDeSaoLuis() {
+  if (geografiaEmCache) return geografiaEmCache;
+  const [{ data: bairros }, { data: locais }] = await Promise.all([
+    supabaseAdmin.from("neighborhood_pricing").select("neighborhood"),
+    supabaseAdmin.from("boarding_spot_prices").select("local"),
+  ]);
+  geografiaEmCache = {
+    bairros: (bairros ?? []) as { neighborhood: string }[],
+    locaisDeOutros: ((locais ?? []) as { local: string }[]).map((l) => l.local),
+  };
+  return geografiaEmCache;
+}
+
 export async function revisarCliente(
   customerId: string,
   assinaturaAntes: string,
@@ -420,6 +435,8 @@ export async function revisarCliente(
         // o que a equipe (ou o Assistente) mudou à mão vence a conversa anterior (issue #389)
         mudancasDaEquipe: await mudancasDaEquipe(ativas.map((x) => x.id), botId),
         confirmadoPelaEquipe: equipeConfirmou,
+        // o lugar diz o sentido (issue #426)
+        ...(await geografiaDeSaoLuis()),
       });
       for (const c of decisao.correcoes) {
         const alvo = ativas.find((x) => x.id === c.reserva_id) as ReservaRevisada;

@@ -35,6 +35,11 @@ Deno.test("#432 modelo, nome e texto do modelo", () => {
   assertEquals(primeiroNome("JOÃO pedro"), "João");
   assertEquals(primeiroNome(""), "passageiro(a)");
   assertEquals(primeiroNome("98999990000"), "passageiro(a)");
+  // tratamento vai junto do nome; "Passageiro (…)" não é nome
+  assertEquals(primeiroNome("Dona maria das Graças"), "Dona Maria");
+  assertEquals(primeiroNome("Sr. Antônio"), "Sr. Antônio");
+  assertEquals(primeiroNome("Dona"), "passageiro(a)");
+  assertEquals(primeiroNome("Passageiro (lá Belle Maiobão)"), "passageiro(a)");
   assertEquals(
     textoDoModelo({ "1": "Maria", "2": "segunda, 16/11", "3": "Rodoviária", "4": "04:40" }),
     "Olá, Maria! Lembrete da sua viagem com a AriTur: segunda, 16/11, embarque em Rodoviária às 04:40. Qualquer dúvida, é só responder esta mensagem.",
