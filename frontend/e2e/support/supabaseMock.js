@@ -328,6 +328,7 @@ export async function mockSupabase(page, opts = {}) {
   // quem busca em casa (issue #96) — override por reserva, stateful
   const buscaOverride = {};
   const seqOverride = {};
+  const seqDesembarqueOverride = {};
   const statusOverride = {};
   const extraOverride = {}; // fora_lotacao por reserva (database/61)
   let botLearnings = botLearningsIniciais.map((l) => ({ ...l }));
@@ -491,6 +492,13 @@ export async function mockSupabase(page, opts = {}) {
           seqOverride[id] = i + 1;
         });
         return route.fulfill(json({ success: true, updated: (b.p_ids ?? []).length }));
+      }
+      if (fn === "rpc_reorder_dropoff") {
+        const b = req.postDataJSON?.() ?? {};
+        (b.p_ids ?? []).forEach((id, i) => {
+          seqDesembarqueOverride[id] = i + 1;
+        });
+        return route.fulfill(json({ success: true }));
       }
       if (fn === "rpc_set_pickup_transport") {
         const b = req.postDataJSON?.() ?? {};
@@ -744,12 +752,14 @@ export async function mockSupabase(page, opts = {}) {
       rows = reservations.map((r) =>
         buscaOverride[r.id] ||
         seqOverride[r.id] ||
+        seqDesembarqueOverride[r.id] ||
         statusOverride[r.id] ||
         extraOverride[r.id] !== undefined
           ? {
               ...r,
               buscaPor: buscaOverride[r.id] ?? r.buscaPor,
               buscaSeq: seqOverride[r.id] ?? r.buscaSeq,
+              desembarqueSeq: seqDesembarqueOverride[r.id] ?? r.desembarqueSeq,
               status: statusOverride[r.id] ?? r.status,
               extra:
                 extraOverride[r.id] === undefined

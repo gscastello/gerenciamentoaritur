@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { mockSupabase } from "./support/supabaseMock.js";
 
-// Issue #353 (dono, 12/11): o app abre na Agenda; Atendimento no lugar do Bloco de
-// notas na barra do celular; atalhos de Assistente e Pendências em todas as telas.
+// Issue #353 (dono, 12/11): o app abre na Agenda; Atendimento na barra do celular; atalhos
+// de Assistente e Pendências em todas as telas. O Bloco de notas saiu (issue #428).
 
 // O service worker do PWA passa a controlar a página a partir do 2º carregamento e as
 // chamadas dele não passam pelo mock (page.route): depois do "puxar para atualizar" o
@@ -15,16 +15,16 @@ test("o app abre na Agenda", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Agenda" }).first()).toBeVisible();
 });
 
-test("barra do celular: Atendimento no lugar do Bloco de notas", async ({ page }, info) => {
+test("barra do celular: Atendimento; o Bloco de notas saiu", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "barra de baixo só existe no celular");
   await mockSupabase(page, { role: "admin" });
   await page.goto("/");
   const barra = page.getByTestId("barra-de-baixo");
   await expect(barra.getByRole("button", { name: /Atendimento/ })).toBeVisible();
   await expect(barra.getByRole("button", { name: /Bloco de notas/ })).toHaveCount(0);
-  // o Bloco continua em "Mais" (botão do topo, issue #391)
+  // nem em "Mais" (issue #428)
   await page.getByRole("button", { name: "Mais" }).click();
-  await expect(page.getByRole("button", { name: /Bloco de notas/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Bloco de notas/ })).toHaveCount(0);
 });
 
 test("ações rápidas levam ao Assistente e às Pendências", async ({ page }) => {
