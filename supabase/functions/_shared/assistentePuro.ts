@@ -8,6 +8,7 @@
 // permissões de quem está logado. Preço sempre pela tabela; vaga pelo banco.
 
 import { normalizarTexto, palavraParecida } from "./grafia.ts";
+import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
 /** Modelos (preço US$ por milhão de tokens). Haiku para o simples, Sonnet para o difícil. */
 export const MODELOS = {
@@ -436,6 +437,7 @@ ENSINAR O BOT (o que o sócio informa ou corrige vira aprendizado)
 
 REGRAS DE RESERVA (as mesmas do app)
 - Ida = sai de São Luís. Volta = sai de Pirapemas/Cantanhede ("pra São Luís" é Volta, inclusive encomenda). O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta.
+- ${REGRA_DO_LUGAR} Ex.: "aguardo vcs no retorno" é Ida no Retorno; "Rua X, Pirapemas" como embarque é Volta; "vou ficar no Cohatrac" é Volta (desce em São Luís).
 - Volta: a cidade de embarque (pirapemas ou cantanhede) só se foi dita na conversa ou pelo sócio. Ruas se repetem nas duas cidades: nunca deduza pela rua. Sem cidade, pergunte.
 - Preço: nunca invente. O valor sai da tabela no servidor. Só use valor_dito se o SÓCIO disse o valor neste chat. Encomenda nunca tem valor.
 - Nome: o do cadastro; senão o que o cliente ESCREVEU na conversa; nunca o nome do perfil do WhatsApp. Sem nome, deixe vazio.

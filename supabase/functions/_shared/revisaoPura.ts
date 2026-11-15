@@ -11,6 +11,7 @@
 //   - duplicada na mesma viagem criada pelo bot: cancela a mais nova (fica no histórico).
 
 import { normalizarTexto } from "./grafia.ts";
+import { lugaresContraOSentido, REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 
 /** Uma fala da conversa (cliente ou equipe) com a hora em que foi escrita. */
@@ -206,6 +207,9 @@ export function decidirRevisao(
      * com certeza média ou alta, inclusive dia e sentido, sem esperar prova escrita depois da reserva.
      */
     confirmadoPelaEquipe?: boolean;
+    /** para conferir se embarque/desembarque combinam com o sentido (issue #426) */
+    bairros?: { neighborhood: string }[];
+    locaisDeOutros?: string[];
   },
 ): { correcoes: Correcao[]; pendencias: Achado[]; descartados: Achado[] } {
   const porId = new Map(ctx.reservas.map((r) => [r.id, r]));
@@ -325,7 +329,46 @@ export function decidirRevisao(
         }
       }
     }
+    // O LUGAR DIZ O SENTIDO (issue #426): a correção não pode deixar embarque/desembarque contra o sentido
+    const depois = {
+      direction: c.sentido ?? r.direcao,
+      route_point_code: c.ponto ?? r.ponto,
+      pickup_detail: "embarque" in c ? c.embarque ?? null : r.embarque,
+      pickup_neighborhood: "bairro" in c ? c.bairro ?? null : r.bairro,
+      dropoff_location: "desembarque" in c ? c.desembarque ?? null : r.desembarque,
+      type: r.tipo,
+    };
+    const contra = lugaresContraOSentido(depois, { bairros: ctx.bairros, locaisDeOutros: ctx.locaisDeOutros });
+    if (contra) {
+      for (const a of achados.filter((x) => x.reserva_id === c.reserva_id && CORRIGE_SOZINHO.includes(x.campo))) {
+        if (!pendencias.includes(a)) pendencias.push(a);
+      }
+      continue;
+    }
     finais.push(c);
+  }
+  // reserva futura que JÁ está com o lugar contra o sentido e nenhuma correção mexeu: pendência
+  const corrigidas = new Set(finais.map((c) => c.reserva_id));
+  for (const r of ctx.reservas) {
+    if (corrigidas.has(r.id) || !["confirmada", "pendente"].includes(r.status)) continue;
+    if (r.data < ctx.hoje || (r.data === ctx.hoje && viagemDeHojeJaSaiu(r.direcao, ctx.horaAgora))) continue;
+    if (pendencias.some((a) => a.reserva_id === r.id)) continue;
+    const contra = lugaresContraOSentido(
+      { direction: r.direcao, route_point_code: r.ponto, pickup_detail: r.embarque, pickup_neighborhood: r.bairro, dropoff_location: r.desembarque, type: r.tipo },
+      { bairros: ctx.bairros, locaisDeOutros: ctx.locaisDeOutros },
+    );
+    if (contra) {
+      pendencias.push({
+        reserva_id: r.id,
+        campo: "sentido",
+        valor_atual: r.direcao,
+        valor_correto: null,
+        evidencia: "",
+        quem_errou: "desconhecido",
+        certeza: "media",
+        explicacao: `O lugar não combina com o sentido: ${contra}. Confira com o passageiro se é Ida ou Volta.`,
+      });
+    }
   }
   return { correcoes: finais, pendencias, descartados };
 }
@@ -391,6 +434,7 @@ Você recebe as reservas FUTURAS de um passageiro e a conversa do WhatsApp dele 
 
 O que conferir em cada reserva:
 - dia e sentido (Ida = sai de São Luís; Volta = sai de Pirapemas/Cantanhede). O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta. "Hoje", "amanhã", "sexta" contam do dia em que a mensagem foi escrita. O que o cliente corrigiu depois vale ("não, é dia 15").
+- ${REGRA_DO_LUGAR} Ex.: "aguardo vcs no retorno" é Ida no Retorno; "Rua X, Pirapemas" como embarque é Volta; "vou ficar no Cohatrac" é Volta (desce em São Luís).
 - ponto de embarque (códigos abaixo), bairro (busca em casa), embarque (rua/referência), desembarque, quantidade, tipo (passagem/encomenda).
 - endereço trocado de lugar: rua/referência da cidade de embarque gravada como desembarque (na Volta, rua de Cantanhede/Pirapemas no desembarque), ou o NOME do passageiro lido como lugar ("De Cantanhede pra Luís / Maria Souza / Rua X perto do banco": "Luís" = São Luís, "Maria Souza" = nome, a rua = embarque). Confira cada parte do que o cliente escreveu e onde ela foi parar. Rua com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a rua, não a cidade do caminho.
 - quantidade: é o número que o cliente PEDIU. Frase de costume ("eu e minhas filhas viajamos sempre com vocês") não pede mais vagas: não aponte. N passagens com desembarques diferentes na mesma viagem formam UMA reserva de N (todas têm de estar reservadas).

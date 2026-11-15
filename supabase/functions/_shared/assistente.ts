@@ -41,6 +41,7 @@ import {
   validarInstrucaoDoCliente,
 } from "./assistentePuro.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { lugaresContraOSentido } from "./ladoDaRota.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
 
@@ -385,6 +386,23 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
         .in("status", ["confirmada", "pendente"])
         .limit(1);
       if (jaTem?.length) avisos.push("Esse cliente já tem reserva nesse dia e sentido.");
+      // o lugar diz o sentido (issue #426): avisa no cartão antes do "Confirmar"
+      const [{ data: bairrosSl }, { data: locaisBr }] = await Promise.all([
+        ctx.db.from("neighborhood_pricing").select("neighborhood"),
+        ctx.db.from("boarding_spot_prices").select("local"),
+      ]);
+      const contra = lugaresContraOSentido(
+        {
+          direction: v.acao.sentido,
+          route_point_code: v.acao.ponto,
+          pickup_detail: v.acao.embarque,
+          pickup_neighborhood: v.acao.bairro,
+          dropoff_location: v.acao.desembarque,
+          type: v.acao.tipo_reserva,
+        },
+        { bairros: (bairrosSl ?? []) as { neighborhood: string }[], locaisDeOutros: ((locaisBr ?? []) as { local: string }[]).map((l) => l.local) },
+      );
+      if (contra) avisos.push(`Atenção: ${contra}. Confira se é Ida ou Volta.`);
       const acao: Acao = { ...v.acao, valor_unitario: valor, aviso: avisos.join(" ") || null, id: crypto.randomUUID() };
       ctx.acoes.push(acao);
       return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos), avisos };
