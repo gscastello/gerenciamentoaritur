@@ -73,6 +73,7 @@ import {
   idaPeloEmbarqueEmSaoLuis,
   outroPodeSerBusca,
   bairroTemProva,
+  bairroForaDoNomeComposto,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -688,6 +689,14 @@ async function lerEGravar(
           .join(" ")
           .slice(0, 300);
         r.pickup_neighborhood = escrito.neighborhood;
+      }
+    }
+    // "Jardim Araçagy, Cohatrac": o bairro é o escrito como pedaço do endereço (issue #426)
+    if (r.route_point_code === "busca" && r.pickup_neighborhood) {
+      const fora = bairroForaDoNomeComposto(r.pickup_neighborhood, textosDoCliente, ctx.bairrosTabela);
+      if (fora) {
+        r.notes = [r.notes, `Bairro ${fora.neighborhood} (${r.pickup_neighborhood} era parte do nome do lugar).`].filter(Boolean).join(" ").slice(0, 300);
+        r.pickup_neighborhood = fora.neighborhood;
       }
     }
     // bairro sem prova (não escrito, não é o de costume): a leitura chutou — sai e o sistema procura

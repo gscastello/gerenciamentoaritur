@@ -301,7 +301,7 @@ Deno.test("#426 revisor: o lugar diz o sentido — não corrige para o contra e 
   assertStringIncludes(r.pendencias[0].explicacao, "São Luís");
   // correção de sentido que deixaria o embarque em São Luís numa Volta: vira pendência
   // (a troca de embarque e desembarque não resolve: os dois são de São Luís)
-  const ida: ReservaRevisada = { ...base, id: "r3", ponto: "retorno", embarque: "Retorno das Vans", desembarque: "Rodoviária" };
+  const ida: ReservaRevisada = { ...base, id: "r3", ponto: "retorno", embarque: "Retorno das Vans", desembarque: "Aeroporto" };
   const achados = achadosValidos([
     { reserva_id: "r3", campo: "sentido", valor_atual: "ida", valor_correto: "volta", evidencia: "Quero passagem dia 14", certeza: "alta" },
     { reserva_id: "r3", campo: "ponto", valor_atual: "retorno", valor_correto: "pirapemas", evidencia: "Quero passagem dia 14", certeza: "alta" },

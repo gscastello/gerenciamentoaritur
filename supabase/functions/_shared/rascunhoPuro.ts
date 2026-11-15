@@ -561,6 +561,35 @@ export function bairroTemProva(bairro: string | null | undefined, ctx: { textos:
   });
 }
 
+/**
+ * "Jardim Araçagy, Cohatrac": o bairro lido só aparece dentro de um nome composto (Jardim,
+ * Residencial, Condomínio, Conjunto, Parque) e o cliente escreveu OUTRO bairro da tabela como
+ * pedaço do endereço — o bairro é esse outro (issue #426). Devolve o outro ou null.
+ */
+export function bairroForaDoNomeComposto<T extends { neighborhood: string }>(
+  bairro: string | null | undefined,
+  textos: string[],
+  tabela: T[],
+): T | null {
+  const n = normalizarTexto(bairro);
+  if (!n) return null;
+  const composto = new RegExp(` (jardim|residencial|condominio|conjunto|parque) ${n} `);
+  let soNoComposto = false;
+  const outros = new Set<T>();
+  for (const t of textos) {
+    const tn = ` ${normalizarTexto(t)} `;
+    if (!tn.includes(` ${n} `)) continue;
+    if (!composto.test(tn)) return null; // escreveu o bairro sozinho também: vale o lido
+    soNoComposto = true;
+    for (const pedaco of String(t).split(/[,;/\n]+|\s-\s/)) {
+      const pn = normalizarTexto(pedaco);
+      const achado = tabela.find((b) => normalizarTexto(b.neighborhood) === pn && pn !== n);
+      if (achado) outros.add(achado);
+    }
+  }
+  return soNoComposto && outros.size === 1 ? [...outros][0] : null;
+}
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",

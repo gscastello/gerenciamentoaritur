@@ -8,7 +8,6 @@ const ctx = {
 
 Deno.test("#426 de que lado da rota é o lugar", () => {
   assertEquals(ladoEscrito("Retorno das Vans", ctx), "sao_luis");
-  assertEquals(ladoEscrito("Rodoviária", ctx), "sao_luis");
   assertEquals(ladoEscrito("Aeroporto de São Luís", ctx), "sao_luis");
   assertEquals(ladoEscrito("entrada da Vila Itamar, perto da PRF", ctx), "sao_luis");
   assertEquals(ladoEscrito("Condomínio Belleville, Estrada da Maioba", ctx), "sao_luis");
@@ -51,7 +50,20 @@ Deno.test("#426 embarque/desembarque que não combinam com o sentido", () => {
   assertEquals(lugaresContraOSentido({ direction: "ida", route_point_code: "outro", pickup_detail: "Cantanhede, Praça da Cruz", dropoff_location: "Pirapemas" }, ctx), null);
   assertEquals(lugaresContraOSentido({ direction: "volta", route_point_code: "pirapemas", pickup_detail: "Rua do Sol", dropoff_location: "Rodoviária de Miranda" }, ctx), null);
   assert(lugaresContraOSentido({ direction: "volta", route_point_code: "cantanhede", pickup_detail: "Praça da Cruz", dropoff_location: "Pirapemas" }, ctx));
+  // "rodoviária" escrita não decide (Cantanhede tem); bairro de São Luís + cidade no texto: os dois lados
+  assertEquals(lugaresContraOSentido({ direction: "volta", route_point_code: "cantanhede", pickup_detail: "Rua do Matadouro 20 — Rodoviária" }, ctx), null);
+  assertEquals(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_neighborhood: "Cohatrac", pickup_detail: "Rua do Pêssego, 29 — Cantanhede" }, ctx), null);
   // encomenda não entra; lado que a base de lugares resolveu vence o texto
   assertEquals(lugaresContraOSentido({ type: "encomenda", direction: "volta", route_point_code: "pirapemas", pickup_detail: "Retorno" }, ctx), null);
   assert(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_detail: "Avenida Exemplo, 1025" }, { ...ctx, ladoDoEmbarque: "interior" }));
+});
+
+Deno.test("#426 'Jardim Araçagy, Cohatrac': o bairro é o pedaço escrito, não o nome do lugar", async () => {
+  const { bairroForaDoNomeComposto } = await import("./rascunhoPuro.ts");
+  const tabela = [{ neighborhood: "Araçagy" }, { neighborhood: "Cohatrac" }, { neighborhood: "Turu" }];
+  assertEquals(bairroForaDoNomeComposto("Araçagy", ["Jardim aracagy, Cohatrac\nPróximo a arena, kit net azul"], tabela)?.neighborhood, "Cohatrac");
+  // escreveu o bairro sozinho: vale o lido
+  assertEquals(bairroForaDoNomeComposto("Araçagy", ["Rua 5, Araçagy"], tabela), null);
+  // nome composto sem outro bairro: não mexe
+  assertEquals(bairroForaDoNomeComposto("Turu", ["Jardim Turu, Rua N, casa 32"], tabela), null);
 });

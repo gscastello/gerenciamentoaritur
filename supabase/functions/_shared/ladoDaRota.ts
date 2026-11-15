@@ -60,9 +60,8 @@ export function ladoEscrito(
   if (!texto || !String(texto).trim()) return null;
   const t = ` ${normalizarTexto(semLogradouros(texto))} `;
   const interior = paradasNoTexto(texto).size > 0;
-  let saoLuis = / (sao luis|slz|s luis|sao luiz|aeroporto|retorno) /.test(t) ||
-    // "rodoviária" sozinha é a de São Luís; "rodoviária de Miranda" é do interior
-    (/ (rodoviaria|rodov|terminal) /.test(t) && !interior);
+  // "rodoviária" escrita não decide: Cantanhede e Miranda também têm (o ponto Rodoviária da Ida vem pelo código)
+  let saoLuis = / (sao luis|slz|s luis|sao luiz|aeroporto|retorno) /.test(t);
   if (!saoLuis && ctx.locaisDeOutros?.length) {
     saoLuis = ctx.locaisDeOutros.some((l) => {
       const n = normalizarTexto(l);
@@ -119,7 +118,11 @@ export function lugaresContraOSentido(
   const textoEmbarque = [r.pickup_detail, r.direction === "ida" ? r.pickup_neighborhood : null].filter(Boolean).join(", ");
   // o ponto já diz o lado: busca/rodoviária/retorno = São Luís; pirapemas/cantanhede = interior
   const ladoDoPonto: Lado | null = PONTOS_DE_SAO_LUIS.has(ponto) ? "sao_luis" : PONTOS_DO_INTERIOR.has(ponto) ? "interior" : null;
-  const embarque = ctx.ladoDoEmbarque ?? ladoEscrito(textoEmbarque, ctx);
+  // o bairro da tabela (Ida) é um sinal à parte: "Pirâmide" + "Cantanhede" no texto = os dois lados, não decide
+  const ladoDoBairro = r.direction === "ida" && r.pickup_neighborhood ? ladoEscrito(r.pickup_neighborhood, ctx) : null;
+  const ladoDoTexto = ladoEscrito(r.pickup_detail, ctx);
+  const embarque = ctx.ladoDoEmbarque ??
+    (ladoDoBairro && ladoDoTexto && ladoDoBairro !== ladoDoTexto ? null : ladoDoTexto ?? ladoDoBairro);
   const desembarque = ctx.ladoDoDesembarque ?? ladoEscrito(r.dropoff_location, ctx);
   const deOnde = paradaDoInterior(textoEmbarque) ?? (PONTOS_DO_INTERIOR.has(ponto) ? (ponto as Parada) : null);
   const paraOnde = paradaDoInterior(r.dropoff_location);
