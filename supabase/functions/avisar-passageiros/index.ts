@@ -6,7 +6,7 @@
 // aprovado pela Meta (settings.aviso_modelo); sem modelo ou sem conversa, fica marcado para a
 // equipe avisar pelo celular. Tudo registrado em avisos_passageiros.
 //
-// Deploy: verify_jwt = true.
+// Deploy: verify_jwt = false (o app manda o JWT e a função confere; a rotina usa x-rotina).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { comoEnviar, itensValidos, modeloValido, textoDoModelo } from "../_shared/avisoPuro.ts";
@@ -34,21 +34,41 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ success: false, message: "Método não permitido." }, 405);
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) return json({ success: false, message: "Sem autenticação." }, 401);
-  const db = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false },
-  });
-  const { data: userData } = await db.auth.getUser();
-  const userId = userData?.user?.id;
-  if (!userId) return json({ success: false, message: "Sessão inválida." }, 401);
-  const { data: perfil } = await db.from("users").select("role").eq("id", userId).maybeSingle();
-  if (!PAPEIS.includes(String(perfil?.role ?? ""))) {
-    return json({ success: false, message: "Avisar passageiros é para admin e atendente." }, 403);
+  // quem pede: alguém da equipe logado no app, ou a rotina do servidor a pedido do dono (chave da
+  // rotina do revisor, como o avaliar-bot) — nesse caso `por` diz quem pediu
+  // deno-lint-ignore no-explicit-any
+  let db: any;
+  let userId: string | null = null;
+  const chave = req.headers.get("x-rotina") ?? "";
+  const corpoBruto = await req.text();
+  // deno-lint-ignore no-explicit-any
+  let corpo: any = {};
+  try {
+    corpo = corpoBruto ? JSON.parse(corpoBruto) : {};
+  } catch {
+    return json({ success: false, message: "Pedido inválido." }, 400);
+  }
+  if (chave) {
+    const { data: autorizada } = await supabaseAdmin.rpc("fn_rotina_autorizada", { p_nome: "revisor", p_token: chave });
+    if (autorizada !== true) return json({ success: false, message: "Não autorizado." }, 401);
+    db = supabaseAdmin;
+    userId = /^[0-9a-f-]{36}$/i.test(String(corpo?.por ?? "")) ? String(corpo.por) : null;
+  } else {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ")) return json({ success: false, message: "Sem autenticação." }, 401);
+    db = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: userData } = await db.auth.getUser();
+    userId = userData?.user?.id ?? null;
+    if (!userId) return json({ success: false, message: "Sessão inválida." }, 401);
+    const { data: perfil } = await db.from("users").select("role").eq("id", userId).maybeSingle();
+    if (!PAPEIS.includes(String(perfil?.role ?? ""))) {
+      return json({ success: false, message: "Avisar passageiros é para admin e atendente." }, 403);
+    }
   }
 
-  const corpo = await req.json().catch(() => ({}));
   const itens = itensValidos(corpo?.itens);
   if (!itens.length) return json({ success: false, message: "Escolha ao menos um passageiro." }, 400);
 
