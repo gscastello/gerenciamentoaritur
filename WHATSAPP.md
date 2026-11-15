@@ -355,7 +355,7 @@ falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:
 ## 8. Limites conhecidos
 
 - **Opções** vão como texto numerado ("1 - Ida"); o cliente responde com o número ou o nome. Botões/listas do WhatsApp via Chatwoot não foram validados.
-- **Lembretes e "motorista a caminho"** (modelos aprovados fora das 24 h) **não existem mais**: o `whatsapp-notifications-dispatcher` (Meta direto) foi removido. Reimplementar pela API de modelos do Chatwoot é trabalho futuro (issue própria).
+- **Avisos aos passageiros** (issue #432): pela Agenda → "Avisar passageiros" (Edge Function `avisar-passageiros`). Fora das 24 h só vai o modelo aprovado pela Meta cadastrado em `settings.aviso_modelo` (texto do modelo `aviso_horario`: "Olá, {{1}}! Lembrete da sua viagem com a AriTur: {{2}}, embarque em {{3}} às {{4}}. Qualquer dúvida, é só responder esta mensagem."). Sem ele, quem está fora da janela aparece em "Avisar pelo celular". "Motorista a caminho" continua sem existir.
 - **Áudio** não é entendido (peça para escrever; insistindo, vai pra equipe).
 - Histórico antigo das conversas pode não sincronizar com o Chatwoot.
 - O CI roda o job **Funções (Deno)** (`deno check` da função + `deno test supabase/functions/_shared`). Localmente: `deno test supabase/functions/_shared`.

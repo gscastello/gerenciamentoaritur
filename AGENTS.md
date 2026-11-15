@@ -531,6 +531,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
   `sem_data`; "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+- **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
+  `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
+  com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
+  nada sai sem "Enviar" + "Confirmar". Dentro das 24 h da última mensagem do cliente vai o texto; fora, só o **modelo
+  aprovado pela Meta** em `settings.aviso_modelo` (`{"nome","idioma","categoria"}`; variáveis {{1}} nome, {{2}} dia,
+  {{3}} ponto, {{4}} horário). Sem modelo ou sem conversa, o passageiro vai para "Avisar pelo celular". Tudo em
+  `avisos_passageiros`; quem já recebeu volta desmarcado. A confirmação do Agendado também traz o horário do ponto.
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
 

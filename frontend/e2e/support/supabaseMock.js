@@ -231,6 +231,35 @@ export async function mockSupabase(page, opts = {}) {
     route.fulfill(json({ success: true, resumo: botAprendizadoResumo })),
   );
 
+  // "Avisar passageiros" (issue #432): a Edge Function avisar-passageiros e o registro dos avisos.
+  // opts.avisoForaDaJanela = ids de reserva que não recebem (fora das 24 h); o resto "enviado".
+  const avisosRows = [];
+  const avisosPedidos = [];
+  await page.route("**/functions/v1/avisar-passageiros", (route) => {
+    const itens = route.request().postDataJSON?.()?.itens ?? [];
+    avisosPedidos.push(itens);
+    const fora = new Set(opts.avisoForaDaJanela ?? []);
+    const resultados = itens.map((i) => ({
+      reservation_id: i.reservation_id,
+      status: fora.has(i.reservation_id) ? "fora_da_janela" : "enviado",
+    }));
+    const doDia = (opts.reservations ?? []).reduce((m, r) => m.set(r.id, r), new Map());
+    for (const r of resultados) {
+      const res = doDia.get(r.reservation_id);
+      avisosRows.push({
+        reservation_id: r.reservation_id,
+        trip_date: res?.data,
+        direction: res?.direcao,
+        status: r.status,
+        modo: r.status === "enviado" ? "texto" : null,
+        erro: null,
+        criado_em: new Date().toISOString(),
+      });
+    }
+    return route.fulfill(json({ success: true, resultados }));
+  });
+  page.avisosPedidos = avisosPedidos;
+
   // auth: getUser / refresh
   await page.route("**/auth/v1/**", (route) => {
     const url = route.request().url();
@@ -349,6 +378,14 @@ export async function mockSupabase(page, opts = {}) {
     const path = url.pathname.replace("/rest/v1/", "");
     const wantsObject = (req.headers().accept || "").includes("pgrst.object");
 
+    if (path === "avisos_passageiros") {
+      const data = (url.searchParams.get("trip_date") ?? "").replace(/^eq\./, "");
+      const dir = (url.searchParams.get("direction") ?? "").replace(/^eq\./, "");
+      const linhas = avisosRows
+        .filter((a) => (!data || a.trip_date === data) && (!dir || a.direction === dir))
+        .sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)));
+      return route.fulfill(json(linhas));
+    }
     if (path === "notes") {
       if (req.method() === "GET") {
         const sorted = [...notesRows].sort((a, b) =>
