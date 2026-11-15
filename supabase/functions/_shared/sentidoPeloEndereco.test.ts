@@ -184,3 +184,26 @@ Deno.test("#419 bairro sem prova sai (a leitura não escolhe da lista)", async (
   assert(bairroTemProva("Cohab Anil III", { textos: ["moro na cohab anil 3"] }));
   assert(bairroTemProva(null, { textos }));
 });
+
+Deno.test("#419 'Aguardo vcs no retorno' é a Ida; o trecho de ontem não decide o pedido de amanhã", async () => {
+  const { falasDoDia, origemDoPedido, pontoEscrito: ponto } = await import("./pedidoDoCliente.ts");
+  const pontos = ["busca", "rodoviaria", "retorno", "outro"];
+  // "ficaremos no retorno" é onde desce; "aguardo no retorno" é onde embarca
+  assertEquals(ponto(["De Pirapemas a São Luís! Ficaremos no retorno."], pontos), null);
+  assertEquals(ponto(["3 passagens p amanhã 16/11 — Aguardo vcs no retorno!"], pontos), "retorno");
+  // conversa: ontem (14/11) a Volta "para hoje"; hoje (15/11) a Ida de amanhã
+  const falas = [
+    { quem: "cliente", texto: "3 passagens", em: "2026-11-14T14:15:00Z" },
+    { quem: "cliente", texto: "De Pirapemas a São Luís! Ficaremos no retorno.", em: "2026-11-14T14:16:00Z" },
+    { quem: "cliente", texto: "Para hoje atarde ! aqui na avenida", em: "2026-11-14T14:17:00Z" },
+    { quem: "equipe", texto: "Bom dia", em: "2026-11-15T14:05:00Z" },
+    { quem: "cliente", texto: "3 passagens p amanhã 16/11 — Aguardo vcs no retorno!", em: "2026-11-15T14:07:00Z" },
+  ];
+  assertEquals(origemDoPedido(falas)?.sentido, "volta");
+  assertEquals(origemDoPedido(falasDoDia(falas, "2026-11-16")), null);
+  assertEquals(falasDoDia(falas, "2026-11-16").length, 2);
+  // a leitura deu Volta "saindo de Pirapemas (Retorno das Vans)": o Retorno é da Ida
+  const lidos = [{ tipo: "passagem", data: "2026-11-16", direcao: "volta", ponto: "pirapemas", bairro: null, endereco: "Retorno das Vans", desembarque: null, cidade_dita: "pirapemas" }];
+  const [p] = idaPeloEmbarqueEmSaoLuis(lidos, []);
+  assertEquals([p.direcao, p.ponto, p.cidade_dita], ["ida", "retorno", null]);
+});

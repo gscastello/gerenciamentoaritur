@@ -489,11 +489,27 @@ export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(
   const out = pedidos.map((p) => {
     if ((p.tipo ?? "passagem") === "encomenda" || p.direcao !== "volta" || !p.endereco) return p;
     if (sentidoDoDia(p.data) === "volta") return p;
+    const doInterior = cidadeDaVolta(p.endereco) ||
+      ["campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"].some((c) => normalizarTexto(p.endereco).includes(c));
+    if (doInterior) return p;
+    const desceEmSaoLuis = /sao luis|slz/.test(normalizarTexto(p.desembarque ?? ""));
+    // "Aguardo vcs no retorno": o Retorno das Vans é ponto da Ida, em São Luís (issue #419)
+    if (/ retorno /.test(` ${normalizarTexto(semLogradouros(p.endereco))} `)) {
+      mudou = true;
+      return {
+        ...p,
+        direcao: "ida",
+        ponto: "retorno",
+        bairro: null,
+        cidade_dita: null,
+        desembarque: desceEmSaoLuis ? null : (p.desembarque ?? null),
+        duvida: [p.duvida, "Embarque no Retorno (São Luís): é a Ida, não a Volta."].filter(Boolean).join(" "),
+      };
+    }
     // "Rua do Aeroporto" (Cantanhede) é rua, não o aeroporto de São Luís
     const local = localDeOutros([semLogradouros(p.endereco)], locais);
-    if (!local || cidadeDaVolta(p.endereco) || ["campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"].some((c) => normalizarTexto(p.endereco).includes(c))) return p;
+    if (!local) return p;
     mudou = true;
-    const desceEmSaoLuis = /sao luis|slz/.test(normalizarTexto(p.desembarque ?? ""));
     return {
       ...p,
       direcao: "ida",

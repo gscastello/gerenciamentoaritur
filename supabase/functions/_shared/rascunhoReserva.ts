@@ -97,6 +97,7 @@ import {
   sentidoDoDiaEscrito,
   pediuDeNovo,
   pontoEscrito,
+  falasDoDia,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -399,9 +400,7 @@ async function lerEGravar(
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
-  const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto }));
-  // a ORIGEM decide: saindo de Pirapemas/Cantanhede é Volta, de São Luís é Ida (dono, 14/11 — #407)
-  const origem = origemDoPedido(falasDoTrecho);
+  const falasDoTrecho = recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe").map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
   // "agendar de novo" sem pedido lido: refaz a reserva que ele cancelou (issue #419)
   let juntos = lidosJuntos;
   if (!juntos.length && pediuDeNovo(textosDoCliente)) {
@@ -413,6 +412,10 @@ async function lerEGravar(
       evento("bot_pedido_de_novo", { conversa: entrada.chatwootConversationId });
     }
   }
+  // a ORIGEM decide: saindo de Pirapemas/Cantanhede é Volta, de São Luís é Ida (dono, 14/11 — #407) —
+  // só a dita no pedido DAQUELE dia (a de ontem era de outra viagem — issue #419)
+  const diaDoPedido = juntos.length === 1 ? juntos[0].data : null;
+  const origem = origemDoPedido(falasDoDia(falasDoTrecho, diaDoPedido));
   const pelaOrigem = pedidosPelaOrigem(juntos, origem);
   if (pelaOrigem !== juntos) evento("bot_sentido_pela_origem", { conversa: entrada.chatwootConversationId, sentido: origem?.sentido ?? null });
   const mensagensDoCliente = doCliente.map((m) => ({ texto: m.texto, em: m.em }));

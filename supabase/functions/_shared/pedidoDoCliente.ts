@@ -118,6 +118,28 @@ export function pedidosPeloSentidoDoDia<P extends PedidoDoPar>(pedidos: P[], men
   return mudou ? out : pedidos;
 }
 
+/**
+ * As falas do pedido daquele DIA (issue #419): a conversa em blocos (mensagens com menos de 15 min
+ * entre uma e outra); bloco que cita só OUTROS dias é de outro pedido e sai. "De Pirapemas a São
+ * Luís… para hoje à tarde" de ontem não diz o sentido do pedido de amanhã.
+ */
+export function falasDoDia<F extends { texto: string; em: string }>(falas: F[], dia: string | null | undefined): F[] {
+  if (!dia) return falas;
+  const blocos: F[][] = [];
+  for (const f of falas) {
+    const ultimo = blocos.at(-1);
+    const anterior = ultimo?.at(-1);
+    if (ultimo && anterior && Date.parse(f.em) - Date.parse(anterior.em) < 15 * 60 * 1000) ultimo.push(f);
+    else blocos.push([f]);
+  }
+  return blocos
+    .filter((b) => {
+      const ds = datasEscritas(b);
+      return !ds.length || ds.includes(dia);
+    })
+    .flat();
+}
+
 /** "Gostaria de agendar de novo!", "marca novamente", "reserva outra vez" (issue #419). */
 export function pediuDeNovo(textos: string[]): boolean {
   return textos.some((t) =>
@@ -622,6 +644,8 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
     if (t.includes("?")) continue;
     const n = ` ${normalizarTexto(t)} `;
     if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
+    // "De Pirapemas a São Luís! Ficaremos no retorno": indo PARA São Luís, o ponto é onde desce (issue #419)
+    if (origemEscrita(t)?.sentido === "volta" || RE_IR_PARA_SAO_LUIS.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
     // "parada das vans" é o Retorno das Vans, não a rodoviária (dono, 11/11 — issue #333)
     // "e retorno segunda-feira de manhã" é a viagem de volta, não o ponto Retorno (issue #419)
@@ -700,7 +724,8 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
   const avisos: string[] = [];
   if (pedido.tipo === "encomenda") return { pedido, completados, avisos };
 
-  const sentido = ctx.sentidoDaEquipe ?? ctx.origem?.sentido ?? sentidoEscrito(textos);
+  // só o que foi escrito no pedido daquele dia: o trecho de ontem era de outra viagem (issue #419)
+  const sentido = ctx.sentidoDaEquipe ?? ctx.origem?.sentido ?? sentidoEscrito(falasDoDia(mensagens, p.data).map((m) => m.texto));
   if (!pedido.direcao && sentido) {
     pedido.direcao = sentido;
     completados.push(`sentido ${sentido}`);
@@ -793,7 +818,7 @@ export function conferenciaFinal(
     naoBate.push(`o cliente escreveu o dia ${datas.map(ddmm).join(" ou ")} e a reserva ficou para ${ddmm(r.trip_date)}`);
   }
 
-  const sentido = ctx.sentidoDaEquipe ?? ctx.origem?.sentido ?? sentidoEscrito(textos);
+  const sentido = ctx.sentidoDaEquipe ?? ctx.origem?.sentido ?? sentidoEscrito(falasDoDia(mensagens, r.trip_date).map((m) => m.texto));
   if (sentido && ctx.pedidosLidos === 1 && sentido !== r.direction) {
     naoBate.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"} e a reserva ficou na ${r.direction === "volta" ? "Volta" : "Ida"}`);
   }
