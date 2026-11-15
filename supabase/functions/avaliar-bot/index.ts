@@ -43,6 +43,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
       pendencia: p.pendencia ?? null,
       notes: p.notes ?? null,
     }));
+    await supabaseAdmin.from("bot_avaliacoes").delete().eq("rodada", rodada).eq("caso_id", caso.id).eq("resultado", "erro");
     const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas, {
       motivos: r.motivos,
       pendenteOk: caso.pendente_ok === true,
@@ -84,7 +85,8 @@ Deno.serve(async (req: Request) => {
   // só os modelos que o bot usa (issue #421: comparar a primeira leitura com o modelo capaz)
   const modelo = ["claude-haiku-5-5", "claude-sonnet-5-5"].includes(corpo?.modelo) ? String(corpo.modelo) : null;
 
-  const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada);
+  // erro técnico (limite da API, tempo) não conta como feito: a próxima chamada refaz
+  const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada).neq("resultado", "erro");
   const jaFeitos = new Set(((feitos ?? []) as Linha[]).map((f) => f.caso_id));
   let q = supabaseAdmin.from("bot_casos").select("*").eq("ativo", true).order("marca_em", { ascending: true });
   if (Array.isArray(corpo?.casos) && corpo.casos.length) q = q.in("id", corpo.casos);

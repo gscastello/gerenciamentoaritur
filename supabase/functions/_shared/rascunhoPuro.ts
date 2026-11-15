@@ -525,6 +525,25 @@ export function outroPodeSerBusca(
 }
 const CIDADES_DA_ROTA_FORA = ["pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
 
+/**
+ * O bairro da busca em casa tem PROVA? (issue #419: a leitura escolhia "Turu" da lista para um
+ * "Condomínio Marsil" ou até para uma rua de Pirapemas.) Vale se o nome foi escrito na conversa
+ * (cliente ou equipe, com erro de escrita aceito) ou é o bairro de costume do passageiro. Sem
+ * prova, o bairro sai e o sistema procura pelo endereço (memória de São Luís, internet).
+ */
+export function bairroTemProva(bairro: string | null | undefined, ctx: { textos: string[]; costume?: string | null }): boolean {
+  if (!bairro) return true;
+  if (ctx.costume && normalizarTexto(ctx.costume) === normalizarTexto(bairro)) return true;
+  const palavras = normalizarTexto(bairro)
+    .split(" ")
+    .filter((p) => p.length >= 3 && !/^(i|ii|iii|iv|v|vi)$/.test(p) && !/^\d+$/.test(p) && !["das", "dos"].includes(p));
+  if (!palavras.length) return true;
+  return ctx.textos.some((t) => {
+    const ditas = normalizarTexto(t).split(" ");
+    return palavras.every((p) => ditas.some((d) => palavraParecida(d, p)));
+  });
+}
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",
@@ -977,7 +996,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
   pedido_faltando: "o cliente pediu também outro dia que a leitura da conversa não trouxe (confira e lance pela Agenda)",
   qual_viagem: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede: Volta de hoje ou Ida de amanhã?",
-  onde_embarca: "o endereço é conhecido em Pirapemas/Cantanhede, mas o cliente também citou São Luís: Ida ou Volta?",
+  onde_embarca: "não dá para ter certeza se embarca em São Luís (Ida) ou em Pirapemas/Cantanhede (Volta)",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
   sem_endereco: "falta o local de embarque",

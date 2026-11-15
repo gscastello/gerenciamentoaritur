@@ -164,3 +164,23 @@ Deno.test("#419 'uma vaga para ir em S.Luís' é a Volta", async () => {
   assertEquals(sentidoEscrito(["preciso ir pra Pirapemas"]), "ida");
   assertEquals(sentidoEscrito(["uma passagem pra ir"]), "ida");
 });
+
+Deno.test("#419 'pra manhã', 'para a manhã' = amanhã; 'agora à tarde' = hoje; 'de manhã' não é dia", async () => {
+  const { datasEscritas } = await import("./pedidoDoCliente.ts");
+  const QUINTA = "2026-11-12T13:00:00Z"; // quinta 12/11, 10h
+  assertEquals(datasEscritas([{ texto: "queria agendar uma passagem pra manhã de São Luís pra pirapemas", em: QUINTA }]), ["2026-11-13"]);
+  assertEquals(datasEscritas([{ texto: "Para a manhã uma passagem", em: QUINTA }]), ["2026-11-13"]);
+  assertEquals(datasEscritas([{ texto: "tem passagem para São Luís agora a tarde?", em: QUINTA }]), ["2026-11-12"]);
+  assertEquals(datasEscritas([{ texto: "a van passa de manhã?", em: QUINTA }]), []);
+});
+
+Deno.test("#419 bairro sem prova sai (a leitura não escolhe da lista)", async () => {
+  const { bairroTemProva } = await import("./rascunhoPuro.ts");
+  const textos = ["Qual seu endereço", "Condomínio masil", "Jardim aracagy, Cohatrac"];
+  assert(!bairroTemProva("Turu", { textos }));
+  assert(bairroTemProva("Cohatrac", { textos }));
+  assert(bairroTemProva("Araçagy", { textos })); // "aracagy" escrito sem cedilha
+  assert(bairroTemProva("Turu", { textos, costume: "Turu" }));
+  assert(bairroTemProva("Cohab Anil III", { textos: ["moro na cohab anil 3"] }));
+  assert(bairroTemProva(null, { textos }));
+});

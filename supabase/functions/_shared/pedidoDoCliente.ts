@@ -560,8 +560,10 @@ export function datasEscritas(mensagens: MensagemDoCliente[]): string[] {
     }
     const n = ` ${normalizarTexto(cru)} `;
     if (/ depois de (amanha|amnh|amh) /.test(n)) out.push(somar(base, 2));
-    else if (/ (amanha|amnh|amh|amanhan) /.test(n)) out.push(somar(base, 1));
-    if (/ (hoje|hj) /.test(n)) out.push(base);
+    // "pra manhã", "para a manhã" = amanhã (erro de escrita comum); "de manhã" é o turno, não o dia (issue #419)
+    else if (/ (amanha|amnh|amh|amanhan) /.test(n) || / (pra|pro|para|p) (a )?manha /.test(n)) out.push(somar(base, 1));
+    // "agora à tarde", "essa tarde", "hoje à tarde" = hoje
+    if (/ (hoje|hj|agora a tarde|agora de tarde|essa tarde|esta tarde|nessa tarde|agora pela manha) /.test(n)) out.push(base);
     for (const [, d] of n.matchAll(/ dia (\d{1,2}) /g)) {
       const dia = Number(d);
       if (dia < 1 || dia > 31) continue;

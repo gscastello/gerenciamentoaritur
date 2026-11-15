@@ -72,6 +72,7 @@ import {
   sentidoPeloLugarDoEmbarque,
   idaPeloEmbarqueEmSaoLuis,
   outroPodeSerBusca,
+  bairroTemProva,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -95,6 +96,7 @@ import {
   voltaPeloEnderecoDoInterior,
   sentidoDoDiaEscrito,
   pediuDeNovo,
+  pontoEscrito,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -455,6 +457,9 @@ async function lerEGravar(
   const qualViagem = new Set<PedidoExtraido>();
   /** endereço conhecido em Pirapemas/Cantanhede e algo de São Luís também: Ida ou Volta? (issue #419) */
   const ondeEmbarca = new Set<PedidoExtraido>();
+  // tudo o que cliente e equipe escreveram (pedido atual e conversas anteriores): prova do bairro
+  const textosDaConversa = mensagens.filter((m) => m.quem !== "bot").map((m) => m.texto);
+  const formularioDaEquipe = recentes.some((m) => m.quem === "equipe" && /onde voc[eê] vai ficar/i.test(m.texto));
   // o trecho dito decide o sentido só quando há UMA viagem (várias: vale a do dia — issue #419)
   const origemUnica = pedidos.length === 1 ? origem : null;
   // NINGUÉM escreveu o dia (cliente, equipe, marca): a leitura não chuta "amanhã" — fica sem dia e o
@@ -512,6 +517,21 @@ async function lerEGravar(
         }
         if (decisao) evento("bot_volta_pelo_endereco", { conversa: entrada.chatwootConversationId, fonte: "lugares", decisao: decisao === "duvida" ? "duvida" : "volta" });
       }
+    }
+    // respondeu o formulário da equipe ("Local de Embarque… Buscar em casa?" / "Onde você vai ficar?
+    // (Cidade, Rua…)") com "Buscar em casa" e a leitura deu Volta sem o trecho escrito: a cidade pode
+    // ser onde ele vai FICAR — só o passageiro sabe (issue #419)
+    if (
+      (p.tipo ?? "passagem") !== "encomenda" &&
+      p.direcao === "volta" &&
+      !origemUnica &&
+      !dadosMarca.direcao &&
+      !sentidoEscrito(textosDoCliente) &&
+      formularioDaEquipe &&
+      pontoEscrito(textosDoCliente, ["busca"]) === "busca"
+    ) {
+      ondeEmbarca.add(p);
+      evento("bot_formulario_ambiguo", { conversa: entrada.chatwootConversationId });
     }
     const avisosDoCliente = conferido.avisos;
     // "Na usina, certo?" → "Não": a sugestão da equipe sai do embarque (issue #320)
@@ -650,6 +670,18 @@ async function lerEGravar(
         r.pickup_neighborhood = escrito.neighborhood;
       }
     }
+    // bairro sem prova (não escrito, não é o de costume): a leitura chutou — sai e o sistema procura
+    // pelo endereço (issue #419: "Condomínio Marsil" lido como Turu)
+    if (
+      r.route_point_code === "busca" &&
+      r.pickup_neighborhood &&
+      !bairroTemProva(r.pickup_neighborhood, { textos: textosDaConversa, costume: costume?.ida?.neighborhood ?? null })
+    ) {
+      evento("bot_bairro_sem_prova", { conversa: entrada.chatwootConversationId, bairro: r.pickup_neighborhood });
+      r.notes = [r.notes, `Bairro ${r.pickup_neighborhood} não foi dito na conversa: procurado pelo endereço.`].filter(Boolean).join(" ").slice(0, 300);
+      r.pickup_neighborhood = null;
+      if (!r.pickup_detail && !v.aConfirmar.includes("endereco")) v.aConfirmar.push("endereco");
+    }
     // busca em casa com condomínio/residencial fora da tabela: descobre o bairro (issue #270)
     if (r.route_point_code === "busca" && !bairroDaTabela(r.pickup_neighborhood, ctx.bairrosTabela)) {
       const original = [r.pickup_neighborhood, r.pickup_detail].filter(Boolean).join(", ");
@@ -720,7 +752,7 @@ async function lerEGravar(
     }
     if (ondeEmbarca.has(p) && opcoes.confirmadoPelaEquipe) {
       pendencia ??= {
-        motivo: "o endereço é conhecido em Pirapemas/Cantanhede, mas o cliente também citou São Luís (Ida ou Volta?)",
+        motivo: "não dá para ter certeza se embarca em São Luís (Ida) ou em Pirapemas/Cantanhede (Volta): perguntei ao passageiro",
         codigo: "onde_embarca",
       };
     }
