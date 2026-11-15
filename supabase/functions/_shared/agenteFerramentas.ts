@@ -36,6 +36,7 @@ import { getBotContext } from "./botContext.ts";
 import { type LugarNasCidades, lugarDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { lugaresContraOSentido } from "./ladoDaRota.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 
 export type ContextoDoAgente = {
@@ -158,6 +159,10 @@ export const FERRAMENTAS: Ferramenta[] = [
         cidade_confirmada: {
           type: "boolean",
           description: "Só depois de um CIDADE_A_CONFIRMAR: true se o cliente confirmou a cidade de embarque da Volta.",
+        },
+        sentido_confirmado: {
+          type: "boolean",
+          description: "Só depois de um SENTIDO_NAO_COMBINA: true se o cliente confirmou que embarca e desce mesmo onde está no pedido.",
         },
       },
       required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
@@ -562,6 +567,34 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
         ok: false,
         codigo: "CIDADE_A_CONFIRMAR",
         erro: `${outra.nome}, que conhecemos, fica em ${outra.cidade}${junto}. Pergunte ao cliente se o embarque é mesmo em ${ponto.name}; se ele confirmar, chame de novo com cidade_confirmada=true (senão troque o ponto).`,
+      };
+    }
+  }
+
+  // O LUGAR DIZ O SENTIDO (dono, 15/11 — issue #426): embarque/desembarque que não combinam com Ida/Volta
+  if (args.sentido_confirmado !== true) {
+    const [{ data: bairrosSl }, { data: locaisBr }] = await Promise.all([
+      supabaseAdmin.from("neighborhood_pricing").select("neighborhood"),
+      supabaseAdmin.from("boarding_spot_prices").select("local"),
+    ]);
+    const contra = lugaresContraOSentido(
+      {
+        direction: pedido.direcao,
+        route_point_code: String(ponto.code),
+        pickup_detail: pedido.enderecoEmbarque,
+        pickup_neighborhood: pedido.bairro,
+        dropoff_location: pedido.desembarque,
+      },
+      {
+        bairros: (bairrosSl ?? []) as { neighborhood: string }[],
+        locaisDeOutros: ((locaisBr ?? []) as { local: string }[]).map((l) => l.local),
+      },
+    );
+    if (contra) {
+      return {
+        ok: false,
+        codigo: "SENTIDO_NAO_COMBINA",
+        erro: `${contra}. Embarque em São Luís é Ida; embarque em Pirapemas/Cantanhede é Volta. Confira com o cliente de onde ele sai e para onde vai e chame de novo com o sentido certo (ou com sentido_confirmado=true, se ele confirmar).`,
       };
     }
   }

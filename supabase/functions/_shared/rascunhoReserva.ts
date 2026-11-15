@@ -101,6 +101,7 @@ import {
   semPedidosPassados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { lugaresContraOSentido } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -810,6 +811,14 @@ async function lerEGravar(
         motivo: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
         codigo: "dia_ilegivel",
       };
+    }
+    // O LUGAR DIZ O SENTIDO (dono, 15/11 — issue #426): embarque em São Luís só na Ida, no interior
+    // só na Volta; desembarque o contrário. Não combina → não lança calado: pergunta ao passageiro.
+    const contraOSentido = lugaresContraOSentido(r, { bairros: ctx.bairrosTabela, locaisDeOutros: ctx.locaisDeOutros });
+    if (contraOSentido) {
+      evento("bot_lugar_contra_o_sentido", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe });
+      r.notes = [r.notes, `O lugar não combina com o sentido: ${contraOSentido}.`].filter(Boolean).join(" ").slice(0, 300);
+      if (opcoes.confirmadoPelaEquipe) pendencia ??= { motivo: contraOSentido, codigo: "onde_embarca" };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
     // desfazer o que o cliente escreveu sem ninguém ver (issue #309)
