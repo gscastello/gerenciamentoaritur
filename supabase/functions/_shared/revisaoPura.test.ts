@@ -291,3 +291,25 @@ Deno.test("#410: com o 'Atualizado ☑️' da equipe, certeza média corrige —
   );
   assertEquals(baixa.correcoes.length, 0);
 });
+
+Deno.test("#426 revisor: o lugar diz o sentido — não corrige para o contra e aponta a reserva que já está contra", () => {
+  // reserva futura já errada: Volta "saindo de Pirapemas (Retorno das Vans)"
+  const errada: ReservaRevisada = { ...base, id: "r2", direcao: "volta", ponto: "pirapemas", embarque: "Retorno das Vans", desembarque: null };
+  const r = decidirRevisao([], { ...ctx, reservas: [errada] });
+  assertEquals(r.correcoes, []);
+  assertEquals(r.pendencias.map((a) => [a.reserva_id, a.campo]), [["r2", "sentido"]]);
+  assertStringIncludes(r.pendencias[0].explicacao, "São Luís");
+  // correção de sentido que deixaria o embarque em São Luís numa Volta: vira pendência
+  // (a troca de embarque e desembarque não resolve: os dois são de São Luís)
+  const ida: ReservaRevisada = { ...base, id: "r3", ponto: "retorno", embarque: "Retorno das Vans", desembarque: "Aeroporto" };
+  const achados = achadosValidos([
+    { reserva_id: "r3", campo: "sentido", valor_atual: "ida", valor_correto: "volta", evidencia: "Quero passagem dia 14", certeza: "alta" },
+    { reserva_id: "r3", campo: "ponto", valor_atual: "retorno", valor_correto: "pirapemas", evidencia: "Quero passagem dia 14", certeza: "alta" },
+    { reserva_id: "r3", campo: "embarque", valor_atual: "Retorno das Vans", valor_correto: "Retorno das Vans", evidencia: "Quero passagem dia 14", certeza: "alta" },
+  ]);
+  const d = decidirRevisao(achados, { ...ctx, reservas: [ida], confirmadoPelaEquipe: true });
+  assertEquals(d.correcoes, []);
+  assert(d.pendencias.some((a) => a.reserva_id === "r3"));
+  // a reserva certa do exemplo base não vira pendência
+  assertEquals(decidirRevisao([], ctx).pendencias, []);
+});

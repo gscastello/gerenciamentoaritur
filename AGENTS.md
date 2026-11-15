@@ -516,6 +516,20 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   outra pessoa **corrigiu** (mudou o que o bot gravou), **completou** (preencheu o que estava vazio/"a confirmar") e
   **cancelou**. Acerto = lançadas sem correção ÷ lançadas. É o número que decide quando ligar o modo `ia`; todo erro do
   bot vira um teste de regressão antes de ser corrigido.
+- **Banco de casos reais e avaliação** (issue #419, `database/111`, função `avaliar-bot`, `avaliacaoPura.ts`): meta do
+  dono **99,9%** — um erro faz o passageiro perder a viagem. Cada "Agendado ☑️" real vira um caso em `bot_casos`
+  (`fn_gerar_casos_bot`): a conversa até a marca e as viagens que ficaram (cancelada em até 30 min = correção da equipe;
+  depois disso, o passageiro desmarcou). `avaliar-bot` (chave da rotina do revisor, `{rodada, casos?, modelo?}`) refaz a
+  leitura do Agendado como ela estava na marca, **sem gravar nada** (`simularAgendado`), e grava em `bot_avaliacoes`:
+  certo / pendente (avisou a equipe ou perguntou) / faltou / errado. Caso conferido à mão: `verificado`, `observacao`;
+  `pendente_ok` = o certo é perguntar (o cliente não escreveu o dia); `ativo = false` = fora da conta. **Nenhuma mudança
+  no leitor do Agendado é publicada sem uma rodada nova sem erro novo**; todo erro relatado vira caso. Regras que saíram
+  dos casos: busca em casa num endereço de Pirapemas/Cantanhede é Volta (escrito ou só conhecido lá; com algo de São
+  Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
+  outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
+  `sem_data`; "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+- **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
+  ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
 
 ---
 

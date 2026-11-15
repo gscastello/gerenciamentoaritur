@@ -52,7 +52,10 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
 
 ## 2. Interpretar
 
-- **Sentido:** embarque em São Luís = `ida`; saindo de Cantanhede/Pirapemas = `volta`. **O sentido sai da ordem das paradas** (dono, 14/11): Ida = São Luís → … → Matões →
+- **Sentido:** embarque em São Luís = `ida`; saindo de Cantanhede/Pirapemas = `volta`. **O lugar diz o sentido**
+  (dono, 15/11): Retorno das Vans, Rodoviária, aeroporto, trecho da BR e bairro de São Luís só são embarque na Ida;
+  Pirapemas/Cantanhede só na Volta; o desembarque é o contrário ("aguardo vcs no retorno" = Ida no Retorno). Se
+  embarque ou desembarque não combinarem com o sentido, não lance: pergunte ao dono. **O sentido sai da ordem das paradas** (dono, 14/11): Ida = São Luís → … → Matões →
   Cantanhede → Campestre → Pirapemas; Volta = o contrário. Destino depois da origem = `ida`, antes = `volta`:
   de Pirapemas pra Cantanhede é `volta`; **de Cantanhede pra Pirapemas é `ida`** (ponto `outro`, "Cantanhede" no embarque).
   "Madrugada", "amanhã cedo" = ida da manhã.
