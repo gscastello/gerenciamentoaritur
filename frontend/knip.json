@@ -4,7 +4,6 @@
     "src/domain/index.js",
     "src/ui/motion/index.js",
     "src/ui/skeletons/*.jsx",
-    "src/ui/charts/*.jsx",
     "src/observability/index.js",
     "src/services/*.js",
     "src/hooks/*.js",

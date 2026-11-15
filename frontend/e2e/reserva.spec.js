@@ -54,35 +54,6 @@ test("admin abre a aba Sistema e as telas de configuração renderizam", async (
   await expect(page.getByText("Locais de desembarque")).toBeVisible();
 });
 
-// Bloco de notas (issue #90 → notas soltas): cria, edita, fixa e apaga.
-test("Bloco de notas: cria, edita, fixa e apaga uma nota", async ({ page }) => {
-  await mockSupabase(page, { role: "atendente" });
-  await page.goto("/");
-  await expect(page.getByRole("button", { name: /Agenda/ }).first()).toBeVisible();
-
-  const bloco = page.getByRole("button", { name: /^Bloco de notas$/ });
-  if ((await bloco.count()) === 0) {
-    await page.getByRole("button", { name: "Mais" }).click();
-  }
-  await bloco.click();
-
-  await expect(page.getByText("Nenhuma nota ainda.")).toBeVisible();
-  await page.getByRole("button", { name: "Criar a primeira" }).click();
-
-  const area = page.getByPlaceholder("Escreva aqui…");
-  await expect(area).toBeVisible();
-  await area.fill("SÃO LUÍS\n2p Miranda +55 98 8516-6052\n1p Cohama 98 7024-2260");
-  await area.blur();
-  await expect(page.getByText("Nenhuma nota ainda.")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Fixar" }).click();
-  await expect(page.getByRole("button", { name: "Desafixar" })).toBeVisible();
-
-  page.once("dialog", (d) => d.accept());
-  await page.getByRole("button", { name: "Apagar" }).click();
-  await expect(page.getByText("Nenhuma nota ainda.")).toBeVisible();
-});
-
 test("Agenda: lista de espera aparece com todos os aguardando vaga", async ({ page }) => {
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(
     new Date(),

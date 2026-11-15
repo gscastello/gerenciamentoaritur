@@ -208,13 +208,3 @@ export function TabSkeleton({ tab }) {
     </div>
   );
 }
-
-/** Skeleton específico dos gráficos (usado no Suspense do Dashboard). */
-export function ChartsSkeleton() {
-  return (
-    <div style={grid(2)}>
-      <Skeleton height={260} rounded={12} />
-      <Skeleton height={260} rounded={12} />
-    </div>
-  );
-}

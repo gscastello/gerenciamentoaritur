@@ -1,40 +1,28 @@
-import { AlertTriangle, Bell, ChevronRight, Hourglass, Inbox, Sparkles } from "lucide-react";
-import React, { Suspense, useMemo } from "react";
+import { AlertTriangle, Bell, ChevronRight, Hourglass, Inbox } from "lucide-react";
+import { useMemo } from "react";
 import { ehExtra } from "../../domain/vagas.js";
 import { useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
-import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
-import { useVehicles } from "../../hooks/useVehicles.js";
 import { Skeleton } from "../../ui/motion/index.js";
-import { ChartsSkeleton } from "../../ui/skeletons/TabSkeleton.jsx";
 import {
   C,
-  Card,
   FUNDO_CARTAO,
   INICIO,
   OCUPA_VAGA,
   SinoNotificacoes,
-  dataOperacao,
   fmtBRL,
-  gerarInsightsIA,
   mapEntry,
-  mapFuel,
-  mapManut,
-  previsaoDemanda,
   somaTipo,
   todayStr,
   useCountUp,
   useNotificacoesCtx,
 } from "../tabShared.jsx";
 
-// Recharts é pesado e só o Dashboard usa — carregado sob demanda para sair
-// do bundle inicial (ver vite.config.js manualChunks). Issue #2.
-const SevenDayCharts = React.lazy(() => import("../../ui/charts/SevenDayCharts.jsx"));
-
 /* ============================= 7. INÍCIO (Dashboard) =============================
  * Visual aprovado pelo dono (issue #391): a imagem da AriTur inteira no primeiro cartão;
  * faturamento do ano, do mês e de hoje com o lucro real (receitas − despesas, a mesma conta
  * do Financeiro) em três cartões na mesma linha; os passageiros da Ida e da Volta separados
- * (nunca somados); e "Precisa de você". Gráficos, IA operacional e previsão vêm depois.
+ * (nunca somados); e "Precisa de você". Gráficos de 7 dias, IA operacional e previsão de demanda
+ * saíram a pedido do dono (issue #428).
  */
 
 // Valor curto para caber três cartões numa linha de celular: "R$ 702 mil", "R$ 38,9 mil".
@@ -189,7 +177,6 @@ export default function DashboardTab({
   reservas,
   capacidade,
   capacidadeDe = null,
-  trips,
   pendencias = 0,
   onIr,
 }) {
@@ -209,22 +196,6 @@ export default function DashboardTab({
   );
   const finAno = useFinanceYear(now.getFullYear());
   const financeiroAno = useMemo(() => (finAno.entries || []).map(mapEntry), [finAno.entries]);
-  // combustível/manutenção do veículo padrão — só para os alertas de "IA Operacional"
-  const { defaultVehicle } = useVehicles();
-  const fuel = useFuelRecords(defaultVehicle?.id ?? null);
-  const manut = useMaintenance(defaultVehicle?.id ?? null);
-  const operacao = useMemo(
-    () => ({
-      registros: (fuel.records || []).map(mapFuel),
-      manutencoes: (manut.records || []).map(mapManut),
-    }),
-    [fuel.records, manut.records],
-  );
-  const insights = useMemo(
-    () => gerarInsightsIA(reservas, operacao, capacidade, trips),
-    [reservas, operacao, capacidade, trips],
-  );
-  const demanda = useMemo(() => previsaoDemanda(reservas), [reservas]);
   const doDia = reservas.filter(
     (r) =>
       r.data === hoje && OCUPA_VAGA.includes(r.status) && !["frete", "encomenda"].includes(r.tipo),
@@ -251,27 +222,6 @@ export default function DashboardTab({
   const lucroAno = receitaAno - somaTipo(financeiroAno, "despesa");
   const carregandoMes = finThis.loading && !finThis.entries?.length;
   const carregandoAno = finAno.loading && !finAno.entries?.length;
-  const ultimos7 = useMemo(() => {
-    const dias = [];
-    for (let i = 6; i >= 0; i--) {
-      const ds = dataOperacao(-i);
-      dias.push({
-        dia: `${ds.slice(8, 10)}/${ds.slice(5, 7)}`,
-        faturamento: financeiro
-          .filter((f) => f.data === ds && f.tipo === "receita")
-          .reduce((s, f) => s + f.valor, 0),
-        passageiros: reservas
-          .filter(
-            (r) =>
-              r.data === ds &&
-              OCUPA_VAGA.includes(r.status) &&
-              !["frete", "encomenda"].includes(r.tipo),
-          )
-          .reduce((s, r) => s + r.quantidade, 0),
-      });
-    }
-    return dias;
-  }, [financeiro, reservas]);
   const ir = (tab, deepLink) => onIr?.({ tab, deepLink });
   const avisos = (notif?.notificacoes || []).filter((n) => !n.lida).slice(0, 3);
   const nomeMes = nomeDoMes(hoje);
@@ -410,74 +360,6 @@ export default function DashboardTab({
             )}
           </div>
         </div>
-      </div>
-      <div className="space-y-5 mt-6">
-        <div className="anim-fadeUp">
-          <Suspense fallback={<ChartsSkeleton />}>
-            <SevenDayCharts data={ultimos7} />
-          </Suspense>
-        </div>
-        <Card className="anim-fadeUp" style={{ borderColor: C.purple }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={16} style={{ color: C.purple }} />
-            <div className="text-sm font-semibold" style={{ color: C.purple }}>
-              IA Operacional
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {insights.map((it, i) => (
-              <div
-                key={i}
-                className="text-xs rounded-md px-2.5 py-1.5 flex items-start gap-2"
-                style={{
-                  background:
-                    it.nivel === "alerta"
-                      ? C.redSoft
-                      : it.nivel === "sucesso"
-                        ? C.greenSoft
-                        : C.blueSoft,
-                  color: it.nivel === "alerta" ? C.red : it.nivel === "sucesso" ? C.green : C.blue,
-                }}
-              >
-                <span>{it.emoji}</span>
-                <span>{it.msg}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="anim-fadeUp">
-          <div className="text-sm font-semibold mb-3">Previsão de demanda por dia da semana</div>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-            {demanda.map((d) => (
-              <div
-                key={d.idx}
-                className="rounded-lg px-2 py-2 text-center"
-                style={{ background: C.panel2 }}
-              >
-                <div className="text-[10px]" style={{ color: C.inkFaint }}>
-                  {d.nome.slice(0, 3)}
-                </div>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  {d.amostras > 0 ? d.media.toFixed(0) : "—"}
-                </div>
-                {d.amostras >= 2 && d.diffPct !== 0 && (
-                  <div className="text-[10px]" style={{ color: d.diffPct > 0 ? C.green : C.red }}>
-                    {d.diffPct > 0 ? "+" : ""}
-                    {d.diffPct}%
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="text-xs mt-2" style={{ color: C.inkFaint }}>
-            Média de passageiros confirmados por dia da semana, com base no histórico de reservas.
-          </div>
-        </Card>
       </div>
     </div>
   );

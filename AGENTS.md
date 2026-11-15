@@ -269,9 +269,11 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   (`settings.pix`), a data é dos últimos 10 dias e o valor é exatamente o de reserva(s) do cliente em aberto;
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
-- **Rota** (issue #411, antiga Lista do Dia): só o embarque da **Volta** — quem buscamos em casa em Pirapemas e
-  Cantanhede, na ordem da rota. A Ida não aparece. O desembarque é só a lista anotada abaixo (bloco de notas); o
-  desembarque ligado às reservas (baldes por área) saiu e volta numa versão melhor.
+- **Rota** (issue #411, antiga Lista do Dia): o embarque é só o da **Volta** — quem buscamos em casa em Pirapemas e
+  Cantanhede, na ordem da rota. O **desembarque é o da Ida** (issue #428, `domain/desembarqueDaIda.js`): separado em
+  Cantanhede e Pirapemas (Campestre vai com Pirapemas; cidade do caminho e sem desembarque à parte), pela área do
+  desembarque e, sem ela, pelo texto; "Organizar" põe na ordem da entrega (`dropoff_seq`, `rpc_reorder_dropoff`).
+  A lista anotada fica abaixo. O Bloco de notas (aba) saiu (issue #428): a tabela `notes` fica, nada foi apagado.
 - **Desembarque anotado na viagem** (issue #383, Rota → Desembarque, `database/106`): lista livre por dia e
   sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
   e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
@@ -531,12 +533,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 
 ---
 
-## 9. IA Operacional e previsão de demanda
+## 9. Operação, frota e números
 
-- O Dashboard calcula client-side (sem custo de API) alertas operacionais
-  a cada carregamento: lotação por viagem, pendências, pagamentos em
-  aberto, manutenção próxima do vencimento, consumo de combustível
-  anômalo, lista de espera.
+- O **Início** mostra a capa, o faturamento e o lucro (ano, mês e hoje), os passageiros da Ida e da Volta e "Precisa
+  de você". Os gráficos de 7 dias (Recharts), a IA operacional e a previsão de demanda saíram a pedido do dono (issue
+  #428); os avisos de frota e vencimentos seguem no sino e em Pendências.
 - **Frota** (issue #369, `database/103`): consumo fora do normal = km/l abaixo de 85% da mediana dos 8 abastecimentos
   anteriores do veículo (sem litros: custo por km acima de 120%; menos de 3 anteriores não avisa). Regra única em
   `domain/frota.js` (tela Operação) e no trigger de `fuel_records` (aviso `consumo` no sino). Manutenção a 80% do
@@ -557,9 +558,6 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   e contas quitadas; `domain/fechamentoDoMes.js` monta o DRE (com o DAS estimado de `simplesNacional.js`) e os avisos
   (cobertura das reservas, meses sem receita no DAS, despesa sem nota). Baixa em PDF, planilha e .zip das fotos; todo
   dia 1 às 08:00 o sino avisa (`fechamento`, só admin/financeiro veem).
-- Previsão de demanda = média histórica simples por dia da semana
-  (`domain/demanda.js`). Ao crescer o volume, considerar série temporal
-  real (Prophet, ou chamada à API do Claude com dados agregados).
 
 ---
 

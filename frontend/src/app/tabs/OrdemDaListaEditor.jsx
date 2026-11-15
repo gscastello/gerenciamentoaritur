@@ -11,7 +11,7 @@ import { C, enderecoEmbarque } from "../tabShared.jsx";
  * rascunho: arrastar, setas, "topo" ou digitar a posição de destino. Nada é
  * gravado até "Salvar"; "Cancelar" descarta.
  */
-export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar }) {
+export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar, endereco }) {
   const original = useMemo(() => itens.map((r) => r.id), [itens]);
   const porId = useMemo(() => Object.fromEntries(itens.map((r) => [r.id, r])), [itens]);
   const [ordem, setOrdem] = useState(original);
@@ -118,7 +118,7 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar })
                   style={{ color: C.ink, overflowWrap: "anywhere" }}
                 >
                   {r.quantidade > 1 ? `${r.quantidade}P · ` : ""}
-                  {enderecoEmbarque(r, trips) || "endereço não informado"}
+                  {endereco ? endereco(r) : enderecoEmbarque(r, trips) || "endereço não informado"}
                 </span>
                 <span className="block text-[13px] font-semibold" style={{ color: C.inkSoft }}>
                   {r.nome || "—"}

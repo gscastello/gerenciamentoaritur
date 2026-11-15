@@ -10,7 +10,6 @@ import {
   LogOut,
   MessageCircle,
   MoreHorizontal,
-  NotebookPen,
   Plus,
   RefreshCw,
   Route,
@@ -43,7 +42,6 @@ import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import { SubAbas, grupoDaTela } from "./SubAbas.jsx";
 
-const BlocoDeNotasTab = React.lazy(() => import("./tabs/BlocoDeNotasTab.jsx"));
 const PendenciasTab = React.lazy(() => import("./tabs/PendenciasTab.jsx"));
 const AssistenteTab = React.lazy(() => import("./tabs/AssistenteTab.jsx"));
 const PassageirosTab = React.lazy(() => import("./tabs/PassageirosTab.jsx"));
@@ -789,7 +787,6 @@ const TAB_ROLES = {
   atendimento: ["admin", "atendente"],
   agenda: ["admin", "atendente", "motorista", "financeiro"],
   lista: ["admin", "atendente", "motorista", "financeiro"],
-  bloco: ["admin", "atendente", "motorista"],
   passageiros: ["admin", "atendente", "financeiro"],
   pendencias: ["admin", "atendente"],
   // janelas do Atendimento (issue #360)
@@ -814,7 +811,7 @@ const NAV_ITENS = [
   { id: "agenda", label: "Agenda", icon: Calendar, grupo: "Operação" },
   // "Rota" (issue #411): o embarque da Volta em Pirapemas/Cantanhede e o desembarque anotado
   { id: "lista", label: "Rota", icon: Route, grupo: "Operação" },
-  // Atendimento no lugar do Bloco de notas na barra do celular (dono, 12/11 — issue #353)
+  // Atendimento na barra do celular (dono, 12/11 — issue #353); o Bloco de notas saiu (issue #428)
   { id: "atendimento", label: "Atendimento", icon: MessageCircle, grupo: "Atendimento" },
   // Financeiro + Gestão + Operação numa tela só, com abas no topo (issue #360, SubAbas.jsx)
   { id: "financeiro", label: "Gestão", icon: Landmark, grupo: "Financeiro" },
@@ -822,8 +819,6 @@ const NAV_ITENS = [
   { id: "sistema", label: "Sistema", icon: ShieldCheck, grupo: "Administração" },
   // Pendências fica dentro do Atendimento (aba no topo, issue #360)
   { id: "assistente", label: "Assistente", icon: Sparkles, grupo: "Atendimento" },
-  // fora da barra do celular (fica em "Mais"); na lateral continua em Operação
-  { id: "bloco", label: "Bloco de notas", icon: NotebookPen, grupo: "Operação" },
 ];
 const NAV_GRUPOS = [
   "Principal",
@@ -907,7 +902,7 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
 // Barra de baixo com cinco telas. No Início ela flutua com a luz vinho deslizando (issue #391,
 // o dono quer o Início como está); nas telas de trabalho encaixa no rodapé, lisa, com um traço
 // vermelho em cima do item atual (crítica de design, issue #393). A troca é animada.
-// O resto (Passageiros, Sistema, Assistente, Bloco de notas) e "Sair" ficam no "Mais" do topo.
+// O resto (Passageiros, Sistema, Assistente) e "Sair" ficam no "Mais" do topo.
 function MobileNav({
   nav,
   tab,
@@ -1564,7 +1559,6 @@ function AppInner() {
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
                         />
                       )}
-                      {tab === "bloco" && <BlocoDeNotasTab />}
                       {tab === "pendencias" && <PendenciasTab pend={pend} />}
                       {tab === "assistente" && <AssistenteTab />}
                       {tab === "passageiros" && (
