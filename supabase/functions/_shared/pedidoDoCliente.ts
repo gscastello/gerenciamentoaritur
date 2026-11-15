@@ -72,6 +72,24 @@ function mesmoLugar(x: string | null | undefined, y: string | null | undefined):
   return px.filter((p) => py.has(p)).length / px.length >= 0.6;
 }
 
+/**
+ * O embarque lido é a resposta do cliente a uma pergunta da equipe sobre a VOLTA ("Na volta, onde
+ * lhe busco?" → "lá na Lister Caldas")? Olha a última mensagem da equipe antes da resposta.
+ */
+export function embarqueRespondeuAVolta(endereco: string | null | undefined, falas: { quem: string; texto: string }[]): boolean {
+  if (!nucleoDoLugar(endereco).length) return false;
+  for (let i = falas.length - 1; i >= 0; i--) {
+    const f = falas[i];
+    if (f.quem !== "cliente" || !mesmoLugar(f.texto, endereco)) continue;
+    for (let j = i - 1; j >= 0 && j >= i - 4; j--) {
+      if (falas[j].quem !== "equipe") continue;
+      return / (volta|voltar|retorno) /.test(` ${normalizarTexto(falas[j].texto)} `) && falas[j].texto.includes("?");
+    }
+    return false;
+  }
+  return false;
+}
+
 const cidadeDoInterior = (t: string | null | undefined): "pirapemas" | "cantanhede" | null => {
   const n = normalizarTexto(t ?? "");
   const p = n.includes("pirapemas") || n.includes("campestre");
@@ -238,7 +256,12 @@ export function outraViagemDoPar<P extends PedidoDoPar>(pedidos: P[], mensagens:
  * a outra viagem, com embarque e desembarque trocados (issue #401). Só com exatamente duas
  * passagens; senão devolve a mesma lista.
  */
-export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], textos: string[]): P[] {
+export function segundaViagemEhAOutra<P extends PedidoDoPar>(
+  pedidos: P[],
+  textos: string[],
+  /** a conversa (cliente e equipe): "Na volta, onde lhe busco?" → a resposta é o embarque da Volta */
+  falas: { quem: string; texto: string }[] = [],
+): P[] {
   if (pedidos.length !== 2 || !falouDasDuasViagens(textos)) return pedidos;
   let [a, b] = [...pedidos].sort((x, y) => String(x.data ?? "").localeCompare(String(y.data ?? "")));
   const sentido = a.direcao;
@@ -248,7 +271,10 @@ export function segundaViagemEhAOutra<P extends PedidoDoPar>(pedidos: P[], texto
   // a leitura já montou a viagem de VOLTA certa (desce onde a outra embarca), só com o rótulo
   // errado: "Na volta, onde lhe busco?" → "Lister Caldas" (issue #419). Troca só o sentido.
   const desceOndeAOutraSobe = (x: P, y: P) => mesmoLugar(x.desembarque, [y.endereco, y.bairro].filter(Boolean).join(" "));
-  const jaDeVolta = desceOndeAOutraSobe(b, a) && !desceOndeAOutraSobe(a, b)
+  // o embarque respondeu à pergunta da equipe sobre a volta ("Na volta, onde lhe busco?")
+  const respondeuAVolta = (x: P) => sentido === "ida" && embarqueRespondeuAVolta(x.endereco, falas);
+  const voltaPelaResposta = respondeuAVolta(b) !== respondeuAVolta(a) ? (respondeuAVolta(b) ? b : a) : null;
+  const jaDeVolta = voltaPelaResposta ?? (desceOndeAOutraSobe(b, a) && !desceOndeAOutraSobe(a, b))
     ? b
     : a.data === b.data && desceOndeAOutraSobe(a, b) && !desceOndeAOutraSobe(b, a)
     ? a
@@ -613,7 +639,7 @@ export function datasEscritas(mensagens: MensagemDoCliente[]): string[] {
     // "pra manhã", "para a manhã" = amanhã (erro de escrita comum); "de manhã" é o turno, não o dia (issue #419)
     else if (/ (amanha|amnh|amh|amanhan) /.test(n) || / (pra|pro|para|p) (a )?manha /.test(n)) out.push(somar(base, 1));
     // "agora à tarde", "essa tarde", "hoje à tarde" = hoje
-    if (/ (hoje|hj|agora a tarde|agora de tarde|essa tarde|esta tarde|nessa tarde|agora pela manha) /.test(n)) out.push(base);
+    if (/ (hoje|hj|agora a tarde|agora de tarde|agora tarde|essa tarde|esta tarde|nessa tarde|agora pela manha) /.test(n)) out.push(base);
     for (const [, d] of n.matchAll(/ dia (\d{1,2}) /g)) {
       const dia = Number(d);
       if (dia < 1 || dia > 31) continue;

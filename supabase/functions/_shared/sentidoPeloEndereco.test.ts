@@ -225,3 +225,19 @@ Deno.test("#419 pedido de um dia que já passou vai para o histórico; Volta com
   assert(conferenciaFinal({ trip_date: "2026-11-16", direction: "volta", quantity: 3, route_point_code: "pirapemas" }, msgs, { hoje: "2026-11-15", pedidosLidos: 1 }).length > 0);
   assertEquals(conferenciaFinal({ trip_date: "2026-11-16", direction: "ida", quantity: 3, route_point_code: "retorno" }, msgs, { hoje: "2026-11-15", pedidosLidos: 1 }), []);
 });
+
+Deno.test("#419 'Na volta, onde lhe busco?' → a resposta é o embarque da Volta; 'agora tarde' = hoje", async () => {
+  const { segundaViagemEhAOutra: par, datasEscritas } = await import("./pedidoDoCliente.ts");
+  const ida = { tipo: "passagem", data: "2026-11-11", direcao: "ida", ponto: "busca", bairro: "Maioba", endereco: "Condomínio Bela Vista, bloco C", desembarque: "Cantanhede" };
+  const outra = { ...ida, endereco: "Rua das Palmeiras, do lado da casa da professora", desembarque: null };
+  const falas = [
+    { quem: "cliente", texto: "uma passagem para amanhã para cantanhede" },
+    { quem: "cliente", texto: "é ida e volta" },
+    { quem: "equipe", texto: "Na volta, onde lhe busco?" },
+    { quem: "cliente", texto: "lá na rua das palmeiras" },
+    { quem: "cliente", texto: "do lado da casa da professora" },
+  ];
+  const r = par([ida, outra], falas.filter((f) => f.quem === "cliente").map((f) => f.texto), falas);
+  assertEquals(r.map((p) => p.direcao), ["ida", "volta"]);
+  assertEquals(datasEscritas([{ texto: "Tem vaga para São Luís agora tarde", em: "2026-11-11T14:00:00Z" }]), ["2026-11-11"]);
+});

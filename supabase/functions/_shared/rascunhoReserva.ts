@@ -100,6 +100,7 @@ import {
   falasDoDia,
   semPedidosPassados,
 } from "./pedidoDoCliente.ts";
+import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -432,11 +433,20 @@ async function lerEGravar(
   const comOPar = outraViagemDoPar(peloDia, mensagensDoCliente, hoje);
   // "uma de ida e outra de volta" com as duas lidas no mesmo sentido: a outra viagem (issues #401 e
   // #419) — depois das regras do dia, que não sabem do par (formulário colado duas vezes)
-  const pares = segundaViagemEhAOutra(comOPar, textosDoCliente);
+  const pares = segundaViagemEhAOutra(comOPar, textosDoCliente, falasDoTrecho);
   if (pares !== comOPar) evento("bot_segunda_viagem_virada", { conversa: entrada.chatwootConversationId });
   // Volta que embarca num lugar de São Luís (trecho da BR: Pedrinhas, Estiva…) é a Ida (issue #419)
-  const naBr = idaPeloEmbarqueEmSaoLuis(pares, ctx.locaisDeOutros, (data) => sentidoDoDiaEscrito(mensagensDoCliente, data));
-  if (naBr !== pares) evento("bot_volta_na_br_e_ida", { conversa: entrada.chatwootConversationId });
+  // "vou esperar na entrada da Vila Itamar" (BR de São Luís) numa Volta: o embarque é esse local (issue #419)
+  const comEspera = pares.map((p) => {
+    if (p.direcao !== "volta" || localDeOutros([p.endereco], ctx.locaisDeOutros)) return p;
+    const doDia = falasDoDia(mensagensDoCliente, p.data)
+      .map((m) => m.texto)
+      .filter((t) => / (esperar|espero|aguardo|aguardar|estarei|vou estar|embarcar|embarco|me pega|pegar) /.test(` ${normalizarTexto(t)} `));
+    const local = localDeOutros(doDia.map((t) => semLogradouros(t)), ctx.locaisDeOutros);
+    return local ? { ...p, endereco: local } : p;
+  });
+  const naBr = idaPeloEmbarqueEmSaoLuis(comEspera, ctx.locaisDeOutros, (data) => sentidoDoDiaEscrito(mensagensDoCliente, data));
+  if (naBr !== comEspera) evento("bot_volta_na_br_e_ida", { conversa: entrada.chatwootConversationId });
   // "Agendado ☑️ seg Ida Estiva 2P": o que a EQUIPE escreveu na marca vence a leitura (issue #420)
   const marca = opcoes.confirmadoPelaEquipe ? mensagens.find((m) => m.id === entrada.mensagemId) : undefined;
   const dadosMarca = marca
@@ -725,6 +735,16 @@ async function lerEGravar(
         r.pickup_neighborhood = daTabela.neighborhood;
         r.notes = [r.notes, `${peloLugar.lugar} fica no ${daTabela.neighborhood}: busca pelo bairro, não Outros.`].filter(Boolean).join(" ").slice(0, 300);
         evento("bot_outro_era_busca", { conversa: entrada.chatwootConversationId, bairro: daTabela.neighborhood });
+      } else if (pontoEscrito(falasDoDia(mensagensDoCliente, r.trip_date).map((m) => m.texto), ["busca"]) === "busca") {
+        // o cliente pediu "buscar em casa": é busca, com o bairro a achar pelo endereço
+        r.route_point_code = "busca";
+        const deduzido = await resolverBairro(String(r.pickup_detail), entrada.chatwootConversationId);
+        r.pickup_neighborhood = deduzido?.bairro ?? null;
+        r.notes = [r.notes, "O cliente pediu buscar em casa: busca, não Outros.", deduzido ? avisoDoBairro(String(r.pickup_detail), deduzido) : "Bairro a confirmar."]
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 300);
+        evento("bot_outro_era_busca", { conversa: entrada.chatwootConversationId, bairro: r.pickup_neighborhood });
       }
     }
     // o cliente deu o endereço e o bairro foi achado (tabela, memória, lugares ou internet): a
