@@ -114,16 +114,19 @@ export function lugaresContraOSentido(
   } = {},
 ): string | null {
   if ((r.type ?? "passagem") === "encomenda") return null;
+  // Para TRAVAR só valem sinais fortes (Retorno, aeroporto, BR, "São Luís", nome da cidade): nome de
+  // bairro de São Luís também existe no interior ("Bairro São Francisco", em Pirapemas) — issue #426
+  const fortes = { locaisDeOutros: ctx.locaisDeOutros };
   const ponto = String(r.route_point_code ?? "");
   const textoEmbarque = [r.pickup_detail, r.direction === "ida" ? r.pickup_neighborhood : null].filter(Boolean).join(", ");
   // o ponto já diz o lado: busca/rodoviária/retorno = São Luís; pirapemas/cantanhede = interior
   const ladoDoPonto: Lado | null = PONTOS_DE_SAO_LUIS.has(ponto) ? "sao_luis" : PONTOS_DO_INTERIOR.has(ponto) ? "interior" : null;
   // o bairro da tabela (Ida) é um sinal à parte: "Pirâmide" + "Cantanhede" no texto = os dois lados, não decide
   const ladoDoBairro = r.direction === "ida" && r.pickup_neighborhood ? ladoEscrito(r.pickup_neighborhood, ctx) : null;
-  const ladoDoTexto = ladoEscrito(r.pickup_detail, ctx);
+  const ladoDoTexto = ladoEscrito(r.pickup_detail, fortes);
   const embarque = ctx.ladoDoEmbarque ??
     (ladoDoBairro && ladoDoTexto && ladoDoBairro !== ladoDoTexto ? null : ladoDoTexto ?? ladoDoBairro);
-  const desembarque = ctx.ladoDoDesembarque ?? ladoEscrito(r.dropoff_location, ctx);
+  const desembarque = ctx.ladoDoDesembarque ?? ladoEscrito(r.dropoff_location, fortes);
   const deOnde = paradaDoInterior(textoEmbarque) ?? (PONTOS_DO_INTERIOR.has(ponto) ? (ponto as Parada) : null);
   const paraOnde = paradaDoInterior(r.dropoff_location);
 

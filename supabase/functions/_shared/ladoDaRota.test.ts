@@ -36,10 +36,11 @@ Deno.test("#426 embarque/desembarque que não combinam com o sentido", () => {
   assert(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_detail: "Rua Newton Belo, Pirapemas" }, ctx));
   // Ida com o ponto da Volta
   assert(lugaresContraOSentido({ direction: "ida", route_point_code: "cantanhede" }, ctx));
-  // Ida que desce em São Luís; Volta que desce no interior saindo de Pirapemas pra Pirapemas
-  assert(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_neighborhood: "Turu", dropoff_location: "Cohatrac" }, ctx));
-  // Volta embarcando num bairro de São Luís
-  assert(lugaresContraOSentido({ direction: "volta", route_point_code: "cantanhede", pickup_detail: "Condomínio Belleville, Estrada da Maioba" }, ctx));
+  // Ida que desce em São Luís (sinal forte)
+  assert(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_neighborhood: "Turu", dropoff_location: "Rodoviária de São Luís" }, ctx));
+  // nome de bairro de São Luís sozinho NÃO trava: existe no interior também ("Bairro São Francisco")
+  assertEquals(lugaresContraOSentido({ direction: "volta", route_point_code: "pirapemas", pickup_detail: "Pira Lanches, Bairro Estrada da Maioba" }, ctx), null);
+  assertEquals(lugaresContraOSentido({ direction: "ida", route_point_code: "busca", pickup_neighborhood: "Turu", dropoff_location: "Cohatrac" }, ctx), null);
 
   // o que combina passa
   assertEquals(lugaresContraOSentido({ direction: "ida", route_point_code: "retorno", pickup_detail: "Retorno das Vans", dropoff_location: "Pirapemas" }, ctx), null);
