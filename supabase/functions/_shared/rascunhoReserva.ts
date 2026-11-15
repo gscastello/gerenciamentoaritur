@@ -98,6 +98,7 @@ import {
   pediuDeNovo,
   pontoEscrito,
   falasDoDia,
+  semPedidosPassados,
 } from "./pedidoDoCliente.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -373,9 +374,14 @@ async function lerEGravar(
   const disparoEm = mensagens.find((m) => m.id === entrada.mensagemId)?.em ?? null;
   const corte = inicioDoPedidoAtual(mensagens, disparoEm);
   const limite = Math.max(agora.getTime() - 72 * 3600 * 1000, corte ? Date.parse(corte) + 1 : 0);
-  const recentes = mensagens.filter((m) => new Date(m.em).getTime() >= limite);
+  // pedido de um dia que já passou é histórico, não o pedido atual (issue #419)
+  const separadas = semPedidosPassados(mensagens.filter((m) => new Date(m.em).getTime() >= limite), hoje, entrada.mensagemId);
+  if (separadas.passadas.length) evento("bot_pedido_passado_no_historico", { conversa: entrada.chatwootConversationId, mensagens: separadas.passadas.length });
+  const recentes = separadas.atuais;
   // conversas anteriores: só para saber onde o cliente costuma embarcar e descer (issue #266)
-  const anteriores = mensagens.filter((m) => new Date(m.em).getTime() < limite && m.quem !== "bot");
+  const anteriores = [...mensagens.filter((m) => new Date(m.em).getTime() < limite), ...separadas.passadas]
+    .filter((m) => m.quem !== "bot")
+    .sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
 
   const cliente = await whatsappService.identifyCustomer(entrada.telefone);
   const costume = cliente ? await costumeDoCliente(cliente.id) : null;

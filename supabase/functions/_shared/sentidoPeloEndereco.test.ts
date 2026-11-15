@@ -207,3 +207,21 @@ Deno.test("#419 'Aguardo vcs no retorno' é a Ida; o trecho de ontem não decide
   const [p] = idaPeloEmbarqueEmSaoLuis(lidos, []);
   assertEquals([p.direcao, p.ponto, p.cidade_dita], ["ida", "retorno", null]);
 });
+
+Deno.test("#419 pedido de um dia que já passou vai para o histórico; Volta com 'aguardo no retorno' não passa", async () => {
+  const { semPedidosPassados, conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const falas = [
+    { id: 1, quem: "cliente", texto: "De Pirapemas a São Luís! Ficaremos no retorno.", em: "2026-11-14T14:16:00Z" },
+    { id: 2, quem: "cliente", texto: "Para hoje atarde ! aqui na avenida", em: "2026-11-14T14:17:00Z" },
+    { id: 3, quem: "cliente", texto: "3 passagens p amanhã 16/11 — Aguardo vcs no retorno!", em: "2026-11-15T14:07:00Z" },
+    { id: 4, quem: "equipe", texto: "Agendado ☑️", em: "2026-11-15T14:27:00Z" },
+  ];
+  const r = semPedidosPassados(falas, "2026-11-15", 4);
+  assertEquals(r.atuais.map((f) => f.id), [3, 4]);
+  assertEquals(r.passadas.map((f) => f.id), [1, 2]);
+  // sem dia escrito: fica no pedido atual
+  assertEquals(semPedidosPassados([{ texto: "quero uma passagem", em: "2026-11-14T14:00:00Z" }], "2026-11-15").atuais.length, 1);
+  const msgs = [{ texto: "3 passagens p amanhã 16/11 — Aguardo vcs no retorno!", em: "2026-11-15T14:07:00Z" }];
+  assert(conferenciaFinal({ trip_date: "2026-11-16", direction: "volta", quantity: 3, route_point_code: "pirapemas" }, msgs, { hoje: "2026-11-15", pedidosLidos: 1 }).length > 0);
+  assertEquals(conferenciaFinal({ trip_date: "2026-11-16", direction: "ida", quantity: 3, route_point_code: "retorno" }, msgs, { hoje: "2026-11-15", pedidosLidos: 1 }), []);
+});

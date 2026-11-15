@@ -140,6 +140,34 @@ export function falasDoDia<F extends { texto: string; em: string }>(falas: F[], 
     .flat();
 }
 
+/**
+ * Pedido de um dia que JÁ PASSOU não é o pedido atual (issue #419): a conversa em blocos (menos de
+ * 15 min entre as mensagens); bloco cujos dias escritos são todos antes de `hoje` vai para o
+ * histórico. "Para hoje à tarde… De Pirapemas a São Luís" de ontem não entra no pedido de amanhã.
+ * A marca do Agendado (`manter`) nunca sai.
+ */
+export function semPedidosPassados<F extends { texto: string; em: string; id?: number }>(
+  falas: F[],
+  hoje: string,
+  manter?: number,
+): { atuais: F[]; passadas: F[] } {
+  const blocos: F[][] = [];
+  for (const f of falas) {
+    const ultimo = blocos.at(-1);
+    const anterior = ultimo?.at(-1);
+    if (ultimo && anterior && Date.parse(f.em) - Date.parse(anterior.em) < 15 * 60 * 1000) ultimo.push(f);
+    else blocos.push([f]);
+  }
+  const atuais: F[] = [];
+  const passadas: F[] = [];
+  for (const b of blocos) {
+    const ds = datasEscritas(b);
+    const passado = ds.length > 0 && ds.every((d) => d < hoje) && !b.some((f) => manter != null && f.id === manter);
+    (passado ? passadas : atuais).push(...b);
+  }
+  return { atuais, passadas };
+}
+
 /** "Gostaria de agendar de novo!", "marca novamente", "reserva outra vez" (issue #419). */
 export function pediuDeNovo(textos: string[]): boolean {
   return textos.some((t) =>
@@ -838,6 +866,10 @@ export function conferenciaFinal(
     naoBate.push(`o cliente escreveu ${q} passagem(ns) e a reserva ficou com ${r.quantity ?? 1}`);
   }
 
+  // "Aguardo vcs no retorno": o Retorno das Vans é em São Luís — não é Volta (issue #419)
+  if (r.direction === "volta" && pontoEscrito(falasDoDia(mensagens, r.trip_date).map((m) => m.texto), ["retorno"]) === "retorno") {
+    naoBate.push("o cliente vai esperar no Retorno (São Luís) e a reserva ficou na Volta");
+  }
   if (r.direction === "volta" && ctx.cidadeEscrita && r.route_point_code && r.route_point_code !== ctx.cidadeEscrita) {
     naoBate.push(`o cliente escreveu ${ctx.cidadeEscrita} e a Volta ficou saindo de ${r.route_point_code}`);
   }
