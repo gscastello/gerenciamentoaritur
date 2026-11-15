@@ -92,3 +92,13 @@ Deno.test("#339: aviso de reserva atualizada pelo revisor", () => {
   const sem = mensagemDeConfirmacao([volta, { ...volta, direcao: "ida" }], { hoje: HOJE, atualizacao: true });
   assertStringIncludes(sem ?? "", "Atualizei suas reservas. Ficou assim:");
 });
+
+Deno.test("#432 horário do embarque na confirmação; segunda a Ida sai 1 h mais cedo", async () => {
+  const { horarioDoEmbarque } = await import("./confirmacaoAoCliente.ts");
+  const { assertEquals } = await import("jsr:@std/assert");
+  assertEquals(horarioDoEmbarque("05:40:00", "2026-11-16", "ida", { active: true, hours: 1 }), "04:40");
+  assertEquals(horarioDoEmbarque("05:40:00", "2026-11-17", "ida", { active: true, hours: 1 }), "05:40");
+  assertEquals(horarioDoEmbarque("12:00:00", "2026-11-16", "volta", { active: true, hours: 1 }), "12:00");
+  assertEquals(horarioDoEmbarque("05:40:00", "2026-11-16", "ida", { active: false }), "05:40");
+  assertEquals(horarioDoEmbarque(null, "2026-11-16", "ida", null), null);
+});

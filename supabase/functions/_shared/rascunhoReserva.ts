@@ -68,7 +68,7 @@ import {
   enderecoSemMarcaDeBairro,
   notasSemReservaSemEndereco,
 } from "./rascunhoPuro.ts";
-import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
+import { horarioDoEmbarque, mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
   conferenciaFinal,
   conferirPeloCliente,
@@ -292,6 +292,15 @@ async function textosAntigosDoCliente(conversationId: string): Promise<string[]>
  * Lê a conversa e grava/atualiza os rascunhos. Devolve o que foi lido para quem
  * chamou (o Agendado ☑️ lança em seguida).
  */
+/** settings.monday_adjustment (a Ida da segunda sai mais cedo), lido uma vez por chamada. */
+let ajusteEmCache: { active?: boolean; hours?: number } | null | undefined;
+async function ajusteDaSegunda() {
+  if (ajusteEmCache !== undefined) return ajusteEmCache;
+  const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "monday_adjustment").maybeSingle();
+  ajusteEmCache = (data?.value ?? null) as { active?: boolean; hours?: number } | null;
+  return ajusteEmCache;
+}
+
 async function lerEGravar(
   entrada: Entrada,
   mensagens: MensagemDaConversa[],
@@ -839,6 +848,8 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
           direcao,
           data: d.trip_date,
           pontoCodigo: ponto?.code ?? null,
+          // o horário do ponto na data, como na Agenda (issue #432)
+          horario: encomenda ? null : horarioDoEmbarque(ponto?.base_time, d.trip_date, direcao, await ajusteDaSegunda()),
           pontoNome: ponto?.name ?? null,
           bairro: d.pickup_neighborhood,
           detalhe: encomenda ? null : d.pickup_detail,
