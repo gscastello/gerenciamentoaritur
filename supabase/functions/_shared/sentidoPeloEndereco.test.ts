@@ -156,3 +156,11 @@ Deno.test("#419 'agendar de novo' é refazer a reserva cancelada", () => {
   assert(!pediuDeNovo(["obrigado de novo"]));
   assert(!pediuDeNovo(["Uma passagem pra amanhã"]));
 });
+
+Deno.test("#419 'uma vaga para ir em S.Luís' é a Volta", async () => {
+  const { sentidoEscrito } = await import("./pedidoDoCliente.ts");
+  assertEquals(sentidoEscrito(["Quero uma vaga para ir em S.Luis."]), "volta");
+  assertEquals(sentidoEscrito(["vou pra são luiz amanhã"]), "volta");
+  assertEquals(sentidoEscrito(["preciso ir pra Pirapemas"]), "ida");
+  assertEquals(sentidoEscrito(["uma passagem pra ir"]), "ida");
+});

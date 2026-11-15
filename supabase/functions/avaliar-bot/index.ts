@@ -21,7 +21,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 type Linha = Record<string, any>;
 
-async function avaliarCaso(caso: Linha, rodada: string, versao: string | null) {
+async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, modelo: string | null) {
   try {
     const r = await simularAgendado({
       conversationId: caso.conversation_id,
@@ -29,6 +29,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null) {
       mensagemId: Number(caso.mensagem_id),
       telefone: String(caso.telefone),
       marcaEm: String(caso.marca_em),
+      ...(modelo ? { modelo } : {}),
     });
     const planejadas = r.planejadas.map((p: Linha) => ({
       trip_date: p.trip_date,
@@ -80,6 +81,8 @@ Deno.serve(async (req: Request) => {
   if (!rodada) return json({ success: false, message: "Informe a rodada." }, 400);
   const limite = Math.min(Math.max(Number(corpo?.limite) || 6, 1), 15);
   const versao = typeof corpo?.versao === "string" ? corpo.versao : null;
+  // só os modelos que o bot usa (issue #421: comparar a primeira leitura com o modelo capaz)
+  const modelo = ["claude-haiku-5-5", "claude-sonnet-5-5"].includes(corpo?.modelo) ? String(corpo.modelo) : null;
 
   const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada);
   const jaFeitos = new Set(((feitos ?? []) as Linha[]).map((f) => f.caso_id));
@@ -90,7 +93,7 @@ Deno.serve(async (req: Request) => {
 
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao));
+    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo));
     evento("avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
   })().catch((err) => evento("bot_erro", { etapa: "avaliacao", erro: String(err).slice(0, 300) }));
 

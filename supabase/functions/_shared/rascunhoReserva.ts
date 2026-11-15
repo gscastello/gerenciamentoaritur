@@ -1340,6 +1340,7 @@ export async function simularAgendado(c: {
   mensagemId: number;
   telefone: string;
   marcaEm: string;
+  modelo?: string;
 }) {
   // o Agendado lê alguns segundos depois da marca
   const ate = Date.parse(c.marcaEm) + 30_000;
@@ -1364,7 +1365,8 @@ export async function simularAgendado(c: {
     telefone: c.telefone,
   };
   const simular: SimulacaoDaLeitura = { agora: new Date(ate), reservasAntesDe: c.marcaEm };
-  let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular });
+  // c.modelo: avaliar a primeira leitura com outro modelo (issue #421)
+  let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular, ...(c.modelo ? { modelo: c.modelo } : {}) });
   let releu = false;
   if (
     agendadoPrecisaReler({

@@ -73,7 +73,7 @@ export function compararCaso(
   for (const e of esperadas) {
     const i = planejadas.findIndex((p, k) => !usadas.has(k) && p.trip_date === e.trip_date && p.direction === e.direction);
     if (i === -1) {
-      if (motivosDePendencia.length) {
+      if (motivosDePendencia.length || planejadas.some((p) => p.pendencia)) {
         // o Agendado avisa a equipe com o motivo: não some calado
         pendente = true;
         diferencas.push(`${rotulo(e)} ficaria pendente: ${motivosDePendencia.join(", ")}`);

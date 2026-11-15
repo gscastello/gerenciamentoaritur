@@ -326,6 +326,9 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
   return null;
 }
 
+const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate|no|na) (sao luis|slz|s luis|sao luiz) /;
+const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate) (pirapemas|cantanhede) /;
+
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   const achados: ("ida" | "volta")[] = [];
   for (const t of textos) {
@@ -335,6 +338,15 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
       continue;
     }
     const n = ` ${normalizarTexto(t)} `;
+    // "uma vaga para ir em S.Luís" é ir PARA São Luís = Volta; "pra ir pra Pirapemas" = Ida (issue #419)
+    if (RE_IR_PARA_SAO_LUIS.test(n)) {
+      achados.push("volta");
+      continue;
+    }
+    if (RE_IR_PARA_O_INTERIOR.test(n)) {
+      achados.push("ida");
+      continue;
+    }
     // "Volta na terça…", "a ida é segunda": o rótulo escrito diz o sentido (issue #415); os dois = nenhum
     const rotuloVolta = / volta /.test(n);
     const rotuloIda = / (ida|pra ir|para ir) /.test(n);
@@ -343,7 +355,7 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
       continue;
     }
     // sem origem dita, o destino diz o sentido
-    if (/ (pra|pro|para|p|ate|ir pra|ir pro|ir para) (sao luis|slz) /.test(n)) achados.push("volta");
+    if (/ (pra|pro|para|p|ate|ir pra|ir pro|ir para) (sao luis|slz|s luis|sao luiz) /.test(n)) achados.push("volta");
     if (/ (pra|pro|para|p|ate|ir pra|ir pro|ir para) (pirapemas|cantanhede) /.test(n)) achados.push("ida");
   }
   return unico(achados);
