@@ -102,7 +102,7 @@ import {
   semPedidosPassados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
-import { lugaresContraOSentido } from "./ladoDaRota.ts";
+import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -516,7 +516,9 @@ async function lerEGravar(
       if (escrita) {
         Object.assign(p, voltaPeloEnderecoDoInterior(p, escrita, `O cliente escreveu o endereço em ${escrita.cidade === "pirapemas" ? "Pirapemas" : "Cantanhede"}`));
         evento("bot_volta_pelo_endereco", { conversa: entrada.chatwootConversationId, fonte: "escrito" });
-      } else if (p.endereco) {
+      } else if (p.endereco && !paradaDoInterior(p.endereco)) {
+        // (o nome da cidade no embarque lido costuma ser o DESTINO colado pela leitura: a regra do
+        // endereço escrito pelo próprio cliente, acima, é que decide esse caso — issue #426)
         const lugares = await lugaresNasCidades(p.endereco);
         const { data: deSaoLuis } = await supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: String(p.endereco).slice(0, 300) });
         const decisao = sentidoPeloLugarDoEmbarque({
