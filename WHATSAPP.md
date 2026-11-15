@@ -355,7 +355,10 @@ falta vai em `extra_data.a_confirmar` e aparece no embarque da própria reserva:
 ## 8. Limites conhecidos
 
 - **Opções** vão como texto numerado ("1 - Ida"); o cliente responde com o número ou o nome. Botões/listas do WhatsApp via Chatwoot não foram validados.
-- **Avisos aos passageiros** (issue #432): pela Agenda → "Avisar passageiros" (Edge Function `avisar-passageiros`). Fora das 24 h só vai o modelo aprovado pela Meta cadastrado em `settings.aviso_modelo` (texto do modelo `aviso_horario`: "Olá, {{1}}! Lembrete da sua viagem com a AriTur: {{2}}, embarque em {{3}} às {{4}}. Qualquer dúvida, é só responder esta mensagem."). Sem ele, quem está fora da janela aparece em "Avisar pelo celular". "Motorista a caminho" continua sem existir.
+- **Avisos aos passageiros** (issue #432): pela Agenda → "Avisar passageiros" (Edge Function `avisar-passageiros`). Fora das 24 h só vai o modelo aprovado pela Meta cadastrado em `settings.aviso_modelo` (texto do modelo `aviso_horario`: "Olá, {{1}}! Lembrete da sua viagem com a AriTur: {{2}}, embarque em {{3}} às {{4}}. Qualquer dúvida, é só responder esta mensagem."). Sem ele, quem está fora da janela aparece em "Avisar pelo celular". Os outros modelos (issue #434), todos Utilidade, Português (BR), em `settings.aviso_modelos`:
+  - `confirmar_viagem`: "Olá, {{1}}! Sua viagem com a AriTur está marcada para {{2}}, embarque em {{3}} às {{4}}. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar."
+  - `volta_em_rota`: "Olá, {{1}}! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em {{2}}: a partir das {{3}}. Fique de prontidão, por favor!"
+  A resposta SIM/NÃO ao `confirmar_viagem` é lida pelo bot em qualquer modo (`_shared/presenca.ts`).
 - **Áudio** não é entendido (peça para escrever; insistindo, vai pra equipe).
 - Histórico antigo das conversas pode não sincronizar com o Chatwoot.
 - O CI roda o job **Funções (Deno)** (`deno check` da função + `deno test supabase/functions/_shared`). Localmente: `deno test supabase/functions/_shared`.

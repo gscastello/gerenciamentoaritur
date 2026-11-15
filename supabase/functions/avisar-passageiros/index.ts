@@ -9,7 +9,7 @@
 // Deploy: verify_jwt = false (o app manda o JWT e a função confere; a rotina usa x-rotina).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { comoEnviar, itensValidos, modeloValido, textoDoModelo } from "../_shared/avisoPuro.ts";
+import { comoEnviar, itensValidos, modelosDosAvisos, textoDoModelo, tipoValido } from "../_shared/avisoPuro.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { variantesTelefone } from "../_shared/telefone.ts";
@@ -70,6 +70,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const itens = itensValidos(corpo?.itens);
+  // horario (lembrete), confirmacao ("você confirma?") ou em_rota ("a Volta saiu") — issue #434
+  const tipo = tipoValido(corpo?.tipo);
   if (!itens.length) return json({ success: false, message: "Escolha ao menos um passageiro." }, 400);
 
   // as reservas, lidas com as permissões de quem pediu (RLS)
@@ -78,8 +80,9 @@ Deno.serve(async (req: Request) => {
     .select("id, telefone, data, direcao, status, customer_id")
     .in("id", itens.map((i) => i.reservation_id));
   const porId = new Map(((reservas ?? []) as Linha[]).map((r) => [r.id, r]));
-  const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "aviso_modelo").maybeSingle();
-  const modelo = modeloValido(cfg?.value);
+  const { data: cfgs } = await supabaseAdmin.from("settings").select("key, value").in("key", ["aviso_modelos", "aviso_modelo"]);
+  const cfg = (k: string) => ((cfgs ?? []) as Linha[]).find((c) => c.key === k)?.value ?? null;
+  const modelo = modelosDosAvisos(cfg("aviso_modelos"), cfg("aviso_modelo"))[tipo];
   const agora = new Date();
 
   const resultados: { reservation_id: string; status: string; erro?: string }[] = [];
@@ -107,6 +110,7 @@ Deno.serve(async (req: Request) => {
       agora,
       modelo,
       item,
+      tipo,
     });
     let status = como.modo === "nenhum" ? como.status : "enviado";
     let erro: string | null = null;
@@ -115,7 +119,7 @@ Deno.serve(async (req: Request) => {
       if (como.modo === "texto") {
         await chatwootClient.postMessage(Number(conversa!.chatwoot_conversation_id), texto);
       } else if (como.modo === "modelo") {
-        texto = textoDoModelo(como.corpo);
+        texto = textoDoModelo(como.corpo, tipo);
         await chatwootClient.postTemplate(Number(conversa!.chatwoot_conversation_id), texto, modelo!, como.corpo);
       }
     } catch (e) {
@@ -123,6 +127,7 @@ Deno.serve(async (req: Request) => {
       erro = String(e).slice(0, 300);
     }
     await supabaseAdmin.from("avisos_passageiros").insert({
+      tipo,
       reservation_id: r.id,
       customer_id: r.customer_id ?? null,
       trip_date: r.data,
@@ -141,6 +146,7 @@ Deno.serve(async (req: Request) => {
     fora_da_janela: conta("fora_da_janela"),
     sem_conversa: conta("sem_conversa"),
     falhas: conta("falhou"),
+    tipo,
     com_modelo: !!modelo,
   });
   return json({ success: true, resultados });

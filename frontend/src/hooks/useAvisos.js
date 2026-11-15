@@ -13,8 +13,8 @@ export function useAvisos(data, direcao, { enabled = true } = {}) {
   });
   const envio = useAsyncAction(avisosService.enviar);
   const enviar = useCallback(
-    async (itens) => {
-      const resultados = await envio.run(itens);
+    async (itens, tipo) => {
+      const resultados = await envio.run(itens, tipo);
       await query.refetch();
       return resultados;
     },

@@ -11,7 +11,7 @@ export const avisosService = {
   async listar(data, direcao) {
     const { data: linhas, error } = await supabase
       .from("avisos_passageiros")
-      .select("reservation_id, status, modo, erro, criado_em")
+      .select("reservation_id, tipo, status, modo, erro, criado_em")
       .eq("trip_date", data)
       .eq("direction", direcao)
       .order("criado_em", { ascending: false });
@@ -24,10 +24,13 @@ export const avisosService = {
     return linhas ?? [];
   },
 
-  /** Envia; `itens` = [{ reservation_id, texto, nome, dia, ponto, horario }]. Devolve o resultado de cada um. */
-  async enviar(itens) {
+  /**
+   * Envia; `itens` = [{ reservation_id, texto, nome, dia, ponto, horario }]; `tipo` = horario |
+   * confirmacao | em_rota (o modelo da Meta de cada um). Devolve o resultado de cada passageiro.
+   */
+  async enviar(itens, tipo = "horario") {
     const { data, error } = await supabase.functions.invoke("avisar-passageiros", {
-      body: { itens },
+      body: { itens, tipo },
     });
     if (error) {
       let msg = error.message;

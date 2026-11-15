@@ -36,6 +36,7 @@
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
+import { registrarPresencaSePedida } from "../_shared/presenca.ts";
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
@@ -215,6 +216,20 @@ async function processar(body: any) {
         telefone: atividade.telefone,
       });
     }
+  }
+
+  // resposta ao "você confirma a viagem?" pedido pela equipe (issue #434): registra e agradece; a
+  // mensagem já foi observada, nada mais responde a ela
+  if (atividade?.autor === "cliente" && atividade.texto && conversaEspelhada) {
+    const tratada = await registrarPresencaSePedida({
+      telefone: atividade.telefone,
+      texto: atividade.texto,
+      chatwootConversationId: atividade.chatwootConversationId,
+    }).catch((e) => {
+      evento("bot_erro", { etapa: "presenca", erro: String(e).slice(0, 300) });
+      return false;
+    });
+    if (tratada) return;
   }
 
   // o cliente completou depois do Agendado ☑️ (dia, quantidade…) e ele não tinha lançado: tenta de novo (issue #286)

@@ -81,3 +81,85 @@ test("Agenda: avisar os passageiros com o horário do ponto de cada um", async (
   await expect(janela.getByRole("checkbox", { name: "Avisar Dona joana Teste" })).toBeChecked();
   await expect(janela.getByText(/avisado \d{2}:\d{2}/)).toBeVisible();
 });
+
+test("Agenda: pedir confirmação da viagem e ver quem já confirmou (issue #434)", async ({
+  page,
+}) => {
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      res("c1", {
+        pontoId: "rodoviaria",
+        nome: "Ana Teste",
+        telefone: "98999990011",
+        extra: { presenca: { resposta: "sim", em: new Date().toISOString() } },
+      }),
+      res("c2", { pontoId: "retorno", nome: "Bruno Teste", telefone: "98999990012" }),
+    ],
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
+  await page.locator('input[type="date"]').first().fill(hoje);
+  await escolherSentido(page, "Ida");
+  // na Agenda, quem respondeu SIM aparece marcado
+  await expect(page.getByText("✓ Confirmou")).toBeVisible();
+
+  await page.getByRole("button", { name: "Avisar passageiros" }).click();
+  const janela = page.getByTestId("avisar-passageiros");
+  await janela.getByRole("radio", { name: "Confirmar viagem" }).click();
+  await expect(janela.getByText(/Ana Teste/)).toBeVisible();
+  await expect(janela.getByText("confirmou", { exact: true })).toBeVisible();
+  await expect(janela.getByText(/Olá, Bruno!.*Você confirma\? Responda SIM/)).toBeVisible();
+  await janela.getByRole("button", { name: "Enviar para 2" }).click();
+  await janela.getByRole("button", { name: "Confirmar: enviar para 2" }).click();
+  await expect(page.getByTestId("resultado-do-aviso")).toHaveText(
+    "2 enviados · 0 para avisar pelo celular",
+  );
+  expect(page.avisosTipos).toEqual(["confirmacao"]);
+
+  // "Saímos em rota" é da Volta: na Ida não aparece
+  await expect(janela.getByRole("radio", { name: "Saímos em rota" })).toHaveCount(0);
+});
+
+test('Agenda: na Volta, "Saímos em rota" com a janela de embarque de cada cidade', async ({
+  page,
+}) => {
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    reservations: [
+      res("v1", {
+        direcao: "volta",
+        pontoId: "pirapemas",
+        embarque: "Rua do Sol",
+        nome: "Carla Teste",
+        telefone: "98999990021",
+      }),
+    ],
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
+  await page.locator('input[type="date"]').first().fill(hoje);
+  await escolherSentido(page, "Volta");
+  await page.getByRole("button", { name: "Avisar passageiros" }).click();
+  const janela = page.getByTestId("avisar-passageiros");
+  await janela.getByRole("radio", { name: "Saímos em rota" }).click();
+  await expect(
+    janela.getByText(
+      /Olá, Carla! A Volta da AriTur já saiu.*Sua janela de embarque em Pirapemas[^:]*: a partir das \d{2}:\d{2}/,
+    ),
+  ).toBeVisible();
+  await janela.getByRole("button", { name: "Enviar para 1" }).click();
+  await janela.getByRole("button", { name: "Confirmar: enviar para 1" }).click();
+  await expect(page.getByTestId("resultado-do-aviso")).toHaveText(
+    "1 enviado · 0 para avisar pelo celular",
+  );
+  expect(page.avisosTipos).toEqual(["em_rota"]);
+});

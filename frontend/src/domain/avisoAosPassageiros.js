@@ -25,6 +25,28 @@ const capitalizar = (p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
 export const TEXTO_PADRAO =
   "{saudacao} Lembrete da sua viagem {quando}, com a AriTur: {aviso_do_dia}{embarque} Qualquer dúvida, é só responder aqui. 😊";
 
+/**
+ * Os tipos de aviso (issues #432 e #434) e o texto padrão de cada um. "confirmacao" pede SIM/NÃO
+ * (a resposta vai para a reserva); "em_rota" é o aviso de que a Volta saiu e estamos buscando.
+ */
+export const TIPOS_DE_AVISO = [
+  { id: "horario", rotulo: "Horário", texto: TEXTO_PADRAO },
+  {
+    id: "confirmacao",
+    rotulo: "Confirmar viagem",
+    texto:
+      "{saudacao} Sua viagem {quando}, com a AriTur, está marcada: {aviso_do_dia}{embarque} Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
+  },
+  {
+    id: "em_rota",
+    rotulo: "Saímos em rota",
+    texto:
+      "{saudacao} A Volta da AriTur já saiu e estamos buscando os passageiros. {embarque} Fique de prontidão, por favor!",
+  },
+];
+export const textoPadraoDoTipo = (tipo) =>
+  (TIPOS_DE_AVISO.find((t) => t.id === tipo) ?? TIPOS_DE_AVISO[0]).texto;
+
 const ehSegunda = (data) => new Date(`${data}T12:00:00Z`).getUTCDay() === 1;
 const somarDias = (dia, n) => {
   const d = new Date(`${dia}T12:00:00Z`);
@@ -79,8 +101,10 @@ export function quandoDoAviso(data, hoje) {
 }
 
 /** A frase do embarque de uma reserva, pelo ponto (busca em casa e BR = "a partir das"). */
-export function fraseDoEmbarque(r, pontoNome, horario) {
+export function fraseDoEmbarque(r, pontoNome, horario, tipo = "horario") {
   if (!horario) return "";
+  // "saímos em rota": a janela de embarque do ponto (issue #434)
+  if (tipo === "em_rota") return `sua janela de embarque em ${pontoNome}: a partir das ${horario}.`;
   if (r.direcao === "volta") return `a Volta sai de ${pontoNome} a partir das ${horario}.`;
   if (r.pontoId === "busca")
     return `vamos te buscar em casa a partir das ${horario} — fique de olho no celular.`;
@@ -125,15 +149,18 @@ export function montarAvisos({
   segundaHoras = 1,
   modelo = TEXTO_PADRAO,
   avisos = [],
+  tipo = "horario",
 }) {
   const ordemDoPonto = new Map((pontos ?? []).map((p, i) => [p.id, i]));
   const pontoPorId = new Map((pontos ?? []).map((p) => [p.id, p]));
   const avisoDoDia =
-    direcao === "ida" && segundaAtiva && ehSegunda(data)
+    tipo !== "em_rota" && direcao === "ida" && segundaAtiva && ehSegunda(data)
       ? `como é segunda, a Ida sai ${segundaHoras === 1 ? "1 hora" : `${segundaHoras} horas`} mais cedo.`
       : "";
   const ultimo = new Map();
   for (const a of avisos ?? []) {
+    // "já avisado" é por tipo: o lembrete não conta como pedido de confirmação
+    if ((a.tipo ?? "horario") !== tipo) continue;
     const atual = ultimo.get(a.reservation_id);
     if (!atual || String(a.criado_em) > String(atual.criado_em)) ultimo.set(a.reservation_id, a);
   }
@@ -162,7 +189,7 @@ export function montarAvisos({
         segundaHoras,
       });
       const nome = nomeDoAviso(r.nome);
-      const embarque = fraseDoEmbarque(r, pontoNome, horario);
+      const embarque = fraseDoEmbarque(r, pontoNome, horario, tipo);
       const anterior = ultimo.get(r.id) ?? null;
       return {
         id: r.id,
@@ -184,6 +211,8 @@ export function montarAvisos({
           horario: horario ?? "",
         },
         anterior,
+        // resposta ao "você confirma a viagem?" (issue #434)
+        presenca: r.extra?.presenca?.resposta ?? null,
         // quem já recebeu não vem marcado; quem ficou de fora (janela, sem conversa, falha) vem
         marcado: anterior?.status !== "enviado",
       };

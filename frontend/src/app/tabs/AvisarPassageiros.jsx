@@ -2,7 +2,11 @@ import { Check, Copy, MessageCircle, PhoneCall, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatarTelefoneBR } from "../../domain/agendaLinha.js";
-import { TEXTO_PADRAO, montarAvisos } from "../../domain/avisoAosPassageiros.js";
+import {
+  TIPOS_DE_AVISO,
+  montarAvisos,
+  textoPadraoDoTipo,
+} from "../../domain/avisoAosPassageiros.js";
 import { useAvisos } from "../../hooks/useAvisos.js";
 import { copiarTexto } from "../../lib/clipboard.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -38,10 +42,12 @@ export default function AvisarPassageiros({
   onFechar,
 }) {
   const { avisos, loading, enviar, enviando } = useAvisos(data, direcao);
-  const [modelo, setModelo] = useState(TEXTO_PADRAO);
+  const [tipo, setTipo] = useState("horario");
+  const [modelo, setModelo] = useState(textoPadraoDoTipo("horario"));
   const lista = useMemo(
     () =>
       montarAvisos({
+        tipo,
         reservas,
         data,
         direcao,
@@ -52,7 +58,7 @@ export default function AvisarPassageiros({
         modelo,
         avisos,
       }),
-    [reservas, data, direcao, pontos, segundaAtiva, segundaHoras, modelo, avisos],
+    [reservas, data, direcao, pontos, segundaAtiva, segundaHoras, modelo, avisos, tipo],
   );
   const [desmarcados, setDesmarcados] = useState(() => new Set());
   const [marcadosAMais, setMarcadosAMais] = useState(() => new Set());
@@ -83,6 +89,7 @@ export default function AvisarPassageiros({
     try {
       const r = await enviar(
         escolhidos.map((a) => ({ reservation_id: a.id, texto: a.texto, ...a.variaveis })),
+        tipo,
       );
       setResultado(r);
       setConfirmando(false);
@@ -153,6 +160,43 @@ export default function AvisarPassageiros({
             Quem escreveu nas últimas 24 h recebe pelo WhatsApp; quem não escreveu só recebe com o
             modelo aprovado pela Meta. Quem ficar de fora aparece em "Avisar pelo celular".
           </p>
+          {/* tipo da mensagem (issue #434): cada um com o seu texto e o seu modelo da Meta */}
+          <div
+            className={`grid ${direcao === "volta" ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}
+            role="radiogroup"
+            aria-label="Tipo da mensagem"
+          >
+            {TIPOS_DE_AVISO.filter((t) => t.id !== "em_rota" || direcao === "volta").map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={tipo === t.id}
+                onClick={() => {
+                  setTipo(t.id);
+                  setModelo(t.texto);
+                  setConfirmando(false);
+                  setResultado(null);
+                  setDesmarcados(new Set());
+                  setMarcadosAMais(new Set());
+                }}
+                className="btn-press min-h-[44px] rounded-xl text-[13px] font-semibold px-1"
+                style={{
+                  background: tipo === t.id ? C.ink : C.panel2,
+                  color: tipo === t.id ? C.bg : C.inkSoft,
+                  border: `1px solid ${tipo === t.id ? C.ink : C.border}`,
+                }}
+              >
+                {t.rotulo}
+              </button>
+            ))}
+          </div>
+          {tipo === "confirmacao" && (
+            <p className="text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
+              A resposta de cada um (SIM/NÃO) aparece aqui e na Agenda. Quem responder NÃO vira
+              pendência para liberar a vaga.
+            </p>
+          )}
           <label className="block">
             <span className="text-[12px] font-semibold" style={{ color: C.inkSoft }}>
               Texto
@@ -214,6 +258,17 @@ export default function AvisarPassageiros({
                             {a.pontoNome} · {a.horario ?? "—"}
                           </span>
                         </span>
+                        {a.presenca && (
+                          <span
+                            className="inline-block text-[11px] mt-0.5 mr-1 px-1.5 rounded font-semibold"
+                            style={{
+                              background: a.presenca === "sim" ? C.greenSoft : C.panel,
+                              color: a.presenca === "sim" ? C.green : C.brandText,
+                            }}
+                          >
+                            {a.presenca === "sim" ? "confirmou" : "não vai"}
+                          </span>
+                        )}
                         {st && (
                           <span
                             className="inline-block text-[11px] mt-0.5 px-1.5 rounded"

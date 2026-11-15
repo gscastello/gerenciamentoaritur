@@ -984,6 +984,12 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       : ehEnc && embarcado
         ? "✓ Entregue"
         : null,
+    // resposta ao "você confirma a viagem?" (issue #434)
+    r.extra?.presenca?.resposta === "sim"
+      ? "✓ Confirmou"
+      : r.extra?.presenca?.resposta === "nao"
+        ? "✗ Disse que não vai"
+        : null,
   ].filter(Boolean);
   const icone = "btn-press w-10 h-11 rounded-xl flex items-center justify-center shrink-0";
   return (

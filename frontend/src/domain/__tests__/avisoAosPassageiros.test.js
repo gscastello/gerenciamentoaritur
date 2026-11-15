@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   TEXTO_PADRAO,
+  TIPOS_DE_AVISO,
   fraseDoEmbarque,
   horarioDoPonto,
   montarAvisos,
   nomeDoAviso,
   quandoDoAviso,
   textoDoAviso,
+  textoPadraoDoTipo,
 } from "../avisoAosPassageiros.js";
 
 const pontos = [
@@ -180,5 +182,54 @@ describe("montarAvisos", () => {
     expect(
       montarAvisos({ reservas: null, data: SEGUNDA, direcao: "ida", hoje: SEGUNDA, pontos: null }),
     ).toEqual([]);
+  });
+});
+
+describe("tipos de aviso (issue #434)", () => {
+  it("confirmação pede SIM/NÃO; em rota dá a janela do ponto; o já avisado é por tipo", () => {
+    expect(TIPOS_DE_AVISO.map((t) => t.id)).toEqual(["horario", "confirmacao", "em_rota"]);
+    expect(textoPadraoDoTipo("nenhum")).toBe(TEXTO_PADRAO);
+    const reservas = [r("1", { pontoId: "retorno", extra: { presenca: { resposta: "sim" } } })];
+    const avisos = [
+      {
+        reservation_id: "1",
+        status: "enviado",
+        tipo: "horario",
+        criado_em: "2026-11-15T20:00:00Z",
+      },
+    ];
+    const [c] = montarAvisos({
+      reservas,
+      data: SEGUNDA,
+      direcao: "ida",
+      hoje: "2026-11-15",
+      pontos,
+      avisos,
+      tipo: "confirmacao",
+      modelo: textoPadraoDoTipo("confirmacao"),
+    });
+    expect(c.texto).toBe(
+      "Olá, Maria! Sua viagem de amanhã, segunda (16/11), com a AriTur, está marcada: como é segunda, a Ida sai 1 hora mais cedo. Seu embarque é no Retorno das Vans às 05:00. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
+    );
+    // o lembrete enviado não marca o pedido de confirmação como já feito
+    expect(c.anterior).toBeNull();
+    expect(c.marcado).toBe(true);
+    expect(c.presenca).toBe("sim");
+    const [v] = montarAvisos({
+      reservas: [r("2", { direcao: "volta", pontoId: "cantanhede" })],
+      data: SEGUNDA,
+      direcao: "volta",
+      hoje: SEGUNDA,
+      pontos: [{ id: "cantanhede", nome: "Cantanhede", horaBase: "13:00" }],
+      tipo: "em_rota",
+      modelo: textoPadraoDoTipo("em_rota"),
+    });
+    expect(v.texto).toBe(
+      "Olá, Maria! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em Cantanhede: a partir das 13:00. Fique de prontidão, por favor!",
+    );
+    expect(v.presenca).toBeNull();
+    expect(
+      fraseDoEmbarque({ direcao: "ida", pontoId: "busca" }, "Buscar em Casa", "04:00", "em_rota"),
+    ).toBe("sua janela de embarque em Buscar em Casa: a partir das 04:00.");
   });
 });

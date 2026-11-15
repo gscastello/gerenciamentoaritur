@@ -1,5 +1,14 @@
 import { assertEquals } from "jsr:@std/assert";
-import { comoEnviar, itensValidos, modeloValido, primeiroNome, textoDoModelo } from "./avisoPuro.ts";
+import {
+  comoEnviar,
+  itensValidos,
+  modelosDosAvisos,
+  modeloValido,
+  primeiroNome,
+  respostaDePresenca,
+  textoDoModelo,
+  tipoValido,
+} from "./avisoPuro.ts";
 
 const ID = "6027bbfc-fa07-47a1-9f2d-dbfd8d2f7419";
 const AGORA = new Date("2026-11-15T21:00:00Z");
@@ -53,4 +62,45 @@ Deno.test("#432 itens do pedido: id válido, texto, sem repetir, até 80", () =>
   assertEquals(r[0].ponto, "Rodoviária");
   const muitos = Array.from({ length: 100 }, (_, i) => ({ reservation_id: `${String(i).padStart(8, "0")}-fa07-47a1-9f2d-dbfd8d2f7419`, texto: "Aviso de teste" }));
   assertEquals(itensValidos(muitos).length, 80);
+});
+
+Deno.test("#434 tipos: confirmação e em rota com os seus modelos", () => {
+  const fora = { temConversa: true, ultimaDoClienteEm: "2026-11-13T10:00:00Z", agora: AGORA };
+  assertEquals(comoEnviar({ ...fora, modelo, item, tipo: "em_rota" }), {
+    modo: "modelo",
+    corpo: { "1": "Maria", "2": "Rodoviária", "3": "04:40" },
+  });
+  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, dia: null }, tipo: "em_rota" }).modo, "modelo");
+  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, horario: null }, tipo: "em_rota" }).modo, "nenhum");
+  assertEquals(comoEnviar({ ...fora, modelo, item, tipo: "confirmacao" }).modo, "modelo");
+  assertEquals(
+    textoDoModelo({ "1": "Maria", "2": "segunda, 16/11", "3": "Rodoviária", "4": "04:40" }, "confirmacao"),
+    "Olá, Maria! Sua viagem com a AriTur está marcada para segunda, 16/11, embarque em Rodoviária às 04:40. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
+  );
+  assertEquals(
+    textoDoModelo({ "1": "Maria", "2": "Pirapemas", "3": "12:00" }, "em_rota"),
+    "Olá, Maria! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em Pirapemas: a partir das 12:00. Fique de prontidão, por favor!",
+  );
+  assertEquals(tipoValido("em_rota"), "em_rota");
+  assertEquals(tipoValido("qualquer"), "horario");
+  const m = modelosDosAvisos({ confirmacao: { nome: "confirmar_viagem" } }, { nome: "aviso_horario" });
+  assertEquals([m.horario?.nome, m.confirmacao?.nome, m.em_rota], ["aviso_horario", "confirmar_viagem", null]);
+  assertEquals(modelosDosAvisos(null, null).horario, null);
+});
+
+Deno.test("#434 resposta ao 'você confirma a viagem?': só sim/não claros", () => {
+  for (const t of ["SIM", "sim, confirmo", "Confirmado!", "ok", "vou sim", "Sim \u{1F44D}", "pode confirmar", "estarei lá"]) {
+    assertEquals(respostaDePresenca(t), "sim", t);
+  }
+  for (const t of ["NÃO", "nao vou mais", "Não vou poder, desmarca por favor", "desisti", "cancela", "n"]) {
+    assertEquals(respostaDePresenca(t), "nao", t);
+  }
+  for (const t of ["que horas vocês passam?", "", "oi", "talvez", "bom dia", "sim, mas não sei se vou"]) {
+    assertEquals(respostaDePresenca(t), null, t);
+  }
+  assertEquals(respostaDePresenca("sim, não precisa trocar nada"), "sim");
+  assertEquals(
+    respostaDePresenca("Sim mas queria saber se posso levar uma mala grande e se tem lugar na frente pra minha mãe"),
+    null,
+  );
 });

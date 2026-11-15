@@ -8,6 +8,17 @@
 
 export type ModeloDoAviso = { nome: string; idioma: string; categoria: string };
 
+/**
+ * Tipos de aviso (issues #432 e #434), cada um com o seu modelo da Meta para fora das 24 h:
+ *   horario     — lembrete do horário: {{1}} nome, {{2}} dia, {{3}} ponto, {{4}} horário
+ *   confirmacao — "você confirma a viagem?" (SIM/NÃO): as mesmas quatro variáveis
+ *   em_rota     — "a Volta saiu e estamos buscando": {{1}} nome, {{2}} ponto, {{3}} horário
+ */
+export const TIPOS_DE_AVISO = ["horario", "confirmacao", "em_rota"] as const;
+export type TipoDeAviso = (typeof TIPOS_DE_AVISO)[number];
+export const tipoValido = (v: unknown): TipoDeAviso =>
+  (TIPOS_DE_AVISO as readonly string[]).includes(String(v)) ? (v as TipoDeAviso) : "horario";
+
 export type ItemDoAviso = {
   reservation_id: string;
   texto: string;
@@ -62,18 +73,29 @@ export function comoEnviar(p: {
   agora: Date;
   modelo: ModeloDoAviso | null;
   item: ItemDoAviso;
+  tipo?: TipoDeAviso;
 }): ComoEnviar {
   if (!p.temConversa) return { modo: "nenhum", status: "sem_conversa" };
   const ultima = p.ultimaDoClienteEm ? Date.parse(p.ultimaDoClienteEm) : Number.NaN;
   if (Number.isFinite(ultima) && p.agora.getTime() - ultima < JANELA_MS) return { modo: "texto" };
-  // fora da janela: só o modelo, e só com as quatro variáveis preenchidas
+  // fora da janela: só o modelo do tipo, e só com as variáveis dele preenchidas
   const { nome, dia, ponto, horario } = p.item;
+  if (p.tipo === "em_rota") {
+    if (!p.modelo || !ponto || !horario) return { modo: "nenhum", status: "fora_da_janela" };
+    return { modo: "modelo", corpo: { "1": primeiroNome(nome), "2": ponto, "3": horario } };
+  }
   if (!p.modelo || !dia || !ponto || !horario) return { modo: "nenhum", status: "fora_da_janela" };
   return { modo: "modelo", corpo: { "1": primeiroNome(nome), "2": dia, "3": ponto, "4": horario } };
 }
 
 /** O texto que fica no histórico quando vai o modelo (o mesmo que o passageiro lê). */
-export function textoDoModelo(corpo: Record<string, string>): string {
+export function textoDoModelo(corpo: Record<string, string>, tipo: TipoDeAviso = "horario"): string {
+  if (tipo === "confirmacao") {
+    return `Olá, ${corpo["1"]}! Sua viagem com a AriTur está marcada para ${corpo["2"]}, embarque em ${corpo["3"]} às ${corpo["4"]}. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.`;
+  }
+  if (tipo === "em_rota") {
+    return `Olá, ${corpo["1"]}! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em ${corpo["2"]}: a partir das ${corpo["3"]}. Fique de prontidão, por favor!`;
+  }
   return `Olá, ${corpo["1"]}! Lembrete da sua viagem com a AriTur: ${corpo["2"]}, embarque em ${corpo["3"]} às ${corpo["4"]}. Qualquer dúvida, é só responder esta mensagem.`;
 }
 
@@ -95,4 +117,38 @@ export function itensValidos(bruto: unknown): ItemDoAviso[] {
     if (out.length >= 80) break;
   }
   return out;
+}
+
+/**
+ * Os modelos de cada tipo: settings.aviso_modelos = { horario: {...}, confirmacao: {...},
+ * em_rota: {...} }; o antigo settings.aviso_modelo vale para o horário.
+ */
+export function modelosDosAvisos(modelos: unknown, antigo: unknown): Record<TipoDeAviso, ModeloDoAviso | null> {
+  const m = (modelos ?? {}) as Record<string, unknown>;
+  return {
+    horario: modeloValido(m.horario) ?? modeloValido(antigo),
+    confirmacao: modeloValido(m.confirmacao),
+    em_rota: modeloValido(m.em_rota),
+  };
+}
+
+const RE_NAO = / (nao|n|desisti|cancela|cancelar|cancele|desmarca|desmarcar|desmarque) /;
+const RE_SIM = / (sim|s|confirmo|confirmar|confirma|confirmado|confirmada|ok|okay|vou|estarei|certo|com certeza|isso|blz|beleza|positivo) /;
+
+/**
+ * A resposta do passageiro ao "você confirma a viagem?" (issue #434): "sim" ou "nao" só quando
+ * está claro (mensagem curta, sem pergunta); dúvida ou as duas coisas = null (a equipe lê).
+ * "Sim, não precisa trocar nada" é sim.
+ */
+export function respostaDePresenca(texto: string | null | undefined): "sim" | "nao" | null {
+  const bruto = String(texto ?? "");
+  if (bruto.includes("?")) return null;
+  const t = ` ${bruto.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim()} `;
+  if (!t.trim() || t.trim().split(" ").length > 12) return null;
+  const semRessalva = t.replace(/ nao (precisa|tem problema|ha problema|se preocupe)/g, " ");
+  const nao = RE_NAO.test(semRessalva);
+  // "não vou", "não posso": o verbo depois do não é parte do NÃO, não um sim
+  const sim = RE_SIM.test(semRessalva.replace(/ (nao|n) [a-z]+/g, " "));
+  if (nao && sim) return null;
+  return nao ? "nao" : sim ? "sim" : null;
 }

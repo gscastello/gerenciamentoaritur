@@ -235,9 +235,12 @@ export async function mockSupabase(page, opts = {}) {
   // opts.avisoForaDaJanela = ids de reserva que não recebem (fora das 24 h); o resto "enviado".
   const avisosRows = [];
   const avisosPedidos = [];
+  const avisosTipos = [];
   await page.route("**/functions/v1/avisar-passageiros", (route) => {
-    const itens = route.request().postDataJSON?.()?.itens ?? [];
+    const corpo = route.request().postDataJSON?.() ?? {};
+    const itens = corpo.itens ?? [];
     avisosPedidos.push(itens);
+    avisosTipos.push(corpo.tipo ?? "horario");
     const fora = new Set(opts.avisoForaDaJanela ?? []);
     const resultados = itens.map((i) => ({
       reservation_id: i.reservation_id,
@@ -247,6 +250,7 @@ export async function mockSupabase(page, opts = {}) {
     for (const r of resultados) {
       const res = doDia.get(r.reservation_id);
       avisosRows.push({
+        tipo: corpo.tipo ?? "horario",
         reservation_id: r.reservation_id,
         trip_date: res?.data,
         direction: res?.direcao,
@@ -259,6 +263,7 @@ export async function mockSupabase(page, opts = {}) {
     return route.fulfill(json({ success: true, resultados }));
   });
   page.avisosPedidos = avisosPedidos;
+  page.avisosTipos = avisosTipos;
 
   // auth: getUser / refresh
   await page.route("**/auth/v1/**", (route) => {
