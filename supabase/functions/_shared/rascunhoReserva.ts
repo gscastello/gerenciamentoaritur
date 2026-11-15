@@ -73,6 +73,7 @@ import {
   idaPeloEmbarqueEmSaoLuis,
   outroPodeSerBusca,
   bairroTemProva,
+  bairroForaDoNomeComposto,
 } from "./rascunhoPuro.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -101,6 +102,7 @@ import {
   semPedidosPassados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
 import { whatsappService } from "./whatsappService.ts";
@@ -514,7 +516,9 @@ async function lerEGravar(
       if (escrita) {
         Object.assign(p, voltaPeloEnderecoDoInterior(p, escrita, `O cliente escreveu o endereço em ${escrita.cidade === "pirapemas" ? "Pirapemas" : "Cantanhede"}`));
         evento("bot_volta_pelo_endereco", { conversa: entrada.chatwootConversationId, fonte: "escrito" });
-      } else if (p.endereco) {
+      } else if (p.endereco && !paradaDoInterior(p.endereco)) {
+        // (o nome da cidade no embarque lido costuma ser o DESTINO colado pela leitura: a regra do
+        // endereço escrito pelo próprio cliente, acima, é que decide esse caso — issue #426)
         const lugares = await lugaresNasCidades(p.endereco);
         const { data: deSaoLuis } = await supabaseAdmin.rpc("fn_bairro_pelo_endereco", { p_texto: String(p.endereco).slice(0, 300) });
         const decisao = sentidoPeloLugarDoEmbarque({
@@ -689,6 +693,14 @@ async function lerEGravar(
         r.pickup_neighborhood = escrito.neighborhood;
       }
     }
+    // "Jardim Araçagy, Cohatrac": o bairro é o escrito como pedaço do endereço (issue #426)
+    if (r.route_point_code === "busca" && r.pickup_neighborhood) {
+      const fora = bairroForaDoNomeComposto(r.pickup_neighborhood, textosDoCliente, ctx.bairrosTabela);
+      if (fora) {
+        r.notes = [r.notes, `Bairro ${fora.neighborhood} (${r.pickup_neighborhood} era parte do nome do lugar).`].filter(Boolean).join(" ").slice(0, 300);
+        r.pickup_neighborhood = fora.neighborhood;
+      }
+    }
     // bairro sem prova (não escrito, não é o de costume): a leitura chutou — sai e o sistema procura
     // pelo endereço (issue #419: "Condomínio Marsil" lido como Turu)
     if (
@@ -810,6 +822,14 @@ async function lerEGravar(
         motivo: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
         codigo: "dia_ilegivel",
       };
+    }
+    // O LUGAR DIZ O SENTIDO (dono, 15/11 — issue #426): embarque em São Luís só na Ida, no interior
+    // só na Volta; desembarque o contrário. Não combina → não lança calado: pergunta ao passageiro.
+    const contraOSentido = lugaresContraOSentido(r, { bairros: ctx.bairrosTabela, locaisDeOutros: ctx.locaisDeOutros });
+    if (contraOSentido) {
+      evento("bot_lugar_contra_o_sentido", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe });
+      r.notes = [r.notes, `O lugar não combina com o sentido: ${contraOSentido}.`].filter(Boolean).join(" ").slice(0, 300);
+      if (opcoes.confirmadoPelaEquipe) pendencia ??= { motivo: contraOSentido, codigo: "onde_embarca" };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
     // desfazer o que o cliente escreveu sem ninguém ver (issue #309)
