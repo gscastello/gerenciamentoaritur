@@ -474,6 +474,92 @@ export function localDeOutros(textos: (string | null | undefined)[], locais: str
   return achado;
 }
 
+/**
+ * Volta que EMBARCA num trecho da BR de São Luís (Pedrinhas, Estiva, Maracanã…) não existe: a
+ * Volta sai de Pirapemas/Cantanhede. É a Ida, embarque em Outros (issue #419: "dia 14 de Pedrinhas"
+ * lida como Volta porque outra mensagem dizia "de Pirapemas a São Luís… dia 15").
+ */
+export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(
+  pedidos: P[],
+  locais: string[],
+  /** o sentido que o cliente escreveu para aquele dia ("vou voltar segunda pra São Luís" = Volta: não mexe) */
+  sentidoDoDia: (data: string | null | undefined) => "ida" | "volta" | null = () => null,
+): P[] {
+  let mudou = false;
+  const out = pedidos.map((p) => {
+    if ((p.tipo ?? "passagem") === "encomenda" || p.direcao !== "volta" || !p.endereco) return p;
+    if (sentidoDoDia(p.data) === "volta") return p;
+    const doInterior = cidadeDaVolta(p.endereco) ||
+      ["campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"].some((c) => normalizarTexto(p.endereco).includes(c));
+    if (doInterior) return p;
+    const desceEmSaoLuis = /sao luis|slz/.test(normalizarTexto(p.desembarque ?? ""));
+    // "Aguardo vcs no retorno": o Retorno das Vans é ponto da Ida, em São Luís (issue #419)
+    if (/ retorno /.test(` ${normalizarTexto(semLogradouros(p.endereco))} `)) {
+      mudou = true;
+      return {
+        ...p,
+        direcao: "ida",
+        ponto: "retorno",
+        bairro: null,
+        cidade_dita: null,
+        desembarque: desceEmSaoLuis ? null : (p.desembarque ?? null),
+        duvida: [p.duvida, "Embarque no Retorno (São Luís): é a Ida, não a Volta."].filter(Boolean).join(" "),
+      };
+    }
+    // "Rua do Aeroporto" (Cantanhede) é rua, não o aeroporto de São Luís
+    const local = localDeOutros([semLogradouros(p.endereco)], locais);
+    if (!local) return p;
+    mudou = true;
+    return {
+      ...p,
+      direcao: "ida",
+      ponto: "outro",
+      bairro: null,
+      cidade_dita: null,
+      endereco: `${local} (BR)`,
+      desembarque: desceEmSaoLuis ? null : (p.desembarque ?? null),
+      duvida: [p.duvida, `Embarque em ${local} (BR de São Luís): é a Ida, não a Volta.`].filter(Boolean).join(" "),
+    };
+  });
+  return mudou ? out : pedidos;
+}
+
+/**
+ * Ida em "Outros" num lugar da CIDADE ("vou esperar em frente ao Pátio Norte"): Outros é a BR, posto,
+ * aeroporto e os locais cadastrados; ponto de referência dentro de São Luís é busca, pelo bairro
+ * (issue #419). Devolve true quando vale procurar o bairro do lugar na memória de São Luís.
+ */
+export function outroPodeSerBusca(
+  r: { direction: string; route_point_code: string | null; pickup_detail: string | null },
+  locais: string[],
+): boolean {
+  if (r.direction !== "ida" || r.route_point_code !== "outro" || !r.pickup_detail) return false;
+  if (localDeOutros([r.pickup_detail], locais)) return false;
+  const n = ` ${normalizarTexto(r.pickup_detail)} `;
+  if (/ (br|posto|aeroporto|rodovia|estrada|pista|beira|km|retorno|rodoviaria|terminal|ponte|balsa|ferry|prf) /.test(n)) return false;
+  return !CIDADES_DA_ROTA_FORA.some((c) => n.includes(` ${c} `));
+}
+const CIDADES_DA_ROTA_FORA = ["pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
+
+/**
+ * O bairro da busca em casa tem PROVA? (issue #419: a leitura escolhia "Turu" da lista para um
+ * "Condomínio Marsil" ou até para uma rua de Pirapemas.) Vale se o nome foi escrito na conversa
+ * (cliente ou equipe, com erro de escrita aceito) ou é o bairro de costume do passageiro. Sem
+ * prova, o bairro sai e o sistema procura pelo endereço (memória de São Luís, internet).
+ */
+export function bairroTemProva(bairro: string | null | undefined, ctx: { textos: string[]; costume?: string | null }): boolean {
+  if (!bairro) return true;
+  if (ctx.costume && normalizarTexto(ctx.costume) === normalizarTexto(bairro)) return true;
+  const palavras = normalizarTexto(bairro)
+    .split(" ")
+    .filter((p) => p.length >= 3 && !/^(i|ii|iii|iv|v|vi)$/.test(p) && !/^\d+$/.test(p) && !["das", "dos"].includes(p));
+  if (!palavras.length) return true;
+  return ctx.textos.some((t) => {
+    const ditas = normalizarTexto(t).split(" ");
+    return palavras.every((p) => ditas.some((d) => palavraParecida(d, p)));
+  });
+}
+
 /** Ferramenta que o modelo é obrigado a usar para devolver o que leu. */
 export const FERRAMENTA_PEDIDOS = {
   name: "registrar_pedidos",
@@ -702,6 +788,23 @@ export function cidadePelaBase(
   return achado;
 }
 
+/**
+ * "Ida com busca em casa" num endereço que a base só conhece em Pirapemas/Cantanhede, com 3+
+ * reservas lá (issue #419: "Avenida Antônio Ribeiro, próximo à Agercon" lida como busca no Turu).
+ * Sem nada de São Luís no texto (bairro escrito pelo cliente ou lugar da memória de São Luís) é a
+ * Volta saindo daquela cidade; com algo de São Luís também, só o cliente sabe ("duvida").
+ */
+export function sentidoPeloLugarDoEmbarque(p: {
+  lugares: LugarNasCidades[];
+  bairroDeSaoLuisEscrito: boolean;
+  lugarDeSaoLuis: boolean;
+}): { cidade: "pirapemas" | "cantanhede"; nome: string; reservas: number } | "duvida" | null {
+  const achado = cidadePelaBase(p.lugares);
+  if (!achado || achado.reservas < 3) return null;
+  if (p.bairroDeSaoLuisEscrito || p.lugarDeSaoLuis) return "duvida";
+  return achado;
+}
+
 /** Aviso do "Conferir" quando a cidade veio da base de lugares. */
 export function avisoDaCidadePelaBase(c: { cidade: string; nome: string; reservas: number }): string {
   const onde = NOME_DA_CIDADE[c.cidade] ?? c.cidade;
@@ -909,6 +1012,7 @@ const MOTIVO_LEGIVEL: Record<string, string> = {
   hoje_ja_saiu: "o cliente pediu hoje, mas a viagem desse sentido já saiu (confira se é a do outro sentido ou outro dia)",
   pedido_faltando: "o cliente pediu também outro dia que a leitura da conversa não trouxe (confira e lance pela Agenda)",
   qual_viagem: "a Ida de hoje já saiu e o endereço existe em São Luís e em Pirapemas/Cantanhede: Volta de hoje ou Ida de amanhã?",
+  onde_embarca: "não dá para ter certeza se embarca em São Luís (Ida) ou em Pirapemas/Cantanhede (Volta)",
   data_longe: "o dia lido está a mais de 60 dias",
   sem_sentido: "não deu para saber se é Ida ou Volta",
   sem_endereco: "falta o local de embarque",
@@ -1025,7 +1129,9 @@ export function proximaViagemPeloLugar(p: {
 /** Dúvidas do Agendado que só o CLIENTE resolve: o bot pergunta a ele (issue #314). */
 export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
   qual_viagem: "é a Volta de hoje (saindo daí para São Luís) ou a Ida de amanhã (saindo de São Luís)?",
+  onde_embarca: "você vai embarcar em São Luís (Ida) ou aí em Pirapemas/Cantanhede (Volta, para São Luís)?",
   cidade: "você embarca em Pirapemas ou em Cantanhede?",
+  sem_data: "qual o dia da sua viagem?",
 };
 
 /**
