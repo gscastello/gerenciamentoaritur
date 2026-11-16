@@ -72,7 +72,8 @@ async function simular(page) {
     }
     if (req.method() === "PATCH") return route.fulfill({ json: [] });
     const url = req.url();
-    if (url.includes("limit=1")) {
+    // "o movimento mais recente" pede limit=1; as listas vêm em páginas de 1.000 (issue #442)
+    if (/[?&]limit=1(&|$)/.test(url)) {
       const ultima = [...linhas].sort((a, b) => b.data.localeCompare(a.data))[0];
       return route.fulfill({ json: ultima ? [{ data: ultima.data }] : [] });
     }

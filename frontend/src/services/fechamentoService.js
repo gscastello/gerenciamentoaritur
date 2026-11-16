@@ -4,6 +4,7 @@
 // dos meses anteriores (para a estimativa do DAS) e a URL assinada da foto de
 // cada nota (bucket privado `notas`, database/99).
 
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { ServiceError, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -26,14 +27,17 @@ export const fechamentoService = {
 
   async receitasDesde(desde, ate) {
     return handle(
-      supabase
-        .from("financial_entries")
-        .select("entry_date, amount, type")
-        .eq("type", "receita")
-        .gte("entry_date", desde)
-        .lte("entry_date", ate)
-        .is("deleted_at", null)
-        .limit(10000),
+      // em páginas: o Supabase corta em 1.000 linhas sem erro (issue #442)
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("financial_entries")
+          .select("entry_date, amount, type")
+          .eq("type", "receita")
+          .gte("entry_date", desde)
+          .lte("entry_date", ate)
+          .is("deleted_at", null)
+          .order("id"),
+      ),
       "receitasDoFechamento",
     );
   },

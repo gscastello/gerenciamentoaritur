@@ -283,6 +283,10 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   **Organizar e Copiar** (issue #440, `database/116`): a ordem vai em cada linha (`ordem`; sem ela, a hora em que foi
   anotada) e mover uma linha só muda essa linha (`reordenarLinhas`), então a junção por linha continua valendo;
   "Copiar" leva o texto na ordem da tela, numerado, com ✓ em quem desceu (`textoDaListaAnotada`).
+- **Lista com mais de 1.000 linhas** (issue #442, crítico): o Supabase devolve no máximo 1.000 linhas por consulta e
+  **corta o resto sem erro**. A janela de reservas da Agenda passou disso e as reservas mais novas sumiram do app (um
+  passageiro não foi embarcado). Toda lista que pode passar de 1.000 usa `buscarTodasAsPaginas` (`src/lib/paginas.js`),
+  com ordem estável (criação + id); nunca `.limit(N)` acima de 1.000 achando que vem tudo.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
