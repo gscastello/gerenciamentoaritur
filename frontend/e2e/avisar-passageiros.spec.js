@@ -113,7 +113,9 @@ test("Agenda: pedir confirmação da viagem e ver quem já confirmou (issue #434
   await janela.getByRole("radio", { name: "Confirmar viagem" }).click();
   await expect(janela.getByText(/Ana Teste/)).toBeVisible();
   await expect(janela.getByText("confirmou", { exact: true })).toBeVisible();
-  await expect(janela.getByText(/Olá, Bruno!.*Você confirma\? Responda SIM/)).toBeVisible();
+  await expect(
+    janela.getByText(/Olá, Bruno! Sua passagem está confirmada pra (hoje|amanhã)\?/),
+  ).toBeVisible();
   await janela.getByRole("button", { name: "Enviar para 2" }).click();
   await janela.getByRole("button", { name: "Confirmar: enviar para 2" }).click();
   await expect(page.getByTestId("resultado-do-aviso")).toHaveText(
@@ -121,13 +123,14 @@ test("Agenda: pedir confirmação da viagem e ver quem já confirmou (issue #434
   );
   expect(page.avisosTipos).toEqual(["confirmacao"]);
 
-  // "Saímos em rota" é da Volta: na Ida não aparece
-  await expect(janela.getByRole("radio", { name: "Saímos em rota" })).toHaveCount(0);
+  // "Em rota" também na Ida (a mensagem não cita ponto nem horário)
+  await janela.getByRole("radio", { name: "Em rota" }).click();
+  await expect(
+    janela.getByText(/Olá, Ana! Já estamos em rota buscando os passageiros/),
+  ).toBeVisible();
 });
 
-test('Agenda: na Volta, "Saímos em rota" com a janela de embarque de cada cidade', async ({
-  page,
-}) => {
+test('Agenda: na Volta, "Em rota" avisa que já estamos buscando', async ({ page }) => {
   await mockSupabase(page, {
     role: "admin",
     occupancy: {},
@@ -150,10 +153,10 @@ test('Agenda: na Volta, "Saímos em rota" com a janela de embarque de cada cidad
   await escolherSentido(page, "Volta");
   await page.getByRole("button", { name: "Avisar passageiros" }).click();
   const janela = page.getByTestId("avisar-passageiros");
-  await janela.getByRole("radio", { name: "Saímos em rota" }).click();
+  await janela.getByRole("radio", { name: "Em rota" }).click();
   await expect(
     janela.getByText(
-      /Olá, Carla! A Volta da AriTur já saiu.*Sua janela de embarque em Pirapemas[^:]*: a partir das \d{2}:\d{2}/,
+      /Olá, Carla! Já estamos em rota buscando os passageiros, aguarde no seu local de embarque que chegaremos em breve\./,
     ),
   ).toBeVisible();
   await janela.getByRole("button", { name: "Enviar para 1" }).click();

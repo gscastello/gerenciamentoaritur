@@ -161,12 +161,8 @@ export default function AvisarPassageiros({
             modelo aprovado pela Meta. Quem ficar de fora aparece em "Avisar pelo celular".
           </p>
           {/* tipo da mensagem (issue #434): cada um com o seu texto e o seu modelo da Meta */}
-          <div
-            className={`grid ${direcao === "volta" ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}
-            role="radiogroup"
-            aria-label="Tipo da mensagem"
-          >
-            {TIPOS_DE_AVISO.filter((t) => t.id !== "em_rota" || direcao === "volta").map((t) => (
+          <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Tipo da mensagem">
+            {TIPOS_DE_AVISO.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -193,7 +189,7 @@ export default function AvisarPassageiros({
           </div>
           {tipo === "confirmacao" && (
             <p className="text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
-              A resposta de cada um (SIM/NÃO) aparece aqui e na Agenda. Quem responder NÃO vira
+              A resposta de cada um (sim/não) aparece aqui e na Agenda. Quem responder NÃO vira
               pendência para liberar a vaga.
             </p>
           )}

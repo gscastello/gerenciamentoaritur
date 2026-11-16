@@ -31,17 +31,17 @@ export const TEXTO_PADRAO =
  */
 export const TIPOS_DE_AVISO = [
   { id: "horario", rotulo: "Horário", texto: TEXTO_PADRAO },
+  // mensagens curtas do dono (15/11)
   {
     id: "confirmacao",
     rotulo: "Confirmar viagem",
-    texto:
-      "{saudacao} Sua viagem {quando}, com a AriTur, está marcada: {aviso_do_dia}{embarque} Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
+    texto: "{saudacao} Sua passagem está confirmada pra {quando_curto}?",
   },
   {
     id: "em_rota",
-    rotulo: "Saímos em rota",
+    rotulo: "Em rota",
     texto:
-      "{saudacao} A Volta da AriTur já saiu e estamos buscando os passageiros. {embarque} Fique de prontidão, por favor!",
+      "{saudacao} Já estamos em rota buscando os passageiros, aguarde no seu local de embarque que chegaremos em breve.",
   },
 ];
 export const textoPadraoDoTipo = (tipo) =>
@@ -100,6 +100,13 @@ export function quandoDoAviso(data, hoje) {
   return `de ${semana} (${ddmm(data)})`;
 }
 
+/** "hoje", "amanhã" ou "segunda (16/11)" — para "Sua passagem está confirmada pra amanhã?". */
+export function quandoCurto(data, hoje) {
+  if (data === hoje) return "hoje";
+  if (data === somarDias(hoje, 1)) return "amanhã";
+  return `${SEMANA[new Date(`${data}T12:00:00Z`).getUTCDay()]} (${ddmm(data)})`;
+}
+
 /** A frase do embarque de uma reserva, pelo ponto (busca em casa e BR = "a partir das"). */
 export function fraseDoEmbarque(r, pontoNome, horario, tipo = "horario") {
   if (!horario) return "";
@@ -125,6 +132,7 @@ export function textoDoAviso(modelo, v) {
   return String(modelo ?? "")
     .replaceAll("{saudacao}", v.nome ? `Olá, ${v.nome}!` : "Olá!")
     .replaceAll("{quando}", v.quando ?? "")
+    .replaceAll("{quando_curto}", v.quandoCurto ?? "")
     .replaceAll("{aviso_do_dia}", v.avisoDoDia ? `${v.avisoDoDia} ` : "")
     .replaceAll(
       "{embarque}",
@@ -200,13 +208,18 @@ export function montarAvisos({
         texto: textoDoAviso(modelo, {
           nome,
           quando: quandoDoAviso(data, hoje),
+          quandoCurto: quandoCurto(data, hoje),
           avisoDoDia,
           embarque,
         }),
         // para o modelo da Meta (fora das 24 h): {{1}} nome, {{2}} dia, {{3}} ponto, {{4}} horário
         variaveis: {
           nome: nome ?? "",
-          dia: `${SEMANA[new Date(`${data}T12:00:00Z`).getUTCDay()]}, ${ddmm(data)}`,
+          // na confirmação o modelo diz "pra {{2}}?": "amanhã", "hoje" ou o dia
+          dia:
+            tipo === "confirmacao"
+              ? quandoCurto(data, hoje)
+              : `${SEMANA[new Date(`${data}T12:00:00Z`).getUTCDay()]}, ${ddmm(data)}`,
           ponto: pontoNome,
           horario: horario ?? "",
         },

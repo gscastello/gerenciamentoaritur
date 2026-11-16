@@ -11,8 +11,8 @@ export type ModeloDoAviso = { nome: string; idioma: string; categoria: string };
 /**
  * Tipos de aviso (issues #432 e #434), cada um com o seu modelo da Meta para fora das 24 h:
  *   horario     — lembrete do horário: {{1}} nome, {{2}} dia, {{3}} ponto, {{4}} horário
- *   confirmacao — "você confirma a viagem?" (SIM/NÃO): as mesmas quatro variáveis
- *   em_rota     — "a Volta saiu e estamos buscando": {{1}} nome, {{2}} ponto, {{3}} horário
+ *   confirmacao — "Sua passagem está confirmada pra amanhã?": {{1}} nome, {{2}} quando ("amanhã", "hoje")
+ *   em_rota     — "Já estamos em rota buscando os passageiros…": {{1}} nome
  */
 export const TIPOS_DE_AVISO = ["horario", "confirmacao", "em_rota"] as const;
 export type TipoDeAviso = (typeof TIPOS_DE_AVISO)[number];
@@ -80,9 +80,14 @@ export function comoEnviar(p: {
   if (Number.isFinite(ultima) && p.agora.getTime() - ultima < JANELA_MS) return { modo: "texto" };
   // fora da janela: só o modelo do tipo, e só com as variáveis dele preenchidas
   const { nome, dia, ponto, horario } = p.item;
+  // mensagens curtas do dono (15/11): confirmação só com o "quando"; em rota só com o nome
   if (p.tipo === "em_rota") {
-    if (!p.modelo || !ponto || !horario) return { modo: "nenhum", status: "fora_da_janela" };
-    return { modo: "modelo", corpo: { "1": primeiroNome(nome), "2": ponto, "3": horario } };
+    if (!p.modelo) return { modo: "nenhum", status: "fora_da_janela" };
+    return { modo: "modelo", corpo: { "1": primeiroNome(nome) } };
+  }
+  if (p.tipo === "confirmacao") {
+    if (!p.modelo || !dia) return { modo: "nenhum", status: "fora_da_janela" };
+    return { modo: "modelo", corpo: { "1": primeiroNome(nome), "2": dia } };
   }
   if (!p.modelo || !dia || !ponto || !horario) return { modo: "nenhum", status: "fora_da_janela" };
   return { modo: "modelo", corpo: { "1": primeiroNome(nome), "2": dia, "3": ponto, "4": horario } };
@@ -91,10 +96,10 @@ export function comoEnviar(p: {
 /** O texto que fica no histórico quando vai o modelo (o mesmo que o passageiro lê). */
 export function textoDoModelo(corpo: Record<string, string>, tipo: TipoDeAviso = "horario"): string {
   if (tipo === "confirmacao") {
-    return `Olá, ${corpo["1"]}! Sua viagem com a AriTur está marcada para ${corpo["2"]}, embarque em ${corpo["3"]} às ${corpo["4"]}. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.`;
+    return `Olá, ${corpo["1"]}! Sua passagem com a AriTur está confirmada pra ${corpo["2"]}?`;
   }
   if (tipo === "em_rota") {
-    return `Olá, ${corpo["1"]}! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em ${corpo["2"]}: a partir das ${corpo["3"]}. Fique de prontidão, por favor!`;
+    return `Olá, ${corpo["1"]}! Já estamos em rota buscando os passageiros, aguarde no seu local de embarque que chegaremos em breve.`;
   }
   return `Olá, ${corpo["1"]}! Lembrete da sua viagem com a AriTur: ${corpo["2"]}, embarque em ${corpo["3"]} às ${corpo["4"]}. Qualquer dúvida, é só responder esta mensagem.`;
 }

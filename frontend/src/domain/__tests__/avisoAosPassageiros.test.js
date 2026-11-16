@@ -6,6 +6,7 @@ import {
   horarioDoPonto,
   montarAvisos,
   nomeDoAviso,
+  quandoCurto,
   quandoDoAviso,
   textoDoAviso,
   textoPadraoDoTipo,
@@ -185,10 +186,13 @@ describe("montarAvisos", () => {
   });
 });
 
-describe("tipos de aviso (issue #434)", () => {
-  it("confirmação pede SIM/NÃO; em rota dá a janela do ponto; o já avisado é por tipo", () => {
+describe("tipos de aviso (issue #434) — mensagens curtas do dono", () => {
+  it("confirmação 'pra amanhã?'; em rota sem ponto nem horário; o já avisado é por tipo", () => {
     expect(TIPOS_DE_AVISO.map((t) => t.id)).toEqual(["horario", "confirmacao", "em_rota"]);
     expect(textoPadraoDoTipo("nenhum")).toBe(TEXTO_PADRAO);
+    expect(quandoCurto(SEGUNDA, "2026-11-15")).toBe("amanhã");
+    expect(quandoCurto(SEGUNDA, SEGUNDA)).toBe("hoje");
+    expect(quandoCurto(SEGUNDA, "2026-11-13")).toBe("segunda (16/11)");
     const reservas = [r("1", { pontoId: "retorno", extra: { presenca: { resposta: "sim" } } })];
     const avisos = [
       {
@@ -208,9 +212,8 @@ describe("tipos de aviso (issue #434)", () => {
       tipo: "confirmacao",
       modelo: textoPadraoDoTipo("confirmacao"),
     });
-    expect(c.texto).toBe(
-      "Olá, Maria! Sua viagem de amanhã, segunda (16/11), com a AriTur, está marcada: como é segunda, a Ida sai 1 hora mais cedo. Seu embarque é no Retorno das Vans às 05:00. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
-    );
+    expect(c.texto).toBe("Olá, Maria! Sua passagem está confirmada pra amanhã?");
+    expect(c.variaveis.dia).toBe("amanhã");
     // o lembrete enviado não marca o pedido de confirmação como já feito
     expect(c.anterior).toBeNull();
     expect(c.marcado).toBe(true);
@@ -225,8 +228,9 @@ describe("tipos de aviso (issue #434)", () => {
       modelo: textoPadraoDoTipo("em_rota"),
     });
     expect(v.texto).toBe(
-      "Olá, Maria! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em Cantanhede: a partir das 13:00. Fique de prontidão, por favor!",
+      "Olá, Maria! Já estamos em rota buscando os passageiros, aguarde no seu local de embarque que chegaremos em breve.",
     );
+    expect(v.variaveis.dia).toBe("segunda, 16/11");
     expect(v.presenca).toBeNull();
     expect(
       fraseDoEmbarque({ direcao: "ida", pontoId: "busca" }, "Buscar em Casa", "04:00", "em_rota"),

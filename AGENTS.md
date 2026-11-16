@@ -540,8 +540,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `avisos_passageiros`; quem já recebeu volta desmarcado. A confirmação do Agendado também traz o horário do ponto.
   **Tipos** (issue #434, `database/115`): Horário, **Confirmar viagem** (SIM/NÃO; a resposta clara até 36 h depois vai
   para `extra_data.presenca` pela `fn_registrar_presenca` e aparece na Agenda — NÃO abre pendência para liberar a vaga,
-  o bot nunca cancela; o bot responde só um obrigado) e **Saímos em rota** (só na Volta: a janela de embarque de cada
-  cidade). Cada tipo tem o seu modelo da Meta em `settings.aviso_modelos` (`{horario, confirmacao, em_rota}`).
+  o bot nunca cancela; o bot responde só um obrigado) e **Em rota** ("já estamos em rota buscando os passageiros,
+  aguarde no seu local de embarque"). Mensagens curtas, a pedido do dono ("Sua passagem está confirmada pra amanhã?"). Cada tipo tem o seu modelo da Meta em `settings.aviso_modelos` (`{horario, confirmacao, em_rota}`).
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
 

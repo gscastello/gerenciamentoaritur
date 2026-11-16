@@ -64,22 +64,19 @@ Deno.test("#432 itens do pedido: id válido, texto, sem repetir, até 80", () =>
   assertEquals(itensValidos(muitos).length, 80);
 });
 
-Deno.test("#434 tipos: confirmação e em rota com os seus modelos", () => {
+Deno.test("#434 tipos: confirmação e em rota com os seus modelos (mensagens curtas)", () => {
   const fora = { temConversa: true, ultimaDoClienteEm: "2026-11-13T10:00:00Z", agora: AGORA };
-  assertEquals(comoEnviar({ ...fora, modelo, item, tipo: "em_rota" }), {
+  assertEquals(comoEnviar({ ...fora, modelo, item, tipo: "em_rota" }), { modo: "modelo", corpo: { "1": "Maria" } });
+  assertEquals(comoEnviar({ ...fora, modelo: null, item, tipo: "em_rota" }).modo, "nenhum");
+  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, dia: "amanhã" }, tipo: "confirmacao" }), {
     modo: "modelo",
-    corpo: { "1": "Maria", "2": "Rodoviária", "3": "04:40" },
+    corpo: { "1": "Maria", "2": "amanhã" },
   });
-  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, dia: null }, tipo: "em_rota" }).modo, "modelo");
-  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, horario: null }, tipo: "em_rota" }).modo, "nenhum");
-  assertEquals(comoEnviar({ ...fora, modelo, item, tipo: "confirmacao" }).modo, "modelo");
+  assertEquals(comoEnviar({ ...fora, modelo, item: { ...item, dia: null }, tipo: "confirmacao" }).modo, "nenhum");
+  assertEquals(textoDoModelo({ "1": "Maria", "2": "amanhã" }, "confirmacao"), "Olá, Maria! Sua passagem com a AriTur está confirmada pra amanhã?");
   assertEquals(
-    textoDoModelo({ "1": "Maria", "2": "segunda, 16/11", "3": "Rodoviária", "4": "04:40" }, "confirmacao"),
-    "Olá, Maria! Sua viagem com a AriTur está marcada para segunda, 16/11, embarque em Rodoviária às 04:40. Você confirma? Responda SIM para manter a vaga ou NÃO se não for mais viajar.",
-  );
-  assertEquals(
-    textoDoModelo({ "1": "Maria", "2": "Pirapemas", "3": "12:00" }, "em_rota"),
-    "Olá, Maria! A Volta da AriTur já saiu e estamos buscando os passageiros. Sua janela de embarque em Pirapemas: a partir das 12:00. Fique de prontidão, por favor!",
+    textoDoModelo({ "1": "Maria" }, "em_rota"),
+    "Olá, Maria! Já estamos em rota buscando os passageiros, aguarde no seu local de embarque que chegaremos em breve.",
   );
   assertEquals(tipoValido("em_rota"), "em_rota");
   assertEquals(tipoValido("qualquer"), "horario");
