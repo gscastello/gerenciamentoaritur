@@ -12,6 +12,7 @@ import {
   mesclarListas,
   mudarLinha,
   novaLinha,
+  reordenarLinhas,
   resumoDaLista,
   temPendente,
 } from "../domain/listaDesembarque.js";
@@ -136,5 +137,7 @@ export function useListaDesembarque(data, direcao) {
     },
     editar: (id, texto) => mudar(mudarLinha(listaRef.current, id, { texto }, Date.now())),
     apagar: (id) => mudar(mudarLinha(listaRef.current, id, { apagada: true }, Date.now())),
+    /** "Organizar" (issue #440): `ids` = as linhas visíveis de cima para baixo */
+    reordenar: (ids) => mudar(reordenarLinhas(listaRef.current, ids, Date.now())),
   };
 }

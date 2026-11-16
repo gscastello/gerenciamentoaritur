@@ -1,14 +1,18 @@
 // src/app/tabs/ListaDesembarqueAnotada.jsx
 //
-// Lista do Dia → Desembarque: anotar à mão, durante a viagem, onde cada
-// passageiro desce (issue #383). Começa em branco e não muda a reserva (decisão
-// do dono). Funciona sem internet: grava no aparelho e envia quando o sinal volta.
+// Rota → Desembarque: anotar à mão, durante a viagem, onde cada passageiro desce
+// (issue #383), organizar na ordem da entrega e copiar (issue #440). Começa em branco
+// e não muda a reserva (decisão do dono). Funciona sem internet: grava no aparelho e
+// envia quando o sinal volta.
 
-import { Check, CloudOff, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { ArrowUpDown, Check, CloudOff, Copy, MapPin, Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
+import { textoDaListaAnotada } from "../../domain/listaDesembarque.js";
 import { useListaDesembarque } from "../../hooks/useListaDesembarque.js";
+import { copiarTexto } from "../../lib/clipboard.js";
 import { FadeIn, Presence, Spinner, fadeScale } from "../../ui/motion/index.js";
 import { C, Card, SubTabs } from "../tabShared.jsx";
+import OrdemDaListaEditor from "./OrdemDaListaEditor.jsx";
 
 const horaEmSaoLuis = () =>
   Number(
@@ -128,7 +132,20 @@ export default function ListaDesembarqueAnotada({ data }) {
   const [direcao, setDirecao] = useState(() => (horaEmSaoLuis() < 10 ? "ida" : "volta"));
   const lista = useListaDesembarque(data, direcao);
   const [texto, setTexto] = useState("");
+  const [organizando, setOrganizando] = useState(false);
+  const [copiado, setCopiado] = useState("");
   const idCampo = useId();
+
+  const copiar = async () => {
+    const ok = await copiarTexto(textoDaListaAnotada(lista.todas, { data, direcao }));
+    setCopiado(ok ? "ok" : "erro");
+    setTimeout(() => setCopiado(""), 1800);
+  };
+  const botao = {
+    className:
+      "btn-press flex items-center gap-1.5 text-[13px] font-medium px-3 rounded-lg min-h-[44px]",
+    style: { background: C.panel2, color: C.ink, border: `1px solid ${C.border}` },
+  };
 
   const anotar = (e) => {
     e.preventDefault();
@@ -139,13 +156,16 @@ export default function ListaDesembarqueAnotada({ data }) {
     <Card>
       <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
         <div className="text-sm font-semibold flex items-center gap-2">
-          <NotebookPen size={16} style={{ color: C.inkSoft }} /> Anotar desembarque
+          <MapPin size={16} style={{ color: C.inkSoft }} /> Desembarque
         </div>
         <Estado estado={lista.estado} />
       </div>
       <SubTabs
         value={direcao}
-        onChange={setDirecao}
+        onChange={(d) => {
+          setDirecao(d);
+          setOrganizando(false);
+        }}
         options={[
           { id: "ida", label: "Ida" },
           { id: "volta", label: "Volta" },
@@ -179,8 +199,30 @@ export default function ListaDesembarqueAnotada({ data }) {
           Nada anotado na {direcao === "ida" ? "Ida" : "Volta"} deste dia. Escreva onde cada
           passageiro desce; marque quando ele descer. Não muda a reserva.
         </p>
+      ) : organizando ? (
+        // organizar o que foi anotado (issue #440): arrastar, setas, topo ou a posição
+        <div className="mt-3">
+          <OrdemDaListaEditor
+            simples
+            itens={lista.linhas.map((l) => ({ id: l.id, nome: l.texto, quantidade: 1 }))}
+            endereco={(r) => r.nome}
+            onSalvar={lista.reordenar}
+            onFechar={() => setOrganizando(false)}
+          />
+        </div>
       ) : (
         <>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {lista.linhas.length > 1 && (
+              <button type="button" onClick={() => setOrganizando(true)} {...botao}>
+                <ArrowUpDown size={15} /> Organizar
+              </button>
+            )}
+            <button type="button" onClick={copiar} {...botao}>
+              {copiado === "ok" ? <Check size={15} /> : <Copy size={15} />}
+              {copiado === "ok" ? "Copiado" : copiado === "erro" ? "Não copiou" : "Copiar"}
+            </button>
+          </div>
           <ol
             className="list-none space-y-1.5 mt-3"
             aria-label="Anotações de desembarque"
