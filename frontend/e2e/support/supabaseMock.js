@@ -748,6 +748,11 @@ export async function mockSupabase(page, opts = {}) {
       ];
     else if (table === "route_points") rows = ROUTE_POINTS;
     else if (table === "settings") rows = SETTINGS;
+    else if (table === "v_reservations_flat" && url.searchParams.get("customer_id"))
+      // histórico do passageiro no CRM (issue #436)
+      rows = reservations.filter(
+        (r) => r.customer_id === url.searchParams.get("customer_id").replace("eq.", ""),
+      );
     else if (table === "v_reservations_flat")
       rows = reservations.map((r) =>
         buscaOverride[r.id] ||

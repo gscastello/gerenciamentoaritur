@@ -70,7 +70,10 @@ export function usePassageiros(busca) {
   // "Salvar" na tela, aplica só os campos que mudaram.
   const perfilAction = useAsyncAction(customersService.updateProfile);
   const salvarPerfil = useCallback(
-    async (customerId, { name, phone, phoneSecondary, defaultRoutePointCode, defaultPaymentMethod }) => {
+    async (
+      customerId,
+      { name, phone, phoneSecondary, defaultRoutePointCode, defaultPaymentMethod },
+    ) => {
       await perfilAction.run(customerId, {
         name,
         phone,
@@ -165,5 +168,6 @@ export function usePassageiroDetalhe(customerId) {
     };
   }, [customerId]);
 
-  return { viagens: viagens ?? [], loading };
+  // antes da primeira leitura também é "carregando" (o skeleton entra sem piscar "nenhuma viagem")
+  return { viagens: viagens ?? [], loading: loading || (!!customerId && viagens === null) };
 }

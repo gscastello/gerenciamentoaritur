@@ -83,10 +83,11 @@ export const customersService = {
       supabase
         .from("v_reservations_flat")
         .select(
-          "id, data, direcao, status, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
+          "id, data, direcao, status, tipo, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
         )
         .eq("customer_id", customerId)
-        .order("criadoEm", { ascending: false })
+        // as 400 viagens mais recentes pela data da viagem (histórico do CRM, issue #436)
+        .order("data", { ascending: false })
         .limit(400),
       "getHistoryFlat",
     );

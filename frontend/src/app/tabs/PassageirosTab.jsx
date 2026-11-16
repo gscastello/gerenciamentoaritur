@@ -23,6 +23,7 @@ import {
   inputStyle,
 } from "../tabShared.jsx";
 import EnderecoDeCostume from "./EnderecoDeCostume.jsx";
+import HistoricoDeViagens from "./HistoricoDeViagens.jsx";
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
 // Endereços mais usados pelo passageiro numa direção — a mudança de
@@ -365,6 +366,7 @@ function PassageiroCard({
             <EnderecosFreq titulo="Embarque (ida)" itens={loading ? [] : enderecosIda} />
             <EnderecosFreq titulo="Desembarque (volta)" itens={loading ? [] : enderecosVolta} />
           </div>
+          <HistoricoDeViagens viagens={viagens} loading={loading} trips={trips} />
           <EnderecoDeCostume p={p} trips={trips} onAgendar={onAgendar} />
           <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
             <div>
