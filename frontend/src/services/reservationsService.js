@@ -305,14 +305,6 @@ export const reservationsService = {
     return data;
   },
 
-  /** Reordena a fila de entrega de um balde — `orderedIds` na ordem desejada. */
-  async reorderDropoff(orderedIds) {
-    const { data, error } = await supabase.rpc("rpc_reorder_dropoff", { p_ids: orderedIds });
-    if (error) throw new ServiceError(`reorderDropoff: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível reordenar a rota.", { retryable: false });
-    return data;
-  },
-
   /**
    * Quem busca o passageiro "em casa": 'taxi' (padrão) | 'proprio' | 'motorista'.
    * Via RPC (guarda de papel — admin/atendente/motorista).

@@ -273,14 +273,16 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   `rpc_baixa_por_comprovante` confere de novo no banco (soma, já pago, comprovante repetido). Qualquer dúvida vira
   pendência com o motivo, e tudo fica em `comprovantes_pix`.
 - **Rota** (issue #411, antiga Lista do Dia): o embarque é só o da **Volta** — quem buscamos em casa em Pirapemas e
-  Cantanhede, na ordem da rota. O **desembarque é o da Ida** (issue #428, `domain/desembarqueDaIda.js`): separado em
-  Cantanhede e Pirapemas (Campestre vai com Pirapemas; cidade do caminho e sem desembarque à parte), pela área do
-  desembarque e, sem ela, pelo texto; "Organizar" põe na ordem da entrega (`dropoff_seq`, `rpc_reorder_dropoff`).
-  A lista anotada fica abaixo. O Bloco de notas (aba) saiu (issue #428): a tabela `notes` fica, nada foi apagado.
+  Cantanhede, na ordem da rota. O **Desembarque** é só a lista anotada na viagem (issue #440: o desembarque da Ida por
+  cidade da #428 saiu a pedido do dono; `dropoff_seq`/`rpc_reorder_dropoff` ficam no banco, sem uso na tela). O Bloco
+  de notas (aba) saiu (issue #428): a tabela `notes` fica, nada foi apagado.
 - **Desembarque anotado na viagem** (issue #383, Rota → Desembarque, `database/106`): lista livre por dia e
   sentido, que começa em branco e **não muda a reserva** (decisão do dono). Grava no aparelho primeiro (copiaOffline)
   e envia por `rpc_salvar_lista_desembarque`, que **junta** linha por linha (vale o `em` mais recente; apagar é marcar
   `apagada`) — mesma regra de `domain/listaDesembarque.js`. Dois aparelhos na mesma viagem não se apagam.
+  **Organizar e Copiar** (issue #440, `database/116`): a ordem vai em cada linha (`ordem`; sem ela, a hora em que foi
+  anotada) e mover uma linha só muda essa linha (`reordenarLinhas`), então a junção por linha continua valendo;
+  "Copiar" leva o texto na ordem da tela, numerado, com ✓ em quem desceu (`textoDaListaAnotada`).
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
