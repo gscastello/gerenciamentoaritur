@@ -1557,6 +1557,7 @@ function AppInner() {
                                 }
                               : null
                           }
+                          podeAvisar={podeAgendar}
                         />
                       )}
                       {tab === "lista" && (
