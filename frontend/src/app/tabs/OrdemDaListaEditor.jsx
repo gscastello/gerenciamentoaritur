@@ -11,7 +11,18 @@ import { C, enderecoEmbarque } from "../tabShared.jsx";
  * rascunho: arrastar, setas, "topo" ou digitar a posição de destino. Nada é
  * gravado até "Salvar"; "Cancelar" descarta.
  */
-export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar, endereco }) {
+/**
+ * `simples`: cada item é só um texto (`endereco(r)`), sem nome nem telefone — a lista anotada do
+ * desembarque (issue #440).
+ */
+export default function OrdemDaListaEditor({
+  itens,
+  trips,
+  onSalvar,
+  onFechar,
+  endereco,
+  simples = false,
+}) {
   const original = useMemo(() => itens.map((r) => r.id), [itens]);
   const porId = useMemo(() => Object.fromEntries(itens.map((r) => [r.id, r])), [itens]);
   const [ordem, setOrdem] = useState(original);
@@ -120,13 +131,17 @@ export default function OrdemDaListaEditor({ itens, trips, onSalvar, onFechar, e
                   {r.quantidade > 1 ? `${r.quantidade}P · ` : ""}
                   {endereco ? endereco(r) : enderecoEmbarque(r, trips) || "endereço não informado"}
                 </span>
-                <span className="block text-[13px] font-semibold" style={{ color: C.inkSoft }}>
-                  {r.nome || "—"}
-                </span>
-                <span className="block text-[12px]" style={{ color: C.inkFaint }}>
-                  {formatarTelefoneBR(r.telefone)}
-                  {tel2}
-                </span>
+                {!simples && (
+                  <>
+                    <span className="block text-[13px] font-semibold" style={{ color: C.inkSoft }}>
+                      {r.nome || "—"}
+                    </span>
+                    <span className="block text-[12px]" style={{ color: C.inkFaint }}>
+                      {formatarTelefoneBR(r.telefone)}
+                      {tel2}
+                    </span>
+                  </>
+                )}
               </span>
               <div className="flex items-center gap-1 shrink-0">
                 <button
