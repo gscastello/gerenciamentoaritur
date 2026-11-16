@@ -48,6 +48,8 @@ async function abrirPassageiro(page) {
   }
   await aba.first().click();
   await page.getByRole("button", { name: /^MR Maria Recorrente/ }).click();
+  // a ficha abre numa tela própria; o costume fica na aba Endereços (issue #438)
+  await page.getByRole("tab", { name: "Endereços" }).click();
   await expect(page.getByText("Endereço de costume", { exact: true })).toBeVisible();
 }
 
@@ -73,7 +75,9 @@ test("Passageiros: agenda a Ida com o endereço de costume já preenchido", asyn
   await ida.getByRole("button", { name: "Agendar Ida" }).click();
 
   // modal da nova reserva, já com o costume
-  await expect(page.getByTestId("aviso-costume")).toContainText("Endereço de costume (4× no histórico)");
+  await expect(page.getByTestId("aviso-costume")).toContainText(
+    "Endereço de costume (4× no histórico)",
+  );
   await page.getByRole("button", { name: "Agendar", exact: true }).click();
 
   await expect.poll(() => criadas.length).toBe(1);

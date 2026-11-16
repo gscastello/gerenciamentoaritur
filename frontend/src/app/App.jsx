@@ -1548,6 +1548,15 @@ function AppInner() {
                           deepLink={deepLink}
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
                           pedidoEncomenda={pedidoEncomenda}
+                          podeVerPassageiro={TAB_ROLES.passageiros.includes(role)}
+                          onAgendarPassageiro={
+                            podeAgendar
+                              ? (inicial) => {
+                                  setAgendarInicial(inicial);
+                                  setAgendarAberto(true);
+                                }
+                              : null
+                          }
                         />
                       )}
                       {tab === "lista" && (

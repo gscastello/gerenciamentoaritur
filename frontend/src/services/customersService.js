@@ -16,6 +16,8 @@ async function handle(promise, context) {
 }
 
 const CUSTOMER_COLS = "id, name, phone, notes, default_neighborhood, created_at";
+const STATS_COLS =
+  "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2";
 
 export const customersService = {
   async list({ search } = {}) {
@@ -47,10 +49,7 @@ export const customersService = {
   async listStats({ search, de = 0, ate = 24 } = {}) {
     let query = supabase
       .from("v_customers_stats")
-      .select(
-        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2",
-        { count: "exact" },
-      )
+      .select(STATS_COLS, { count: "exact" })
       .order("total_gasto", { ascending: false })
       .order("ultima_data", { ascending: false, nullsFirst: false })
       .range(de, ate);
@@ -71,6 +70,21 @@ export const customersService = {
       });
     }
     return { linhas: data ?? [], total: count ?? data?.length ?? 0 };
+  },
+
+  /**
+   * O resumo de UM passageiro (v_customers_stats) — a ficha aberta pela Agenda ou pela lista
+   * (issue #438). `null` quando o cadastro foi removido.
+   */
+  async getStats(customerId) {
+    return handle(
+      supabase
+        .from("v_customers_stats")
+        .select(STATS_COLS)
+        .eq("customer_id", customerId)
+        .maybeSingle(),
+      "getStats",
+    );
   },
 
   /**

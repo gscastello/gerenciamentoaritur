@@ -544,6 +544,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Passageiros (CRM)** (issue #436): o cartão aberto mostra o **histórico de viagens** com a data (dia da semana),
   Ida/Volta, embarque → desembarque, passagens, valor e situação; as próximas primeiro, depois as anteriores da mais
   recente para a mais antiga (`domain/historicoDoPassageiro.js`), as 10 primeiras e "Ver todas".
+  A **ficha do passageiro** (issue #438, `FichaDoPassageiro.jsx`, `usePassageiro`) abre numa tela própria (celular:
+  tela inteira; computador: painel), com abas **Viagens**, **Endereços** (mais usados + costume) e **Cadastro** (notas,
+  editar, remover); a lista só serve para achar. Pela **Agenda**: "⋯" da reserva → **Ver passageiro** abre a mesma
+  ficha por cima (só admin, atendente e financeiro; o motorista não vê).
 - **Frota** (issue #369, `database/103`): consumo fora do normal = km/l abaixo de 85% da mediana dos 8 abastecimentos
   anteriores do veículo (sem litros: custo por km acima de 120%; menos de 3 anteriores não avisa). Regra única em
   `domain/frota.js` (tela Operação) e no trigger de `fuel_records` (aviso `consumo` no sino). Manutenção a 80% do

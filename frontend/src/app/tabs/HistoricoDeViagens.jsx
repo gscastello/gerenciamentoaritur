@@ -77,10 +77,8 @@ export default function HistoricoDeViagens({ viagens, loading, trips }) {
   const anterioresVisiveis = todas ? anteriores : anteriores.slice(0, limite);
 
   return (
-    <section className="sm:col-span-2" aria-label="Histórico de viagens">
-      <div className="text-xs font-semibold mb-1" style={{ color: C.ink }}>
-        Histórico de viagens
-      </div>
+    // a aba "Viagens" da ficha já diz o que é (issue #438): sem título repetido
+    <section aria-label="Histórico de viagens">
       {loading ? (
         <div className="space-y-1.5" data-testid="historico-carregando">
           {[0, 1, 2].map((i) => (
