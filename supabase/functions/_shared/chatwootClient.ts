@@ -66,6 +66,28 @@ export const chatwootClient = {
   },
 
   /**
+   * Modelo aprovado pela Meta (fora da janela de 24 h — issue #432). `content` é o texto já
+   * preenchido que fica no histórico da conversa; `corpo` são as variáveis {{1}}, {{2}}…
+   */
+  postTemplate(
+    conversationId: number,
+    content: string,
+    modelo: { nome: string; idioma: string; categoria: string },
+    corpo: Record<string, string>,
+  ) {
+    return chamar(`/conversations/${conversationId}/messages`, {
+      content,
+      message_type: "outgoing",
+      template_params: {
+        name: modelo.nome,
+        category: modelo.categoria,
+        language: modelo.idioma,
+        processed_params: { body: corpo },
+      },
+    });
+  },
+
+  /**
    * Corrige o nome do contato no Chatwoot pro nome do CADASTRO (o do perfil do
    * WhatsApp costuma ser apelido). Melhor esforço: o token do Agent Bot pode
    * não ter permissão pra isso.

@@ -1548,6 +1548,7 @@ function AppInner() {
                           deepLink={deepLink}
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
                           pedidoEncomenda={pedidoEncomenda}
+                          podeAvisar={podeAgendar}
                         />
                       )}
                       {tab === "lista" && (

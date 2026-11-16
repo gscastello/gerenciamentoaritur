@@ -22,7 +22,27 @@ export type ReservaParaConfirmar = {
   aConfirmar: string[];
   /** nome do passageiro quando a vaga é de OUTRA pessoa (marcada por quem conversa) */
   passageiro?: string | null;
+  /** horário do embarque no ponto, "HH:MM" (issue #432); busca em casa = "a partir de" */
+  horario?: string | null;
 };
+
+/**
+ * Horário do ponto na data (issue #432): o `base_time` do ponto e, na segunda, a Ida sai
+ * `ajuste.hours` mais cedo (settings.monday_adjustment) — os mesmos horários da Agenda.
+ */
+export function horarioDoEmbarque(
+  baseTime: string | null | undefined,
+  data: string,
+  direcao: "ida" | "volta",
+  ajuste: { active?: boolean; hours?: number } | null,
+): string | null {
+  const m = String(baseTime ?? "").match(/^(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const segunda = new Date(`${data}T12:00:00Z`).getUTCDay() === 1;
+  const menos = direcao === "ida" && segunda && ajuste?.active !== false ? Number(ajuste?.hours ?? 1) : 0;
+  const h = (Number(m[1]) - menos + 24) % 24;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
 
 const SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
@@ -78,7 +98,8 @@ function linha(r: ReservaParaConfirmar, hoje: string): string {
   const qtd = `${r.quantidade} ${r.quantidade === 1 ? "passagem" : "passagens"}`;
   const de = embarque(r);
   // passagem: não cita onde o passageiro desce (dono, 14/11 — issue #403)
-  return `🚐 ${quem}${sentido} ${dia}: ${de ? `sai de ${de}` : "embarque a confirmar"} · ${qtd}`;
+  const hora = r.horario ? (r.pontoCodigo === "busca" ? `, a partir das ${r.horario}` : ` às ${r.horario}`) : "";
+  return `🚐 ${quem}${sentido} ${dia}: ${de ? `sai de ${de}${hora}` : "embarque a confirmar"} · ${qtd}`;
 }
 
 /** Só a primeira palavra do nome do cadastro ("Auristelia Coutinho" → "Auristelia"). */
