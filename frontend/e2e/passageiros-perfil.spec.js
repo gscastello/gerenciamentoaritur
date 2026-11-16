@@ -25,6 +25,14 @@ const STATS = [
   },
 ];
 
+// lista → ficha do passageiro (issue #438) → aba Cadastro → Editar cadastro
+async function abrirCadastro(page) {
+  await page.getByRole("button", { name: /^MR Maria Receptora/ }).click();
+  const ficha = page.getByRole("dialog", { name: /Ficha do passageiro/ });
+  await ficha.getByRole("tab", { name: "Cadastro" }).click();
+  await ficha.getByRole("button", { name: "Editar cadastro" }).click();
+}
+
 test("Passageiros: edita nome, telefone e preferências fixas do cliente", async ({ page }) => {
   await mockSupabase(page, { role: "admin", customersStats: STATS });
   await page.goto("/");
@@ -38,9 +46,9 @@ test("Passageiros: edita nome, telefone e preferências fixas do cliente", async
   await aba.first().click();
 
   await expect(page.getByText("Maria Receptora")).toBeVisible();
-  await page.getByRole("button", { name: "Editar cadastro de Maria Receptora" }).click();
+  await abrirCadastro(page);
 
-  await expect(page.getByText("Editar cadastro")).toBeVisible();
+  await expect(page.getByText("Editar cadastro", { exact: true })).toBeVisible();
   await page.getByLabel("Nome").fill("Maria Silva");
   await page.getByLabel("Telefone", { exact: true }).fill("98999997777");
   await page
@@ -49,10 +57,15 @@ test("Passageiros: edita nome, telefone e preferências fixas do cliente", async
   await page.getByLabel("Pagamento padrão (opcional)").selectOption("pix");
   await page.getByRole("button", { name: "Salvar" }).click();
 
-  await expect(page.getByText("Editar cadastro")).toHaveCount(0);
-  await expect(page.getByText("Maria Silva")).toBeVisible();
-  await expect(page.getByText(/Ponto padrão:.*Rodoviária/)).toBeVisible();
-  await expect(page.getByText(/Pagamento padrão:.*Pix/)).toBeVisible();
+  const ficha = page.getByRole("dialog", { name: /Ficha do passageiro/ });
+  // o formulário fechou
+  await expect(ficha.getByRole("button", { name: "Salvar" })).toHaveCount(0);
+  await expect(ficha.getByRole("heading", { name: "Maria Silva" })).toBeVisible();
+  await expect(ficha.getByText(/Ponto padrão:.*Rodoviária/)).toBeVisible();
+  await expect(ficha.getByText(/Pagamento padrão:.*Pix/)).toBeVisible();
+  // a lista atrás acompanha
+  await ficha.getByRole("button", { name: "Voltar" }).click();
+  await expect(page.getByRole("button", { name: /^MS Maria Silva/ })).toBeVisible();
 });
 
 test("Passageiros: telefone inválido barra o salvamento do cadastro", async ({ page }) => {
@@ -67,12 +80,13 @@ test("Passageiros: telefone inválido barra o salvamento do cadastro", async ({ 
   }
   await aba.first().click();
 
-  await page.getByRole("button", { name: "Editar cadastro de Maria Receptora" }).click();
+  await abrirCadastro(page);
   await page.getByLabel("Telefone", { exact: true }).fill("123");
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await expect(page.getByText(/DDD/i)).toBeVisible();
-  await expect(page.getByText("Editar cadastro")).toBeVisible();
+  // o formulário continua aberto
+  await expect(page.getByRole("button", { name: "Salvar" })).toBeVisible();
 });
 
 test("Passageiros: remove o cadastro de um passageiro", async ({ page }) => {
@@ -88,7 +102,7 @@ test("Passageiros: remove o cadastro de um passageiro", async ({ page }) => {
   await aba.first().click();
 
   await expect(page.getByText("Maria Receptora")).toBeVisible();
-  await page.getByRole("button", { name: "Editar cadastro de Maria Receptora" }).click();
+  await abrirCadastro(page);
 
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Remover cadastro de Maria Receptora" }).click();

@@ -1,71 +1,24 @@
-import { ChevronRight, MessageCircle, Pencil, Save, Search, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
-import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
-import { usePassageiroDetalhe, usePassageiros } from "../../hooks/usePassageiros.js";
-import { mensagemAmigavel } from "../../lib/erros.js";
+import { ChevronRight, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePassageiros } from "../../hooks/usePassageiros.js";
 import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
-import {
-  C,
-  Card,
-  ErrorBanner,
-  Field,
-  Header,
-  Pill,
-  Select,
-  TextInput,
-  digitos,
-  enderecoEmbarque,
-  enderecosFrequentes,
-  fmtBRL,
-  fmtDate,
-  inputCls,
-  inputStyle,
-} from "../tabShared.jsx";
-import EnderecoDeCostume from "./EnderecoDeCostume.jsx";
+import { C, Card, ErrorBanner, Header, Pill, TextInput, fmtBRL, fmtDate } from "../tabShared.jsx";
+import FichaDoPassageiro, { classificacao, iniciaisDe } from "./FichaDoPassageiro.jsx";
 
 /* ============================= 4. PASSAGEIROS / CRM ============================= */
-// Endereços mais usados pelo passageiro numa direção — a mudança de
-// desembarque é comum, então ter o histórico à mão ajuda o atendimento.
-function EnderecosFreq({ titulo, itens }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: C.inkFaint }}>
-        {titulo}
-      </div>
-      {itens.length === 0 ? (
-        <div className="text-xs" style={{ color: C.inkFaint }}>
-          — sem histórico —
-        </div>
-      ) : (
-        <ul className="space-y-1">
-          {itens.map((e) => (
-            <li
-              key={e.texto}
-              className="text-xs leading-snug flex items-start gap-1.5"
-              style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
-            >
-              <span style={{ color: C.ink }}>{e.texto}</span>
-              {e.n > 1 && <span style={{ color: C.inkFaint }}>×{e.n}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
+// A lista é só para achar o passageiro: tocar abre a ficha numa tela própria (issue #438), com
+// as viagens, os endereços e o cadastro em abas — antes tudo abria dentro da lista.
 
-// Duração da saída antes de tirar o passageiro da lista de verdade —
-// precisa bater com o `duration` do Presence abaixo (AGENTS.md §5, mesmo
-// padrão de BlocoDeNotasTab.jsx).
+// Duração da saída antes de tirar o passageiro da lista de verdade — precisa bater com o
+// `duration` do Presence abaixo (AGENTS.md §5).
 const SAIDA_MS = 200;
 
-// CRM paginado: lista agregada vem do banco (v_customers_stats), página
-// a página, busca no servidor. O histórico de cada passageiro (para os
-// endereços mais usados) carrega só quando o card abre.
+// CRM paginado: lista agregada vem do banco (v_customers_stats), página a página, busca no
+// servidor. O detalhe de cada passageiro carrega só quando a ficha abre.
 export default function PassageirosTab({ trips, deepLink, onAgendar }) {
   const [busca, setBusca] = useState("");
-  const [aberto, setAberto] = useState(null);
+  const [ficha, setFicha] = useState(null);
+  const [fichaAberta, setFichaAberta] = useState(false);
   const deepLinkAplicado = useRef(null);
   useEffect(() => {
     if (
@@ -86,37 +39,33 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
     temMais,
     carregarMais,
     recarregar,
-    salvarNota,
-    salvarPerfil,
-    removerPassageiro,
+    atualizarNaLista,
+    tirarDaLista,
   } = usePassageiros(busca);
   // acumula com cada "Carregar mais" (usePassageiros.js mantém a lista
   // inteira, não só a página atual) — o rótulo tem que refletir isso.
   const valorCarregado = passageiros.reduce((s, p) => s + Number(p.total_gasto || 0), 0);
 
   const [saindo, setSaindo] = useState(() => new Set());
-  const iniciarRemocao = (customerId) => {
-    setSaindo((prev) => new Set(prev).add(customerId));
-    setTimeout(async () => {
-      try {
-        await removerPassageiro(customerId);
-      } catch {
-        // erro fica visível no ErrorBanner de cima (usePassageiros.erro) —
-        // o card volta a aparecer.
-        setSaindo((prev) => {
-          const next = new Set(prev);
-          next.delete(customerId);
-          return next;
-        });
-      }
-    }, SAIDA_MS);
+  // a ficha removeu o cadastro: a linha sai com transição
+  const aoRemover = useCallback(
+    (customerId) => {
+      setSaindo((prev) => new Set(prev).add(customerId));
+      setTimeout(() => tirarDaLista(customerId), SAIDA_MS);
+    },
+    [tirarDaLista],
+  );
+  const abrir = (p) => {
+    setFicha({ customerId: p.customer_id, inicial: p });
+    setFichaAberta(true);
   };
+  const fechar = useCallback(() => setFichaAberta(false), []);
 
   return (
     <div>
       <Header
         title="Passageiros · CRM"
-        subtitle="Histórico, valor gerado e notas de atendimento por cliente."
+        subtitle="Toque no passageiro para ver as viagens, os endereços e o cadastro."
       />
       <div className="px-4 md:px-10 pb-10">
         {erro && (
@@ -170,16 +119,7 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
               duration={SAIDA_MS}
               {...fadeScale}
             >
-              <PassageiroCard
-                p={p}
-                trips={trips}
-                aberto={aberto === p.customer_id}
-                onToggle={() => setAberto(aberto === p.customer_id ? null : p.customer_id)}
-                onSalvarNota={salvarNota}
-                onSalvarPerfil={salvarPerfil}
-                onRemover={iniciarRemocao}
-                onAgendar={onAgendar}
-              />
+              <LinhaDoPassageiro p={p} onAbrir={() => abrir(p)} />
             </Presence>
           ))}
           {loading && passageiros.length > 0 && (
@@ -191,7 +131,7 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
             <button
               type="button"
               onClick={carregarMais}
-              className="btn-press w-full py-2.5 rounded-lg text-xs font-medium"
+              className="btn-press w-full min-h-[44px] rounded-lg text-xs font-medium"
               style={{ background: C.panel2, color: C.inkSoft, border: `1px solid ${C.border}` }}
             >
               Carregar mais ({total - passageiros.length} restantes)
@@ -199,323 +139,52 @@ export default function PassageirosTab({ trips, deepLink, onAgendar }) {
           )}
         </div>
       </div>
+      <FichaDoPassageiro
+        ficha={ficha}
+        aberta={fichaAberta}
+        onFechar={fechar}
+        trips={trips}
+        onAgendar={onAgendar}
+        onAlterado={atualizarNaLista}
+        onRemovido={aoRemover}
+      />
     </div>
   );
 }
 
-function classificacao(viagensCount) {
-  if (viagensCount >= 5) return "Frequente";
-  if (viagensCount >= 2) return "Recorrente";
-  return "Novo";
-}
-
-function PassageiroCard({
-  p,
-  trips,
-  aberto,
-  onToggle,
-  onSalvarNota,
-  onSalvarPerfil,
-  onRemover,
-  onAgendar,
-}) {
-  const { viagens, loading } = usePassageiroDetalhe(aberto ? p.customer_id : null);
-  const enderecosIda = useMemo(
-    () =>
-      enderecosFrequentes(
-        viagens.filter((v) => v.direcao === "ida"),
-        (v) => enderecoEmbarque(v, trips) || v.bairro,
-      ),
-    [viagens, trips],
-  );
-  const enderecosVolta = useMemo(
-    () =>
-      enderecosFrequentes(
-        viagens.filter((v) => v.direcao === "volta"),
-        (v) => v.desembarque || enderecoEmbarque(v, trips),
-      ),
-    [viagens, trips],
-  );
-  const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState(null);
-  const [erroForm, setErroForm] = useState("");
-  const [salvando, setSalvando] = useState(false);
-
-  const abrirEdicao = () => {
-    setForm({
-      nome: p.nome || "",
-      telefone: p.telefone || "",
-      telefone2: p.telefone2 || "",
-      pontoPadrao: p.ponto_padrao || "",
-      pagamentoPadrao: p.pagamento_padrao || "",
-    });
-    setErroForm("");
-    setEditando(true);
-  };
-
-  const salvarEdicao = async () => {
-    const problema = primeiroErro([
-      validarNome(form.nome),
-      validarTelefone(form.telefone),
-      form.telefone2.trim() ? validarTelefone(form.telefone2) : null,
-    ]);
-    if (problema) {
-      setErroForm(problema);
-      return;
-    }
-    setSalvando(true);
-    try {
-      await onSalvarPerfil(p.customer_id, {
-        name: form.nome.trim(),
-        phone: validarTelefone(form.telefone).valor,
-        phoneSecondary: form.telefone2.trim() ? validarTelefone(form.telefone2).valor : null,
-        defaultRoutePointCode: form.pontoPadrao || null,
-        defaultPaymentMethod: form.pagamentoPadrao || null,
-      });
-      setEditando(false);
-    } catch (e) {
-      setErroForm(mensagemAmigavel(e, "Não foi possível salvar o cadastro."));
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const removerCadastro = () => {
-    if (
-      !window.confirm(
-        `Remover o cadastro de ${p.nome}? O histórico de viagens é mantido, mas o passageiro some da lista.`,
-      )
-    )
-      return;
-    onRemover(p.customer_id);
-  };
-
-  const tel = digitos(p.telefone);
-  const iniciais = (p.nome || "?")
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-
+function LinhaDoPassageiro({ p, onAbrir }) {
   return (
-    <Card className="anim-fadeUp">
-      <div className="w-full flex items-center justify-between gap-3">
-        <button
-          type="button"
-          className="flex-1 flex items-center gap-3 min-w-0 text-left"
-          onClick={onToggle}
+    <Card className="anim-fadeUp !p-0">
+      <button
+        type="button"
+        className="btn-press w-full flex items-center gap-3 min-w-0 text-left p-4"
+        onClick={onAbrir}
+      >
+        <span
+          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+          style={{
+            background: C.amberSoft,
+            color: C.brandText,
+            border: `1px solid ${C.brandDim}55`,
+          }}
         >
-          <span
-            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-            style={{
-              background: C.amberSoft,
-              color: C.brandText,
-              border: `1px solid ${C.brandDim}55`,
-            }}
-          >
-            {iniciais}
-          </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-medium break-words">
-              {p.nome}{" "}
-              <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
-                · {p.telefone}
-                {p.telefone2 ? ` · ${p.telefone2}` : ""}
-              </span>
-            </span>
-            <span className="block text-xs mt-0.5 break-words" style={{ color: C.inkSoft }}>
-              {p.ultima_data ? `última ${fmtDate(p.ultima_data)}` : "sem viagens"} ·{" "}
-              <b style={{ color: C.brandText }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
+          {iniciaisDe(p.nome)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium break-words">
+            {p.nome}{" "}
+            <span className="font-normal text-xs" style={{ color: C.inkSoft }}>
+              · {p.telefone}
             </span>
           </span>
-        </button>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              if (!aberto) onToggle();
-              abrirEdicao();
-            }}
-            aria-label={`Editar cadastro de ${p.nome}`}
-            className="btn-press p-1.5 rounded-md"
-            style={{ color: C.inkFaint }}
-          >
-            <Pencil size={13} />
-          </button>
-          <Pill>{classificacao(p.viagens_count)}</Pill>
-          <button type="button" onClick={onToggle} aria-label={aberto ? "Recolher" : "Expandir"}>
-            <ChevronRight
-              size={14}
-              style={{
-                color: C.inkFaint,
-                transform: aberto ? "rotate(90deg)" : "none",
-                transition: "transform .15s",
-              }}
-            />
-          </button>
-        </div>
-      </div>
-      {aberto && (
-        <div
-          className="anim-slideDown mt-3 pt-3 border-t grid sm:grid-cols-2 gap-3"
-          style={{ borderColor: C.borderSoft }}
-        >
-          <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-            <EnderecosFreq titulo="Embarque (ida)" itens={loading ? [] : enderecosIda} />
-            <EnderecosFreq titulo="Desembarque (volta)" itens={loading ? [] : enderecosVolta} />
-          </div>
-          <EnderecoDeCostume p={p} trips={trips} onAgendar={onAgendar} />
-          <div className="text-xs space-y-1" style={{ color: C.inkSoft }}>
-            <div>
-              Passagens: <b style={{ color: C.ink }}>{p.total_passagens}</b>
-            </div>
-            <div>
-              Viagens: <b style={{ color: C.ink }}>{p.viagens_count}</b>
-            </div>
-            <div>
-              Cancelamentos: <b style={{ color: C.ink }}>{p.cancelamentos}</b>
-            </div>
-            <div>
-              Não compareceu: <b style={{ color: C.ink }}>{p.nao_compareceu}</b>
-            </div>
-            {tel && (
-              <a
-                href={`https://wa.me/55${tel}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-press mt-2 flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
-                style={{ background: C.panel2, color: C.inkSoft }}
-              >
-                <MessageCircle size={12} /> Abrir WhatsApp
-              </a>
-            )}
-          </div>
-          <div>
-            <Field label="Notas do CRM">
-              <textarea
-                key={p.customer_id}
-                defaultValue={p.notes || ""}
-                onBlur={(e) =>
-                  e.target.value !== (p.notes || "") && onSalvarNota(p.customer_id, e.target.value)
-                }
-                rows={4}
-                className={inputCls}
-                style={inputStyle}
-                placeholder="Preferências, observações, combinados…"
-              />
-            </Field>
-          </div>
-          <div className="sm:col-span-2 rounded-lg p-3" style={{ background: C.panel2 }}>
-            {editando && form ? (
-              <>
-                <div className="text-xs font-semibold mb-2" style={{ color: C.ink }}>
-                  Editar cadastro
-                </div>
-                {erroForm && (
-                  <div className="text-xs mb-2" style={{ color: C.red }}>
-                    {erroForm}
-                  </div>
-                )}
-                <div className="grid sm:grid-cols-2 gap-2">
-                  <Field label="Nome">
-                    <TextInput
-                      value={form.nome}
-                      onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Telefone">
-                    <TextInput
-                      inputMode="tel"
-                      value={form.telefone}
-                      onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Telefone secundário (opcional)">
-                    <TextInput
-                      inputMode="tel"
-                      value={form.telefone2}
-                      onChange={(e) => setForm({ ...form, telefone2: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Ponto de embarque padrão (opcional)">
-                    <Select
-                      value={form.pontoPadrao}
-                      onChange={(e) => setForm({ ...form, pontoPadrao: e.target.value })}
-                    >
-                      <option value="">— nenhum —</option>
-                      {(trips?.ida?.pontos || []).map((pt) => (
-                        <option key={pt.id} value={pt.id}>
-                          {pt.nome}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Pagamento padrão (opcional)">
-                    <Select
-                      value={form.pagamentoPadrao}
-                      onChange={(e) => setForm({ ...form, pagamentoPadrao: e.target.value })}
-                    >
-                      <option value="">— nenhum —</option>
-                      {FORMAS_PAGAMENTO.map((f) => (
-                        <option key={f.valor} value={f.valor}>
-                          {f.rotulo}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                </div>
-                <div className="flex items-center gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={salvarEdicao}
-                    disabled={salvando}
-                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
-                    style={{ background: C.amber, color: C.onBrand }}
-                  >
-                    <Save size={13} /> {salvando ? "Salvando…" : "Salvar"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditando(false)}
-                    disabled={salvando}
-                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
-                    style={{ background: C.panel, color: C.inkSoft }}
-                  >
-                    <X size={13} /> Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={removerCadastro}
-                    disabled={salvando}
-                    aria-label={`Remover cadastro de ${p.nome}`}
-                    className="btn-press flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md ml-auto disabled:opacity-40"
-                    style={{ background: C.redSoft, color: C.red }}
-                  >
-                    <Trash2 size={13} /> Remover cadastro
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="text-xs flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.inkSoft }}>
-                <span>
-                  Ponto padrão:{" "}
-                  <b style={{ color: C.ink }}>
-                    {(trips?.ida?.pontos || []).find((pt) => pt.id === p.ponto_padrao)?.nome ||
-                      "não definido"}
-                  </b>
-                </span>
-                <span>
-                  Pagamento padrão:{" "}
-                  <b style={{ color: C.ink }}>
-                    {p.pagamento_padrao ? rotuloPagamento(p.pagamento_padrao) : "não definido"}
-                  </b>
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+          <span className="block text-xs mt-0.5 break-words" style={{ color: C.inkSoft }}>
+            {p.ultima_data ? `última ${fmtDate(p.ultima_data)}` : "sem viagens"} ·{" "}
+            <b style={{ color: C.brandText }}>{fmtBRL(Number(p.total_gasto || 0))}</b> gerados
+          </span>
+        </span>
+        <Pill>{classificacao(p.viagens_count)}</Pill>
+        <ChevronRight size={16} style={{ color: C.inkFaint }} className="shrink-0" />
+      </button>
     </Card>
   );
 }

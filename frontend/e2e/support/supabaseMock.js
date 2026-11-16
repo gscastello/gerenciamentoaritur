@@ -790,6 +790,11 @@ export async function mockSupabase(page, opts = {}) {
       ];
     else if (table === "route_points") rows = ROUTE_POINTS;
     else if (table === "settings") rows = SETTINGS;
+    else if (table === "v_reservations_flat" && url.searchParams.get("customer_id"))
+      // histórico do passageiro no CRM (issue #436)
+      rows = reservations.filter(
+        (r) => r.customer_id === url.searchParams.get("customer_id").replace("eq.", ""),
+      );
     else if (table === "v_reservations_flat")
       rows = reservations.map((r) =>
         buscaOverride[r.id] ||
@@ -1001,7 +1006,11 @@ export async function mockSupabase(page, opts = {}) {
       return route.fulfill(json(wantsObject ? updated : [updated]));
     } else if (table === "app_error_log") rows = errorLogRows.filter((e) => !e.resolved_at);
     else if (table === "v_diagnostico_reservas") rows = opts.diagnostico ?? [];
-    else if (table === "v_customers_stats") {
+    else if (table === "v_customers_stats" && url.searchParams.get("customer_id")) {
+      // a ficha de UM passageiro (issue #438)
+      const id = url.searchParams.get("customer_id").replace("eq.", "");
+      return route.fulfill(json(customersStatsRows.find((c) => c.customer_id === id) ?? null));
+    } else if (table === "v_customers_stats") {
       rows = customersStatsRows;
       return route.fulfill(
         json(rows, 200, { "content-range": `0-${Math.max(rows.length - 1, 0)}/${rows.length}` }),

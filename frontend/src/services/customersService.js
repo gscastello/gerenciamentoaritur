@@ -16,6 +16,8 @@ async function handle(promise, context) {
 }
 
 const CUSTOMER_COLS = "id, name, phone, notes, default_neighborhood, created_at";
+const STATS_COLS =
+  "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2";
 
 export const customersService = {
   async list({ search } = {}) {
@@ -47,10 +49,7 @@ export const customersService = {
   async listStats({ search, de = 0, ate = 24 } = {}) {
     let query = supabase
       .from("v_customers_stats")
-      .select(
-        "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2",
-        { count: "exact" },
-      )
+      .select(STATS_COLS, { count: "exact" })
       .order("total_gasto", { ascending: false })
       .order("ultima_data", { ascending: false, nullsFirst: false })
       .range(de, ate);
@@ -74,6 +73,21 @@ export const customersService = {
   },
 
   /**
+   * O resumo de UM passageiro (v_customers_stats) — a ficha aberta pela Agenda ou pela lista
+   * (issue #438). `null` quando o cadastro foi removido.
+   */
+  async getStats(customerId) {
+    return handle(
+      supabase
+        .from("v_customers_stats")
+        .select(STATS_COLS)
+        .eq("customer_id", customerId)
+        .maybeSingle(),
+      "getStats",
+    );
+  },
+
+  /**
    * Histórico "achatado" de UM cliente (v_reservations_flat) — carregado
    * só quando o card do passageiro abre. Traz os campos de endereço para
    * calcular os endereços mais usados.
@@ -83,10 +97,11 @@ export const customersService = {
       supabase
         .from("v_reservations_flat")
         .select(
-          "id, data, direcao, status, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
+          "id, data, direcao, status, tipo, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
         )
         .eq("customer_id", customerId)
-        .order("criadoEm", { ascending: false })
+        // as 400 viagens mais recentes pela data da viagem (histórico do CRM, issue #436)
+        .order("data", { ascending: false })
         .limit(400),
       "getHistoryFlat",
     );

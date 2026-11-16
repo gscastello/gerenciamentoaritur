@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Sunrise,
   Truck,
+  UserRound,
   Users,
   X,
   X as XIcon,
@@ -98,6 +99,7 @@ import {
 } from "../tabShared.jsx";
 import AvisarPassageiros from "./AvisarPassageiros.jsx";
 import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
+import FichaDoPassageiro from "./FichaDoPassageiro.jsx";
 import LixeiraReservas from "./LixeiraReservas.jsx";
 import MapaDosLugares from "./MapaDosLugares.jsx";
 
@@ -133,9 +135,20 @@ export default function AgendaTab({
   deepLink,
   onAgendar,
   pedidoEncomenda = null,
+  // ficha do passageiro pela Agenda (issue #438): só quem enxerga Passageiros
+  podeVerPassageiro = false,
+  onAgendarPassageiro = null,
   podeAvisar = false,
 }) {
   const [data, setData] = useState(diaAgendaPadrao());
+  const [ficha, setFicha] = useState(null);
+  const [fichaAberta, setFichaAberta] = useState(false);
+  const verPassageiro = podeVerPassageiro
+    ? (r) => {
+        setFicha({ customerId: r.customer_id });
+        setFichaAberta(true);
+      }
+    : null;
   useDeepLinkData(deepLink, setData);
   // lugares da viagem do dia em cada sentido: ônibus 31 ou van reserva 15 (issue #408)
   const capDe = (dir) => capacidadeDe?.(data, dir) ?? capacidade;
@@ -719,6 +732,7 @@ export default function AgendaTab({
             trips={trips}
             onStatus={atualizarStatus}
             onEditar={setEditando}
+            onVerPassageiro={verPassageiro}
             onExtra={alternarExtra}
             onNovoExtra={() => setExtraModal({ direcao: dir })}
             encomendas={encomendasAgendadas}
@@ -729,6 +743,14 @@ export default function AgendaTab({
             aviso={podeAvisar ? { data, reservas, segundaAtiva: segundaAtiva !== false } : null}
           />
         ))}
+
+        <FichaDoPassageiro
+          ficha={ficha}
+          aberta={fichaAberta}
+          onFechar={() => setFichaAberta(false)}
+          trips={trips}
+          onAgendar={onAgendarPassageiro}
+        />
 
         <LixeiraReservas
           reservas={reservas}
@@ -845,7 +867,16 @@ function GruposDeBusca({ itens, trips }) {
 // dentro de "Editar reserva".
 // Menu "⋯" da linha (crítica de design, issue #393): as ações raras saem do caminho do dedo.
 // Abre de baixo, com itens de 48 px; Cancelar fica por último, em vermelho de texto.
-function AcoesDaReserva({ r, aberto, onFechar, onStatus, onEditar, onExtra, textoCopia }) {
+function AcoesDaReserva({
+  r,
+  aberto,
+  onFechar,
+  onStatus,
+  onEditar,
+  onExtra,
+  onVerPassageiro,
+  textoCopia,
+}) {
   const [copiado, setCopiado] = useState("");
   const tel2 = digitos(r.telefone2);
   if (!aberto) return null;
@@ -901,6 +932,12 @@ function AcoesDaReserva({ r, aberto, onFechar, onStatus, onEditar, onExtra, text
           fechar();
           onEditar(r);
         })}
+        {onVerPassageiro &&
+          r.customer_id &&
+          item(UserRound, "Ver passageiro", () => {
+            fechar();
+            onVerPassageiro(r);
+          })}
         {textoCopia &&
           item(
             copiado === "ok" ? Check : Copy,
@@ -948,7 +985,7 @@ function AcoesDaReserva({ r, aberto, onFechar, onStatus, onEditar, onExtra, text
 // procura); embaixo, o nome, o valor e o que for exceção. Ligar e WhatsApp em ícones de 44 px;
 // o resto no "⋯". Status por texto e ícone, sem cor — o laranja fica só para quem desce numa
 // cidade do caminho (pedido do dono).
-function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
+function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassageiro }) {
   const [menu, setMenu] = useState(false);
   const embarcado = r.status === "embarcado";
   const marcado = embarcado || r.status === "nao_compareceu";
@@ -1118,6 +1155,7 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
         onStatus={onStatus}
         onEditar={onEditar}
         onExtra={onExtra}
+        onVerPassageiro={onVerPassageiro}
         textoCopia={textoCopia}
       />
     </div>
@@ -1367,6 +1405,7 @@ function ViagemOperacional({
   trips,
   onStatus,
   onEditar,
+  onVerPassageiro,
   onExtra,
   onNovoExtra,
   onSalvarBusca,
@@ -1524,6 +1563,7 @@ function ViagemOperacional({
                       onStatus={onStatus}
                       onEditar={editarLinha}
                       onExtra={onExtra}
+                      onVerPassageiro={onVerPassageiro}
                     />
                   ))}
                 </div>
@@ -1559,6 +1599,7 @@ function ViagemOperacional({
                   trips={trips}
                   onStatus={onStatus}
                   onEditar={editarLinha}
+                  onVerPassageiro={onVerPassageiro}
                 />
               ))}
             </div>
@@ -1602,6 +1643,7 @@ function ViagemOperacional({
                     onStatus={onStatus}
                     onEditar={onEditar}
                     onExtra={onExtra}
+                    onVerPassageiro={onVerPassageiro}
                   />
                 ))}
               </div>
