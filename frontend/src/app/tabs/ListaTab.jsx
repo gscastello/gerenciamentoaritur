@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { resumoDaEncomenda } from "../../domain/agendaLinha.js";
 import { ordenarBusca } from "../../domain/buscaEmCasa.js";
-import { desembarqueDaIda } from "../../domain/desembarqueDaIda.js";
 import { rotuloPagamento } from "../../domain/format.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import {
@@ -123,12 +122,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
     }
   };
   const salvarOrdem = (ids) => R.reorderPickup(ids);
-  // desembarque da Ida (issue #428): por cidade, na ordem da entrega salva em "Organizar"
-  const salvarOrdemDesembarque = (ids) => R.reorderDropoff(ids);
-  const desembarque = useMemo(() => desembarqueDaIda(reservas, data), [reservas, data]);
-  const paxDaIda = [...desembarque.cantanhede, ...desembarque.pirapemas, ...desembarque.outros]
-    .filter((r) => OCUPA_VAGA.includes(r.status) && r.tipo !== "encomenda")
-    .reduce((s, r) => s + r.quantidade, 0);
   // inclui quem já foi marcado "não compareceu" (some da contagem de pax,
   // mas o motorista ainda vê e pode reverter).
   const naRota = [
@@ -153,7 +146,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
         title="Rota"
         subtitle={
           subview === "desembarque"
-            ? "Ida: onde deixamos cada passageiro em Cantanhede e Pirapemas, na ordem da entrega."
+            ? "Anote onde cada passageiro desce, organize na ordem da entrega e copie."
             : "Volta: quem buscamos em casa em Pirapemas e Cantanhede, na ordem da rota."
         }
       />
@@ -169,9 +162,7 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             <b className="capitalize" style={{ color: C.ink }}>
               {data === todayStr() ? "Hoje" : diaSemana(data)}
             </b>{" "}
-            {subview === "desembarque" ? (
-              <>· Ida · {paxDaIda} passageiros</>
-            ) : (
+            {subview !== "desembarque" && (
               <>
                 · {ativos.reduce((s, r) => s + r.quantidade, 0)} passageiros ·{" "}
                 {ativos
@@ -204,40 +195,9 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             { id: "desembarque", label: "Desembarque", Icon: MapPin },
           ]}
         />
-        {/* desembarque da Ida por cidade, na ordem da entrega (issue #428); a lista anotada fica abaixo */}
-        {subview === "desembarque" && (
-          <>
-            <ListaSecao
-              onOrdenar={salvarOrdemDesembarque}
-              titulo="CANTANHEDE"
-              itens={desembarque.cantanhede}
-              trips={trips}
-              onAbrir={setResumo}
-              endereco={enderecoDoDesembarque}
-              vazio="Ninguém desce aqui."
-            />
-            <ListaSecao
-              onOrdenar={salvarOrdemDesembarque}
-              titulo="PIRAPEMAS"
-              itens={desembarque.pirapemas}
-              trips={trips}
-              onAbrir={setResumo}
-              endereco={enderecoDoDesembarque}
-              vazio="Ninguém desce aqui."
-            />
-            {desembarque.outros.length > 0 && (
-              <ListaSecao
-                onOrdenar={salvarOrdemDesembarque}
-                titulo="OUTRAS PARADAS E SEM DESEMBARQUE"
-                itens={desembarque.outros}
-                trips={trips}
-                onAbrir={setResumo}
-                endereco={enderecoDoDesembarque}
-              />
-            )}
-            <ListaDesembarqueAnotada data={data} />
-          </>
-        )}
+        {/* só a lista anotada na viagem, com Organizar e Copiar (issue #440); o desembarque da Ida por
+            cidade (issue #428) saiu a pedido do dono */}
+        {subview === "desembarque" && <ListaDesembarqueAnotada data={data} />}
         {subview === "embarque" && (
           <>
             {pendentes.length > 0 && (
@@ -295,11 +255,6 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
   );
 }
 
-/** Onde o passageiro da Ida desce (issue #428). */
-function enderecoDoDesembarque(r) {
-  return r.desembarque || "desembarque não informado";
-}
-
 function ListaSecao({
   titulo,
   itens,
@@ -308,7 +263,6 @@ function ListaSecao({
   buscar,
   onAbrir,
   onOrdenar,
-  endereco,
   vazio = "Ninguém neste ponto.",
 }) {
   const [organizando, setOrganizando] = useState(false);
@@ -369,7 +323,6 @@ function ListaSecao({
           trips={trips}
           onSalvar={onOrdenar}
           onFechar={() => setOrganizando(false)}
-          endereco={endereco}
         />
       ) : itens.length === 0 ? (
         <div className="text-xs py-2" style={{ color: C.inkFaint }}>
@@ -385,7 +338,6 @@ function ListaSecao({
               marcar={marcar}
               buscar={buscar}
               onAbrir={onAbrir}
-              endereco={endereco}
             />
           ))}
         </div>
@@ -399,14 +351,12 @@ function ListaSecao({
 // endereço completo e contato. Tudo o resto (status, pagamento, mover,
 // cancelar, "não veio", desembarque) fica no botão "ver reserva
 // completa" à direita.
-function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir, endereco: enderecoDe }) {
+function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const tel = digitos(r.telefone);
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
   const ehEnc = r.tipo === "encomenda";
-  const endereco = enderecoDe
-    ? enderecoDe(r)
-    : enderecoEmbarque(r, trips) || "endereço não informado";
+  const endereco = enderecoEmbarque(r, trips) || "endereço não informado";
   const cidadeIntermediaria = useCidadeIntermediaria(r);
   // crítica de design (issue #393): uma linha por passageiro, sem cartão dentro do cartão;
   // Ligar e WhatsApp em ícones de 44 px; o resto em "ver reserva completa"

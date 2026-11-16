@@ -152,7 +152,6 @@ export function useReservationsWindow(fromDate, toDate) {
   const setQty = useAsyncAction(reservationsService.setQuantity);
   const updateContact = useAsyncAction(reservationsService.updateCustomerContact);
   const setDrop = useAsyncAction(reservationsService.setDropoff);
-  const reorderDrop = useAsyncAction(reservationsService.reorderDropoff);
   const pickupTransp = useAsyncAction(reservationsService.setPickupTransport);
   const pickupMany = useAsyncAction(reservationsService.setPickupTransportMany);
   const reorderPick = useAsyncAction(reservationsService.reorderPickup);
@@ -215,7 +214,6 @@ export function useReservationsWindow(fromDate, toDate) {
     setQuantity: useCallback((id, qty) => after(setQty.run(id, qty)), [after, setQty]),
     updateContact: useCallback((customerId, fields) => after(updateContact.run(customerId, fields)), [after, updateContact]),
     setDropoff: useCallback((id, v) => after(setDrop.run(id, v)), [after, setDrop]),
-    reorderDropoff: useCallback((ids) => after(reorderDrop.run(ids)), [after, reorderDrop]),
     setPickupTransport: useCallback(
       (id, mode) =>
         otimista(
