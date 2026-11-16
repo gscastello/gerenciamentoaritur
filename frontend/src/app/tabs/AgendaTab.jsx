@@ -6,6 +6,7 @@ import {
   Clock,
   Copy,
   Hourglass,
+  Megaphone,
   MessageCircle,
   MoreHorizontal,
   NotebookPen,
@@ -54,6 +55,7 @@ import {
 } from "../../domain/validacao.js";
 import { useCustomerLookup } from "../../hooks/useCustomerLookup.js";
 import { useLocaisOutros } from "../../hooks/useLocaisOutros.js";
+import { copiarTexto } from "../../lib/clipboard.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
 import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
@@ -94,6 +96,7 @@ import {
   useDeepLinkData,
   useDropoff,
 } from "../tabShared.jsx";
+import AvisarPassageiros from "./AvisarPassageiros.jsx";
 import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
 import LixeiraReservas from "./LixeiraReservas.jsx";
 import MapaDosLugares from "./MapaDosLugares.jsx";
@@ -130,6 +133,7 @@ export default function AgendaTab({
   deepLink,
   onAgendar,
   pedidoEncomenda = null,
+  podeAvisar = false,
 }) {
   const [data, setData] = useState(diaAgendaPadrao());
   useDeepLinkData(deepLink, setData);
@@ -721,6 +725,8 @@ export default function AgendaTab({
             onEditarEncomenda={(r) => setEncomendaModal({ editar: r })}
             onSalvarBusca={salvarBusca}
             onAnotar={criarViaAnotacao}
+            // "Avisar passageiros" pelo WhatsApp (issue #432): só admin e atendente
+            aviso={podeAvisar ? { data, reservas, segundaAtiva: segundaAtiva !== false } : null}
           />
         ))}
 
@@ -775,28 +781,6 @@ export default function AgendaTab({
       )}
     </div>
   );
-}
-// Copia para a área de transferência (com plano B para navegadores sem a API)
-// e mostra "Copiado" por um instante.
-async function copiarTexto(texto) {
-  try {
-    await navigator.clipboard.writeText(texto);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = texto;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
 }
 function BotaoCopiar({ texto, label = "Copiar", cor, title }) {
   const [estado, setEstado] = useState("");
@@ -999,6 +983,12 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra }) {
       ? `${STATUS_META[r.status]?.emoji || ""} ${STATUS_META[r.status]?.label || r.status}`
       : ehEnc && embarcado
         ? "✓ Entregue"
+        : null,
+    // resposta ao "você confirma a viagem?" (issue #434)
+    r.extra?.presenca?.resposta === "sim"
+      ? "✓ Confirmou"
+      : r.extra?.presenca?.resposta === "nao"
+        ? "✗ Disse que não vai"
         : null,
   ].filter(Boolean);
   const icone = "btn-press w-10 h-11 rounded-xl flex items-center justify-center shrink-0";
@@ -1383,8 +1373,10 @@ function ViagemOperacional({
   onAnotar,
   encomendas = [],
   onEditarEncomenda,
+  aviso = null,
 }) {
   const viagem = trips[direcao];
+  const [avisando, setAvisando] = useState(false);
   const [editandoBusca, setEditandoBusca] = useState(false);
   const doGrupo = doDia.filter((r) => r.direcao === direcao);
   // Encomendas agendadas ficam no ponto de embarque, junto das passagens, mas
@@ -1431,6 +1423,16 @@ function ViagemOperacional({
           pendentes={pendentesQtd}
           direcao={direcao}
         />
+        {aviso && (
+          <button
+            type="button"
+            onClick={() => setAvisando(true)}
+            className="btn-press mt-3 w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-[14px] font-semibold"
+            style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+          >
+            <Megaphone size={16} /> Avisar passageiros
+          </button>
+        )}
         <p className="text-[13px] mt-3 leading-relaxed" style={{ color: C.inkSoft }}>
           {pendentesQtd > 0 &&
             `${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"} · `}
@@ -1607,6 +1609,17 @@ function ViagemOperacional({
           </div>
         )}
       </div>
+      {avisando && aviso && (
+        <AvisarPassageiros
+          data={aviso.data}
+          direcao={direcao}
+          reservas={aviso.reservas}
+          pontos={viagem.pontos}
+          segundaAtiva={aviso.segundaAtiva}
+          segundaHoras={segundaHoras}
+          onFechar={() => setAvisando(false)}
+        />
+      )}
     </section>
   );
 }
