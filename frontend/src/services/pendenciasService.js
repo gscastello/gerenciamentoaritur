@@ -5,7 +5,8 @@
 // que precisa da equipe (bot transferiu p/ humano, ou alguém abriu
 // manualmente). Fica aberta até "Resolver".
 
-import { supabase, ServiceError } from "../lib/supabaseClient";
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
+import { ServiceError, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
   return /fetch|network|timeout/i.test(error?.message || "");
@@ -14,12 +15,15 @@ function isNetworkish(error) {
 export const pendenciasService = {
   /** Pendências abertas (mais recentes primeiro). */
   async list() {
-    const { data, error } = await supabase
-      .from("v_pendencias_atendimento")
-      .select(
-        "id, source, phone, customer_id, assunto, detail, status, meta, created_at, cliente, aberto_por",
-      )
-      .order("created_at", { ascending: false });
+    const { data, error } = await buscarTodasAsPaginas(() =>
+      supabase
+        .from("v_pendencias_atendimento")
+        .select(
+          "id, source, phone, customer_id, assunto, detail, status, meta, created_at, cliente, aberto_por",
+        )
+        .order("created_at", { ascending: false })
+        .order("id"),
+    );
     if (error) {
       throw new ServiceError(`list: ${error.message}`, {
         cause: error,

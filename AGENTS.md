@@ -287,6 +287,16 @@ anima entrada/saída; `prefers-reduced-motion` desliga transições.
   **corta o resto sem erro**. A janela de reservas da Agenda passou disso e as reservas mais novas sumiram do app (um
   passageiro não foi embarcado). Toda lista que pode passar de 1.000 usa `buscarTodasAsPaginas` (`src/lib/paginas.js`),
   com ordem estável (criação + id); nunca `.limit(N)` acima de 1.000 achando que vem tudo.
+- **Nada de dado incompleto ou velho calado** (issue #444, crítico): três travas além da paginação. (1) A guarda do
+  cliente (`src/lib/guardaDeListas.js`, ligada no `supabaseClient`) olha toda leitura: 1.000 linhas num pedido sem
+  `offset` = lista cortada → faixa "Lista incompleta" na tela (`AvisoListaCortada`) e erro `LISTA_CORTADA` no registro.
+  (2) O teste `services/__tests__/listasSemCorte.test.js` falha quando um service ganha lista sem limite, sem paginação
+  e fora da lista de tabelas pequenas (com o motivo). (3) O tempo real perde eventos com a conexão caída:
+  `useRealtimeTable` relê ao reconectar, ao voltar para a frente (15 s ou mais escondido) e quando a internet volta; a
+  janela de reservas relê também de 2 em 2 minutos. `useSupabaseQuery` só deixa a leitura mais nova escrever na tela.
+  O app instalado procura versão nova de hora em hora e ao voltar para a frente (`PWAUpdatePrompt`).
+- **Quem não está logado não tem grant em tabela nenhuma** (`database/117`): tabela nova não ganha grant para `anon`;
+  RPC `security definer` chamada pelo app confere o papel (`fn_has_role`) e usa `auth.uid()` como autor.
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.

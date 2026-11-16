@@ -4,6 +4,7 @@
 // documentos dos veículos, seguro, parcelas. Quitar passa pela RPC, que já
 // agenda o próximo quando a conta se repete. Remover é soft delete.
 
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -24,13 +25,16 @@ export const vencimentosService = {
   async listar() {
     const desde = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
     return handle(
-      supabase
-        .from("vencimentos")
-        .select(
-          "id, titulo, categoria, vehicle_id, vence_em, valor, recorrencia, avisar_dias, quitado_em, notas",
-        )
-        .or(`quitado_em.is.null,quitado_em.gte.${desde}`)
-        .order("vence_em"),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("vencimentos")
+          .select(
+            "id, titulo, categoria, vehicle_id, vence_em, valor, recorrencia, avisar_dias, quitado_em, notas",
+          )
+          .or(`quitado_em.is.null,quitado_em.gte.${desde}`)
+          .order("vence_em")
+          .order("id"),
+      ),
       "listarVencimentos",
     );
   },
@@ -66,11 +70,15 @@ export const vencimentosService = {
   /** Receitas desde `desde` (para a estimativa do DAS). */
   async receitasDesde(desde) {
     return handle(
-      supabase
-        .from("financial_entries")
-        .select("entry_date, amount, type")
-        .eq("type", "receita")
-        .gte("entry_date", desde),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("financial_entries")
+          .select("entry_date, amount, type")
+          .eq("type", "receita")
+          .gte("entry_date", desde)
+          .order("entry_date")
+          .order("id"),
+      ),
       "receitasDesde",
     );
   },

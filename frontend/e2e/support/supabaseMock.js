@@ -1026,4 +1026,7 @@ export async function mockSupabase(page, opts = {}) {
     const body = wantsObject ? (rows[0] ?? null) : rows;
     return route.fulfill(json(body));
   });
+
+  // para simular o que OUTRA pessoa gravou no banco sem este aparelho receber o evento (issue #444)
+  return { adicionarReserva: (r) => reservations.push({ ...r }) };
 }

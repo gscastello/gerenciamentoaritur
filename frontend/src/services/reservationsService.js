@@ -81,11 +81,14 @@ export const reservationsService = {
    */
   async listPending() {
     return handle(
-      supabase
-        .from("v_reservations_flat")
-        .select(FLAT_SELECT)
-        .in("status", ["pendente", "espera"])
-        .order("criadoEm", { ascending: true }),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("v_reservations_flat")
+          .select(FLAT_SELECT)
+          .in("status", ["pendente", "espera"])
+          .order("criadoEm", { ascending: true })
+          .order("id", { ascending: true }),
+      ),
       { context: "listPending" }
     );
   },

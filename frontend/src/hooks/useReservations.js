@@ -10,12 +10,15 @@
 //   3) expõe ações que, se recusadas pelo banco, devolvem um erro claro
 //      para a tela mostrar (ex.: oferecer lista de espera).
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { reservationsService } from "../services/reservationsService";
 import { paymentsService } from "../services/paymentsService";
 import { useSupabaseQuery } from "./useSupabaseQuery";
 import { useRealtimeTable } from "./useRealtimeTable";
 import { useAsyncAction } from "./useAsyncAction";
+
+const JUNTAR_EVENTOS_MS = 250;
+const CONFERIR_A_AGENDA_MS = 120000;
 
 // status de passageiro (rpc_set_passengers_status) → status "achatado" da
 // reserva na view v_reservations_flat, para o patch otimista.
@@ -135,9 +138,19 @@ export function useReservationsWindow(fromDate, toDate) {
     { enabled: !!fromDate && !!toDate, offlineKey: "reservas-janela" }
   );
 
+  // Uma reserva nova dispara vários eventos de uma vez (reserva, passageiros, pagamento, viagem):
+  // junta a rajada numa leitura só. E relê de 2 em 2 minutos com a tela aberta, além de ao
+  // reconectar/voltar para a frente (useRealtimeTable): a Agenda é a lista que não pode ficar
+  // velha — reserva que não aparece é passageiro que não embarca (issues #442 e #444).
+  const relerRef = useRef(null);
+  useEffect(() => () => clearTimeout(relerRef.current), []);
   useRealtimeTable(
     ["reservations", "reservation_passengers", "payments", "trips"],
-    () => query.refetch()
+    () => {
+      clearTimeout(relerRef.current);
+      relerRef.current = setTimeout(() => query.refetch(), JUNTAR_EVENTOS_MS);
+    },
+    { conferirACada: CONFERIR_A_AGENDA_MS }
   );
 
   const create = useAsyncAction(reservationsService.create);

@@ -36,6 +36,7 @@ import { useViagensDoPeriodo } from "../hooks/useViagensDoPeriodo.js";
 
 import { useVehicles } from "../hooks/useVehicles.js";
 
+import { AvisoListaCortada } from "../ui/AvisoListaCortada.jsx";
 import { AvisoSemInternet } from "../ui/AvisoSemInternet.jsx";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
@@ -1487,6 +1488,7 @@ function AppInner() {
                   fundo={C.amberSoft}
                   texto={C.inkSoft}
                 />
+                <AvisoListaCortada cor={C.red} fundo={C.redSoft} texto={C.inkSoft} />
                 {R.error && !loading && (
                   <div
                     className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
