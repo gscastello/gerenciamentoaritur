@@ -29,14 +29,21 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true, offlineKe
   const [offlineDesde, setOfflineDesde] = useState(null);
   const attemptRef = useRef(0);
   const aliveRef = useRef(true);
+  // Cada leitura ganha um número; só a mais nova pode escrever na tela (issue #444). Sem isso,
+  // trocar rápido de dia/passageiro deixava a resposta atrasada do anterior cair por cima da nova.
+  const pedidoRef = useRef(0);
 
   const run = useCallback(async () => {
     if (!enabled) return;
+    pedidoRef.current += 1;
+    const meuPedido = pedidoRef.current;
+    const valendo = () => aliveRef.current && meuPedido === pedidoRef.current;
     setLoading(true);
     setError(null);
     attemptRef.current = 0;
 
     const usarCopia = () => {
+      if (!valendo()) return false;
       const copia = offlineKey ? lerCopia(offlineKey) : null;
       if (!copia) return false;
       setData(copia.dados);
@@ -48,7 +55,7 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true, offlineKe
       while (attemptRef.current <= MAX_RETRIES) {
         try {
           const result = await fetcher();
-          if (!aliveRef.current) return;
+          if (!valendo()) return;
           setData(result);
           setOfflineDesde(null);
           setLoading(false);
@@ -56,7 +63,7 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true, offlineKe
           return;
         } catch (err) {
           attemptRef.current += 1;
-          if (!aliveRef.current) return;
+          if (!valendo()) return;
           // sem conexão: a cópia guardada já, em vez de insistir
           if (semRede(err) && usarCopia()) return;
           const canRetry = err?.retryable && attemptRef.current <= MAX_RETRIES;
@@ -67,14 +74,13 @@ export function useSupabaseQuery(fetcher, deps = [], { enabled = true, offlineKe
             return;
           }
           await sleep(BASE_DELAY_MS * 2 ** (attemptRef.current - 1));
+          if (!valendo()) return;
         }
       }
     };
     // aparelho sem rede nenhuma: nem tenta (cada leitura levaria segundos para falhar)
     if (typeof navigator !== "undefined" && navigator.onLine === false && usarCopia()) return;
-    const demorou = offlineKey
-      ? setTimeout(() => aliveRef.current && usarCopia(), ESPERA_ANTES_DA_COPIA_MS)
-      : null;
+    const demorou = offlineKey ? setTimeout(() => usarCopia(), ESPERA_ANTES_DA_COPIA_MS) : null;
     try {
       await ler();
     } finally {

@@ -12,6 +12,7 @@
 // Row Level Security (supabase-rls-policies.sql), não o sigilo da chave.
 
 import { createClient } from "@supabase/supabase-js";
+import { fetchComGuarda } from "./guardaDeListas.js";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -97,6 +98,8 @@ export const supabase = createClient(
     realtime: {
       params: { eventsPerSecond: 10 },
     },
+    // acusa leitura cortada em 1.000 linhas (issue #444)
+    global: { fetch: fetchComGuarda() },
   },
 );
 

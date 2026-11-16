@@ -1,4 +1,5 @@
 // src/services/customersService.js
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { digitosDeBusca, variantesTelefone } from "../domain/validacao.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
@@ -21,11 +22,7 @@ const STATS_COLS =
 
 export const customersService = {
   async list({ search } = {}) {
-    let query = supabase
-      .from("customers")
-      .select(CUSTOMER_COLS)
-      .is("deleted_at", null)
-      .order("name");
+    const filtro = [];
     if (search) {
       // `.or()` do PostgREST usa vírgula/parênteses como sintaxe: tirar
       // esses caracteres evita que um termo de busca "vaze" para
@@ -35,10 +32,22 @@ export const customersService = {
         .trim()
         .slice(0, 80);
       const fone = digitosDeBusca(search);
-      if (fone) query = query.or(`phone.ilike.%${fone}%,phone_secondary.ilike.%${fone}%`);
-      else if (termo) query = query.or(`name.ilike.%${termo}%,phone.ilike.%${termo}%`);
+      if (fone) filtro.push(`phone.ilike.%${fone}%,phone_secondary.ilike.%${fone}%`);
+      else if (termo) filtro.push(`name.ilike.%${termo}%,phone.ilike.%${termo}%`);
     }
-    return handle(query, "list");
+    // 712 passageiros em nov/2026: em páginas, para nunca cortar em 1.000 (issue #444)
+    return handle(
+      buscarTodasAsPaginas(() => {
+        const q = supabase
+          .from("customers")
+          .select(CUSTOMER_COLS)
+          .is("deleted_at", null)
+          .order("name")
+          .order("id");
+        return filtro.length ? q.or(filtro[0]) : q;
+      }),
+      "list",
+    );
   },
 
   /**

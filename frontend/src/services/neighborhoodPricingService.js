@@ -5,21 +5,33 @@
 // dela; este serviço é para o painel (Sistema) e para o fluxo de reserva.
 // `neighborhood` é citext — "cohama" e "Cohama" são o mesmo bairro.
 
-import { supabase, ServiceError } from "../lib/supabaseClient";
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
+import { ServiceError, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
   return /fetch|network|timeout/i.test(error?.message || "");
 }
 async function handle(promise, context) {
   const { data, error } = await promise;
-  if (error) throw new ServiceError(`${context}: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+  if (error)
+    throw new ServiceError(`${context}: ${error.message}`, {
+      cause: error,
+      retryable: isNetworkish(error),
+    });
   return data;
 }
 
 export const neighborhoodPricingService = {
   async list() {
+    // 456 bairros em nov/2026 e a tabela cresce: em páginas, para nunca cortar em 1.000 (issue #444)
     return handle(
-      supabase.from("neighborhood_pricing").select("id, neighborhood, price").order("neighborhood"),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("neighborhood_pricing")
+          .select("id, neighborhood, price")
+          .order("neighborhood")
+          .order("id"),
+      ),
       "list",
     );
   },
@@ -30,15 +42,19 @@ export const neighborhoodPricingService = {
       p_neighborhood: neighborhood,
       p_price: price,
     });
-    if (error) throw new ServiceError(`upsert: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar o bairro.", { retryable: false });
+    if (error)
+      throw new ServiceError(`upsert: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível salvar o bairro.", {
+        retryable: false,
+      });
     return data;
   },
 
   async remove(id) {
-    return handle(
-      supabase.from("neighborhood_pricing").delete().eq("id", id),
-      "remove",
-    );
+    return handle(supabase.from("neighborhood_pricing").delete().eq("id", id), "remove");
   },
 };

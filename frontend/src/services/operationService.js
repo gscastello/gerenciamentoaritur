@@ -1,4 +1,5 @@
 // src/services/operationService.js
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -17,15 +18,19 @@ async function handle(promise, context) {
 export const operationService = {
   // ---- combustível --------------------------------------------------
   async listFuelRecords({ vehicleId, from, to } = {}) {
-    let q = supabase
-      .from("fuel_records")
-      .select("*")
-      .is("deleted_at", null)
-      .order("record_date", { ascending: false });
-    if (vehicleId) q = q.eq("vehicle_id", vehicleId);
-    if (from) q = q.gte("record_date", from);
-    if (to) q = q.lte("record_date", to);
-    return handle(q, "listFuelRecords");
+    const montar = () => {
+      let q = supabase
+        .from("fuel_records")
+        .select("*")
+        .is("deleted_at", null)
+        .order("record_date", { ascending: false })
+        .order("id");
+      if (vehicleId) q = q.eq("vehicle_id", vehicleId);
+      if (from) q = q.gte("record_date", from);
+      if (to) q = q.lte("record_date", to);
+      return q;
+    };
+    return handle(buscarTodasAsPaginas(montar), "listFuelRecords");
   },
 
   /** Cria o abastecimento — o lançamento financeiro de despesa é gerado sozinho pela trigger do banco. */
@@ -98,15 +103,19 @@ export const operationService = {
   // ---- manutenção preventiva -----------------------------------------
   /** `vehicleId` omitido busca de toda a frota (comparativo). */
   async listMaintenance({ vehicleId, from, to } = {}) {
-    let q = supabase
-      .from("maintenance")
-      .select("*")
-      .is("deleted_at", null)
-      .order("performed_at", { ascending: false });
-    if (vehicleId) q = q.eq("vehicle_id", vehicleId);
-    if (from) q = q.gte("performed_at", from);
-    if (to) q = q.lte("performed_at", to);
-    return handle(q, "listMaintenance");
+    const montar = () => {
+      let q = supabase
+        .from("maintenance")
+        .select("*")
+        .is("deleted_at", null)
+        .order("performed_at", { ascending: false })
+        .order("id");
+      if (vehicleId) q = q.eq("vehicle_id", vehicleId);
+      if (from) q = q.gte("performed_at", from);
+      if (to) q = q.lte("performed_at", to);
+      return q;
+    };
+    return handle(buscarTodasAsPaginas(montar), "listMaintenance");
   },
 
   /** O lançamento de despesa correspondente é criado sozinho pela trigger. */
@@ -200,12 +209,16 @@ export const operationService = {
   },
 
   async listOccurrences({ tripId } = {}) {
-    let q = supabase
-      .from("operational_occurrences")
-      .select("*")
-      .is("deleted_at", null)
-      .order("occurred_at", { ascending: false });
-    if (tripId) q = q.eq("trip_id", tripId);
-    return handle(q, "listOccurrences");
+    const montar = () => {
+      let q = supabase
+        .from("operational_occurrences")
+        .select("*")
+        .is("deleted_at", null)
+        .order("occurred_at", { ascending: false })
+        .order("id");
+      if (tripId) q = q.eq("trip_id", tripId);
+      return q;
+    };
+    return handle(buscarTodasAsPaginas(montar), "listOccurrences");
   },
 };

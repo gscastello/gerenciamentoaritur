@@ -22,7 +22,9 @@ export const financeService = {
     const lastDay = new Date(year, month, 0).getDate();
     const last = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     return handle(
-      supabase.from("financial_entries").select("*").gte("entry_date", first).lte("entry_date", last).is("deleted_at", null),
+      buscarTodasAsPaginas(() =>
+        supabase.from("financial_entries").select("*").gte("entry_date", first).lte("entry_date", last).is("deleted_at", null).order("entry_date").order("id"),
+      ),
       "listByMonth"
     );
   },
@@ -107,8 +109,11 @@ export const financeService = {
    * esta tela é só cobrança do que falta receber.
    */
   async listContasReceber() {
+    // 870 linhas em nov/2026: sem paginar, a cobrança perderia as contas além de 1.000 (issue #444)
     return handle(
-      supabase.from("v_contas_a_receber").select("*").order("vencimento", { ascending: true, nullsFirst: false }),
+      buscarTodasAsPaginas(() =>
+        supabase.from("v_contas_a_receber").select("*").order("vencimento", { ascending: true, nullsFirst: false }).order("reservation_id"),
+      ),
       "listContasReceber"
     );
   },

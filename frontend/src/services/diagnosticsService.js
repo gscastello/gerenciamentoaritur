@@ -10,6 +10,7 @@
 // trigger. Overbooking, ponto removido, telefone ausente etc. são só
 // reportados (viram alerta interno em `notifications`).
 
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { ServiceError, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -36,9 +37,14 @@ export const diagnosticsService = {
 
   /** Achados atuais (view v_diagnostico_reservas — RLS por papel). */
   async listFindings() {
-    const { data, error } = await supabase
-      .from("v_diagnostico_reservas")
-      .select("kind, reservation_id, trip_id, detail, trip_date");
+    const { data, error } = await buscarTodasAsPaginas(() =>
+      supabase
+        .from("v_diagnostico_reservas")
+        .select("kind, reservation_id, trip_id, detail, trip_date")
+        .order("kind")
+        .order("trip_id")
+        .order("reservation_id"),
+    );
     if (error) {
       throw new ServiceError(`listFindings: ${error.message}`, {
         cause: error,
