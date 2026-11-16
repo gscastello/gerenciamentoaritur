@@ -1,4 +1,5 @@
 // src/services/financeService.js
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
 
 function isNetworkish(error) { return /fetch|network|timeout/i.test(error?.message || ""); }
@@ -29,14 +30,17 @@ export const financeService = {
   /** Ano inteiro — usado pra "lucro real anual" do Dashboard. */
   async listByYear(year) {
     return handle(
-      supabase
-        .from("financial_entries")
-        .select("*")
-        .gte("entry_date", `${year}-01-01`)
-        .lte("entry_date", `${year}-12-31`)
-        .is("deleted_at", null)
-        .order("entry_date", { ascending: false })
-        .limit(4000),
+      // em páginas: o Supabase corta em 1.000 linhas sem erro (issue #442)
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("financial_entries")
+          .select("*")
+          .gte("entry_date", `${year}-01-01`)
+          .lte("entry_date", `${year}-12-31`)
+          .is("deleted_at", null)
+          .order("entry_date", { ascending: false })
+          .order("id"),
+      ),
       "listByYear"
     );
   },

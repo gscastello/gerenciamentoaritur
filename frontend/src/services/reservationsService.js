@@ -7,6 +7,7 @@
 // Leitura é feita direto nas tabelas via SELECT (RLS decide o que cada
 // papel enxerga).
 
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { supabase, getCurrentUserId, ServiceError, isRetryableError } from "../lib/supabaseClient";
 
 // A leitura da UI passa pela view `v_reservations_flat`, que já entrega o
@@ -56,17 +57,20 @@ export const reservationsService = {
       }
       return d;
     };
+    // Em páginas de 1.000 (issue #442): o Supabase corta a resposta em 1.000 linhas sem erro, e a
+    // janela de ~135 dias passou disso — as reservas mais novas sumiam da Agenda e da Rota.
     return handle(
-      supabase
-        .from("v_reservations_flat")
-        .select(FLAT_SELECT)
-        // inclui também as linhas sem data (frete/encomenda, que nascem sem
-        // viagem) — senão elas nunca apareceriam na Agenda.
-        .or(`data.is.null,and(data.gte.${iso(fromDate)},data.lte.${iso(toDate)})`)
-        .order("criadoEm", { ascending: true })
-        // teto de segurança: a janela é de ~135 dias; muito acima disso é
-        // sinal de janela mal configurada, não de operação real.
-        .limit(8000),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("v_reservations_flat")
+          .select(FLAT_SELECT)
+          // inclui também as linhas sem data (frete/encomenda, que nascem sem
+          // viagem) — senão elas nunca apareceriam na Agenda.
+          .or(`data.is.null,and(data.gte.${iso(fromDate)},data.lte.${iso(toDate)})`)
+          .order("criadoEm", { ascending: true })
+          // ordem estável entre as páginas
+          .order("id", { ascending: true }),
+      ),
       { context: "listWindow" }
     );
   },

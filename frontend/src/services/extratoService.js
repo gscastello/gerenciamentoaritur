@@ -4,6 +4,7 @@
 // (sem repetir, pela chave), listar o mês, lançar o que falta pela RPC (o
 // lançamento sai do próprio movimento) e marcar o que não entra.
 
+import { buscarTodasAsPaginas } from "../lib/paginas.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -49,13 +50,16 @@ export const extratoService = {
 
   async listar(de, ate) {
     return handle(
-      supabase
-        .from("extrato_linhas")
-        .select("id, conta, data, valor, descricao, documento, financial_entry_id, ignorada")
-        .gte("data", de)
-        .lte("data", ate)
-        .order("data")
-        .limit(5000),
+      // em páginas: o Supabase corta em 1.000 linhas sem erro (issue #442)
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("extrato_linhas")
+          .select("id, conta, data, valor, descricao, documento, financial_entry_id, ignorada")
+          .gte("data", de)
+          .lte("data", ate)
+          .order("data")
+          .order("id"),
+      ),
       "listarExtrato",
     );
   },
@@ -71,13 +75,15 @@ export const extratoService = {
 
   async lancamentos(de, ate) {
     return handle(
-      supabase
-        .from("financial_entries")
-        .select("id, entry_date, type, amount, category, description")
-        .gte("entry_date", de)
-        .lte("entry_date", ate)
-        .is("deleted_at", null)
-        .limit(5000),
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("financial_entries")
+          .select("id, entry_date, type, amount, category, description")
+          .gte("entry_date", de)
+          .lte("entry_date", ate)
+          .is("deleted_at", null)
+          .order("id"),
+      ),
       "lancamentosDoExtrato",
     );
   },
@@ -85,15 +91,18 @@ export const extratoService = {
   /** Pagamentos de reserva já pagos no Pix/cartão (o dinheiro não passa no banco). */
   async pagamentos(de, ate) {
     return handle(
-      supabase
-        .from("payments")
-        .select("id, amount, paid_at, method, reservation_id")
-        .eq("status", "pago")
-        .in("method", ["pix", "cartao"])
-        .gte("paid_at", `${de}T00:00:00-03:00`)
-        .lte("paid_at", `${ate}T23:59:59-03:00`)
-        .is("deleted_at", null)
-        .limit(5000),
+      // os pagamentos de um mês já passam de 900 (issue #442)
+      buscarTodasAsPaginas(() =>
+        supabase
+          .from("payments")
+          .select("id, amount, paid_at, method, reservation_id")
+          .eq("status", "pago")
+          .in("method", ["pix", "cartao"])
+          .gte("paid_at", `${de}T00:00:00-03:00`)
+          .lte("paid_at", `${ate}T23:59:59-03:00`)
+          .is("deleted_at", null)
+          .order("id"),
+      ),
       "pagamentosDoExtrato",
     );
   },

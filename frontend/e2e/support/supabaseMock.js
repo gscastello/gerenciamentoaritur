@@ -1017,6 +1017,12 @@ export async function mockSupabase(page, opts = {}) {
       );
     } else rows = [];
 
+    // como o PostgREST: no máximo 1.000 linhas por pedido, e respeita offset/limit (issue #442)
+    if (!wantsObject && Array.isArray(rows)) {
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 1000), 1000);
+      rows = rows.slice(offset, offset + limit);
+    }
     const body = wantsObject ? (rows[0] ?? null) : rows;
     return route.fulfill(json(body));
   });
