@@ -54,7 +54,7 @@ function Grupo({ titulo, itens, trips }) {
   if (itens.length === 0) return null;
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide mb-0.5" style={{ color: C.inkFaint }}>
+      <div className="text-[12px] mb-0.5" style={{ color: C.inkFaint }}>
         {titulo} · {itens.length}
       </div>
       <Stagger>

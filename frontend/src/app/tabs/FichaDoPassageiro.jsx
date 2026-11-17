@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useAuth } from "../../auth/AuthProvider.jsx";
 import {
   clienteDesde,
   diaCurto,
@@ -39,7 +40,11 @@ import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { dataDoHistorico } from "../../domain/historicoDoPassageiro.js";
 import { primeiroErro, validarNome, validarTelefone } from "../../domain/validacao.js";
 import { useEnderecoDeCostume } from "../../hooks/useEnderecoDeCostume.js";
-import { useConversaDoPassageiro, usePassageiro } from "../../hooks/usePassageiros.js";
+import {
+  useCadastrosRepetidos,
+  useConversaDoPassageiro,
+  usePassageiro,
+} from "../../hooks/usePassageiros.js";
 import { useSettings } from "../../hooks/useSettings.js";
 import { copiarTexto } from "../../lib/clipboard.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -80,7 +85,7 @@ const ENTRADA = {
 function EnderecosFreq({ titulo, itens, loading }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: C.inkFaint }}>
+      <div className="text-[12px] mb-1" style={{ color: C.inkFaint }}>
         {titulo}
       </div>
       {loading ? (
@@ -107,7 +112,78 @@ function EnderecosFreq({ titulo, itens, loading }) {
   );
 }
 
-function Cadastro({ p, trips, onSalvarNota, onSalvarPerfil, onRemover }) {
+// "Pode ser a mesma pessoa" (database/119): mesmo nome com outro número, ou o mesmo número com e
+// sem o nono dígito. Juntar é só do admin e pede confirmação; "Não é" tira o par da lista.
+function CadastrosRepetidos({ p, onJuntado }) {
+  const { role } = useAuth();
+  const { repetidos, erroRepetidos, ocupado, naoE, juntar } = useCadastrosRepetidos(
+    p.customer_id,
+    true,
+  );
+  if (repetidos.length === 0 && !erroRepetidos) return null;
+  const juntarCom = async (o) => {
+    const nomeFica = p.nome || p.telefone;
+    if (
+      !window.confirm(
+        `Juntar "${o.nome || o.telefone}" em "${nomeFica}"?\n\nAs viagens, conversas e avisos passam para ${nomeFica} e o outro cadastro sai da lista. O telefone dele vira o 2º telefone. Não dá para desfazer pelo app.`,
+      )
+    )
+      return;
+    const r = await juntar(o.customer_id);
+    if (r) onJuntado?.(r);
+  };
+  return (
+    <div className="space-y-2" data-testid="cadastros-repetidos">
+      {erroRepetidos && (
+        <p className="text-[13px]" style={{ color: C.red }}>
+          {erroRepetidos}
+        </p>
+      )}
+      {repetidos.map((o) => (
+        <div
+          key={o.customer_id}
+          className="rounded-2xl p-3 grid gap-2.5"
+          style={{ background: C.panel, boxShadow: `inset 0 0 0 1px ${C.border}` }}
+        >
+          <div>
+            <b className="block text-[14px]" style={{ color: C.ink }}>
+              Pode ser a mesma pessoa
+            </b>
+            <p className="text-[13px]" style={{ color: C.inkSoft }}>
+              {o.nome || "Sem nome"}, {o.telefone}, {o.viagens}{" "}
+              {Number(o.viagens) === 1 ? "viagem" : "viagens"}. {o.motivo[0].toUpperCase()}
+              {o.motivo.slice(1)}.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {role === "admin" && (
+              <button
+                type="button"
+                disabled={ocupado}
+                onClick={() => juntarCom(o)}
+                className="btn-press min-h-[40px] px-3.5 rounded-xl text-[13.5px] font-semibold disabled:opacity-50"
+                style={{ background: C.ink, color: C.bg }}
+              >
+                Juntar com este
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => naoE(o.customer_id)}
+              className="btn-press min-h-[40px] px-3 rounded-xl text-[13.5px] font-semibold disabled:opacity-50"
+              style={{ color: C.inkSoft }}
+            >
+              Não é
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Cadastro({ p, trips, onSalvarNota, onSalvarPerfil, onRemover, onJuntado }) {
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState(null);
   const [erroForm, setErroForm] = useState("");
@@ -171,6 +247,7 @@ function Cadastro({ p, trips, onSalvarNota, onSalvarPerfil, onRemover }) {
 
   return (
     <div className="space-y-4">
+      <CadastrosRepetidos p={p} onJuntado={onJuntado} />
       <Field label="Notas do CRM">
         <textarea
           key={p.customer_id}
@@ -1090,6 +1167,10 @@ function Conteudo({
                     onSalvarNota={nota}
                     onSalvarPerfil={perfil}
                     onRemover={removerEFechar}
+                    onJuntado={() => {
+                      tentarDeNovo();
+                      onAlterado?.(customerId, {});
+                    }}
                   />
                 )}
               </FadeIn>

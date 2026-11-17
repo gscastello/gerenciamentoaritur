@@ -556,7 +556,7 @@ function GrupoResultados({ titulo, children }) {
   return (
     <div className="mb-3">
       <div
-        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
+        className="px-3 py-1 text-[12px] font-semibold"
         style={{ color: C.inkFaint }}
       >
         {titulo}
@@ -867,7 +867,8 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
           className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-[22px] rounded-full"
           style={{
             background: C.brand,
-            opacity: docada && active ? 1 : 0,
+            // a pílula vinho marca a tela atual também na barra encaixada (v18): o traço saiu
+            opacity: 0,
             transition: "opacity .2s ease",
           }}
         />
@@ -988,16 +989,30 @@ function MobileNav({
           className="relative h-full grid"
           style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}
         >
+          {/* a luz vinho desliza até a tela tocada: no Início ocupa o item inteiro; encaixada nas
+              telas de trabalho, vira uma pílula atrás do ícone (visual v18, issue #446) */}
           {indiceAtivo >= 0 && (
             <span
               aria-hidden="true"
-              className="barra-at-luz absolute top-0 bottom-0 left-0 rounded-2xl"
+              data-testid="luz-da-barra"
+              className="absolute left-0 flex justify-center"
               style={{
+                top: docada ? 7 : 0,
+                height: docada ? 30 : "100%",
                 width: `${100 / colunas}%`,
                 transform: `translateX(${indiceAtivo * 100}%)`,
-                opacity: docada ? 0 : 1,
+                transition: "transform .26s cubic-bezier(.2,0,0,1), top .26s cubic-bezier(.2,0,0,1), height .26s cubic-bezier(.2,0,0,1)",
               }}
-            />
+            >
+              <span
+                className="barra-at-luz block h-full"
+                style={{
+                  width: docada ? 56 : "100%",
+                  borderRadius: docada ? 15 : 16,
+                  transition: "width .26s cubic-bezier(.2,0,0,1), border-radius .26s cubic-bezier(.2,0,0,1)",
+                }}
+              />
+            </span>
           )}
           {visiveis.map((n) => (
             <MobileNavItem

@@ -16,6 +16,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { mensagemDeRemocao, resumoDaRemocao } from "../../domain/financeiroRemocao.js";
 import { montarRelatorioFinanceiro } from "../../domain/relatorioFinanceiro.js";
+import { alturasDasBarras, resultadoPorDia } from "../../domain/resultadoDoMes.js";
 import { validarData, validarValor } from "../../domain/validacao.js";
 import { useContasReceber, useFinanceMonth, useFinanceYear } from "../../hooks/useFinance.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
@@ -48,6 +49,52 @@ import {
   useDeepLinkSubview,
 } from "../tabShared.jsx";
 import { LancarPorFoto } from "./LancarPorFoto.jsx";
+
+// Uma barra por dia do mês: a altura é o resultado do dia (em módulo); dia no vermelho fica mais
+// escuro, hoje acende, dia que ainda não chegou fica vazio.
+function ResultadoDosDias({ lancamentos, ano, mes }) {
+  const dias = resultadoPorDia(lancamentos, ano, mes);
+  const alturas = alturasDasBarras(dias);
+  const hoje = todayStr();
+  const chave = (d) => `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const negativos = dias.filter((d) => d.resultado < 0).length;
+  return (
+    <div className="mt-3">
+      <div
+        className="grid items-end gap-[3px] h-14"
+        style={{ gridTemplateColumns: `repeat(${dias.length}, minmax(0,1fr))` }}
+        role="img"
+        aria-label={`Resultado de cada dia do mês${negativos ? `; ${negativos} ${negativos === 1 ? "dia" : "dias"} no vermelho` : ""}`}
+      >
+        {dias.map((d, i) => {
+          const k = chave(d.dia);
+          const futuro = k > hoje;
+          return (
+            <i
+              key={d.dia}
+              className="block rounded-t-[2px]"
+              style={{
+                height: futuro ? 2 : `${Math.max(4, Math.round(alturas[i] * 100))}%`,
+                background:
+                  k === hoje
+                    ? C.lanterna
+                    : futuro
+                      ? C.border
+                      : d.resultado < 0
+                        ? C.contorno
+                        : C.inkSoft,
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[11.5px] mt-1" style={{ color: C.inkFaint }}>
+        <span>dia 1</span>
+        <span>{dias.length}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function FinanceiroTab({ pix, deepLink, pedidoLancar = null }) {
   const [subview, setSubview] = useState("lancamentos");
@@ -262,63 +309,26 @@ export default function FinanceiroTab({ pix, deepLink, pedidoLancar = null }) {
               <ChevronRight size={18} />
             </button>
           </div>
-          {/* resultado do mês primeiro (crítica de design, issue #393): o número maior, uma barra
-              neutra de quanto das receitas foi em despesa e a curva do logo, fina, no canto */}
+          {/* resultado do mês primeiro (crítica de design, issue #393); embaixo, o resultado de cada
+              dia em barras, com hoje em vermelho (visual v18, issue #446) — no lugar da curva do logo */}
           <div
-            className="relative overflow-hidden rounded-xl border p-4 md:max-w-md"
-            style={{ background: C.panel, borderColor: C.border }}
+            className="relative overflow-hidden rounded-2xl border p-4 md:max-w-md"
+            style={{ background: C.panel, borderColor: C.panel2 }}
             data-testid="resultado-do-mes"
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 120 60"
-              fill="none"
-              className="absolute pointer-events-none"
-              style={{ right: -10, top: -6, width: 120, height: 60 }}
-            >
-              <path
-                d="M2 56 C 40 50, 70 30, 118 4"
-                stroke={C.brand}
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <path
-                d="M14 58 C 50 52, 80 34, 118 14"
-                stroke={C.brand}
-                strokeOpacity=".35"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="text-[11px] uppercase tracking-[.06em]" style={{ color: C.inkFaint }}>
+            <div className="text-[12.5px]" style={{ color: C.inkFaint }}>
               Resultado antes do imposto
             </div>
             <div
-              className="mt-0.5"
-              style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.02em", color: C.ink }}
+              className="mt-0.5 tabular-nums"
+              style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.03em", color: C.ink }}
             >
               {fmtBRL(resultadoMes)}
             </div>
-            <div
-              className="h-1.5 rounded-full overflow-hidden mt-2.5"
-              style={{ background: C.panel2 }}
-              role="img"
-              aria-label={`Despesas são ${receitaMes > 0 ? Math.round((despesaMes / receitaMes) * 100) : 0}% das receitas`}
-            >
-              <div
-                className="bar-fill h-full rounded-full"
-                style={{
-                  width: `${receitaMes > 0 ? Math.min(100, (despesaMes / receitaMes) * 100) : 0}%`,
-                  background: C.inkSoft,
-                }}
-              />
-            </div>
+            <ResultadoDosDias lancamentos={financeiro} ano={ano} mes={mes + 1} />
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <div
-                  className="text-[11px] uppercase tracking-[.06em]"
-                  style={{ color: C.inkFaint }}
-                >
+                <div className="text-[12.5px]" style={{ color: C.inkFaint }}>
                   Receitas
                 </div>
                 <div className="text-[15px] font-semibold" style={{ color: C.ink }}>
@@ -326,10 +336,7 @@ export default function FinanceiroTab({ pix, deepLink, pedidoLancar = null }) {
                 </div>
               </div>
               <div>
-                <div
-                  className="text-[11px] uppercase tracking-[.06em]"
-                  style={{ color: C.inkFaint }}
-                >
+                <div className="text-[12.5px]" style={{ color: C.inkFaint }}>
                   Despesas
                 </div>
                 <div className="text-[15px] font-semibold" style={{ color: C.inkSoft }}>

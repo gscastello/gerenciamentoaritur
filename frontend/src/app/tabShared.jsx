@@ -822,8 +822,9 @@ export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(116,13,22
 export function Card({ children, style, className = "" }) {
   return (
     <div
-      className={`rounded-xl border p-4 md:p-5 ${className}`}
-      style={{ background: C.panel, borderColor: C.border, ...style }}
+      // v18 (issue #446): bloco de fundo, canto de 16 e só um fio de borda — sem caixa pesada
+      className={`rounded-2xl border p-4 md:p-5 ${className}`}
+      style={{ background: C.panel, borderColor: C.panel2, ...style }}
     >
       {children}
     </div>
@@ -885,16 +886,18 @@ export function StatCard({ label, value, icon: Icon, accent = C.blue, hint }) {
 
 // Sub-navegação em pílulas (usada em Lista, Financeiro, Gestão).
 export function SubTabs({ value, onChange, options }) {
-  // flex-wrap em vez de rolagem horizontal: o dono não quer precisar
-  // deslizar pra achar uma aba — se não couber tudo numa linha só, quebra
-  // pra segunda linha, mas fica tudo à vista e clicável de cara.
-  // auditoria (issue #397): sem a caixa em volta — quando quebra linha, são etiquetas soltas, não
-  // uma caixa partida; ícone só a partir do tablet, para caber mais numa linha no celular.
+  // Visual v18 (issue #446): o segundo nível de navegação é um seletor só — uma caixa com as
+  // opções lado a lado e a escolhida acesa. Tudo à vista, sem rolar de lado (dono): com mais de
+  // três opções, vira duas colunas no celular.
+  const n = options.length;
+  const colunas =
+    n <= 3 ? "" : n === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3";
   return (
     <div
-      className="grid sm:flex sm:flex-wrap gap-1.5 w-full sm:w-auto max-w-full"
+      className={`grid ${colunas} gap-[3px] p-[3px] rounded-xl w-full sm:w-fit sm:min-w-[22rem] max-w-full`}
       style={{
-        gridTemplateColumns: `repeat(${options.length <= 3 ? options.length : 2}, minmax(0, 1fr))`,
+        background: C.panel,
+        ...(n <= 3 ? { gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` } : {}),
       }}
       role="group"
     >
@@ -906,15 +909,16 @@ export function SubTabs({ value, onChange, options }) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(id)}
-            className="btn-press flex items-center justify-center gap-1.5 text-[13px] leading-tight text-center px-3 sm:px-3.5 min-h-[40px] rounded-full border"
+            className="btn-press flex items-center justify-center gap-1.5 text-[13.5px] leading-tight text-center px-3 min-h-[38px] rounded-[9px]"
             style={{
-              background: active ? C.panel2 : "transparent",
-              borderColor: active ? C.inkFaint : C.border,
+              background: active ? C.border : "transparent",
               color: active ? C.ink : C.inkSoft,
               fontWeight: active ? 600 : 500,
+              transition:
+                "background-color 120ms var(--ease-out-quart), color 120ms var(--ease-out-quart)",
             }}
           >
-            {Icon && <Icon size={13} className="hidden sm:block" />}
+            {Icon && <Icon size={14} className="hidden sm:block" />}
             {label}
           </button>
         );
