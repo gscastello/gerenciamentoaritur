@@ -134,24 +134,29 @@ function GlobalStyles() {
          para horários e valores ficarem alinhados em coluna. */
       body { font-family: ${FONTE}; font-variant-numeric: tabular-nums; }
       /* cores do sistema de movimento no tom do app (barra de progresso e esqueleto) — #393 */
-      :root { --amber: ${C.brand}; --panel2: ${C.border}; --skeleton-base: ${C.panel2}; }
+      :root { --amber: ${C.brand}; --panel2: ${C.border}; --skeleton-base: ${C.panel2};
+        /* a paleta para os componentes de ui/ (que não importam o app), issue #446 */
+        --at-bg: ${C.bg}; --at-panel: ${C.panel}; --at-panel2: ${C.panel2}; --at-border: ${C.border};
+        --at-ink: ${C.ink}; --at-ink-soft: ${C.inkSoft}; --at-ink-faint: ${C.inkFaint};
+        --at-contorno: ${C.contorno}; --at-brand: ${C.brand}; --at-lanterna: ${C.lanterna}; }
+      ::selection { background: ${C.rubro}; color: ${C.ink}; }
       /* ---- visual aprovado (issue #391) ---- */
       /* filete vermelho escuro no alto de todo cartão */
       :where(.cartao-at) { position: relative; }
       .cartao-at::before { content:""; position:absolute; top:0; left:18px; right:18px; height:1px; pointer-events:none;
-        background: linear-gradient(90deg, rgba(122,11,19,0), ${C.rubro} 50%, rgba(122,11,19,0)); }
+        background: linear-gradient(90deg, rgba(116,13,22,0), ${C.rubro} 50%, rgba(116,13,22,0)); }
       /* topo das telas no celular: brilho vermelho escuro e a faixa escura da plotagem embaixo */
       .topo-at { background:
-          radial-gradient(120% 140% at 85% 0%, rgba(122,11,19,.55) 0%, rgba(74,10,16,.22) 45%, rgba(0,0,0,0) 78%),
+          radial-gradient(120% 140% at 85% 0%, rgba(116,13,22,.55) 0%, rgba(66,9,14,.22) 45%, rgba(0,0,0,0) 78%),
           #000; }
       .topo-at::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:12px; pointer-events:none;
-        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 20' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%237A0B13' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%234A0A10'/%3E%3Cstop offset='1' stop-color='%237A0B13'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 19 C150 18 280 12 400 1 L400 9 C280 18 150 20 0 20Z' fill='url(%23g)'/%3E%3Cpath d='M60 20 C190 19 300 14 400 6' fill='none' stroke='%23FFFFFF' stroke-opacity='.22' stroke-width='.8'/%3E%3Cpath d='M200 20 C290 19 350 16 400 13 L400 20Z' fill='%23000'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 20' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23740D16' stop-opacity='0'/%3E%3Cstop offset='.35' stop-color='%2342090E'/%3E%3Cstop offset='1' stop-color='%23740D16'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 19 C150 18 280 12 400 1 L400 9 C280 18 150 20 0 20Z' fill='url(%23g)'/%3E%3Cpath d='M60 20 C190 19 300 14 400 6' fill='none' stroke='%23FFFFFF' stroke-opacity='.22' stroke-width='.8'/%3E%3Cpath d='M200 20 C290 19 350 16 400 13 L400 20Z' fill='%23000'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
       /* dois riscos inclinados (faixas da lateral do ônibus) antes do título de um bloco */
       .riscos-at { display:inline-flex; gap:3px; margin-right:8px; flex-shrink:0; }
       .riscos-at i { width:4px; height:12px; border-radius:1px; background:${C.rubro}; transform:skewX(-24deg); }
       .riscos-at i + i { background:${C.rubro2}; }
       /* barra de baixo flutuante: a luz vinho desliza até a tela tocada */
-      .barra-at { background: rgba(17,18,21,.9); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+      .barra-at { background: rgba(17,13,13,.9); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
         box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px -12px #000; }
       .barra-at-base { left:10px; right:10px; bottom:max(10px, env(safe-area-inset-bottom)); height:68px; padding:6px;
         border-radius:22px; transition: left .3s cubic-bezier(.2,0,0,1), right .3s cubic-bezier(.2,0,0,1),
@@ -163,7 +168,7 @@ function GlobalStyles() {
       .topo-liso { background:${C.bg}; box-shadow: inset 0 -1px 0 0 ${C.panel2}; }
       .barra-at-luz { transition: transform .26s cubic-bezier(.2,0,0,1), opacity .2s ease;
         background: linear-gradient(180deg, ${C.rubro2}, ${C.rubro3});
-        box-shadow: inset 0 0 0 1px rgba(122,11,19,.9), inset 0 -2px 0 0 ${C.rubro}; }
+        box-shadow: inset 0 0 0 1px rgba(116,13,22,.9), inset 0 -2px 0 0 ${C.rubro}; }
       .barra-at-item { transition: color .16s ease, transform .12s cubic-bezier(.2,0,0,1); }
       .barra-at-item:active { transform: scale(.92); }
       /* cartão que leva a outra tela: afunda um pouco ao toque */
@@ -426,7 +431,7 @@ function FabPrincipal({ rotulo, aria, onClick, soCelular = false }) {
       style={{
         background: C.brand,
         color: C.onBrand,
-        boxShadow: "0 12px 26px -10px rgba(228,18,31,.7), inset 0 1px 0 rgba(255,255,255,.16)",
+        boxShadow: "0 12px 26px -10px rgba(215,10,32,.7), inset 0 1px 0 rgba(255,255,255,.16)",
       }}
     >
       <Plus size={19} strokeWidth={2.6} /> {rotulo}
@@ -531,7 +536,7 @@ function QuickActionsFab({
             height: 54,
             background: C.brand,
             color: C.onBrand,
-            boxShadow: "0 12px 28px -10px rgba(228,18,31,.85), inset 0 1px 0 rgba(255,255,255,.18)",
+            boxShadow: "0 12px 28px -10px rgba(215,10,32,.85), inset 0 1px 0 rgba(255,255,255,.18)",
           }}
         >
           <Plus
@@ -870,7 +875,7 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
       <span className="relative flex items-center justify-center" style={{ minHeight: 21 }}>
         <Icon
           size={grande ? 19 : 21}
-          style={{ color: active && !docada ? "#FF5260" : "currentColor" }}
+          style={{ color: active && !docada ? "#FF6367" : "currentColor" }}
         />
         {badge > 0 && (
           <span
@@ -879,7 +884,7 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
               background: C.brand,
               color: "#fff",
               pointerEvents: "none",
-              boxShadow: `0 0 0 2px ${docada ? C.panel : "#111215"}`,
+              boxShadow: `0 0 0 2px ${docada ? C.panel : "#110D0D"}`,
             }}
           >
             {badge > 99 ? "99+" : badge}
@@ -1037,6 +1042,19 @@ function AppInner() {
   const [buscaAberta, setBuscaAberta] = useState(false);
   // folha "Mais" do celular: aberta pelo botão do topo (issue #391)
   const [maisAberto, setMaisAberto] = useState(false);
+  // a altura do topo do celular vira --topo-h: as abas Ida/Volta e as faixas dos pontos da Agenda
+  // grudam logo abaixo dele (issue #446). No computador o topo some e a altura é 0.
+  const topoRef = useRef(null);
+  useEffect(() => {
+    const el = topoRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const medir = () =>
+      document.documentElement.style.setProperty("--topo-h", `${el.offsetHeight}px`);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // contagem nas abas do Atendimento (aguardando resposta, prontas para lançar) — issue #393
   const [contagensAtendimento, setContagensAtendimento] = useState({});
   // "+ Lançar" do Financeiro: abre o formulário mesmo que a tela ainda esteja carregando
@@ -1298,7 +1316,7 @@ function AppInner() {
                   style={{
                     borderColor: C.border,
                     background:
-                      "radial-gradient(120% 120% at 85% 0%, rgba(122,11,19,.45) 0%, rgba(0,0,0,0) 70%)",
+                      "radial-gradient(120% 120% at 85% 0%, rgba(116,13,22,.45) 0%, rgba(0,0,0,0) 70%)",
                   }}
                 >
                   <AriturLogo />
@@ -1425,9 +1443,10 @@ function AppInner() {
 
               {/* sem z-index aqui: as janelas das telas (z-40) precisam ficar por cima da barra de baixo
                   e do botão "+" (issue #393) */}
-              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-hidden relative">
+              <div className="flex-1 min-w-0 pb-44 md:pb-0 overflow-x-clip relative">
                 {/* topo do celular (issue #391): o AT, o nome da tela e o dia, o sino e sair */}
                 <header
+                  ref={topoRef}
                   data-testid="topo-tela"
                   className={`md:hidden sticky top-0 z-20 flex items-center gap-3 pl-3 pr-3 ${
                     noInicio ? "topo-at pb-[18px]" : "topo-liso pb-2"

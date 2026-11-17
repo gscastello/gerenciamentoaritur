@@ -43,45 +43,52 @@ export const FONTE = "'Inter', 'Helvetica Neue', Arial, system-ui, sans-serif";
 // Fora do Início, o app segue o modelo da crítica de design (issue #393, "Estrada à noite"):
 // fundo asfalto, painel e linha discretos; o vermelho só em ação principal, item selecionado e
 // aviso não lido; vermelho de TEXTO mais claro (`brandText`, 5,6:1 — o #E4121F dá 4,2:1).
+// Paleta da simulação v18 (issue #446, aprovada pelo dono em 17/11): os neutros puxam um fio para
+// o vermelho da marca (asfalto molhado da capa), não para o azul. Contraste medido: ink 17:1,
+// inkSoft 8,9:1 e inkFaint 6,7:1 sobre o painel. O vermelho dos botões é um tom mais fundo que o
+// da marca (#E4121F): letra branca sobre ele dá 4,8:1 (sobre o #E4121F dava 4,3:1).
 export const C = {
-  bg: "#0A0B0D",
-  panel: "#131417",
-  panel2: "#1B1C20",
-  border: "#2A2C31",
-  borderSoft: "#1F2024",
-  ink: "#F3F4F6",
-  inkSoft: "#A7ABB3",
-  // 5,4:1 sobre o painel (o #63666D antigo ficava em 3,2:1, difícil de ler)
-  inkFaint: "#8A8E96",
-  brandText: "#FF4D57",
-  // vermelho da marca (era âmbar)
-  amber: "#E4121F",
+  bg: "#080606",
+  panel: "#110D0D",
+  panel2: "#1B1616",
+  border: "#2B2525",
+  borderSoft: "#1B1616",
+  // contorno de controle vazio (caixa de embarque, lugar livre): 4,1:1 sobre o painel
+  contorno: "#7A7271",
+  ink: "#F5F3F1",
+  inkSoft: "#B6AFAD",
+  inkFaint: "#9E9695",
+  brandText: "#FF6367",
+  // vermelho da marca nos botões (letra branca por cima)
+  amber: "#D70A20",
   amberSoft: "#2A0A0E",
-  brand: "#E4121F",
+  brand: "#D70A20",
+  // o vermelho da marca em si, para o que só acende (ponto de aviso, número)
+  lanterna: "#E4121F",
   brandDim: "#A50D17",
-  brandGlow: "rgba(228,18,31,0.35)",
+  brandGlow: "rgba(215,10,32,0.35)",
   onBrand: "#FFFFFF",
   // ornamentos em vermelho escuro (topo das telas, canto dos cartões, barra de baixo)
-  rubro: "#7A0B13",
-  rubro2: "#4A0A10",
-  rubro3: "#24080B",
+  rubro: "#740D16",
+  rubro2: "#42090E",
+  rubro3: "#23090A",
   // Sinalização por cor foi removida do app (pedido do dono): status,
   // ocupação, direção etc. se distinguem por TEXTO e ÍCONE, não por cor.
   // Estes tokens semânticos agora apontam todos para a mesma escala de
   // cinza — o vermelho da marca (`brand`/`amber`) fica só na identidade
   // (logo, hero, botão principal) e o `red` só em erro/ação destrutiva.
-  warn: "#B9BDC6",
-  warnSoft: "#232427",
-  blue: "#B9BDC6",
-  blueSoft: "#232427",
-  green: "#B9BDC6",
-  greenSoft: "#232427",
-  red: "#F0625F",
+  warn: "#BDB6B4",
+  warnSoft: "#221D1D",
+  blue: "#BDB6B4",
+  blueSoft: "#221D1D",
+  green: "#BDB6B4",
+  greenSoft: "#221D1D",
+  red: "#FF6367",
   redSoft: "#33161A",
-  purple: "#B9BDC6",
-  purpleSoft: "#232427",
-  gray: "#B9BDC6",
-  graySoft: "#232427",
+  purple: "#BDB6B4",
+  purpleSoft: "#221D1D",
+  gray: "#BDB6B4",
+  graySoft: "#221D1D",
   // Exceção pedida pelo dono à regra acima: na Volta, quem desce em cidade que não
   // é parada fixa precisa saltar aos olhos do motorista.
   rota: "#F5A524",
@@ -809,8 +816,8 @@ export function ErrorBanner({ children, onDismiss, onRetry, className = "" }) {
 }
 // Início (issue #391, o dono quer como está): fundo preto, cartões grafite com o canto em
 // vermelho escuro e o filete fino no alto (classe `cartao-at`). Só o Início usa estes.
-export const INICIO = { fundo: "#000000", painel: "#111215", borda: "#24262C" };
-export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(122,11,19,.22) 0%, rgba(122,11,19,0) 55%), ${INICIO.painel}`;
+export const INICIO = { fundo: "#000000", painel: "#110D0D", borda: "#2B2525" };
+export const FUNDO_CARTAO = `radial-gradient(140% 90% at 100% 0%, rgba(116,13,22,.22) 0%, rgba(116,13,22,0) 55%), ${INICIO.painel}`;
 // Resto do app (issue #393): cartão liso, sem enfeite.
 export function Card({ children, style, className = "" }) {
   return (

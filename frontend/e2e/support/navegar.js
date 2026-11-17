@@ -85,3 +85,20 @@ export async function acaoDaReserva(page, nome, acao) {
     .click();
   await page.getByRole("dialog").getByRole("button", { name: acao }).click();
 }
+
+/**
+ * Agenda (issue #446): leva a Agenda para o dia `iso` pelo calendário do mês (a semana no topo e
+ * o calendário substituíram a barra com setas). Se já está no dia, não faz nada.
+ */
+export async function irParaODia(page, iso) {
+  const titulo = page.getByTestId("dia-da-agenda").filter({ visible: true }).first();
+  await titulo.waitFor();
+  if ((await titulo.getAttribute("data-dia")) === iso) return;
+  await page
+    .getByRole("button", { name: "Abrir o calendário do mês" })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await page.getByTestId("calendario-do-mes").getByLabel("Ir para a data").fill(iso);
+  await page.getByTestId("calendario-do-mes").waitFor({ state: "detached" });
+}

@@ -64,9 +64,9 @@ export function PWAUpdatePrompt() {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        background: "#111214",
-        color: "#F2F3F5",
-        border: "1px solid #292A2E",
+        background: "#110D0D",
+        color: "#F5F3F1",
+        border: "1px solid #2B2525",
         borderRadius: 12,
         padding: "10px 10px 10px 14px",
         fontSize: 13,
@@ -80,7 +80,7 @@ export function PWAUpdatePrompt() {
         type="button"
         onClick={() => updateServiceWorker(true)}
         style={{
-          background: "#E4121F",
+          background: "#D70A20",
           color: "#fff",
           border: "none",
           borderRadius: 8,
@@ -100,7 +100,7 @@ export function PWAUpdatePrompt() {
         style={{
           background: "transparent",
           border: "none",
-          color: "#9CA0A8",
+          color: "#B6AFAD",
           cursor: "pointer",
           fontSize: 18,
           lineHeight: 1,

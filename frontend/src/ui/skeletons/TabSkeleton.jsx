@@ -6,7 +6,7 @@ import { Skeleton, SkeletonStat } from "../motion/index.js";
 
 const wrap = { padding: "32px 24px", display: "flex", flexDirection: "column", gap: 20 };
 const grid = (cols) => ({ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 });
-const card = { border: "1px solid var(--border,#262d38)", borderRadius: 12, padding: 20 };
+const card = { border: "1px solid var(--border,#2B2525)", borderRadius: 12, padding: 20 };
 
 function HeaderSkel() {
   return (

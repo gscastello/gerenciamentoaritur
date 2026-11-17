@@ -47,34 +47,70 @@ async function abrirAgenda(page) {
 
 const iso = (d) => d.toISOString().slice(0, 10);
 
-// Crítica de design (issue #393): o cartão grande do dia saiu; a data fica numa barra com
-// setas ("‹ Hoje 13/11 ›"), sem precisar abrir o calendário.
-test("Agenda: a barra do dia mostra o dia certo (Hoje/Amanhã) com a data", async ({ page }) => {
+const somar = (d, n) => {
+  const x = new Date(d);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x;
+};
+
+// Visual v18 (issue #446): o dia escolhido fica embaixo de "Agenda" ("Hoje, 16 de novembro"), a
+// semana inteira fica no topo com a lotação de cada dia e o mês abre num calendário.
+test("Agenda: o topo mostra o dia certo (Hoje/Amanhã) e a semana dele", async ({ page }) => {
   await abrirAgenda(page);
   const alvo = diaEsperadoNoOpen();
-  const barra = page.getByTestId("dia-da-agenda");
-  await expect(barra.getByLabel("Dia da Agenda")).toHaveValue(iso(alvo));
+  const titulo = page.getByTestId("dia-da-agenda").filter({ visible: true });
+  await expect(titulo).toHaveAttribute("data-dia", iso(alvo));
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
-  await expect(barra).toContainText(iso(alvo) === hoje ? "Hoje" : "Amanhã");
+  await expect(titulo).toContainText(iso(alvo) === hoje ? "Hoje" : "Amanhã");
+  // a semana vai de segunda a domingo e o dia escolhido fica marcado
+  const semana = page.getByTestId("semana-da-agenda");
+  await expect(semana.getByRole("button")).toHaveCount(7);
+  await expect(semana.locator(`[data-dia="${iso(alvo)}"]`)).toHaveAttribute("aria-pressed", "true");
+  const segunda = somar(alvo, -((alvo.getUTCDay() + 6) % 7));
+  await expect(semana.getByRole("button").first()).toHaveAttribute("data-dia", iso(segunda));
 });
 
-test("Agenda: setas avançam e voltam um dia por vez", async ({ page }) => {
+test("Agenda: tocar num dia da semana leva a Agenda para ele", async ({ page }) => {
   await abrirAgenda(page);
   const alvo = diaEsperadoNoOpen();
-  const proximo = new Date(alvo);
-  proximo.setUTCDate(proximo.getUTCDate() + 1);
-  const campo = page.getByTestId("dia-da-agenda").getByLabel("Dia da Agenda");
+  const outro = alvo.getUTCDay() === 0 ? somar(alvo, -1) : somar(alvo, 1);
+  await page
+    .getByTestId("semana-da-agenda")
+    .locator(`[data-dia="${iso(outro)}"]`)
+    .click();
+  const titulo = page.getByTestId("dia-da-agenda").filter({ visible: true });
+  await expect(titulo).toHaveAttribute("data-dia", iso(outro));
+  await expect(titulo).toContainText(
+    iso(outro) === iso(somar(alvo, 1)) ? "Amanhã" : diaDaSemana(outro).slice(0, 3),
+    { ignoreCase: true },
+  );
+});
 
-  await page.getByRole("button", { name: "Próximo dia" }).click();
-  await expect(campo).toHaveValue(iso(proximo));
-  await page.getByRole("button", { name: "Dia anterior" }).click();
-  await expect(campo).toHaveValue(iso(alvo));
-  // o dia da semana aparece quando não é hoje nem amanhã
-  await page.getByRole("button", { name: "Próximo dia" }).click();
-  await page.getByRole("button", { name: "Próximo dia" }).click();
-  const depois = new Date(alvo);
-  depois.setUTCDate(depois.getUTCDate() + 2);
-  await expect(page.getByTestId("dia-da-agenda")).toContainText(diaDaSemana(depois).slice(0, 3), {
-    ignoreCase: true,
-  });
+test("Agenda: o calendário do mês leva a outro mês e volta para hoje", async ({ page }) => {
+  await abrirAgenda(page);
+  const alvo = diaEsperadoNoOpen();
+  await page
+    .getByRole("button", { name: "Abrir o calendário do mês" })
+    .filter({ visible: true })
+    .click();
+  const cal = page.getByTestId("calendario-do-mes");
+  await expect(cal.getByRole("heading", { name: "Escolher o dia" })).toBeVisible();
+  await expect(cal.locator(`[data-dia="${iso(alvo)}"]`)).toHaveAttribute("aria-pressed", "true");
+  // no mês seguinte, o dia 10
+  await cal.getByRole("button", { name: "Próximo mês" }).click();
+  const proximoMes = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 10, 12));
+  await cal.locator(`[data-dia="${iso(proximoMes)}"]`).click();
+  await expect(cal).toHaveCount(0);
+  const titulo = page.getByTestId("dia-da-agenda").filter({ visible: true });
+  await expect(titulo).toHaveAttribute("data-dia", iso(proximoMes));
+  // fora da semana de hoje aparece o atalho; o calendário também volta
+  await page
+    .getByRole("button", { name: "Abrir o calendário do mês" })
+    .filter({ visible: true })
+    .click();
+  await page
+    .getByTestId("calendario-do-mes")
+    .getByRole("button", { name: "Voltar para hoje" })
+    .click();
+  await expect(titulo).toHaveAttribute("data-dia", iso(alvo));
 });

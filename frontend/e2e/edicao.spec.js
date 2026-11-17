@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Edição de reserva numa transação só (rpc_edit_reservation, database/33).
@@ -46,7 +46,7 @@ test("Agenda: editar reserva salva numa chamada e fecha o modal", async ({ page 
   // depois das 14h em Fortaleza a Agenda abre no dia seguinte por padrão
   // (diaAgendaPadrao em tabShared.jsx) — navega explicitamente pro dia da
   // reserva em vez de depender do default.
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await page
     .getByRole("button", { name: /^Mais ações/ })
     .first()

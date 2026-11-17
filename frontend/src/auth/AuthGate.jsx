@@ -11,7 +11,7 @@ import { ProgressBar } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 import { LoginScreen } from "./LoginScreen.jsx";
 
-const C = { bg: "#0A0B0D", ink: "#F3F4F6", inkSoft: "#A7ABB3", amber: "#E4121F" };
+const C = { bg: "#080606", ink: "#F5F3F1", inkSoft: "#B6AFAD", amber: "#D70A20" };
 
 export function AuthGate({ children }) {
   const { loading, isAuthenticated, profile, signOut } = useAuth();
@@ -52,7 +52,7 @@ export function AuthGate({ children }) {
           position: "relative",
           minHeight: "100dvh",
           overflow: "hidden",
-          background: "#0A0B0D",
+          background: "#080606",
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
@@ -79,7 +79,7 @@ export function AuthGate({ children }) {
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(180deg, rgba(10,11,13,0) 30%, rgba(10,11,13,.8) 60%, #0A0B0D 78%)",
+              "linear-gradient(180deg, rgba(8,6,6,0) 30%, rgba(8,6,6,.8) 60%, #080606 78%)",
           }}
         />
         <div
@@ -97,7 +97,7 @@ export function AuthGate({ children }) {
             style={{ width: "100%", height: "auto", display: "block" }}
           />
           <div style={{ marginTop: 18 }}>
-            <ProgressBar label="Abrindo o app" color="#E4121F" trackColor="#2A2C31" />
+            <ProgressBar label="Abrindo o app" color="#D70A20" trackColor="#2B2525" />
           </div>
         </div>
       </div>

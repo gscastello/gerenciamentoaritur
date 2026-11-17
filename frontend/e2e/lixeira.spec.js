@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #206: Lixeira de reservas canceladas — restaurar uma reserva
@@ -56,7 +57,7 @@ async function abrirAgenda(page, opts = {}) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 }
 
 const lixeira = (page) => page.getByRole("button", { name: /Lixeira — reservas canceladas/ });

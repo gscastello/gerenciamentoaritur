@@ -23,7 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "./motion/index.js";
 
-const BG = "#08090B";
+const BG = "#080606";
 const GLOW = "rgba(228,18,31,0.10)";
 
 const ASSET = {
@@ -33,13 +33,13 @@ const ASSET = {
 };
 
 const VEIL = {
-  app: `linear-gradient(180deg, rgba(8,9,11,.9) 0%, rgba(8,9,11,.85) 42%, rgba(8,9,11,.95) 100%),radial-gradient(120% 90% at 50% 6%, ${GLOW} 0%, transparent 60%)`,
+  app: `linear-gradient(180deg, rgba(8,6,6,.9) 0%, rgba(8,6,6,.85) 42%, rgba(8,6,6,.95) 100%),radial-gradient(120% 90% at 50% 6%, ${GLOW} 0%, transparent 60%)`,
   hero:
-    "linear-gradient(90deg, rgba(8,9,11,.97) 0%, rgba(8,9,11,.82) 30%, rgba(8,9,11,.15) 62%, rgba(120,10,15,.12) 100%)," +
-    "linear-gradient(180deg, transparent 55%, rgba(8,9,11,.55) 100%)",
+    "linear-gradient(90deg, rgba(8,6,6,.97) 0%, rgba(8,6,6,.82) 30%, rgba(8,6,6,.15) 62%, rgba(120,10,15,.12) 100%)," +
+    "linear-gradient(180deg, transparent 55%, rgba(8,6,6,.55) 100%)",
   login:
-    "radial-gradient(120% 90% at 50% 45%, rgba(8,9,11,.5) 0%, rgba(8,9,11,.92) 78%)," +
-    "linear-gradient(180deg, rgba(8,9,11,.72) 0%, rgba(8,9,11,.86) 100%)",
+    "radial-gradient(120% 90% at 50% 45%, rgba(8,6,6,.5) 0%, rgba(8,6,6,.92) 78%)," +
+    "linear-gradient(180deg, rgba(8,6,6,.72) 0%, rgba(8,6,6,.86) 100%)",
 };
 
 function prefersSaveData() {

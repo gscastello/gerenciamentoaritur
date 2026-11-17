@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #210: passagens extras (fora das 31 vagas) — seção EXTRAS na Agenda,
@@ -42,17 +42,17 @@ async function abrirAgenda(page, opts = {}) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await escolherSentido(page, "Ida");
 }
 
 test("o extra aparece na seção EXTRAS e não entra na lotação", async ({ page }) => {
   await abrirAgenda(page);
-  const secao = page.getByText("EXTRAS", { exact: true }).first();
+  const secao = page.getByText("Extras", { exact: true }).first();
   await expect(secao).toBeVisible();
   await expect(page.getByText("3 passagens · fora das vagas").first()).toBeVisible();
   // lotação da ida = só os 2 normais (31 vagas): 29 livres, extras à parte
-  await expect(page.getByTestId("seletor-sentido")).toContainText("2/31");
+  await expect(page.getByTestId("seletor-sentido")).toContainText("2 de 31");
   await expect(page.locator("div.row-hover", { hasText: "Estrada Extra" })).toBeVisible();
 });
 

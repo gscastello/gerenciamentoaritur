@@ -1,11 +1,13 @@
 import {
   AlertTriangle,
+  Building2,
+  Bus,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
+  Home,
   Hourglass,
+  MapPin,
   Megaphone,
   MessageCircle,
   MoreHorizontal,
@@ -15,8 +17,8 @@ import {
   PhoneCall,
   Plus,
   RefreshCw,
-  Sunrise,
   Truck,
+  Undo2,
   UserRound,
   Users,
   X,
@@ -44,6 +46,7 @@ import { ditadoParaAnotacao } from "../../domain/ditado.js";
 import { FORMAS_PAGAMENTO, rotuloPagamento } from "../../domain/format.js";
 import { mensagemDeCancelamento } from "../../domain/lixeira.js";
 import { precoDaVolta } from "../../domain/precos.js";
+import { diasDaSemana, lotacaoDosDias } from "../../domain/semanaDaAgenda.js";
 import { ehExtra } from "../../domain/vagas.js";
 import {
   primeiroErro,
@@ -78,9 +81,7 @@ import {
   TextInput,
   VOLTA_ORDEM,
   anotacaoBase,
-  deslocarDia,
   diaAgendaPadrao,
-  diaSemana,
   digitos,
   enderecoEmbarque,
   fmtBRL,
@@ -102,6 +103,7 @@ import BuscaEmCasaEditor from "./BuscaEmCasaEditor.jsx";
 import FichaDoPassageiro from "./FichaDoPassageiro.jsx";
 import LixeiraReservas from "./LixeiraReservas.jsx";
 import MapaDosLugares from "./MapaDosLugares.jsx";
+import { CalendarioDoMes, SemanaDaAgenda, TituloDoDia } from "./SemanaDaAgenda.jsx";
 
 /* ============================= 2. AGENDA — tela operacional ============================= */
 // Reserva duplicada (issue #216): o banco recusa quando o mesmo contato já tem
@@ -152,6 +154,11 @@ export default function AgendaTab({
   useDeepLinkData(deepLink, setData);
   // lugares da viagem do dia em cada sentido: ônibus 31 ou van reserva 15 (issue #408)
   const capDe = (dir) => capacidadeDe?.(data, dir) ?? capacidade;
+  // semana no topo e calendário do mês (issue #446): a lotação de cada dia sai da janela de reservas
+  const capDoDia = (dia, dir) => capacidadeDe?.(dia, dir) ?? capacidade;
+  const lotacaoDias = useMemo(() => lotacaoDosDias(reservas), [reservas]);
+  const [calendarioAberto, setCalendarioAberto] = useState(false);
+  const hoje = todayStr();
   // Seletor Ida/Volta (issue #391): uma viagem por vez. Abre na que ainda vai sair —
   // hoje depois das 9h (a Ida já chegou) é a Volta; o Início escolhe pelo cartão tocado.
   const [sentido, setSentido] = useState(() =>
@@ -498,25 +505,58 @@ export default function AgendaTab({
       <Header
         title="Agenda"
         subtitle="Painel operacional do dia — capacidade, confirmados, pendentes, vagas e embarcados."
+        // no celular o dia vai para o topo do app e o cabeçalho some (sem espaço vazio em cima)
         right={
-          <div className="flex items-center gap-1.5 w-full md:w-auto">
-            {/* data com setas (crítica de design, issue #393): no celular fica no topo do app */}
-            {!noCelular && <BarraDoDia data={data} setData={setData} />}
-            {onAgendar && (
-              <span className="hidden sm:block">
-                <BotaoAgendar onClick={onAgendar} />
-              </span>
-            )}
-          </div>
+          !noCelular && (
+            <div className="flex items-center gap-1.5 w-full md:w-auto">
+              {/* o dia escolhido e o calendário (issue #446): no celular ficam no topo do app */}
+              {!noCelular && (
+                <TituloDoDia
+                  data={data}
+                  hoje={hoje}
+                  comTitulo={false}
+                  onAbrirCalendario={() => setCalendarioAberto(true)}
+                />
+              )}
+              {onAgendar && (
+                <span className="hidden sm:block">
+                  <BotaoAgendar onClick={onAgendar} />
+                </span>
+              )}
+            </div>
+          )
         }
       />
       {noCelular &&
         slotTopo &&
-        createPortal(<BarraDoDia data={data} setData={setData} />, slotTopo)}
+        createPortal(
+          <TituloDoDia
+            data={data}
+            hoje={hoje}
+            onAbrirCalendario={() => setCalendarioAberto(true)}
+          />,
+          slotTopo,
+        )}
+      <CalendarioDoMes
+        aberto={calendarioAberto}
+        onFechar={() => setCalendarioAberto(false)}
+        data={data}
+        hoje={hoje}
+        lotacao={lotacaoDias}
+        capDe={capDoDia}
+        onEscolher={setData}
+      />
       <div className="px-4 md:px-10 pb-10 space-y-4 stagger">
-        {/* só quando a pessoa saiu do dia de trabalho: à noite a Agenda já abre em amanhã de
-            propósito, e aí não é "outro dia" (auditoria, issue #397) */}
-        {data !== diaAgendaPadrao() && (
+        <SemanaDaAgenda
+          data={data}
+          hoje={hoje}
+          lotacao={lotacaoDias}
+          capDe={capDoDia}
+          onEscolher={setData}
+        />
+        {/* só quando a semana na tela não tem o dia de trabalho: à noite a Agenda já abre em
+            amanhã de propósito, e aí não é "outro dia" (auditoria, issue #397) */}
+        {!diasDaSemana(data).includes(diaAgendaPadrao()) && (
           <FadeIn>
             <div
               className="flex items-center justify-between gap-2 text-[13px]"
@@ -544,15 +584,9 @@ export default function AgendaTab({
           capVolta={capDe("volta")}
           horaIda={horaDaViagem("ida")}
           horaVolta={horaDaViagem("volta")}
+          // segunda: o aviso que era uma faixa à parte vai para dentro da aba da Ida (v18)
+          avisoIda={segunda ? `sai ${segundaHoras || 1} h mais cedo` : ""}
         />
-        {segunda && (
-          <div
-            className="flex items-center gap-2 text-xs rounded-lg px-3 py-2"
-            style={{ background: C.warnSoft, color: C.warn }}
-          >
-            <Sunrise size={14} /> Segunda-feira: horários de ida ajustados automaticamente.
-          </div>
-        )}
         {acaoErro && (
           <div
             className="flex items-center justify-between gap-2 text-xs rounded-lg px-3 py-2"
@@ -621,51 +655,64 @@ export default function AgendaTab({
           </Card>
         )}
 
-        {(pendentesDoDia.length > 0 ||
-          fretesPendentes.length > 0 ||
-          encomendasPendentes.length > 0) && (
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={16} style={{ color: C.inkSoft }} />
-              <div className="text-sm font-semibold" style={{ color: C.ink }}>
-                Pendentes (fora da rota padrão)
-              </div>
-            </div>
-            <div className="space-y-2">
-              {pendentesDoDia.map((r) => (
-                <div key={r.id} className="rounded-lg px-3 py-2.5" style={{ background: C.panel2 }}>
+        {/* pendentes (v18): uma faixa por reserva, com Recusar e Confirmar ao lado */}
+        {pendentesDoDia.length > 0 && (
+          <section aria-label="Pendentes (fora da rota padrão)" className="space-y-1.5">
+            {pendentesDoDia.map((r) => (
+              <div
+                key={r.id}
+                data-testid="pendente-da-agenda"
+                className="grid items-center gap-1.5 rounded-2xl pl-3 pr-1.5 py-1.5"
+                style={{
+                  gridTemplateColumns: "minmax(0,1fr) auto auto",
+                  background: C.panel,
+                  boxShadow: `inset 0 0 0 1px ${C.border}`,
+                }}
+              >
+                <div className="min-w-0 py-1">
                   {/* texto inteiro, sem "·" sobrando quando falta o motivo (issue #399) */}
                   <div
-                    className="text-[13px] font-semibold"
+                    className="text-[14px] font-semibold"
                     style={{ color: C.ink, overflowWrap: "anywhere" }}
                   >
                     {linhaReserva(r, trips)}
                   </div>
-                  {(r.nome || r.motivoPendente) && (
-                    <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>
-                      {[r.nome, r.motivoPendente].filter(Boolean).join(" · ")}
-                    </div>
-                  )}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => confirmarPendente(r)}
-                      className="btn-press flex-1 sm:flex-none text-[13px] font-semibold px-4 min-h-[40px] rounded-lg"
-                      style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
-                    >
-                      Confirmar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => atualizarStatus(r.id, "cancelada")}
-                      className="btn-press flex-1 sm:flex-none text-[13px] font-semibold px-4 min-h-[40px] rounded-lg"
-                      style={{ color: C.red, border: `1px solid ${C.border}` }}
-                    >
-                      Recusar
-                    </button>
+                  <div className="text-[12.5px]" style={{ color: C.inkSoft }}>
+                    {[r.nome, r.motivoPendente || "fora da rota padrão"]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </div>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => atualizarStatus(r.id, "cancelada")}
+                  className="btn-press text-[13.5px] font-semibold px-3 min-h-[40px] rounded-xl"
+                  style={{ color: C.inkSoft }}
+                >
+                  Recusar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmarPendente(r)}
+                  className="btn-press text-[13.5px] font-semibold px-3.5 min-h-[40px] rounded-xl"
+                  style={{ background: C.ink, color: C.bg }}
+                >
+                  Confirmar
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {(fretesPendentes.length > 0 || encomendasPendentes.length > 0) && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={16} style={{ color: C.inkSoft }} />
+              <div className="text-sm font-semibold" style={{ color: C.ink }}>
+                Fretes e encomendas pendentes
+              </div>
+            </div>
+            <div className="space-y-2">
               {fretesPendentes.map((r) => (
                 <div
                   key={r.id}
@@ -1246,6 +1293,18 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
     </div>
   );
 }
+// O desenho de cada categoria de embarque na faixa do ponto (v18, issue #446).
+const ICONES_DOS_PONTOS = {
+  busca: Home,
+  rodoviaria: Bus,
+  retorno: Undo2,
+  pirapemas: Building2,
+  cantanhede: Building2,
+};
+function IconeDoPonto({ id }) {
+  const Icone = ICONES_DOS_PONTOS[id] ?? MapPin;
+  return <Icone size={17} strokeWidth={1.9} />;
+}
 // Pontos na ordem em que aparecem na Agenda (os fora da lista vão para o fim).
 function ordenarPontos(pontos, direcao) {
   const ordem = direcao === "ida" ? IDA_ORDEM_SECOES : VOLTA_ORDEM;
@@ -1280,62 +1339,6 @@ function useNoCelular() {
   return sim;
 }
 
-// Dia da Agenda com setas (crítica de design, issue #393): "‹ Sex 13/11 ›". Tocar no dia abre o
-// calendário do aparelho; fora de hoje, a linha "Voltar para hoje" aparece embaixo do topo.
-function BarraDoDia({ data, setData }) {
-  const hoje = todayStr();
-  const rotulo =
-    data === hoje ? "Hoje" : data === deslocarDia(hoje, 1) ? "Amanhã" : diaSemana(data).slice(0, 3);
-  return (
-    <div className="flex items-center gap-1 w-full" data-testid="dia-da-agenda">
-      <button
-        type="button"
-        onClick={() => setData(deslocarDia(data, -1))}
-        aria-label="Dia anterior"
-        className="btn-press w-9 h-10 rounded-xl shrink-0 flex items-center justify-center border"
-        style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-      >
-        <ChevronLeft size={18} />
-      </button>
-      {/* o dia escrito por inteiro; o campo de data, invisível por cima, abre o calendário */}
-      <div
-        className="toque-at relative flex-1 min-w-0 flex items-center justify-center gap-1.5 h-10 rounded-xl border px-2"
-        style={{ background: C.panel, borderColor: C.border }}
-      >
-        <span className="text-[14px] font-bold capitalize truncate" style={{ color: C.ink }}>
-          {rotulo}{" "}
-          <span style={{ color: C.inkSoft }}>{`${data.slice(8, 10)}/${data.slice(5, 7)}`}</span>
-        </span>
-
-        <input
-          type="date"
-          value={data}
-          onChange={(e) => e.target.value && setData(e.target.value)}
-          onClick={(e) => {
-            try {
-              e.currentTarget.showPicker?.();
-            } catch {
-              /* sem showPicker: o toque no campo já abre o calendário */
-            }
-          }}
-          aria-label="Dia da Agenda"
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          style={{ colorScheme: "dark" }}
-        />
-      </div>
-      <button
-        type="button"
-        onClick={() => setData(deslocarDia(data, 1))}
-        aria-label="Próximo dia"
-        className="btn-press w-9 h-10 rounded-xl shrink-0 flex items-center justify-center border"
-        style={{ background: C.panel, borderColor: C.border, color: C.ink }}
-      >
-        <ChevronRight size={18} />
-      </button>
-    </div>
-  );
-}
-
 // Seletor Ida/Volta (crítica de design, issue #393): as duas viagens lado a lado, com a hora e
 // as vagas; a escolhida fica em painel com um traço vermelho embaixo. Uma viagem por vez.
 function SeletorSentido({
@@ -1347,22 +1350,40 @@ function SeletorSentido({
   capVolta,
   horaIda,
   horaVolta,
+  avisoIda = "",
 }) {
   const itens = [
-    { id: "ida", rotulo: "Ida", hora: horaIda, pax: paxIda, capacidade: capIda },
+    { id: "ida", rotulo: "Ida", hora: horaIda, pax: paxIda, capacidade: capIda, aviso: avisoIda },
     { id: "volta", rotulo: "Volta", hora: horaVolta, pax: paxVolta, capacidade: capVolta },
   ];
+  // v18 (issue #446): duas abas com uma linha vermelha que desliza até a viagem escolhida; ficam
+  // presas no alto da tela enquanto a lista rola
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    const pai = el?.parentElement;
+    if (!el || !pai || typeof ResizeObserver === "undefined") return undefined;
+    const medir = () => pai.style.setProperty("--seletor-h", `${el.offsetHeight}px`);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <div
+      ref={ref}
       role="tablist"
       aria-label="Viagem"
       data-testid="seletor-sentido"
-      className="grid grid-cols-2 gap-1 p-1 rounded-xl border w-full md:max-w-md"
-      style={{ background: C.panel, borderColor: C.border }}
+      className="sticky z-10 -mx-4 px-4 md:mx-0 md:px-0 grid grid-cols-2 md:max-w-md"
+      style={{
+        top: "var(--topo-h, 0px)",
+        background: C.bg,
+        boxShadow: `inset 0 -1px 0 0 ${C.border}`,
+      }}
     >
       {itens.map((it) => {
         const ativo = sentido === it.id;
-        const vagas = Math.max(0, it.capacidade - it.pax);
         return (
           <button
             key={it.id}
@@ -1370,25 +1391,34 @@ function SeletorSentido({
             role="tab"
             aria-selected={ativo}
             onClick={() => onChange(it.id)}
-            className="btn-press text-left rounded-lg px-3 py-2 min-h-[52px]"
-            style={{
-              background: ativo ? C.panel2 : "transparent",
-              boxShadow: ativo
-                ? `inset 0 0 0 1px ${C.border}, inset 0 -2px 0 0 ${C.brand}`
-                : "none",
-              transition: "background-color .2s ease, box-shadow .2s ease",
-            }}
+            className="relative text-left pt-2 pb-2.5 pr-2 min-h-[54px] min-w-0"
           >
             <span
-              className="block text-[14px] font-bold"
-              style={{ color: ativo ? C.ink : C.inkSoft }}
+              className="block text-[16px] font-semibold tabular-nums"
+              style={{ color: ativo ? C.ink : C.inkSoft, letterSpacing: "-.01em" }}
             >
               {it.rotulo}
-              {it.hora ? ` · ${it.hora}` : ""}
+              {it.hora ? ` ${it.hora}` : ""}
             </span>
-            <span className="block text-xs" style={{ color: C.inkFaint }}>
-              {it.pax}/{it.capacidade} · {vagas} {vagas === 1 ? "vaga" : "vagas"}
+            <span
+              className="block text-[12.5px] truncate tabular-nums"
+              style={{ color: C.inkSoft }}
+            >
+              {it.pax} de {it.capacidade}
+              {it.aviso ? `, ${it.aviso}` : ""}
             </span>
+            <span
+              aria-hidden="true"
+              className="absolute left-0 bottom-0 h-[2px] w-16 rounded-full"
+              style={{
+                background: C.lanterna,
+                opacity: ativo ? 1 : 0,
+                transform: ativo ? "scaleX(1)" : "scaleX(.4)",
+                transformOrigin: "left",
+                transition:
+                  "opacity var(--motion-base) var(--ease-out-quart), transform var(--motion-base) var(--ease-out-quart)",
+              }}
+            />
           </button>
         );
       })}
@@ -1451,37 +1481,35 @@ function ViagemOperacional({
   return (
     <section className="relative" aria-label={`Viagem de ${viagem.nome}`}>
       {/* lotação (issue #430): o mapa dos lugares do veículo do dia, no lugar da barra fina */}
-      <div
-        className="rounded-xl px-3 py-3 mb-3"
-        style={{ background: C.panel2 }}
-        data-testid={`lotacao-${direcao}`}
-      >
+      {/* v18 (issue #446): o ônibus em pé, sem caixa em volta, com os números e o aviso ao lado */}
+      <div className="mb-4" data-testid={`lotacao-${direcao}`}>
         <MapaDosLugares
           capacidade={capacidade}
           confirmados={confirmados}
           pendentes={pendentesQtd}
           direcao={direcao}
-        />
-        {aviso && (
-          <button
-            type="button"
-            onClick={() => setAvisando(true)}
-            className="btn-press mt-3 w-full flex items-center justify-center gap-2 min-h-[44px] rounded-xl text-[14px] font-semibold"
-            style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
-          >
-            <Megaphone size={16} /> Avisar passageiros
-          </button>
-        )}
-        <p className="text-[13px] mt-3 leading-relaxed" style={{ color: C.inkSoft }}>
-          {pendentesQtd > 0 &&
-            `${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"} · `}
-          {`${embarcados} ${embarcados === 1 ? "embarcado" : "embarcados"} · ${pagosQtd} ${pagosQtd === 1 ? "pago" : "pagos"}`}
-        </p>
-        {extrasQtd > 0 && (
-          <div className="text-xs mt-1.5" style={{ color: C.inkFaint }}>
-            + {extrasQtd} extra(s) fora das vagas
-          </div>
-        )}
+        >
+          <p className="text-[12.5px] leading-snug" style={{ color: C.inkSoft }}>
+            {pendentesQtd > 0 &&
+              `${pendentesQtd} ${pendentesQtd === 1 ? "pendente" : "pendentes"} · `}
+            {`${embarcados} ${embarcados === 1 ? "embarcado" : "embarcados"} · ${pagosQtd} ${pagosQtd === 1 ? "pago" : "pagos"}`}
+          </p>
+          {extrasQtd > 0 && (
+            <p className="text-[12.5px]" style={{ color: C.inkFaint }}>
+              + {extrasQtd} extra(s) fora das vagas
+            </p>
+          )}
+          {aviso && (
+            <button
+              type="button"
+              onClick={() => setAvisando(true)}
+              className="btn-press flex items-center gap-2 min-h-[40px] -ml-1 px-1 rounded-lg text-[14px] font-semibold"
+              style={{ color: C.ink }}
+            >
+              <Megaphone size={16} /> Avisar passageiros
+            </button>
+          )}
+        </MapaDosLugares>
       </div>
       <div className="space-y-1">
         {pontosOrdenados.map((p) => {
@@ -1502,46 +1530,60 @@ function ViagemOperacional({
             <div key={p.id}>
               {/* cabeçalho do ponto (issue #399): hora, ponto e quantos numa linha; as ações da
                   busca em casa embaixo, alinhadas, em vez de tudo misturado */}
+              {/* faixa da categoria de embarque (v18, issue #446): o desenho do ponto, o nome,
+                  a hora e o total; fica presa embaixo das abas enquanto a lista daquele ponto rola
+                  (por isso é filha direta do bloco do ponto, que contém a lista) */}
               <div
                 id={`ponto-${direcao}-${p.id}`}
-                className="mt-1 pt-3 pb-1 border-t scroll-mt-24"
-                style={{ borderColor: C.panel2 }}
+                data-testid="faixa-do-ponto"
+                className="sticky mt-3 scroll-mt-32 z-[5] grid items-center gap-x-2.5 rounded-[13px] pl-1.5 pr-2.5 min-h-[50px]"
+                style={{
+                  top: "calc(var(--topo-h, 0px) + var(--seletor-h, 0px))",
+                  gridTemplateColumns: "30px minmax(0,1fr) auto",
+                  background: C.panel,
+                  boxShadow: `inset 0 0 0 1px ${C.panel2}, 0 -8px 0 0 ${C.bg}`,
+                }}
               >
-                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                <span
+                  aria-hidden="true"
+                  className="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center"
+                  style={{ background: C.border, color: C.ink }}
+                >
+                  <IconeDoPonto id={p.id} />
+                </span>
+                <span className="min-w-0 py-1.5">
                   <span
-                    className="text-[13px] font-semibold tabular-nums"
-                    style={{ color: C.inkSoft }}
+                    className="block text-[15.5px] font-bold truncate"
+                    style={{ color: C.ink, letterSpacing: "-.015em", lineHeight: 1.2 }}
                   >
-                    {hora}
-                  </span>
-                  <span className="text-[15px] font-bold" style={{ color: C.ink }}>
                     {p.nome}
                   </span>
-                  <span className="text-[12.5px]" style={{ color: C.inkSoft }}>
+                  <span className="block text-[12.5px] tabular-nums" style={{ color: C.inkSoft }}>
+                    {hora ? `${hora}, ` : ""}
                     {resumoDoPonto(itens, encDoPonto)}
                   </span>
-                  {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
-                </div>
-                {ehBusca && !editando && itens.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <GruposDeBusca itens={itens} trips={trips} />
-                    {onSalvarBusca && (
-                      <button
-                        type="button"
-                        onClick={() => setEditandoBusca(true)}
-                        className="btn-press flex items-center gap-1.5 text-[12px] font-semibold px-3 min-h-[36px] rounded-lg"
-                        style={{
-                          background: C.panel2,
-                          color: C.ink,
-                          border: `1px solid ${C.border}`,
-                        }}
-                      >
-                        <Pencil size={12} /> Editar lista
-                      </button>
-                    )}
-                  </div>
-                )}
+                </span>
+                {p.janela && <Pill color={C.purple}>{p.janela}</Pill>}
               </div>
+              {ehBusca && !editando && itens.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mt-2 px-1">
+                  <GruposDeBusca itens={itens} trips={trips} />
+                  {onSalvarBusca && (
+                    <button
+                      type="button"
+                      onClick={() => setEditandoBusca(true)}
+                      className="btn-press flex items-center gap-1.5 text-[12px] font-semibold px-3 min-h-[36px] rounded-lg"
+                      style={{
+                        background: C.panel2,
+                        color: C.ink,
+                        border: `1px solid ${C.border}`,
+                      }}
+                    >
+                      <Pencil size={12} /> Editar lista
+                    </button>
+                  )}
+                </div>
+              )}
               {editando ? (
                 <BuscaEmCasaEditor
                   itens={itens}
@@ -1612,7 +1654,7 @@ function ViagemOperacional({
               style={{ borderColor: C.panel2 }}
             >
               <span className="text-[14px] font-bold" style={{ color: C.ink }}>
-                EXTRAS
+                Extras
               </span>
               <span className="text-[12px] font-medium" style={{ color: C.inkSoft }}>
                 {extras.length === 0

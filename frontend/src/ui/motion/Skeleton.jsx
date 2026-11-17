@@ -18,7 +18,7 @@ export function Skeleton({ width, height = 16, rounded = 8, style, className = "
         borderRadius: rounded,
         position: "relative",
         overflow: "hidden",
-        background: "var(--skeleton-base, #1c222b)",
+        background: "var(--skeleton-base, #1B1616)",
         ...style,
       }}
     >

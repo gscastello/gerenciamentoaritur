@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { abrirTela } from "./support/navegar.js";
+import { abrirTela, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #192: telefone secundário, cidades de desembarque (revisão),
@@ -56,7 +56,7 @@ test("Agenda: endereço em destaque, nome em segundo plano e telefone secundári
     ],
   });
   await abrirAgenda(page);
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 
   const linha = page.locator("div.row-hover", { hasText: "João do Bairro Teste" });
   const tamanho = (loc) => loc.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #444 (crítico), depois da #442: o app não pode mostrar dado incompleto ou velho calado.
@@ -28,7 +29,7 @@ async function abrirAgenda(page) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje());
+  await irParaODia(page, hoje());
 }
 
 test("lista que veio cortada em 1.000 linhas avisa na tela, com o nome da lista", async ({

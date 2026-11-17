@@ -164,7 +164,7 @@ function ItemPrecisa({ Icon, titulo, detalhe, acao, onClick }) {
       </span>
       <span
         className="flex items-center gap-0.5 text-[13px] font-semibold"
-        style={{ color: "#FF5260" }}
+        style={{ color: "#FF6367" }}
       >
         {acao}
         <ChevronRight size={15} />

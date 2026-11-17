@@ -25,7 +25,10 @@ test("Agenda: Agendar passagem manual também normaliza o telefone antes de envi
   });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
-  await page.getByRole("button", { name: /^Agenda$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agenda$/ })
+    .first()
+    .click();
 
   await page.getByRole("button", { name: "Nova reserva" }).click();
   await expect(page.getByText("Agendar passagem")).toBeVisible();
@@ -34,7 +37,10 @@ test("Agenda: Agendar passagem manual também normaliza o telefone antes de envi
   await page.getByLabel("Nome (ou telefone)").fill("Cliente Manual E2E");
   await page.getByLabel("Telefone (ou nome)").fill("+55 98 99999-8888");
 
-  await page.getByRole("button", { name: /^Agendar$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Agendar$/ })
+    .first()
+    .click();
 
   await expect.poll(() => createBody?.p_customer_phone, { timeout: 10000 }).toBe("98999998888");
 });

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #442 (crítico): o Supabase devolve no máximo 1.000 linhas por pedido e corta o resto sem
@@ -45,7 +46,7 @@ test("Agenda: a reserva de número 1.005 da janela aparece (busca em páginas)",
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje());
+  await irParaODia(page, hoje());
   await page.getByRole("tab", { name: /^Volta/ }).click();
   await expect(page.getByText("Passageira Lançada Por Último")).toBeVisible();
 
