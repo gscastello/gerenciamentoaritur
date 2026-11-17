@@ -191,13 +191,14 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
 }
 
 /**
- * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
- * e a viagem daquele sentido ainda não saiu: é a viagem de hoje (issue #452 — "Tem vaga de
- * Cantanhede pra São Luís?" às 9h, a equipe respondeu "sim, qual o endereço?" e marcou). Só com a
- * marca da equipe (quem marcou sabe qual viagem), com o sentido conhecido e com tudo o que o cliente
- * escreveu no pedido feito hoje; senão continua sem dia e o bot pergunta (issue #419).
+ * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu:
+ * é a PRÓXIMA viagem daquele sentido — a de hoje se ainda não saiu, senão a de amanhã (issue #452:
+ * "Tem vaga de Cantanhede pra São Luís?" às 9h = Volta de hoje; "vou pro posto" às 16h, com a Ida
+ * do dia já saída = Ida de amanhã; dono, 17/11). Só com a marca da equipe (quem marcou sabe qual
+ * viagem), com o sentido conhecido e com tudo o que o cliente escreveu no pedido feito hoje; senão
+ * continua sem dia e o bot pergunta (issue #419).
  */
-export function viagemDeHojePeloAgendado(
+export function proximaViagemPeloAgendado(
   p: Pick<PedidoExtraido, "direcao" | "ponto" | "tipo">,
   ctx: {
     agendado: boolean;
@@ -217,13 +218,14 @@ export function viagemDeHojePeloAgendado(
         : ctx.pontos.volta.includes(ponto)
           ? "volta"
           : null;
-  if (!direcao || !ctx.horaAgora || viagemDeHojeJaSaiu(direcao, ctx.horaAgora)) return null;
+  if (!direcao || !ctx.horaAgora || !/^\d{2}:\d{2}$/.test(ctx.horaAgora)) return null;
   if (!ctx.mensagensDoCliente.length) return null;
   const todoHoje = ctx.mensagensDoCliente.every((m) => {
     const t = Date.parse(m.em);
     return Number.isFinite(t) && diaCivil(new Date(t)) === ctx.hoje;
   });
-  return todoHoje ? ctx.hoje : null;
+  if (!todoHoje) return null;
+  return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? somarDias(ctx.hoje, 1) : ctx.hoje;
 }
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */

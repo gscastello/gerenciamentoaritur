@@ -59,7 +59,7 @@ import {
   perguntaAoCliente,
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
-  viagemDeHojePeloAgendado,
+  proximaViagemPeloAgendado,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
   juntarPedidosDaMesmaViagem,
@@ -511,22 +511,22 @@ async function lerEGravar(
     });
     Object.assign(p, conferido.pedido);
     if (!algumDiaEscrito && (p.tipo ?? "passagem") !== "encomenda") {
-      // "Tem vaga de Cantanhede pra São Luís?" de manhã + "Agendado ☑️" da equipe = a de hoje (issue #452)
-      const deHoje = viagemDeHojePeloAgendado(p, {
+      // "Tem vaga de Cantanhede pra São Luís?" + "Agendado ☑️" da equipe no mesmo dia = a próxima viagem (issue #452)
+      const proxima = proximaViagemPeloAgendado(p, {
         agendado: opcoes.confirmadoPelaEquipe,
         hoje,
         horaAgora,
         pontos: ctx.pontos,
         mensagensDoCliente,
       });
-      if (deHoje) {
-        if (p.data !== deHoje) {
-          p.duvida = [p.duvida, "Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido, antes da viagem sair: considerei a viagem de hoje."]
+      if (proxima) {
+        if (p.data !== proxima) {
+          p.duvida = [p.duvida, `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a próxima viagem (${proxima === hoje ? "hoje" : "amanhã"}).`]
             .filter(Boolean)
             .join(" ");
         }
         evento("bot_dia_pelo_agendado", { conversa: entrada.chatwootConversationId, lido: p.data ?? null });
-        p.data = deHoje;
+        p.data = proxima;
       } else if (p.data) {
         evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
         p.data = null;
