@@ -759,6 +759,49 @@ export async function mockSupabase(page, opts = {}) {
         ];
         return route.fulfill(json({ success: true, id: `tkt-${ticketSeq}` }));
       }
+      // CRM (issue #446, database/118): números do topo e a conversa da ficha
+      if (fn === "fn_resumo_dos_passageiros") {
+        const n = (f) => customersStatsRows.filter(f).length;
+        return route.fulfill(
+          json({
+            total: customersStatsRows.length,
+            viajaram_30d: n((c) => !!c.ultima_viagem),
+            novos_no_mes: n((c) => c.novo),
+            a_receber: customersStatsRows.reduce((s, c) => s + Number(c.a_receber || 0), 0),
+            a_receber_pessoas: n((c) => Number(c.a_receber) > 0),
+            grupos: {
+              sumiram: n((c) => c.sumiu),
+              sem_pagamento: n((c) => Number(c.a_receber) > 0),
+              frequentes: n((c) => c.frequente),
+              marcada: n((c) => !!c.proxima_data),
+              novos: n((c) => c.novo),
+              sem_nome: n((c) => c.sem_nome),
+            },
+          }),
+        );
+      }
+      if (fn === "rpc_conversa_do_passageiro") {
+        return route.fulfill(
+          json({
+            success: true,
+            chatwoot_conversation_id: 77,
+            mensagens: [
+              { autor: "cliente", texto: "Tem vaga pra quarta?", em: "2026-11-16T09:12:00Z" },
+              { autor: "equipe", texto: "Tem sim. Agendado ☑️", em: "2026-11-16T09:20:00Z" },
+            ],
+            avisos: [
+              {
+                tipo: "confirmacao",
+                status: "enviado",
+                dia: "2026-11-17",
+                sentido: "ida",
+                em: "2026-11-16T21:00:00Z",
+                resposta: "sim",
+              },
+            ],
+          }),
+        );
+      }
       if (fn === "rpc_resolve_support_ticket") {
         const b = req.postDataJSON?.() ?? {};
         tickets = tickets.filter((t) => t.id !== b.p_id);
@@ -1011,7 +1054,15 @@ export async function mockSupabase(page, opts = {}) {
       const id = url.searchParams.get("customer_id").replace("eq.", "");
       return route.fulfill(json(customersStatsRows.find((c) => c.customer_id === id) ?? null));
     } else if (table === "v_customers_stats") {
-      rows = customersStatsRows;
+      // os grupos do CRM (issue #446) chegam como filtros do PostgREST
+      rows = customersStatsRows.filter((c) =>
+        [...url.searchParams.entries()].every(([k, v]) => {
+          if (v === "eq.true") return c[k] === true;
+          if (v.startsWith("gt.")) return Number(c[k] || 0) > Number(v.slice(3));
+          if (v === "not.is.null") return c[k] != null;
+          return true;
+        }),
+      );
       return route.fulfill(
         json(rows, 200, { "content-range": `0-${Math.max(rows.length - 1, 0)}/${rows.length}` }),
       );

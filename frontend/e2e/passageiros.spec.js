@@ -44,10 +44,7 @@ test("Passageiros: lista do servidor, busca e abre o detalhe", async ({ page }) 
   await page.getByRole("button", { name: /^P1 Passageiro 1/ }).click();
   // a ficha abre numa tela própria, com abas (issue #438)
   const ficha = page.getByRole("dialog", { name: /Ficha do passageiro/ });
-  await expect(ficha.getByRole("tab", { name: "Viagens" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(ficha.getByRole("tab", { name: "Resumo" })).toHaveAttribute("aria-selected", "true");
   await ficha.getByRole("tab", { name: "Cadastro" }).click();
   await expect(ficha.getByText("Notas do CRM")).toBeVisible();
   await ficha.getByRole("button", { name: "Voltar" }).click();
@@ -131,6 +128,11 @@ test("Passageiros: histórico de viagens com a data, próximas antes das anterio
   }
   await aba.first().click();
   await page.getByRole("button", { name: /^P1 Passageiro 1/ }).click();
+  // a ficha abre no Resumo (v18, issue #446); o histórico fica na aba Viagens
+  await page
+    .getByRole("dialog", { name: /Ficha do passageiro/ })
+    .getByRole("tab", { name: "Viagens" })
+    .click();
 
   const historico = page
     .getByRole("dialog", { name: /Ficha do passageiro/ })
@@ -185,6 +187,7 @@ test('Agenda: "Ver passageiro" no menu da reserva abre a ficha por cima da Agend
 
   const ficha = page.getByRole("dialog", { name: /Ficha do passageiro/ });
   await expect(ficha.getByRole("heading", { name: "Passageiro 1" })).toBeVisible();
+  await ficha.getByRole("tab", { name: "Viagens" }).click();
   await expect(ficha.getByTestId("viagem-do-historico")).toHaveCount(2);
   await ficha.getByRole("button", { name: "Voltar" }).click();
   await expect(ficha).toHaveCount(0);

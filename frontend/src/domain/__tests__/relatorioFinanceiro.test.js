@@ -102,7 +102,11 @@ describe("agregarPorPeriodo", () => {
   });
 
   it("agrega por dia e por ano", () => {
-    const dados = [e("2026-01-01", "receita", 10), e("2026-01-01", "despesa", 4), e("2027-05-05", "receita", 1)];
+    const dados = [
+      e("2026-01-01", "receita", 10),
+      e("2026-01-01", "despesa", 4),
+      e("2027-05-05", "receita", 1),
+    ];
     expect(agregarPorPeriodo(dados, "dia")).toHaveLength(2);
     const porAno = agregarPorPeriodo(dados, "ano");
     expect(porAno.map((l) => l.periodo)).toEqual(["2026", "2027"]);
@@ -133,12 +137,14 @@ describe("despesaPorCategoria", () => {
     ]);
   });
   it("categoria ausente vira 'outro'", () => {
-    expect(despesaPorCategoria([e("2026-01-01", "despesa", 7)])).toEqual([{ categoria: "outro", total: 7 }]);
+    expect(despesaPorCategoria([e("2026-01-01", "despesa", 7)])).toEqual([
+      { categoria: "outro", total: 7 },
+    ]);
   });
   it("ignora elementos nulos na lista sem quebrar", () => {
-    expect(despesaPorCategoria([null, undefined, e("2026-01-01", "despesa", 3, "pedagio")])).toEqual([
-      { categoria: "pedagio", total: 3 },
-    ]);
+    expect(
+      despesaPorCategoria([null, undefined, e("2026-01-01", "despesa", 3, "pedagio")]),
+    ).toEqual([{ categoria: "pedagio", total: 3 }]);
   });
   it("lista vazia => []", () => {
     expect(despesaPorCategoria([])).toEqual([]);

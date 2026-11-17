@@ -7,12 +7,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { logTecnico, mensagemAmigavel } from "../lib/erros.js";
 import { customersService } from "../services/customersService";
+import { reservationsService } from "../services/reservationsService";
 import { useAsyncAction } from "./useAsyncAction";
 import { useRealtimeTable } from "./useRealtimeTable";
 
 const PAGINA = 25;
 
-export function usePassageiros(busca) {
+export function usePassageiros(busca, { grupo = "todos", ordem = "viagens" } = {}) {
   const [linhas, setLinhas] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,9 @@ export function usePassageiros(busca) {
   const paginaRef = useRef(0);
   const buscaRef = useRef(busca);
   buscaRef.current = busca;
+  // grupo e ordem da lista (issue #446): mudar qualquer um volta para a página 0
+  const filtroRef = useRef({ grupo, ordem });
+  filtroRef.current = { grupo, ordem };
 
   const carregar = useCallback(async (pagina, termo) => {
     setLoading(true);
@@ -30,6 +34,7 @@ export function usePassageiros(busca) {
         search: termo,
         de,
         ate: de + PAGINA - 1,
+        ...filtroRef.current,
       });
       setTotal(t);
       setLinhas((atual) => (pagina === 0 ? novas : [...atual, ...novas]));
@@ -43,10 +48,11 @@ export function usePassageiros(busca) {
   }, []);
 
   // busca (com debounce) → volta pra página 0
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grupo e ordem chegam por filtroRef; aqui só disparam a releitura
   useEffect(() => {
     const t = setTimeout(() => carregar(0, busca), busca ? 300 : 0);
     return () => clearTimeout(t);
-  }, [busca, carregar]);
+  }, [busca, grupo, ordem, carregar]);
 
   // outro atendente mexeu numa reserva/cliente → recarrega a página 0
   useRealtimeTable(["reservations", "customers"], () => carregar(0, buscaRef.current));
@@ -80,6 +86,55 @@ export function usePassageiros(busca) {
     tirarDaLista,
   };
 }
+
+/** Os números do topo de Passageiros e a quantidade de cada grupo (database/118). */
+export function useResumoDosPassageiros() {
+  const [resumo, setResumo] = useState(null);
+  const ler = useCallback(async () => {
+    try {
+      setResumo(await customersService.resumo());
+    } catch (e) {
+      // o resumo é complemento da lista: sem ele, a tela segue com a lista
+      logTecnico(e, { origem: "useResumoDosPassageiros" });
+    }
+  }, []);
+  useEffect(() => {
+    ler();
+  }, [ler]);
+  useRealtimeTable(["reservations", "customers", "payments"], ler);
+  return { resumo, recarregarResumo: ler };
+}
+
+/** A aba Conversa da ficha: lê só quando a aba abre (`ativo`). */
+export function useConversaDoPassageiro(customerId, ativo) {
+  const [conversa, setConversa] = useState(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  useEffect(() => {
+    if (!customerId || !ativo) return undefined;
+    let vivo = true;
+    setCarregando(true);
+    setErro("");
+    customersService
+      .conversa(customerId)
+      .then((c) => vivo && setConversa(c))
+      .catch((e) => {
+        logTecnico(e, { origem: "useConversaDoPassageiro" });
+        if (vivo) setErro(mensagemAmigavel(e, "Não foi possível ler a conversa."));
+      })
+      .finally(() => vivo && setCarregando(false));
+    return () => {
+      vivo = false;
+    };
+  }, [customerId, ativo]);
+  return { conversa, carregando: carregando || (ativo && !conversa && !erro), erro };
+}
+
+// Marca paga uma viagem já feita, pela mesma edição da Agenda (rpc_edit_reservation).
+const marcarComoPaga = (id, valor, forma) =>
+  reservationsService.editReservationFull(id, {
+    paid: { paid: true, amount: valor, method: forma || "dinheiro" },
+  });
 
 // O que o cadastro editado muda na linha de v_customers_stats.
 function camposDaLinha({
@@ -129,7 +184,31 @@ export function usePassageiro(customerId, { inicial = null } = {}) {
     };
   }, [customerId, tentativa]);
 
-  const { viagens, loading: carregandoViagens } = usePassageiroDetalhe(customerId);
+  const {
+    viagens,
+    loading: carregandoViagens,
+    marcarPagaNoHistorico,
+  } = usePassageiroDetalhe(customerId);
+
+  // marcar pago uma viagem já feita (issue #446): a mesma edição da Agenda (rpc_edit_reservation)
+  const pagoAction = useAsyncAction(marcarComoPaga);
+  const marcarPago = useCallback(
+    async (viagem) => {
+      const valor = Number(viagem.valorTotal) || 0;
+      await pagoAction.run(viagem.id, valor, viagem.pagamento);
+      marcarPagaNoHistorico(viagem.id);
+      setP((atual) =>
+        atual
+          ? {
+              ...atual,
+              a_receber: Math.max(0, Number(atual.a_receber || 0) - valor),
+              a_receber_qtd: Math.max(0, Number(atual.a_receber_qtd || 0) - 1),
+            }
+          : atual,
+      );
+    },
+    [pagoAction, marcarPagaNoHistorico],
+  );
 
   const notaAction = useAsyncAction(customersService.updateNotes);
   const salvarNota = useCallback(
@@ -169,6 +248,9 @@ export function usePassageiro(customerId, { inicial = null } = {}) {
         : "") ||
       (removerAction.error
         ? mensagemAmigavel(removerAction.error, "Não foi possível remover o passageiro.")
+        : "") ||
+      (pagoAction.error
+        ? mensagemAmigavel(pagoAction.error, "Não foi possível marcar o pagamento.")
         : ""),
     tentarDeNovo: () => setTentativa((n) => n + 1),
     viagens,
@@ -176,6 +258,8 @@ export function usePassageiro(customerId, { inicial = null } = {}) {
     salvarNota,
     salvarPerfil,
     remover,
+    marcarPago,
+    marcandoPago: pagoAction.loading,
   };
 }
 
@@ -210,6 +294,22 @@ function usePassageiroDetalhe(customerId) {
     };
   }, [customerId]);
 
+  // a viagem marcada como paga na ficha muda na hora (e no cache)
+  const marcarPagaNoHistorico = useCallback(
+    (id) => {
+      setViagens((atual) => {
+        const nova = (atual ?? []).map((v) => (v.id === id ? { ...v, pago: true } : v));
+        cache.current.set(customerId, nova);
+        return nova;
+      });
+    },
+    [customerId],
+  );
+
   // antes da primeira leitura também é "carregando" (o skeleton entra sem piscar "nenhuma viagem")
-  return { viagens: viagens ?? [], loading: loading || (!!customerId && viagens === null) };
+  return {
+    viagens: viagens ?? [],
+    loading: loading || (!!customerId && viagens === null),
+    marcarPagaNoHistorico,
+  };
 }

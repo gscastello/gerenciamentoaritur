@@ -24,10 +24,7 @@ export function runDiagnostics(reservas, capacidade, trips) {
 
     if (novo.direcao && !trips[novo.direcao]) {
       issues.push(`Reserva ${novo.id} com direção inválida (${novo.direcao}).`);
-    } else if (
-      novo.direcao &&
-      !trips[novo.direcao].pontos.find((p) => p.id === novo.pontoId)
-    ) {
+    } else if (novo.direcao && !trips[novo.direcao].pontos.find((p) => p.id === novo.pontoId)) {
       issues.push(`Reserva ${novo.id} aponta para um local de embarque que não existe mais.`);
     }
 
