@@ -228,6 +228,11 @@ Sair); cada tela mostra ali só os seus controles. Barra de baixo flutuante com 
 Agenda, a lotação é o **mapa dos lugares** do veículo do dia (issue #430, `domain/mapaDosLugares.js`): ônibus de 31
 com 2 na frente à esquerda (porta à direita), fileiras de 2 + corredor + 2 e o fundo com 5; van de 15 com 2 + corredor
 + 1 e o fundo com 3.
+**Visual v18** (issue #446, simulação aprovada em 17/11): paleta em `C` com neutros puxados para o vermelho da marca
+(`#080606`, `#110D0D`, `#1B1616`, `#2B2525`; texto `#F5F3F1`/`#B6AFAD`/`#9E9695`; botão `#D70A20`, a marca `#E4121F`
+fica em `C.lanterna`), as mesmas cores como `--at-*` para a `ui/` (ex.: `FolhaDeBaixo`). Na Agenda, a semana fica no
+topo com a lotação de cada dia e o mês abre num calendário (`domain/semanaDaAgenda.js`); abas Ida/Volta e a faixa de
+cada categoria de embarque ficam presas no topo (`--topo-h`, `--seletor-h`). O Início não muda.
 Artes oficiais em `frontend/public/brand/` (logo para fundo claro e escuro — o slogan já faz parte dela —, AT e a
 capa do Início). Toque em todo botão (`btn-press`/`toque-at`), nada sai da tela de 320 a 430 px.
 
