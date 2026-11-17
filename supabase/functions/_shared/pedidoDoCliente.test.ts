@@ -383,3 +383,32 @@ Deno.test("#415: 'segunda pra ir e terça pra volta' — monta a Volta que falto
   // a mensagem que cita os dois dias não decide nenhum deles
   assertEquals(pedidosPeloSentidoDoDia([ida], conversa), [ida]);
 });
+
+Deno.test("#451 o dia de uma mensagem sobre encomenda não trava as passagens pedidas depois", async () => {
+  const { conferenciaFinal, conferirPeloCliente, semFalaDeEncomenda } = await import("./pedidoDoCliente.ts");
+  // 16/11/2026 (segunda): de manhã fala de uma encomenda "hoje"; à tarde pede duas passagens sem dia
+  const msgs = [
+    { texto: "Bom dia", em: "2026-11-16T13:44:00Z" },
+    { texto: "Pra pegar hoje a encomenda", em: "2026-11-16T13:44:30Z" },
+    { texto: "Eu já quero marcar duas passagens", em: "2026-11-16T19:08:00Z" },
+    { texto: "Daqui de São Luís pra Pirapemas", em: "2026-11-16T19:09:00Z" },
+    { texto: "São duas passagens", em: "2026-11-16T19:10:00Z" },
+    { texto: "Rua Exemplo, 10 Bairro Fictício", em: "2026-11-16T19:34:00Z" },
+  ];
+  const ctx = { hoje: "2026-11-16", pedidosLidos: 1 };
+  assertEquals(semFalaDeEncomenda(msgs).length, 5);
+  // a reserva da Ida de amanhã com 2 passagens passa na conferência final
+  assertEquals(
+    conferenciaFinal({ type: "passagem", trip_date: "2026-11-17", direction: "ida", quantity: 2, route_point_code: "busca" }, msgs, ctx),
+    [],
+  );
+  // e o "hoje" da encomenda não vira o dia da passagem nem aviso de dia diferente
+  const ctxPedido = { ...ctx, pontosIda, bairros };
+  const r = conferirPeloCliente({ data: "2026-11-17", direcao: "ida", quantidade: 2 } as CamposDoPedido, msgs, ctxPedido);
+  assertEquals(r.avisos.filter((a) => a.includes("dia")), []);
+  const semDia = conferirPeloCliente({ direcao: "ida", quantidade: 2 } as CamposDoPedido, msgs, ctxPedido);
+  assertEquals(semDia.pedido.data, undefined);
+  // dia escrito junto do pedido de passagem continua valendo
+  const comDia = [...msgs, { texto: "É pra quarta", em: "2026-11-16T19:40:00Z" }];
+  assertEquals(conferenciaFinal({ type: "passagem", trip_date: "2026-11-17", direction: "ida", quantity: 2 }, comDia, ctx).length, 1);
+});
