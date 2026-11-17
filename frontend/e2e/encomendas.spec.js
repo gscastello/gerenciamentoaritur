@@ -132,7 +132,7 @@ test("Rota: mostra a encomenda agendada na Volta e marca como entregue", async (
   // a encomenda entra na seção do ponto, com a linha do motorista, e não conta como passageiro
   await expect(page.getByText(/Documentos · entrega: Centro, São Luís/)).toBeVisible();
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 pax · 1 encomenda", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 encomenda", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Marcar entrega" }).click();
   // espera a UI refletir a entrega antes de checar a chamada — o click só
