@@ -22,7 +22,7 @@ function toqueIgnorado(alvo) {
   return false;
 }
 
-export function PuxarParaAtualizar({ onAtualizar, cor = "currentColor", fundo = "#1c1c1c" }) {
+export function PuxarParaAtualizar({ onAtualizar, cor = "currentColor", fundo = "#1B1616" }) {
   const reduzido = useReducedMotion();
   const [distancia, setDistancia] = useState(0);
   const [atualizando, setAtualizando] = useState(false);

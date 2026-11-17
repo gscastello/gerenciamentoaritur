@@ -202,7 +202,7 @@ test("Agenda: encomenda agendada aparece no ponto da viagem como uma passagem, s
   await expect(page.getByRole("link", { name: /WhatsApp/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Mais ações/ }).first()).toBeVisible();
   // cabeçalho do ponto conta a encomenda à parte; nenhuma passagem
-  await expect(page.getByText("1 encomenda", { exact: true })).toBeVisible();
+  await expect(page.getByText(/(^|, )1 encomenda$/)).toBeVisible();
   await expect(page.getByText(/\d passage(m|ns)\b/)).toHaveCount(0);
 });
 

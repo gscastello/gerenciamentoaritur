@@ -124,6 +124,6 @@ test("Agenda: as vagas são as da viagem do dia (van 15 na Ida, ônibus 31 na Vo
     .click();
 
   const seletor = page.getByTestId("seletor-sentido");
-  await expect(seletor.getByRole("tab", { name: /Ida/ })).toContainText("0/15");
-  await expect(seletor.getByRole("tab", { name: /Volta/ })).toContainText("0/31");
+  await expect(seletor.getByRole("tab", { name: /Ida/ })).toContainText("0 de 15");
+  await expect(seletor.getByRole("tab", { name: /Volta/ })).toContainText("0 de 31");
 });

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #432: "Avisar passageiros" na Agenda — a mensagem de cada um com o horário do ponto dele;
@@ -49,7 +49,7 @@ test("Agenda: avisar os passageiros com o horário do ponto de cada um", async (
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await escolherSentido(page, "Ida");
   await page.getByRole("button", { name: "Avisar passageiros" }).click();
 
@@ -103,7 +103,7 @@ test("Agenda: pedir confirmação da viagem e ver quem já confirmou (issue #434
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await escolherSentido(page, "Ida");
   // na Agenda, quem respondeu SIM aparece marcado
   await expect(page.getByText("✓ Confirmou")).toBeVisible();
@@ -149,7 +149,7 @@ test('Agenda: na Volta, "Em rota" avisa que já estamos buscando', async ({ page
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await escolherSentido(page, "Volta");
   await page.getByRole("button", { name: "Avisar passageiros" }).click();
   const janela = page.getByTestId("avisar-passageiros");

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issues #196 e #198: reservas de "Buscar em casa" — copiar endereço +
@@ -83,7 +84,7 @@ async function abrir(page) {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 }
 
 const linha = (page, nome) => page.locator("div.row-hover", { hasText: nome });

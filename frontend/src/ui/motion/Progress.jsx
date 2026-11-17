@@ -4,7 +4,7 @@ import { useReducedMotion } from "./useReducedMotion.js";
  * Barra de progresso. `value` 0..100 => determinada (steps de formulário,
  * upload). Sem `value` => indeterminada (carregando sem total conhecido).
  */
-export function ProgressBar({ value, height = 4, trackColor = "var(--panel2,#1c222b)", color = "var(--amber,#e8a33d)", label }) {
+export function ProgressBar({ value, height = 4, trackColor = "var(--panel2,#2B2525)", color = "var(--amber,#D70A20)", label }) {
   const reduced = useReducedMotion();
   const indeterminate = value == null;
 

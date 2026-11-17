@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // CRM paginado no servidor (v_customers_stats, database/37).
@@ -173,7 +174,7 @@ test('Agenda: "Ver passageiro" no menu da reserva abre a ficha por cima da Agend
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await page.getByRole("tab", { name: /^Ida/ }).click();
 
   await page
@@ -202,7 +203,7 @@ test('Agenda: motorista não vê "Ver passageiro"', async ({ page }) => {
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
   await page.getByRole("tab", { name: /^Ida/ }).click();
   await page
     .getByRole("button", { name: /^Mais ações de/ })

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #185: na Agenda, reservas de ponto fixo (Rodoviária / Retorno /
@@ -50,7 +50,7 @@ test("Agenda: ponto fixo mostra só o nome do passageiro e o telefone", async ({
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 
   // o nome do passageiro aparece com destaque e o telefone é um link de ligação
   const nomeRod = page.getByText("Maria da Rodoviária Teste", { exact: true });
@@ -94,7 +94,7 @@ test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço 
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 
   const linha = page.locator("div.row-hover", { hasText: "Ana da Volta Teste" });
   await expect(linha).toBeVisible();
@@ -126,7 +126,7 @@ test("Agenda: em Outros a linha mostra só o local citado, sem repetir 'Outros' 
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 
   // a seção se chama "Outros"; a linha mostra só o embarque citado pelo cliente
   await expect(page.getByText("Outros", { exact: true }).first()).toBeVisible();

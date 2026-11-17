@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #237: na Volta, quem desce em cidade que não é parada fixa ganha destaque.
@@ -33,8 +33,10 @@ for (const aba of ["Agenda", "Rota"]) {
       .getByRole("button", { name: new RegExp(`^${aba}$`) })
       .first()
       .click();
-    await page.locator('input[type="date"]').first().fill(hoje);
-    if (aba === "Agenda") await escolherSentido(page, "Volta");
+    if (aba === "Agenda") {
+      await irParaODia(page, hoje);
+      await escolherSentido(page, "Volta");
+    } else await page.locator('input[type="date"]').first().fill(hoje);
 
     const selos = page.getByTestId("selo-cidade-intermediaria");
     await expect(selos).toHaveCount(1);

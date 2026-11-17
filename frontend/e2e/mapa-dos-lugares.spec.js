@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { escolherSentido } from "./support/navegar.js";
+import { escolherSentido, irParaODia } from "./support/navegar.js";
 import { mockSupabase } from "./support/supabaseMock.js";
 
 // Issue #430: na Agenda, o mapa dos lugares do veículo do dia no lugar da barra de lotação —
@@ -70,7 +70,7 @@ test("Agenda: mapa dos lugares do ônibus (31) na Ida e da van (15) na Volta", a
     .getByRole("button", { name: /^Agenda$/ })
     .first()
     .click();
-  await page.locator('input[type="date"]').first().fill(hoje);
+  await irParaODia(page, hoje);
 
   await escolherSentido(page, "Ida");
   const ida = page.getByTestId("mapa-lugares-ida");

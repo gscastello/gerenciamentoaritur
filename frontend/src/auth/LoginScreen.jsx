@@ -9,15 +9,15 @@ import { ProgressBar } from "../ui/motion/index.js";
 import { useAuth } from "./AuthProvider.jsx";
 
 const C = {
-  bg: "#0A0B0D",
-  panel: "#131417",
-  panel2: "#1B1C20",
-  border: "#2A2C31",
-  ink: "#F3F4F6",
-  inkSoft: "#A7ABB3",
-  inkFaint: "#8A8E96",
-  brand: "#E4121F",
-  red: "#F0625F",
+  bg: "#080606",
+  panel: "#110D0D",
+  panel2: "#1B1616",
+  border: "#2B2525",
+  ink: "#F5F3F1",
+  inkSoft: "#B6AFAD",
+  inkFaint: "#9E9695",
+  brand: "#D70A20",
+  red: "#FF6367",
 };
 
 export function LoginScreen() {
@@ -82,7 +82,7 @@ export function LoginScreen() {
         style={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(180deg, rgba(10,11,13,0) 18%, rgba(10,11,13,.78) 48%, ${C.bg} 66%)`,
+          background: `linear-gradient(180deg, rgba(8,6,6,0) 18%, rgba(8,6,6,.78) 48%, ${C.bg} 66%)`,
         }}
       />
       <form
@@ -180,7 +180,7 @@ export function LoginScreen() {
         >
           {busy ? "Entrando…" : "Entrar"}
         </button>
-        {busy && <ProgressBar color="#E4121F" trackColor="#2A2C31" />}
+        {busy && <ProgressBar color="#D70A20" trackColor="#2B2525" />}
       </form>
       <style>{`
         .login-entrar { transition: transform .12s cubic-bezier(.2,0,0,1), background-color .15s ease; }
@@ -204,7 +204,7 @@ const labelStyle = {
 const inputStyle = {
   width: "100%",
   minHeight: 48,
-  background: "rgba(19,20,23,.92)",
+  background: "rgba(17,13,13,.92)",
   border: `1px solid ${C.border}`,
   borderRadius: 10,
   padding: "10px 12px",

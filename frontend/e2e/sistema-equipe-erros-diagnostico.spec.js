@@ -151,5 +151,8 @@ test("Sistema: diagnóstico com data de viagem mostra 'Ver reserva' e navega pra
   await page.getByRole("button", { name: "Ver reserva" }).click();
 
   await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible();
-  await expect(page.locator('input[type="date"]').first()).toHaveValue("2026-09-25");
+  await expect(page.getByTestId("dia-da-agenda").filter({ visible: true })).toHaveAttribute(
+    "data-dia",
+    "2026-09-25",
+  );
 });
