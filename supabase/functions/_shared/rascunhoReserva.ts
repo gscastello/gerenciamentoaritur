@@ -59,6 +59,7 @@ import {
   perguntaAoCliente,
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
+  viagemDeHojePeloAgendado,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
   juntarPedidosDaMesmaViagem,
@@ -509,9 +510,27 @@ async function lerEGravar(
       sentidoDaEquipe: dadosMarca.direcao ?? null,
     });
     Object.assign(p, conferido.pedido);
-    if (!algumDiaEscrito && p.data && (p.tipo ?? "passagem") !== "encomenda") {
-      evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
-      p.data = null;
+    if (!algumDiaEscrito && (p.tipo ?? "passagem") !== "encomenda") {
+      // "Tem vaga de Cantanhede pra São Luís?" de manhã + "Agendado ☑️" da equipe = a de hoje (issue #452)
+      const deHoje = viagemDeHojePeloAgendado(p, {
+        agendado: opcoes.confirmadoPelaEquipe,
+        hoje,
+        horaAgora,
+        pontos: ctx.pontos,
+        mensagensDoCliente,
+      });
+      if (deHoje) {
+        if (p.data !== deHoje) {
+          p.duvida = [p.duvida, "Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido, antes da viagem sair: considerei a viagem de hoje."]
+            .filter(Boolean)
+            .join(" ");
+        }
+        evento("bot_dia_pelo_agendado", { conversa: entrada.chatwootConversationId, lido: p.data ?? null });
+        p.data = deHoje;
+      } else if (p.data) {
+        evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
+        p.data = null;
+      }
     }
     // busca em casa num endereço de Pirapemas/Cantanhede não existe: é a Volta saindo de lá (issue #419)
     if (

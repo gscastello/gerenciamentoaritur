@@ -6,7 +6,7 @@
 // toque. Aqui: o filtro barato antes de chamar o modelo, o formato que o modelo
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
-import { type MensagemDaConversa, somarDias } from "./agentePuro.ts";
+import { diaCivil, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
 import { normalizarTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
@@ -188,6 +188,42 @@ export const SAIDA_ENCERRADA = { ida: "07:00", volta: "14:00" } as const;
 
 export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string | null | undefined): boolean {
   return !!horaAgora && /^\d{2}:\d{2}$/.test(horaAgora) && horaAgora >= SAIDA_ENCERRADA[direcao];
+}
+
+/**
+ * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
+ * e a viagem daquele sentido ainda não saiu: é a viagem de hoje (issue #452 — "Tem vaga de
+ * Cantanhede pra São Luís?" às 9h, a equipe respondeu "sim, qual o endereço?" e marcou). Só com a
+ * marca da equipe (quem marcou sabe qual viagem), com o sentido conhecido e com tudo o que o cliente
+ * escreveu no pedido feito hoje; senão continua sem dia e o bot pergunta (issue #419).
+ */
+export function viagemDeHojePeloAgendado(
+  p: Pick<PedidoExtraido, "direcao" | "ponto" | "tipo">,
+  ctx: {
+    agendado: boolean;
+    hoje: string;
+    horaAgora: string | null | undefined;
+    pontos: PontosPorSentido;
+    mensagensDoCliente: { em: string }[];
+  },
+): string | null {
+  if (!ctx.agendado || (p.tipo ?? "passagem") === "encomenda") return null;
+  const ponto = String(p.ponto ?? "").toLowerCase();
+  const direcao =
+    p.direcao === "ida" || p.direcao === "volta"
+      ? p.direcao
+      : ctx.pontos.ida.includes(ponto)
+        ? "ida"
+        : ctx.pontos.volta.includes(ponto)
+          ? "volta"
+          : null;
+  if (!direcao || !ctx.horaAgora || viagemDeHojeJaSaiu(direcao, ctx.horaAgora)) return null;
+  if (!ctx.mensagensDoCliente.length) return null;
+  const todoHoje = ctx.mensagensDoCliente.every((m) => {
+    const t = Date.parse(m.em);
+    return Number.isFinite(t) && diaCivil(new Date(t)) === ctx.hoje;
+  });
+  return todoHoje ? ctx.hoje : null;
 }
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
