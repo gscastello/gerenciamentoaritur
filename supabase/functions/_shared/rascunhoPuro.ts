@@ -195,8 +195,10 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
  * é a PRÓXIMA viagem daquele sentido — a de hoje se ainda não saiu, senão a de amanhã (issue #452:
  * "Tem vaga de Cantanhede pra São Luís?" às 9h = Volta de hoje; "vou pro posto" às 16h, com a Ida
  * do dia já saída = Ida de amanhã; dono, 17/11). Só com a marca da equipe (quem marcou sabe qual
- * viagem), com o sentido conhecido e com tudo o que o cliente escreveu no pedido feito hoje; senão
- * continua sem dia e o bot pergunta (issue #419).
+ * viagem), com o sentido ESCRITO (pelo cliente, pela origem do trecho, na marca ou pelo ponto dito —
+ * o sentido só lido pelo modelo pode estar errado e o dia não pode esconder isso) e igual ao lido, e
+ * com tudo o que o cliente escreveu no pedido feito hoje; senão continua sem dia e o bot pergunta
+ * (issue #419).
  */
 export function proximaViagemPeloAgendado(
   p: Pick<PedidoExtraido, "direcao" | "ponto" | "tipo">,
@@ -206,6 +208,8 @@ export function proximaViagemPeloAgendado(
     horaAgora: string | null | undefined;
     pontos: PontosPorSentido;
     mensagensDoCliente: { em: string }[];
+    /** o sentido escrito na conversa (marca, origem do trecho, cliente ou ponto dito), se há */
+    sentidoEscrito: "ida" | "volta" | null;
   },
 ): string | null {
   if (!ctx.agendado || (p.tipo ?? "passagem") === "encomenda") return null;
@@ -218,7 +222,8 @@ export function proximaViagemPeloAgendado(
         : ctx.pontos.volta.includes(ponto)
           ? "volta"
           : null;
-  if (!direcao || !ctx.horaAgora || !/^\d{2}:\d{2}$/.test(ctx.horaAgora)) return null;
+  if (!direcao || direcao !== ctx.sentidoEscrito) return null;
+  if (!ctx.horaAgora || !/^\d{2}:\d{2}$/.test(ctx.horaAgora)) return null;
   if (!ctx.mensagensDoCliente.length) return null;
   const todoHoje = ctx.mensagensDoCliente.every((m) => {
     const t = Date.parse(m.em);

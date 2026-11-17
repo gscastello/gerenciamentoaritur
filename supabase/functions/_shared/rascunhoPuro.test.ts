@@ -1093,15 +1093,19 @@ Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido é a pr�
   const pontos = { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] };
   // "Tem vaga de Cantanhede pra São Luís?" às 09:21 (12:21 UTC), Agendado às 10:37
   const doDia = [{ em: "2026-11-17T12:21:00Z" }, { em: "2026-11-17T13:30:00Z" }];
-  const base = { agendado: true, hoje: "2026-11-17", horaAgora: "10:37", pontos, mensagensDoCliente: doDia };
+  const base = { agendado: true, hoje: "2026-11-17", horaAgora: "10:37", pontos, mensagensDoCliente: doDia, sentidoEscrito: "volta" as const };
   assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, base), "2026-11-17");
   // o sentido pelo ponto, quando a leitura não disse
   assertEquals(proximaViagemPeloAgendado({ ponto: "cantanhede" }, base), "2026-11-17");
   // sem a marca da equipe, o bot não decide o dia: pergunta (issue #419)
   assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, agendado: false }), null);
   // a viagem daquele sentido já saiu: é a de amanhã ("vou pro posto" às 17h = Ida de amanhã; dono, 17/11)
-  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, { ...base, horaAgora: "11:50" }), "2026-11-18");
-  assertEquals(proximaViagemPeloAgendado({ ponto: "outro" }, { ...base, horaAgora: "17:58" }), "2026-11-18");
+  const ida = { ...base, sentidoEscrito: "ida" as const };
+  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "11:50" }), "2026-11-18");
+  assertEquals(proximaViagemPeloAgendado({ ponto: "outro" }, { ...ida, horaAgora: "17:58" }), "2026-11-18");
+  // sentido só lido pelo modelo (ninguém escreveu) ou contrário ao escrito: o dia não esconde o chute
+  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, { ...base, sentidoEscrito: null }), null);
+  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, base), null);
   assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, horaAgora: "15:10" }), "2026-11-18");
   assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, horaAgora: null }), null);
   // pedido que começou ontem: o dia pode ser outro

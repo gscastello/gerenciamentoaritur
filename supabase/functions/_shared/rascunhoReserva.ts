@@ -498,6 +498,12 @@ async function lerEGravar(
   const algumDiaEscrito = datasEscritas(mensagensDoCliente).length > 0 ||
     confirmadas.length > 0 ||
     datasEscritas(recentes.filter((m) => m.quem === "equipe" && m.id !== entrada.mensagemId).map((m) => ({ texto: m.texto, em: m.em }))).length > 0;
+  // o sentido ESCRITO na conversa (não o lido pelo modelo): só ele deixa o Agendado escolher o dia (issue #452)
+  const sentidoComprovado =
+    dadosMarca.direcao ??
+    origemUnica?.sentido ??
+    sentidoEscrito(textosDoCliente) ??
+    (pontoEscrito(textosDoCliente, ctx.pontos.ida) ? "ida" : null);
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -518,6 +524,7 @@ async function lerEGravar(
         horaAgora,
         pontos: ctx.pontos,
         mensagensDoCliente,
+        sentidoEscrito: sentidoComprovado,
       });
       if (proxima) {
         if (p.data !== proxima) {
