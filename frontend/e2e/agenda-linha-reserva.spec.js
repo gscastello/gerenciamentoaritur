@@ -58,7 +58,11 @@ test("Agenda: ponto fixo mostra só o nome do passageiro e o telefone", async ({
   expect(
     await nomeRod.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
   ).toBeGreaterThanOrEqual(15);
-  await expect(page.getByRole("link", { name: /98991234567/ })).toBeVisible();
+  // ligar e WhatsApp ficam na folha que abre ao tocar na linha (v18, issue #446)
+  await page.getByRole("button", { name: "Mais ações de Maria da Rodoviária Teste" }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /98991234567/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // na linha do ponto fixo NÃO repete "Rodoviária" ao lado do nome (o título da seção já diz)
   const linhaRod = page.locator("div.row-hover", { hasText: "Maria da Rodoviária Teste" });
@@ -67,7 +71,8 @@ test("Agenda: ponto fixo mostra só o nome do passageiro e o telefone", async ({
   // ponto de busca continua mostrando o bairro (é a informação útil)
   const linhaBusca = page.locator("div.row-hover", { hasText: "João do Bairro Teste" });
   await expect(linhaBusca).toContainText("Cohatrac");
-  await expect(page.getByRole("link", { name: /98987654321/ })).toBeVisible();
+  await page.getByRole("button", { name: "Mais ações de João do Bairro Teste" }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /98987654321/ })).toBeVisible();
 });
 
 test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço informado", async ({
@@ -100,7 +105,8 @@ test("Agenda: na Volta a linha não repete a cidade do tópico, só o endereço 
   await expect(linha).toBeVisible();
   await expect(linha).toContainText("Rua das Flores, 7");
   await expect(linha).not.toContainText(/Pirapemas/i);
-  await expect(linha.getByRole("link", { name: /98981112222/ })).toBeVisible();
+  await linha.getByRole("button", { name: /^Mais ações/ }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /98981112222/ })).toBeVisible();
 });
 
 test("Agenda: em Outros a linha mostra só o local citado, sem repetir 'Outros' (issue #261)", async ({
