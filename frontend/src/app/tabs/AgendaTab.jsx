@@ -10,7 +10,7 @@ import {
   MapPin,
   Megaphone,
   MessageCircle,
-  MoreHorizontal,
+  MoreVertical,
   NotebookPen,
   Package,
   Pencil,
@@ -63,6 +63,7 @@ import { copiarTexto } from "../../lib/clipboard.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
 import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
+import { FolhaDeBaixo } from "../../ui/FolhaDeBaixo.jsx";
 import { FadeIn, Presence } from "../../ui/motion/index.js";
 import {
   BUSCA_MODOS,
@@ -678,7 +679,11 @@ export default function AgendaTab({
                     {linhaReserva(r, trips)}
                   </div>
                   <div className="text-[12.5px]" style={{ color: C.inkSoft }}>
-                    {[r.nome, r.motivoPendente || "fora da rota padrão"]
+                    {[
+                      r.direcao === "ida" ? "Ida" : "Volta",
+                      r.nome,
+                      r.motivoPendente || "fora da rota padrão",
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
@@ -908,12 +913,10 @@ function GruposDeBusca({ itens, trips }) {
     </span>
   );
 }
-// Ações da linha do passageiro na Agenda. Enxuto e com rótulo (o motorista
-// no celular não vê tooltip): WhatsApp · Editar · Cancelar. Pagamento,
-// comprovante e localização saíram — pagamento/comprovante agora ficam
-// dentro de "Editar reserva".
-// Menu "⋯" da linha (crítica de design, issue #393): as ações raras saem do caminho do dedo.
-// Abre de baixo, com itens de 48 px; Cancelar fica por último, em vermelho de texto.
+// Ações da linha do passageiro na Agenda (v18, issue #446): tocar na linha abre esta folha de
+// baixo. Em cima, Ligar e WhatsApp (o motorista no celular não vê tooltip, então tudo tem rótulo);
+// embaixo as ações com itens de 48 px; Cancelar por último, em vermelho de texto.
+// Pagamento e comprovante ficam dentro de "Editar reserva".
 function AcoesDaReserva({
   r,
   aberto,
@@ -925,8 +928,9 @@ function AcoesDaReserva({
   textoCopia,
 }) {
   const [copiado, setCopiado] = useState("");
+  const tel = digitos(r.telefone);
   const tel2 = digitos(r.telefone2);
-  if (!aberto) return null;
+  const nome = r.nome || r.telefone || "Reserva";
   const item = (Icon, rotulo, onClick, perigo = false) => (
     <button
       type="button"
@@ -942,103 +946,102 @@ function AcoesDaReserva({
     setCopiado("");
     onFechar();
   };
-  // portal: o conteúdo da tela entra com transform (stagger), que prenderia o "fixed" na seção
-  return createPortal(
-    <div
-      className="fixed inset-0 z-40 anim-fadeIn"
-      style={{ background: "rgba(0,0,0,.55)" }}
-      onClick={fechar}
-      onKeyDown={(e) => e.key === "Escape" && fechar()}
-      role="presentation"
+  const botaoGrande =
+    "btn-press min-h-[48px] rounded-2xl flex items-center justify-center gap-2 text-[14.5px] font-semibold";
+  return (
+    <FolhaDeBaixo
+      aberta={aberto}
+      onFechar={fechar}
+      titulo={nome}
+      subtitulo={`${r.tipo === "encomenda" ? "Encomenda" : `${r.quantidade}P`} · ${r.telefone || "sem telefone"}`}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Ações de ${r.nome || "reserva"}`}
-        className="absolute left-2 right-2 md:left-1/2 md:right-auto md:w-[380px] md:-translate-x-1/2 rounded-3xl border p-2 anim-slideDown"
-        style={{
-          bottom: "max(8px, env(safe-area-inset-bottom))",
-          background: C.panel,
-          borderColor: C.border,
-          boxShadow: "0 24px 48px -16px #000",
-        }}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <div className="w-9 h-1 rounded-full mx-auto mt-1 mb-2" style={{ background: C.border }} />
-        <div className="px-3 pb-2">
-          <div className="text-[15px] font-semibold break-words" style={{ color: C.ink }}>
-            {r.nome || r.telefone || "Reserva"}
-          </div>
-          <div className="text-xs break-words" style={{ color: C.inkFaint }}>
-            {r.tipo === "encomenda" ? "Encomenda" : `${r.quantidade}P`} ·{" "}
-            {r.telefone || "sem telefone"}
-          </div>
+      {tel && (
+        <div className="grid grid-cols-2 gap-2 px-2 pb-2">
+          <a
+            href={`tel:${tel}`}
+            data-foco-inicial
+            aria-label={`Ligar para ${nome} (${r.telefone})`}
+            className={botaoGrande}
+            style={{ background: C.ink, color: C.bg }}
+            onClick={fechar}
+          >
+            <PhoneCall size={18} /> Ligar
+          </a>
+          <a
+            href={`https://wa.me/55${tel}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`WhatsApp de ${nome}`}
+            className={botaoGrande}
+            style={{ background: C.border, color: C.ink }}
+            onClick={fechar}
+          >
+            <MessageCircle size={18} /> WhatsApp
+          </a>
         </div>
-        {item(Pencil, "Editar", () => {
+      )}
+      {item(Pencil, "Editar", () => {
+        fechar();
+        onEditar(r);
+      })}
+      {onVerPassageiro &&
+        r.customer_id &&
+        item(UserRound, "Ver passageiro", () => {
           fechar();
-          onEditar(r);
+          onVerPassageiro(r);
         })}
-        {onVerPassageiro &&
-          r.customer_id &&
-          item(UserRound, "Ver passageiro", () => {
+      {textoCopia &&
+        item(
+          copiado === "ok" ? Check : Copy,
+          copiado === "ok"
+            ? "Copiado"
+            : copiado === "erro"
+              ? "Não copiou"
+              : "Copiar endereço + contato",
+          async () => {
+            const ok = await copiarTexto(textoCopia);
+            setCopiado(ok ? "ok" : "erro");
+            setTimeout(fechar, 900);
+          },
+        )}
+      {tel2 &&
+        item(PhoneCall, `Ligar no 2º telefone (${r.telefone2})`, () => {
+          window.location.href = `tel:${tel2}`;
+          fechar();
+        })}
+      {onExtra &&
+        r.tipo === "passagem" &&
+        r.status !== "cancelada" &&
+        item(Users, ehExtra(r) ? "Voltar às vagas" : "Tornar extra", () => {
+          fechar();
+          onExtra(r, !ehExtra(r));
+        })}
+      {r.status !== "cancelada" &&
+        item(
+          X,
+          r.tipo === "encomenda" ? "Cancelar encomenda" : "Cancelar reserva",
+          () => {
             fechar();
-            onVerPassageiro(r);
-          })}
-        {textoCopia &&
-          item(
-            copiado === "ok" ? Check : Copy,
-            copiado === "ok"
-              ? "Copiado"
-              : copiado === "erro"
-                ? "Não copiou"
-                : "Copiar endereço + contato",
-            async () => {
-              const ok = await copiarTexto(textoCopia);
-              setCopiado(ok ? "ok" : "erro");
-              setTimeout(fechar, 900);
-            },
-          )}
-        {tel2 &&
-          item(PhoneCall, `Ligar no 2º telefone (${r.telefone2})`, () => {
-            window.location.href = `tel:${tel2}`;
-            fechar();
-          })}
-        {onExtra &&
-          r.tipo === "passagem" &&
-          r.status !== "cancelada" &&
-          item(Users, ehExtra(r) ? "Voltar às vagas" : "Tornar extra", () => {
-            fechar();
-            onExtra(r, !ehExtra(r));
-          })}
-        {r.status !== "cancelada" &&
-          item(
-            X,
-            r.tipo === "encomenda" ? "Cancelar encomenda" : "Cancelar reserva",
-            () => {
-              fechar();
-              onStatus(r.id, "cancelada");
-            },
-            true,
-          )}
-      </div>
-    </div>,
-    document.body,
+            onStatus(r.id, "cancelada");
+          },
+          true,
+        )}
+    </FolhaDeBaixo>
   );
 }
 
-// Uma linha por passageiro (crítica de design, issue #393): ~52 px em vez de um cartão de
-// ~150 px com 5 botões. O endereço de embarque continua em primeiro (é o que o motorista
-// procura); embaixo, o nome, o valor e o que for exceção. Ligar e WhatsApp em ícones de 44 px;
-// o resto no "⋯". Status por texto e ícone, sem cor — o laranja fica só para quem desce numa
-// cidade do caminho (pedido do dono).
+// Uma linha por passageiro (v18, issue #446): a caixa de embarque na linha da rota, que acende
+// conforme o ônibus enche; o endereço em destaque e, embaixo, o nome, onde desce e o que for
+// exceção (os dois inteiros, sem reticências — dono, issue #399). O valor ou "pago" fica à direita.
+// Tocar na linha abre as ações (ligar, WhatsApp, editar, ver passageiro, cancelar) numa folha de
+// baixo. Status por texto e desenho, sem cor — o laranja fica só para quem desce numa cidade do
+// caminho (pedido do dono).
 function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassageiro }) {
   const [menu, setMenu] = useState(false);
   const embarcado = r.status === "embarcado";
   const marcado = embarcado || r.status === "nao_compareceu";
   const ehEnc = r.tipo === "encomenda";
   const endereco = pontoSoNome(r) ? detalheDoPonto(r) : enderecoEmbarque(r, trips) || "";
-  const tel = digitos(r.telefone);
   const ehBusca = r.pontoId === "busca";
   const modoBusca = ehBusca ? BUSCA_MODOS[responsavelDaBusca(r)] : null;
   const cidadeIntermediaria = useCidadeIntermediaria(r);
@@ -1053,18 +1056,17 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassagei
   const corTexto = marcado ? C.inkFaint : C.ink;
   const riscado = r.status === "nao_compareceu" ? "line-through" : "none";
   const nome = r.nome || (ehEnc ? r.telefone : "") || "—";
-  // dono (issue #399): o ENDEREÇO em destaque e o nome em segundo plano, os dois inteiros
-  // (nada de reticências). Ponto fixo sem endereço (Rodoviária) mostra o nome em cima.
   const quem = ehEnc ? `contato: ${nome}` : nome;
   const principal = endereco || quem;
   const pagamentoEmDestaque = r.pagamento === "pix" || r.pagamento === "cartao";
   // o que vem embaixo, separado por " · "
   const detalhes = [
-    ehEnc ? resumoDaEncomenda(r) : r.pago ? "✓ Pago" : r.valorTotal ? fmtBRL(r.valorTotal) : null,
-    pagamentoEmDestaque && !r.pago ? rotuloPagamento(r.pagamento) : null,
+    endereco ? quem : null,
+    ehEnc ? resumoDaEncomenda(r) : null,
     r.desembarque ? `desce: ${r.desembarque}` : null,
+    pagamentoEmDestaque && !r.pago && !ehEnc ? rotuloPagamento(r.pagamento) : null,
     r.status !== "confirmada" && !(ehEnc && embarcado)
-      ? `${STATUS_META[r.status]?.emoji || ""} ${STATUS_META[r.status]?.label || r.status}`
+      ? `${STATUS_META[r.status]?.emoji || ""} ${STATUS_META[r.status]?.label || r.status}`.trim()
       : ehEnc && embarcado
         ? "✓ Entregue"
         : null,
@@ -1075,14 +1077,15 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassagei
         ? "✗ Disse que não vai"
         : null,
   ].filter(Boolean);
-  const icone = "btn-press w-10 h-11 rounded-xl flex items-center justify-center shrink-0";
+  // à direita: pago, o valor ou nada (encomenda nunca tem valor automático)
+  const direita = ehEnc ? null : r.pago ? "pago" : r.valorTotal ? fmtBRL(r.valorTotal) : null;
   return (
     <div
-      className="row-hover grid items-start gap-1 py-2 pr-0.5 border-b"
+      className="row-hover relative grid items-center gap-x-2.5"
       data-testid="linha-reserva"
       style={{
-        gridTemplateColumns: "40px minmax(0,1fr) auto",
-        borderColor: C.panel2,
+        gridTemplateColumns: "22px minmax(0,1fr)",
+        // a cor de quem busca (issue #196) e o laranja de quem desce numa cidade do caminho
         background: cidadeIntermediaria
           ? C.rotaSoft
           : modoBusca
@@ -1090,6 +1093,16 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassagei
             : "transparent",
       }}
     >
+      {/* a linha da rota: acende no trecho de quem já embarcou */}
+      <span
+        aria-hidden="true"
+        className="absolute top-0 bottom-0 w-px"
+        style={{
+          left: 10.5,
+          background: embarcado ? C.ink : C.border,
+          transition: "background-color var(--motion-base) var(--ease-out-quart)",
+        }}
+      />
       <button
         type="button"
         aria-label={
@@ -1103,98 +1116,72 @@ function LinhaOperacional({ r, trips, onStatus, onEditar, onExtra, onVerPassagei
         }
         aria-pressed={embarcado}
         onClick={() => onStatus(r.id, embarcado ? "confirmada" : "embarcado")}
-        className="check-fast w-10 h-11 flex items-center justify-center"
+        className="check-fast relative z-[1] w-[22px] h-12 flex items-center justify-center"
       >
+        {/* área de toque de 44 px em volta da caixa de 22 */}
+        <span aria-hidden="true" className="absolute inset-y-0 -left-3 -right-2" />
         <span
-          className="w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center"
+          className="relative w-[22px] h-[22px] rounded-[7px] flex items-center justify-center"
           style={{
-            borderColor: embarcado ? C.ink : C.inkFaint,
-            background: embarcado ? C.ink : "transparent",
+            background: embarcado ? C.ink : C.bg,
+            boxShadow: embarcado ? "none" : `inset 0 0 0 1.75px ${C.contorno}`,
           }}
         >
-          {embarcado && <Check size={13} color={C.bg} strokeWidth={3} />}
+          {embarcado && <Check size={15} color={C.bg} strokeWidth={3} />}
         </span>
       </button>
-      <div className="min-w-0 py-0.5">
-        <div
-          className="text-[15px] font-semibold leading-snug"
-          style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
-        >
-          <span className="font-bold mr-1.5" style={{ color: corTexto }}>
-            {ehEnc ? "ENC" : `${r.quantidade}P`}
+      <button
+        type="button"
+        aria-label={`Mais ações de ${nome}`}
+        aria-haspopup="dialog"
+        onClick={() => setMenu(true)}
+        className="min-w-0 grid items-center gap-x-2 py-2 pl-0.5 text-left rounded-xl"
+        style={{ gridTemplateColumns: "minmax(0,1fr) auto 18px" }}
+      >
+        <span className="min-w-0">
+          <span
+            className="block text-[15px] leading-snug"
+            style={{ color: corTexto, textDecoration: riscado, overflowWrap: "anywhere" }}
+          >
+            <span className="font-bold mr-1.5">{ehEnc ? "ENC" : `${r.quantidade}P`}</span>
+            <span className="font-semibold">{principal}</span>
           </span>
-          <span>{principal}</span>
-        </div>
-        {endereco && (
-          <div
-            className="text-[13px] leading-snug mt-0.5"
-            style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
-          >
-            {quem}
-          </div>
-        )}
-        {
-          <div
-            className="text-[12.5px] leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5"
-            style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
-          >
-            {detalhes.map((d, i) => (
-              <span
-                key={d}
-                className={d === "✓ Pago" ? "font-semibold" : ""}
-                style={d === "✓ Pago" ? { color: C.ink } : undefined}
-              >
-                {i > 0 ? "· " : ""}
-                {d}
-              </span>
-            ))}
-            {modoBusca && (
-              <span
-                className="inline-flex items-center gap-1 font-semibold"
-                style={{ color: modoBusca.cor }}
-              >
-                {detalhes.length > 0 ? "· " : ""}
-                <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
-              </span>
-            )}
-          </div>
-        }
-        {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
-      </div>
-      <div className="flex items-center">
-        {tel && (
-          <a
-            href={`tel:${tel}`}
-            aria-label={`Ligar para ${nome} (${r.telefone})`}
-            className={icone}
-            style={{ color: C.inkSoft }}
-          >
-            <PhoneCall size={18} />
-          </a>
-        )}
-        {tel && (
-          <a
-            href={`https://wa.me/55${tel}`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`WhatsApp de ${nome}`}
-            className={icone}
-            style={{ color: C.inkSoft }}
-          >
-            <MessageCircle size={18} />
-          </a>
-        )}
-        <button
-          type="button"
-          aria-label={`Mais ações de ${nome}`}
-          aria-haspopup="dialog"
-          onClick={() => setMenu(true)}
-          className={icone}
-          style={{ color: C.inkSoft }}
+          {(detalhes.length > 0 || modoBusca) && (
+            <span
+              className="flex flex-wrap items-center gap-x-1.5 text-[12.5px] leading-snug mt-0.5"
+              style={{ color: marcado ? C.inkFaint : C.inkSoft, overflowWrap: "anywhere" }}
+            >
+              {detalhes.map((d, i) => (
+                <span key={d}>
+                  {i > 0 ? "· " : ""}
+                  {d}
+                </span>
+              ))}
+              {modoBusca && (
+                <span
+                  className="inline-flex items-center gap-1 font-semibold"
+                  style={{ color: modoBusca.cor }}
+                >
+                  {detalhes.length > 0 ? "· " : ""}
+                  <modoBusca.Icon size={12} /> <span>{modoBusca.label}</span>
+                </span>
+              )}
+            </span>
+          )}
+          {cidadeIntermediaria && <SeloCidadeIntermediaria cidade={cidadeIntermediaria} />}
+        </span>
+        <span
+          className="text-[12.5px] whitespace-nowrap inline-flex items-center gap-1 tabular-nums"
+          style={{
+            color: r.pago ? C.ink : marcado ? C.inkFaint : C.inkSoft,
+            fontWeight: r.pago ? 600 : 400,
+          }}
         >
-          <MoreHorizontal size={19} />
-        </button>
-      </div>
+          {r.pago && !ehEnc && <Check size={13} strokeWidth={2.6} />}
+          {direita}
+        </span>
+        <MoreVertical size={18} style={{ color: C.inkFaint }} aria-hidden="true" />
+      </button>
       <AcoesDaReserva
         r={r}
         aberto={menu}
@@ -1526,6 +1513,7 @@ function ViagemOperacional({
           const itens = ehBusca ? ordenarBusca(doPonto) : doPonto;
           const encDoPonto = encDoGrupo.filter((r) => r.pontoId === p.id);
           const editando = ehBusca && editandoBusca;
+          const todosEmbarcaram = itens.length > 0 && itens.every((r) => r.status === "embarcado");
           return (
             <div key={p.id}>
               {/* cabeçalho do ponto (issue #399): hora, ponto e quantos numa linha; as ações da
@@ -1536,14 +1524,25 @@ function ViagemOperacional({
               <div
                 id={`ponto-${direcao}-${p.id}`}
                 data-testid="faixa-do-ponto"
-                className="sticky mt-3 scroll-mt-32 z-[5] grid items-center gap-x-2.5 rounded-[13px] pl-1.5 pr-2.5 min-h-[50px]"
+                className="sticky mt-3 scroll-mt-32 z-[5] grid items-center gap-x-2.5 rounded-[13px] pr-2.5 min-h-[50px]"
                 style={{
                   top: "calc(var(--topo-h, 0px) + var(--seletor-h, 0px))",
-                  gridTemplateColumns: "30px minmax(0,1fr) auto",
+                  gridTemplateColumns: "22px 30px minmax(0,1fr) auto",
                   background: C.panel,
                   boxShadow: `inset 0 0 0 1px ${C.panel2}, 0 -8px 0 0 ${C.bg}`,
                 }}
               >
+                {/* o ponto na linha da rota: enche quando todos dali embarcaram */}
+                <span
+                  aria-hidden="true"
+                  data-completo={todosEmbarcaram ? "1" : undefined}
+                  className="justify-self-center w-2.5 h-2.5 rounded-full"
+                  style={{
+                    background: todosEmbarcaram ? C.ink : C.panel,
+                    boxShadow: todosEmbarcaram ? "none" : `inset 0 0 0 2px ${C.inkSoft}`,
+                    transition: "background-color var(--motion-base) var(--ease-out-quart)",
+                  }}
+                />
                 <span
                   aria-hidden="true"
                   className="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center"

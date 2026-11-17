@@ -117,8 +117,12 @@ describe("textos do cartão", () => {
 describe("rascunhoAindaValeLancar (issue #357)", () => {
   const hoje = "2026-11-12";
   it("viagem de outro dia: dia que passou some, dia que vem fica", () => {
-    expect(rascunhoAindaValeLancar({ trip_date: "2026-11-11", direction: "ida" }, hoje, "05:00")).toBe(false);
-    expect(rascunhoAindaValeLancar({ trip_date: "2026-11-13", direction: "volta" }, hoje, "20:00")).toBe(true);
+    expect(
+      rascunhoAindaValeLancar({ trip_date: "2026-11-11", direction: "ida" }, hoje, "05:00"),
+    ).toBe(false);
+    expect(
+      rascunhoAindaValeLancar({ trip_date: "2026-11-13", direction: "volta" }, hoje, "20:00"),
+    ).toBe(true);
   });
   it("viagem de hoje some depois que saiu (Ida 07:00, Volta 14:00)", () => {
     const ida = { trip_date: hoje, direction: "ida" };

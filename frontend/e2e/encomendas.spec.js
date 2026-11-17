@@ -132,7 +132,7 @@ test("Rota: mostra a encomenda agendada na Volta e marca como entregue", async (
   // a encomenda entra na seção do ponto, com a linha do motorista, e não conta como passageiro
   await expect(page.getByText(/Documentos · entrega: Centro, São Luís/)).toBeVisible();
   await expect(page.getByText("ENC", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 pax · 1 encomenda", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 encomenda", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Marcar entrega" }).click();
   // espera a UI refletir a entrega antes de checar a chamada — o click só
@@ -199,11 +199,16 @@ test("Agenda: encomenda agendada aparece no ponto da viagem como uma passagem, s
   await expect(
     page.getByText(/Documentos · entrega: Pirapemas centro · de: José Remetente/),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: /WhatsApp/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Mais ações/ }).first()).toBeVisible();
   // cabeçalho do ponto conta a encomenda à parte; nenhuma passagem
   await expect(page.getByText(/(^|, )1 encomenda$/)).toBeVisible();
   await expect(page.getByText(/\d passage(m|ns)\b/)).toHaveCount(0);
+  // o WhatsApp do contato fica na folha de ações da linha (v18, issue #446)
+  await page
+    .getByRole("button", { name: /^Mais ações/ })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /WhatsApp/ })).toBeVisible();
 });
 
 test("Agenda: a caixa da linha marca a entrega da encomenda", async ({ page }) => {

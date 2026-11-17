@@ -36,26 +36,18 @@ export function grupoDaTela(id) {
   return GRUPOS_DE_TELAS.find((g) => g.telas.some((t) => t.id === id)) ?? null;
 }
 
-/** Abas no topo da tela do grupo. `badges` = { [id]: número }. */
+/**
+ * Abas no topo da tela do grupo. `badges` = { [id]: número }.
+ * Visual v18 (issue #446): uma fileira só, que rola de lado no celular, com a linha vermelha
+ * embaixo da aba escolhida — o mesmo desenho das abas Ida/Volta da Agenda e da ficha do passageiro.
+ */
 export function SubAbas({ telas, ativa, onChange, badges = {} }) {
   if (!telas || telas.length < 2) return null;
-  // issue #399: grade de colunas iguais no celular (3 por linha quando são mais de 4), todas
-  // à vista e alinhadas; a aba ativa acende com o filete vermelho embaixo
-  // telas estreitas: duas colunas para nenhum nome quebrar em duas linhas
-  const colunas =
-    telas.length <= 3
-      ? "grid-cols-3"
-      : telas.length === 4
-        ? "grid-cols-2 min-[400px]:grid-cols-4"
-        : "grid-cols-2 min-[360px]:grid-cols-3";
   return (
-    <div className="px-4 md:px-10 pt-4" data-sem-puxao>
+    <div className="pt-2 md:pt-4" data-sem-puxao>
       <div
-        className={`grid ${colunas} md:flex md:flex-wrap gap-1 rounded-xl border p-1 md:w-fit`}
-        style={{
-          background: C.panel,
-          borderColor: C.border,
-        }}
+        className="flex gap-6 overflow-x-auto px-4 md:px-10"
+        style={{ boxShadow: `inset 0 -1px 0 0 ${C.border}`, scrollbarWidth: "none" }}
         role="tablist"
         aria-label="Telas"
       >
@@ -68,22 +60,35 @@ export function SubAbas({ telas, ativa, onChange, badges = {} }) {
               type="button"
               role="tab"
               aria-selected={sel}
-              onClick={() => onChange(t.id)}
-              className="btn-press relative flex items-center justify-center gap-1.5 text-[13px] md:text-sm leading-tight text-center px-2 md:px-3.5 min-h-[40px] rounded-lg font-semibold"
+              onClick={(e) => {
+                e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+                onChange(t.id);
+              }}
+              className="relative shrink-0 flex items-center gap-1.5 whitespace-nowrap text-[14.5px] min-h-[46px]"
               style={{
-                background: sel ? C.panel2 : "transparent",
                 color: sel ? C.ink : C.inkSoft,
-                boxShadow: sel ? `inset 0 -2px 0 ${C.brand}` : "none",
-                transition:
-                  "background 120ms var(--ease-out-quart), color 120ms var(--ease-out-quart)",
+                fontWeight: sel ? 600 : 500,
+                transition: "color 120ms var(--ease-out-quart)",
               }}
             >
               {t.label}
               {badge > 0 && (
-                <span className="text-[11px] font-semibold" style={{ color: C.inkFaint }}>
+                <span
+                  className="text-[12px] font-semibold tabular-nums"
+                  style={{ color: C.inkFaint }}
+                >
                   {badge}
                 </span>
               )}
+              <span
+                aria-hidden="true"
+                className="absolute left-0 right-0 bottom-0 h-[2px] rounded-full"
+                style={{
+                  background: C.lanterna,
+                  opacity: sel ? 1 : 0,
+                  transition: "opacity var(--motion-base) var(--ease-out-quart)",
+                }}
+              />
             </button>
           );
         })}

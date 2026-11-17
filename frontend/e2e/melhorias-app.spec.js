@@ -69,9 +69,9 @@ test("Agenda: endereço em destaque, nome em segundo plano e telefone secundári
   const topo = async (loc) => (await loc.boundingBox()).y;
   expect(await topo(endereco)).toBeLessThan(await topo(nome));
 
-  // o principal é o ícone de ligar; o 2º telefone fica no menu "⋯" (issue #393)
-  await expect(linha.getByRole("link", { name: /98987654321/ }).first()).toBeVisible();
+  // tocar na linha abre Ligar (o principal) e o 2º telefone na folha de ações (v18, issue #446)
   await linha.getByRole("button", { name: /^Mais ações/ }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /98987654321/ })).toBeVisible();
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /2º.*98981110000/ }),
   ).toBeVisible();

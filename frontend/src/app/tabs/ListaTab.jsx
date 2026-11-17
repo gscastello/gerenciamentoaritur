@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Building2,
   Check,
   ClipboardList,
   ListOrdered,
@@ -24,7 +25,6 @@ import {
   ErrorBanner,
   Header,
   OCUPA_VAGA,
-  Pill,
   SeloCidadeIntermediaria,
   StatusPill,
   SubTabs,
@@ -140,6 +140,16 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
     (r) => r.direcao === "volta" && r.pontoId !== "cantanhede" && r.pontoId !== "pirapemas",
   );
 
+  const totalQtd = ativos.reduce((s, r) => s + r.quantidade, 0);
+  const embarcadosQtd = ativos
+    .filter((r) => r.status === "embarcado")
+    .reduce((s, r) => s + r.quantidade, 0);
+  // a próxima parada: o primeiro da rota (Cantanhede, depois Pirapemas) que ainda não embarcou
+  const naOrdem = [...cantanhedeItens, ...comOrdemSalva([...pirapemasItens, ...outrasVolta])];
+  const proximaId = naOrdem.find(
+    (r) => OCUPA_VAGA.includes(r.status) && r.status !== "embarcado" && r.tipo !== "encomenda",
+  )?.id;
+
   return (
     <div>
       <Header
@@ -154,24 +164,26 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
         {erro && <ErrorBanner onDismiss={() => setErro("")}>{erro}</ErrorBanner>}
         {/* o dia e o resumo na mesma linha (issue #399: o campo de data ficava solto no topo) */}
         <div className="flex items-center justify-between gap-3">
-          <p
-            className="text-[13px] min-w-0"
-            style={{ color: C.inkSoft }}
-            data-testid="resumo-da-lista"
-          >
-            <b className="capitalize" style={{ color: C.ink }}>
-              {data === todayStr() ? "Hoje" : diaSemana(data)}
-            </b>{" "}
+          {/* v18 (issue #446): quantos já embarcaram em destaque — dá para conferir de relance */}
+          <div className="min-w-0" data-testid="resumo-da-lista">
             {subview !== "desembarque" && (
-              <>
-                · {ativos.reduce((s, r) => s + r.quantidade, 0)} passageiros ·{" "}
-                {ativos
-                  .filter((r) => r.status === "embarcado")
-                  .reduce((s, r) => s + r.quantidade, 0)}{" "}
-                embarcados
-              </>
+              <div className="flex items-baseline gap-1.5">
+                <b
+                  className="tabular-nums"
+                  style={{ fontSize: 28, lineHeight: 1, letterSpacing: "-.035em", color: C.ink }}
+                >
+                  {embarcadosQtd}
+                </b>
+                <span className="text-[13.5px]" style={{ color: C.inkSoft }}>
+                  de {totalQtd} embarcados
+                </span>
+              </div>
             )}
-          </p>
+            <p className="text-[12.5px] mt-1" style={{ color: C.inkSoft }}>
+              <span className="capitalize">{data === todayStr() ? "Hoje" : diaSemana(data)}</span>
+              {subview !== "desembarque" && `, ${totalQtd} passageiros`}
+            </p>
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             <TextInput
               type="date"
@@ -187,6 +199,9 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             )}
           </div>
         </div>
+        {subview !== "desembarque" && totalQtd > 0 && (
+          <BarraDeEmbarque total={totalQtd} embarcados={embarcadosQtd} />
+        )}
         <SubTabs
           value={subview}
           onChange={setSubview}
@@ -223,16 +238,18 @@ export default function ListaTab({ reservas, R, trips, deepLink, onAgendar }) {
             )}
             <ListaSecao
               onOrdenar={salvarOrdem}
-              titulo="CANTANHEDE"
+              titulo="Cantanhede"
               itens={cantanhedeItens}
+              proximaId={proximaId}
               trips={trips}
               marcar={marcar}
               onAbrir={setResumo}
             />
             <ListaSecao
               onOrdenar={salvarOrdem}
-              titulo="PIRAPEMAS"
+              titulo="Pirapemas"
               itens={comOrdemSalva([...pirapemasItens, ...outrasVolta])}
+              proximaId={proximaId}
               trips={trips}
               marcar={marcar}
               onAbrir={setResumo}
@@ -263,6 +280,7 @@ function ListaSecao({
   buscar,
   onAbrir,
   onOrdenar,
+  proximaId = null,
   vazio = "Ninguém neste ponto.",
 }) {
   const [organizando, setOrganizando] = useState(false);
@@ -280,20 +298,53 @@ function ListaSecao({
         }, {})
     : null;
   return (
-    <section className="border-t pt-3" style={{ borderColor: C.border }}>
-      <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-        <h3 className="text-[12px] font-bold tracking-wide" style={{ color: C.inkSoft }}>
-          {titulo}
-        </h3>
-        <div className="flex items-center gap-1.5">
+    <section className="pt-1">
+      {/* faixa da cidade (v18, issue #446): o mesmo desenho das categorias da Agenda */}
+      <div
+        className="grid items-center gap-x-2.5 rounded-[13px] pl-1.5 pr-1.5 min-h-[50px] mb-1"
+        style={{
+          gridTemplateColumns: "30px minmax(0,1fr) auto",
+          background: C.panel,
+          boxShadow: `inset 0 0 0 1px ${C.panel2}`,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center"
+          style={{ background: C.border, color: C.ink }}
+        >
+          <Building2 size={17} strokeWidth={1.9} />
+        </span>
+        <span className="min-w-0 py-1.5">
+          <h3
+            className="text-[15.5px] font-bold truncate"
+            style={{ color: C.ink, letterSpacing: "-.015em", lineHeight: 1.2 }}
+          >
+            {titulo}
+          </h3>
+          <span className="block text-[12.5px] tabular-nums" style={{ color: C.inkSoft }}>
+            {/* encomenda conta junto das passagens (issue #399) */}
+            {[
+              paxAtivos > 0 || qtdEncomendas === 0
+                ? `${paxAtivos} ${paxAtivos === 1 ? "passagem" : "passagens"}`
+                : null,
+              qtdEncomendas > 0
+                ? `${qtdEncomendas} ${qtdEncomendas === 1 ? "encomenda" : "encomendas"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
           {tally &&
             Object.entries(tally).map(([k, n]) => {
               const m = BUSCA_MODOS[k];
               return (
                 <span
                   key={k}
-                  className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-                  style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full font-semibold"
+                  style={{ background: C.panel2, color: C.ink }}
                 >
                   <m.Icon size={11} /> {m.label} {n}
                 </span>
@@ -303,19 +354,13 @@ function ListaSecao({
             <button
               type="button"
               onClick={() => setOrganizando(true)}
-              className="btn-press flex items-center gap-1 text-[11px] font-semibold px-2.5 min-h-[36px] rounded-lg"
-              style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
+              className="btn-press flex items-center gap-1.5 text-[13px] font-semibold px-2 min-h-[40px] rounded-lg"
+              style={{ color: C.ink }}
             >
-              <ListOrdered size={12} /> ORGANIZAR
+              <ListOrdered size={15} /> Organizar
             </button>
           )}
-          {/* encomenda conta junto das passagens, no mesmo contador (issue #399) */}
-          <Pill>
-            {paxAtivos} pax
-            {qtdEncomendas > 0 &&
-              ` · ${qtdEncomendas} ${qtdEncomendas === 1 ? "encomenda" : "encomendas"}`}
-          </Pill>
-        </div>
+        </span>
       </div>
       {organizando ? (
         <OrdemDaListaEditor
@@ -330,10 +375,12 @@ function ListaSecao({
         </div>
       ) : (
         <div>
-          {itens.map((r) => (
+          {itens.map((r, i) => (
             <LinhaEmbarque
               key={r.id}
               r={r}
+              ordem={i + 1}
+              proxima={r.id === proximaId}
               trips={trips}
               marcar={marcar}
               buscar={buscar}
@@ -346,12 +393,49 @@ function ListaSecao({
   );
 }
 
+// Um pedaço por passageiro: enche conforme embarcam (v18, issue #446). Com muita gente, vira uma
+// barra só, para os pedaços não ficarem finos demais.
+function BarraDeEmbarque({ total, embarcados }) {
+  const pedacos = total <= 40;
+  return (
+    <div
+      role="img"
+      aria-label={`${embarcados} de ${total} embarcados`}
+      className="h-1.5 rounded-full overflow-hidden"
+      style={
+        pedacos
+          ? { display: "grid", gridTemplateColumns: `repeat(${total}, minmax(0,1fr))`, gap: 3 }
+          : { background: C.border }
+      }
+    >
+      {pedacos ? (
+        Array.from({ length: total }, (_, i) => (
+          <i
+            // biome-ignore lint/suspicious/noArrayIndexKey: os pedaços são posições fixas
+            key={i}
+            className="block rounded-full"
+            style={{
+              background: i < embarcados ? C.ink : C.border,
+              transition: "background-color var(--motion-base) var(--ease-out-quart)",
+            }}
+          />
+        ))
+      ) : (
+        <i
+          className="block h-full rounded-full"
+          style={{ width: `${(embarcados / total) * 100}%`, background: C.ink }}
+        />
+      )}
+    </div>
+  );
+}
+
 // Linha de passageiro na Lista do Dia — é o que o MOTORISTA olha. Só o
 // essencial: caixa de embarque (1 toque, otimista), nº de passagens,
 // endereço completo e contato. Tudo o resto (status, pagamento, mover,
 // cancelar, "não veio", desembarque) fica no botão "ver reserva
 // completa" à direita.
-function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
+function LinhaEmbarque({ r, ordem, proxima = false, trips, marcar, buscar, onAbrir }) {
   const tel = digitos(r.telefone);
   const embarcado = r.status === "embarcado";
   const faltou = r.status === "nao_compareceu";
@@ -363,14 +447,25 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
   const icone = "btn-press w-11 h-11 rounded-xl flex items-center justify-center shrink-0";
   return (
     <div
-      className="row-hover grid items-start gap-1 py-1.5 border-b"
+      className="row-hover relative grid items-center gap-1 py-1.5 rounded-2xl"
       style={{
         gridTemplateColumns: `${marcar ? "44px " : ""}minmax(0,1fr) auto`,
-        borderColor: C.panel2,
-        background: cidadeIntermediaria ? C.rotaSoft : "transparent",
+        background: cidadeIntermediaria ? C.rotaSoft : proxima ? C.panel : "transparent",
         opacity: faltou ? 0.5 : 1,
       }}
     >
+      {/* a linha da rota: acende no trecho de quem já embarcou (v18) */}
+      {marcar && (
+        <span
+          aria-hidden="true"
+          className="absolute top-0 bottom-0 w-px"
+          style={{
+            left: 21.5,
+            background: embarcado ? C.ink : C.border,
+            transition: "background-color var(--motion-base) var(--ease-out-quart)",
+          }}
+        />
+      )}
       {marcar && (
         <button
           type="button"
@@ -385,16 +480,18 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
                 : "Marcar embarque"
           }
           aria-pressed={embarcado}
-          className="check-fast w-11 h-11 flex items-center justify-center"
+          className="check-fast relative z-[1] w-11 h-11 flex items-center justify-center"
         >
+          {/* o número da casa na ordem da rota; ao marcar, vira o visto */}
           <span
-            className="w-5 h-5 rounded-md border-[1.5px] flex items-center justify-center"
+            className="w-[22px] h-[22px] rounded-[7px] flex items-center justify-center text-[11.5px] font-semibold tabular-nums"
             style={{
-              borderColor: embarcado ? C.ink : C.inkFaint,
-              background: embarcado ? C.ink : "transparent",
+              background: embarcado ? C.ink : C.bg,
+              boxShadow: embarcado ? "none" : `inset 0 0 0 1.75px ${C.contorno}`,
+              color: C.inkSoft,
             }}
           >
-            {embarcado && <Check size={13} style={{ color: C.bg }} strokeWidth={3} />}
+            {embarcado ? <Check size={15} style={{ color: C.bg }} strokeWidth={3} /> : ordem}
           </span>
         </button>
       )}
@@ -408,6 +505,11 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           aria-label={`Ver reserva completa de ${r.nome || r.telefone || "passageiro"}`}
           className="toque-at block w-full text-left"
         >
+          {proxima && (
+            <span className="block text-[12px] font-semibold" style={{ color: C.brandText }}>
+              próxima parada
+            </span>
+          )}
           <div className="flex items-baseline gap-2">
             <span className="text-[15px] font-bold shrink-0" style={{ color: C.ink }}>
               {ehEnc ? (
@@ -460,8 +562,8 @@ function LinhaEmbarque({ r, trips, marcar, buscar, onAbrir }) {
           <a
             href={`tel:${tel}`}
             aria-label={`Ligar para ${r.telefone}`}
-            className={icone}
-            style={{ color: C.inkSoft }}
+            className={`${icone}${proxima ? " !rounded-full" : ""}`}
+            style={proxima ? { background: C.ink, color: C.bg } : { color: C.inkSoft }}
           >
             <PhoneCall size={18} />
           </a>

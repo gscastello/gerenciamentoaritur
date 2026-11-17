@@ -1,6 +1,6 @@
+import { digitosDeBusca, variantesTelefone } from "../domain/validacao.js";
 // src/services/customersService.js
 import { buscarTodasAsPaginas } from "../lib/paginas.js";
-import { digitosDeBusca, variantesTelefone } from "../domain/validacao.js";
 import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
 function isNetworkish(error) {
@@ -18,7 +18,31 @@ async function handle(promise, context) {
 
 const CUSTOMER_COLS = "id, name, phone, notes, default_neighborhood, created_at";
 const STATS_COLS =
-  "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2";
+  "customer_id, nome, telefone, notes, bairro_padrao, viagens_count, total_passagens, cancelamentos, nao_compareceu, total_gasto, ultima_data, reservas_total, ponto_padrao, pagamento_padrao, telefone2, ultima_viagem, proxima_data, primeira_data, viagens_90d, a_receber, a_receber_qtd, frequente, novo, sumiu, sem_nome, cliente_desde, email, tags, bot_instructions, nota_do_bot";
+
+// Grupos prontos do CRM (issue #446, database/118): o filtro de cada um na v_customers_stats.
+const FILTRO_DO_GRUPO = {
+  sumiram: (q) => q.eq("sumiu", true),
+  sem_pagamento: (q) => q.gt("a_receber", 0),
+  frequentes: (q) => q.eq("frequente", true),
+  marcada: (q) => q.not("proxima_data", "is", null),
+  novos: (q) => q.eq("novo", true),
+  sem_nome: (q) => q.eq("sem_nome", true),
+};
+// Ordens da lista; o id do passageiro desempata (página estável).
+const ORDEM_DA_LISTA = {
+  viagens: [
+    ["viagens_count", false],
+    ["total_gasto", false],
+  ],
+  recente: [["ultima_viagem", false]],
+  gasto: [["total_gasto", false]],
+  a_receber: [
+    ["a_receber", false],
+    ["viagens_count", false],
+  ],
+  nome: [["nome", true]],
+};
 
 export const customersService = {
   async list({ search } = {}) {
@@ -55,13 +79,16 @@ export const customersService = {
    * com busca no servidor. `range` é [de, ate] inclusivo (PostgREST).
    * Devolve { linhas, total }.
    */
-  async listStats({ search, de = 0, ate = 24 } = {}) {
+  async listStats({ search, de = 0, ate = 24, grupo = "todos", ordem = "viagens" } = {}) {
+    // uma página por vez (range): a lista nunca é cortada em 1.000 calada (issue #444)
     let query = supabase
       .from("v_customers_stats")
       .select(STATS_COLS, { count: "exact" })
-      .order("total_gasto", { ascending: false })
-      .order("ultima_data", { ascending: false, nullsFirst: false })
       .range(de, ate);
+    for (const [coluna, asc] of ORDEM_DA_LISTA[ordem] ?? ORDEM_DA_LISTA.viagens)
+      query = query.order(coluna, { ascending: asc, nullsFirst: false });
+    query = query.order("customer_id", { ascending: true });
+    if (FILTRO_DO_GRUPO[grupo]) query = FILTRO_DO_GRUPO[grupo](query);
     if (search) {
       const termo = String(search)
         .replace(/[,()*:\\%]/g, " ")
@@ -79,6 +106,24 @@ export const customersService = {
       });
     }
     return { linhas: data ?? [], total: count ?? data?.length ?? 0 };
+  },
+
+  /** Os números do topo de Passageiros e a quantidade de cada grupo (database/118). */
+  async resumo() {
+    return handle(supabase.rpc("fn_resumo_dos_passageiros"), "resumo");
+  },
+
+  /** A aba Conversa da ficha: as últimas mensagens do WhatsApp e os avisos enviados. */
+  async conversa(customerId) {
+    const data = await handle(
+      supabase.rpc("rpc_conversa_do_passageiro", { p_customer_id: customerId, p_limite: 12 }),
+      "conversa",
+    );
+    if (data && data.success === false)
+      throw new ServiceError("Sem permissão para ver a conversa deste passageiro.", {
+        retryable: false,
+      });
+    return data;
   },
 
   /**
@@ -106,7 +151,7 @@ export const customersService = {
       supabase
         .from("v_reservations_flat")
         .select(
-          "id, data, direcao, status, tipo, quantidade, valorTotal, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
+          "id, data, direcao, status, tipo, quantidade, valorTotal, pago, pagamento, bairro, localExato, rua, referencia, desembarque, pontoId, criadoEm",
         )
         .eq("customer_id", customerId)
         // as 400 viagens mais recentes pela data da viagem (histórico do CRM, issue #436)

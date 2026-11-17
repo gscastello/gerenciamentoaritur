@@ -48,8 +48,8 @@ async function abrirPassageiro(page) {
   }
   await aba.first().click();
   await page.getByRole("button", { name: /^MR Maria Recorrente/ }).click();
-  // a ficha abre numa tela própria; o costume fica na aba Endereços (issue #438)
-  await page.getByRole("tab", { name: "Endereços" }).click();
+  // a ficha abre numa tela própria; o costume fica no Resumo (v18, issue #446)
+  await page.getByRole("tab", { name: "Resumo" }).click();
   await expect(page.getByText("Endereço de costume", { exact: true })).toBeVisible();
 }
 

@@ -491,13 +491,13 @@ export function useCidadeIntermediaria(r) {
 
 export function SeloCidadeIntermediaria({ cidade }) {
   return (
-    <div
+    <span
       data-testid="selo-cidade-intermediaria"
       className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold rounded px-1.5 py-0.5"
       style={{ background: C.rota, color: "#1A1205" }}
     >
       <MapPin size={11} aria-hidden="true" /> Desce em {cidade}
-    </div>
+    </span>
   );
 }
 

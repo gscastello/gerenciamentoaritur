@@ -98,7 +98,10 @@ export function totaisRelatorio(linhas) {
  * Monta o objeto completo do relatório, pronto para a camada de export.
  * `escopo` é só metadado de título ("Setembro/2026", "2026"...).
  */
-export function montarRelatorioFinanceiro(entries, { granularidade = "mes", escopo = "", geradoEm } = {}) {
+export function montarRelatorioFinanceiro(
+  entries,
+  { granularidade = "mes", escopo = "", geradoEm } = {},
+) {
   const linhas = agregarPorPeriodo(entries, granularidade);
   return {
     granularidade,
