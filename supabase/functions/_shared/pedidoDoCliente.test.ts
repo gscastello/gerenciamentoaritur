@@ -50,7 +50,11 @@ Deno.test("quantidade: 'duas passagens', '3 pessoas'; 'um lugar perto do posto' 
 });
 
 Deno.test("ponto: rodoviária, retorno, busca em casa, Outros; 'estou em casa' no meio da conversa não é busca", () => {
-  assertEquals(pontoEscrito(["fico na rodoviária"], pontosIda), "rodoviaria");
+  assertEquals(pontoEscrito(["espero na rodoviária"], pontosIda), "rodoviaria");
+  // "ficar" é onde desce ("Onde você vai ficar?"): não diz o embarque (issue #454)
+  assertEquals(pontoEscrito(["fico na rodoviária"], pontosIda), null);
+  assertEquals(pontoEscrito(["Ficar no retorno do Tirirical"], pontosIda), null);
+  assertEquals(pontoEscrito(["fico esperando no retorno"], pontosIda), "retorno");
   assertEquals(pontoEscrito(["espero no retorno do aeroporto"], pontosIda), "retorno");
   assertEquals(pontoEscrito(["chego no aeroporto às 4h"], pontosIda), "outro");
   assertEquals(pontoEscrito(["pode me pegar em casa"], pontosIda), "busca");
@@ -411,4 +415,20 @@ Deno.test("#451 o dia de uma mensagem sobre encomenda não trava as passagens pe
   // dia escrito junto do pedido de passagem continua valendo
   const comDia = [...msgs, { texto: "É pra quarta", em: "2026-11-16T19:40:00Z" }];
   assertEquals(conferenciaFinal({ type: "passagem", trip_date: "2026-11-17", direction: "ida", quantity: 2 }, comDia, ctx).length, 1);
+});
+
+Deno.test("#454 conferência final: 'Ficar no retorno' numa Volta é onde desce, não trava", async () => {
+  const { conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = [
+    { texto: "Tem uma vaga amanhã pra são Luís???", em: "2026-11-17T23:29:45Z" },
+    { texto: "Cantanhede", em: "2026-11-17T23:32:48Z" },
+    { texto: "Em Cantanhede pra são Luís", em: "2026-11-17T23:35:54Z" },
+    { texto: "Ficar no retorno do Tirirical", em: "2026-11-17T23:36:07Z" },
+  ];
+  const ctx = { hoje: "2026-11-17", pedidosLidos: 1 };
+  const volta = { trip_date: "2026-11-18", direction: "volta", quantity: 1, route_point_code: "cantanhede" };
+  assertEquals(conferenciaFinal(volta, msgs, ctx), []);
+  // "aguardo vcs no retorno" continua sendo embarque em São Luís (issue #419)
+  const espera = [{ texto: "Aguardo vcs no retorno", em: "2026-11-17T23:40:00Z" }];
+  assertEquals(conferenciaFinal({ ...volta, route_point_code: null }, espera, ctx).length, 1);
 });

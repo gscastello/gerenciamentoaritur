@@ -707,6 +707,8 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
     if (t.includes("?")) continue;
     const n = ` ${normalizarTexto(t)} `;
     if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
+    // "Ficar no retorno do Tirirical" é onde DESCE; "fico esperando no retorno" é onde embarca (issue #454)
+    if (/ (ficar|fico|fica|ficarei|ficaremos|ficamos|ficam) /.test(n) && !/ (esper|aguard)\w* /.test(n)) continue;
     // "De Pirapemas a São Luís! Ficaremos no retorno": indo PARA São Luís, o ponto é onde desce (issue #419)
     if (origemEscrita(t)?.sentido === "volta" || RE_IR_PARA_SAO_LUIS.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
