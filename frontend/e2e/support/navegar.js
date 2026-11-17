@@ -49,7 +49,7 @@ export async function escolherSentido(page, sentido) {
     .click();
 }
 
-/** "Sair da conta": na lateral do computador; no celular fica no "Mais" do topo (issue #391). */
+/** "Sair da conta": na lateral do computador; no celular fica no "Mais" do topo (issue #391), com confirmação. */
 export async function sairDaConta(page) {
   const sair = page.getByRole("button", { name: "Sair da conta" }).filter({ visible: true });
   if ((await sair.count()) === 0)
@@ -59,6 +59,11 @@ export async function sairDaConta(page) {
     .filter({ visible: true })
     .first()
     .click();
+  // no celular a folha do "⋯" pede confirmação antes de sair (issue #446)
+  const confirmar = page
+    .getByTestId("folha-mais")
+    .getByRole("button", { name: "Sair", exact: true });
+  if (await confirmar.count()) await confirmar.click();
 }
 
 const PONTOS_DA_VOLTA = /pirapemas|cantanhede/i;
