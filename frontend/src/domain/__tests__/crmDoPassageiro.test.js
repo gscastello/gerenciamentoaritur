@@ -128,6 +128,10 @@ describe("CRM dos passageiros (issue #446)", () => {
     ]);
     expect(etiquetas({ nome: "" }, HOJE)).toEqual([{ texto: "Sem nome", tipo: "alerta" }]);
     expect(etiquetas({ nome: "Bia", sumiu: true }, HOJE)).toEqual([]);
+    // sem o tradutor da forma de pagamento, o texto vai como veio
+    expect(etiquetas({ nome: "Bia", pagamento_padrao: "dinheiro" }, HOJE)).toEqual([
+      { texto: "Paga em dinheiro", tipo: "normal" },
+    ]);
   });
 
   const v = (data, direcao, extra = {}) => ({
@@ -193,6 +197,7 @@ describe("CRM dos passageiros (issue #446)", () => {
     expect(meses.map((m) => m.n)).toEqual([1, 0, 0, 0, 1, 2]);
     expect(meses.at(-1).atual).toBe(true);
     expect(meses[0].atual).toBe(false);
+    expect(viagensPorMes(null, HOJE, 2).map((m) => m.n)).toEqual([0, 0]);
     const virada = viagensPorMes([v("2025-12-10", "ida")], "2026-02-10", 3);
     expect(virada.map((m) => [m.chave, m.n])).toEqual([
       ["2025-12", 1],
