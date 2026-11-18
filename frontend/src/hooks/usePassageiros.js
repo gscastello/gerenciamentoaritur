@@ -130,6 +130,59 @@ export function useConversaDoPassageiro(customerId, ativo) {
   return { conversa, carregando: carregando || (ativo && !conversa && !erro), erro };
 }
 
+/**
+ * Possíveis cadastros repetidos do passageiro (aba Cadastro da ficha, database/119), com as ações
+ * "Não é" e "Juntar". Lê só quando a aba abre (`ativo`).
+ */
+export function useCadastrosRepetidos(customerId, ativo) {
+  const [lista, setLista] = useState([]);
+  const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => {
+    if (!customerId || !ativo) return undefined;
+    let vivo = true;
+    customersService
+      .possiveisRepetidos(customerId)
+      .then((l) => vivo && setLista(l))
+      .catch((e) => logTecnico(e, { origem: "useCadastrosRepetidos" }));
+    return () => {
+      vivo = false;
+    };
+  }, [customerId, ativo]);
+  const tirar = (id) => setLista((atual) => atual.filter((x) => x.customer_id !== id));
+  const acao = async (fn, id, falha) => {
+    setOcupado(true);
+    setErro("");
+    try {
+      const r = await fn();
+      tirar(id);
+      return r;
+    } catch (e) {
+      setErro(mensagemAmigavel(e, falha));
+      return null;
+    } finally {
+      setOcupado(false);
+    }
+  };
+  return {
+    repetidos: lista,
+    erroRepetidos: erro,
+    ocupado,
+    naoE: (outroId) =>
+      acao(
+        () => customersService.marcarCadastrosDistintos(customerId, outroId),
+        outroId,
+        "Não foi possível guardar.",
+      ),
+    juntar: (outroId) =>
+      acao(
+        () => customersService.juntarCadastros(customerId, outroId),
+        outroId,
+        "Não foi possível juntar os cadastros.",
+      ),
+  };
+}
+
 // Marca paga uma viagem já feita, pela mesma edição da Agenda (rpc_edit_reservation).
 const marcarComoPaga = (id, valor, forma) =>
   reservationsService.editReservationFull(id, {

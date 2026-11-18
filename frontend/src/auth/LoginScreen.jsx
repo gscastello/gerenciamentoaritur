@@ -194,11 +194,9 @@ export function LoginScreen() {
 const labelStyle = {
   display: "grid",
   gap: 5,
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: ".07em",
-  textTransform: "uppercase",
-  color: C.inkFaint,
+  fontSize: 12.5,
+  fontWeight: 500,
+  color: C.inkSoft,
 };
 
 const inputStyle = {
