@@ -6,7 +6,7 @@
 // toque. Aqui: o filtro barato antes de chamar o modelo, o formato que o modelo
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
-import { type MensagemDaConversa, somarDias } from "./agentePuro.ts";
+import { diaCivil, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
 import { normalizarTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
@@ -188,6 +188,50 @@ export const SAIDA_ENCERRADA = { ida: "07:00", volta: "14:00" } as const;
 
 export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string | null | undefined): boolean {
   return !!horaAgora && /^\d{2}:\d{2}$/.test(horaAgora) && horaAgora >= SAIDA_ENCERRADA[direcao];
+}
+
+/**
+ * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
+ * e a viagem daquele sentido AINDA NÃO SAIU: é a de hoje (issue #452: "Tem vaga de Cantanhede pra
+ * São Luís?" às 9h = Volta de hoje). Se já saiu, NÃO é "amanhã": "guarde uma vaga pra mim" numa
+ * sexta às 19h era para domingo (caso real) — fica sem dia, a equipe vê o aviso e o bot pergunta.
+ * Só com a marca da equipe (quem marcou sabe qual
+ * viagem), com o sentido ESCRITO (pelo cliente, pela origem do trecho, na marca ou pelo ponto dito —
+ * o sentido só lido pelo modelo pode estar errado e o dia não pode esconder isso) e igual ao lido, e
+ * com tudo o que o cliente escreveu no pedido feito hoje; senão continua sem dia e o bot pergunta
+ * (issue #419).
+ */
+export function viagemDeHojePeloAgendado(
+  p: Pick<PedidoExtraido, "direcao" | "ponto" | "tipo">,
+  ctx: {
+    agendado: boolean;
+    hoje: string;
+    horaAgora: string | null | undefined;
+    pontos: PontosPorSentido;
+    mensagensDoCliente: { em: string }[];
+    /** o sentido escrito na conversa (marca, origem do trecho, cliente ou ponto dito), se há */
+    sentidoEscrito: "ida" | "volta" | null;
+  },
+): string | null {
+  if (!ctx.agendado || (p.tipo ?? "passagem") === "encomenda") return null;
+  const ponto = String(p.ponto ?? "").toLowerCase();
+  const direcao =
+    p.direcao === "ida" || p.direcao === "volta"
+      ? p.direcao
+      : ctx.pontos.ida.includes(ponto)
+        ? "ida"
+        : ctx.pontos.volta.includes(ponto)
+          ? "volta"
+          : null;
+  if (!direcao || direcao !== ctx.sentidoEscrito) return null;
+  if (!ctx.horaAgora || !/^\d{2}:\d{2}$/.test(ctx.horaAgora)) return null;
+  if (!ctx.mensagensDoCliente.length) return null;
+  const todoHoje = ctx.mensagensDoCliente.every((m) => {
+    const t = Date.parse(m.em);
+    return Number.isFinite(t) && diaCivil(new Date(t)) === ctx.hoje;
+  });
+  if (!todoHoje) return null;
+  return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? null : ctx.hoje;
 }
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
@@ -1179,6 +1223,15 @@ export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
   cidade: "você embarca em Pirapemas ou em Cantanhede?",
   sem_data: "qual o dia da sua viagem?",
 };
+
+/**
+ * As dúvidas do Agendado que o PASSAGEIRO resolve, venham dos motivos da leitura (sem_data…) ou
+ * das pendências dos rascunhos (cidade, qual_viagem…). Vale também quando nenhum rascunho saiu:
+ * antes, nesse caminho o bot abria a pendência e não perguntava nada (issue #457).
+ */
+export function duvidasDoPassageiro(motivos: string[], pendentes: string[]): string[] {
+  return [...new Set([...pendentes, ...motivos])].filter((c) => c in PERGUNTAS_AO_CLIENTE);
+}
 
 /**
  * A pergunta ao cliente para as dúvidas pendentes ainda não perguntadas (uma por vez,
