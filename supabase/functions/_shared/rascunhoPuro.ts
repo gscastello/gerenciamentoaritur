@@ -1210,6 +1210,15 @@ export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
 };
 
 /**
+ * As dúvidas do Agendado que o PASSAGEIRO resolve, venham dos motivos da leitura (sem_data…) ou
+ * das pendências dos rascunhos (cidade, qual_viagem…). Vale também quando nenhum rascunho saiu:
+ * antes, nesse caminho o bot abria a pendência e não perguntava nada (issue #457).
+ */
+export function duvidasDoPassageiro(motivos: string[], pendentes: string[]): string[] {
+  return [...new Set([...pendentes, ...motivos])].filter((c) => c in PERGUNTAS_AO_CLIENTE);
+}
+
+/**
  * A pergunta ao cliente para as dúvidas pendentes ainda não perguntadas (uma por vez,
  * na ordem: qual viagem antes da cidade). null = nada a perguntar.
  */

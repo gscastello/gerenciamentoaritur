@@ -4,6 +4,8 @@ import {
 } from "./agentePuro.ts";
 import {
   ehMarcaDeAgendado,
+  perguntaAoCliente,
+  duvidasDoPassageiro,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -684,7 +686,7 @@ Deno.test("#307: disse hoje, a Ida saiu e a Volta não serve: fica para a equipe
 });
 
 Deno.test("#314: lugar de Cantanhede depois que a Ida saiu é a Volta de hoje; nome que também é bairro de São Luís pergunta", async () => {
-  const { proximaViagemPeloLugar, perguntaAoCliente } = await import("./rascunhoPuro.ts");
+  const { proximaViagemPeloLugar } = await import("./rascunhoPuro.ts");
   const santaBarbara = { tipo: "rua", nome: "Rua Santa Bárbara", em_pirapemas: false, em_cantanhede: true, reservas_pirapemas: 0, reservas_cantanhede: 2 };
   assertEquals(proximaViagemPeloLugar({ lugares: [santaBarbara], bairroDeSaoLuis: false, costumeVolta: false }), "volta");
   assertEquals(proximaViagemPeloLugar({ lugares: [santaBarbara], bairroDeSaoLuis: true, costumeVolta: false }), "qual_viagem");
@@ -1118,4 +1120,13 @@ Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido, antes d
   assertEquals(viagemDeHojePeloAgendado({}, base), null);
   assertEquals(viagemDeHojePeloAgendado({ direcao: "volta", tipo: "encomenda" }, base), null);
   assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [] }), null);
+});
+
+Deno.test("#457: as dúvidas do passageiro saem dos motivos mesmo sem nenhum rascunho", () => {
+  // "o dia da viagem não aparece": nenhum rascunho, só o motivo — a pergunta tem de sair
+  assertEquals(duvidasDoPassageiro(["sem_data"], []), ["sem_data"]);
+  assertEquals(perguntaAoCliente(duvidasDoPassageiro(["sem_data"], []), [], "Ana Teste")?.texto, "Ana, só pra confirmar sua vaga: qual o dia da sua viagem? 😊");
+  // pendências dos rascunhos e motivos juntos, sem repetir e só o que o passageiro resolve
+  assertEquals(duvidasDoPassageiro(["sem_data", "data_passada"], ["cidade", "conferir", "sem_data"]).sort(), ["cidade", "sem_data"]);
+  assertEquals(duvidasDoPassageiro(["ja_reservado"], ["pedido_faltando"]), []);
 });

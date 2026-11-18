@@ -40,6 +40,7 @@ import {
   planejarAtualizacao,
   avisoDaCidadePelaBase,
   avisoDoAgendado,
+  duvidasDoPassageiro,
   avisoDosLugares,
   cidadeDaVolta,
   cidadePelaBase,
@@ -1028,7 +1029,11 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       .gte("trip_date", lido.hoje);
     if (!prontos?.length) {
       evento("bot_agendado_lancado", { conversa, lancadas: 0, pendentes: ["sem_rascunho"], motivos: lido.motivos });
-      await avisarAgendadoQueFalhou(entrada, avisoDoAgendado({ lancadas: 0, pedidos: lidos, motivos: motivosLidos, pendentes: [] }));
+      // nenhum rascunho (ex.: ninguém escreveu o dia): pergunta ao passageiro o que só ele sabe (issue #457)
+      await avisarAgendadoQueFalhou(entrada, avisoDoAgendado({ lancadas: 0, pedidos: lidos, motivos: motivosLidos, pendentes: [] }), {
+        pendentes: duvidasDoPassageiro(motivosLidos, []),
+        nome: nomeDoCliente,
+      });
       return;
     }
 
@@ -1148,7 +1153,7 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
     entrada,
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
     // sem o dia escrito, quem sabe é o passageiro: pergunta a ele (autorizado pelo dono, 14/11)
-    { pendentes: [...pendentes, ...(motivosLidos.includes("sem_data") ? ["sem_data"] : [])], nome: nomeDoCliente },
+    { pendentes: duvidasDoPassageiro(motivosLidos, pendentes), nome: nomeDoCliente },
   );
   // o cliente escreveu DURANTE esta leitura e ficou algo pendente: lê de novo uma vez, agora sem
   // concorrência — o que ele mandou nesses segundos não se perde (issue #337)
