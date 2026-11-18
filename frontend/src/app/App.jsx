@@ -4,6 +4,7 @@ import {
   Bus,
   Calendar,
   CheckCircle2,
+  ChevronRight,
   Inbox,
   Landmark,
   LayoutDashboard,
@@ -38,6 +39,7 @@ import { useVehicles } from "../hooks/useVehicles.js";
 
 import { AvisoListaCortada } from "../ui/AvisoListaCortada.jsx";
 import { AvisoSemInternet } from "../ui/AvisoSemInternet.jsx";
+import { FolhaDeBaixo } from "../ui/FolhaDeBaixo.jsx";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
 import { VideoBackdrop } from "../ui/VideoBackdrop.jsx";
 import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
@@ -555,10 +557,7 @@ function QuickActionsFab({
 function GrupoResultados({ titulo, children }) {
   return (
     <div className="mb-3">
-      <div
-        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
-        style={{ color: C.inkFaint }}
-      >
+      <div className="px-3 py-1 text-[12px] font-semibold" style={{ color: C.inkFaint }}>
         {titulo}
       </div>
       {children}
@@ -839,44 +838,18 @@ const NAV_GRUPOS = [
 // Navegação inferior (celular). Muitas abas não cabem numa linha só —
 // mostra as principais + "Mais" numa folha. A aba ativa sempre aparece
 // na barra, mesmo que normalmente estivesse em "Mais".
-function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
+function MobileNavItem({ n, active, badge, onClick, docada = false }) {
   const Icon = n.icon;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={
-        grande
-          ? "btn-press flex flex-col items-center gap-1 py-3 rounded-xl min-h-[64px]"
-          : "barra-at-item relative z-10 flex flex-col items-center justify-center gap-1 min-w-0 h-full"
-      }
-      style={
-        grande
-          ? {
-              background: active ? C.rubro2 : C.panel2,
-              color: active ? C.ink : C.inkSoft,
-              boxShadow: active ? `inset 0 0 0 1px ${C.rubro}` : "none",
-            }
-          : { color: active ? C.ink : docada ? C.inkFaint : C.inkSoft }
-      }
+      className="barra-at-item relative z-10 flex flex-col items-center justify-center gap-1 min-w-0 h-full"
+      style={{ color: active ? C.ink : docada ? C.inkFaint : C.inkSoft }}
     >
-      {!grande && (
-        <span
-          aria-hidden="true"
-          className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-[22px] rounded-full"
-          style={{
-            background: C.brand,
-            opacity: docada && active ? 1 : 0,
-            transition: "opacity .2s ease",
-          }}
-        />
-      )}
       <span className="relative flex items-center justify-center" style={{ minHeight: 21 }}>
-        <Icon
-          size={grande ? 19 : 21}
-          style={{ color: active && !docada ? "#FF6367" : "currentColor" }}
-        />
+        <Icon size={21} style={{ color: active && !docada ? "#FF6367" : "currentColor" }} />
         {badge > 0 && (
           <span
             className="absolute -top-2 -right-3 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
@@ -892,16 +865,163 @@ function MobileNavItem({ n, active, grande, badge, onClick, docada = false }) {
         )}
       </span>
       <span
-        className={
-          grande
-            ? "text-[11px]"
-            : "text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"
-        }
+        className="text-[10px] min-[360px]:text-[11px] tracking-[-0.02em] min-[360px]:tracking-normal leading-none truncate max-w-full px-0.5"
         style={{ fontWeight: active ? 700 : 500 }}
       >
         {n.label}
       </span>
     </button>
+  );
+}
+
+// O "⋯" do topo do celular (issue #446): uma folha que sobe de baixo, como as outras do app —
+// perto do polegar, com entrada e saída animadas, Esc e o foco de volta no botão. Em cima, quem
+// está conectado; no meio, as telas que não cabem na barra, uma por linha com o que cada uma faz;
+// embaixo, "Sair da conta", discreto e com confirmação (um toque errado não desloga o celular).
+const PAPEIS = {
+  admin: "Administrador",
+  atendente: "Atendimento",
+  financeiro: "Financeiro",
+  motorista: "Motorista",
+};
+const O_QUE_CADA_TELA_FAZ = {
+  passageiros: "Grupos, fichas e quem sumiu",
+  sistema: "Preços, bot, equipe e backup",
+  assistente: "Peça por texto ou voz",
+};
+function MaisTelas({ aberta, onFechar, telas, tab, badgeDe, onEscolher, onSair, perfil }) {
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+  const fechar = () => {
+    setConfirmandoSaida(false);
+    onFechar();
+  };
+  const nome = String(perfil?.name ?? "").trim();
+  const iniciais =
+    nome
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase() || "?";
+  return (
+    <FolhaDeBaixo aberta={aberta} onFechar={fechar} testId="folha-mais">
+      <div className="flex items-center gap-3 px-2.5 pb-3">
+        <span
+          aria-hidden="true"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-semibold shrink-0"
+          style={{ background: C.border, color: C.ink }}
+        >
+          {iniciais}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[15px] font-semibold truncate" style={{ color: C.ink }}>
+            {nome || "Conectado"}
+          </span>
+          <span className="block text-[12.5px]" style={{ color: C.inkSoft }}>
+            {PAPEIS[perfil?.role] ?? "Equipe AriTur"}
+          </span>
+        </span>
+      </div>
+      <nav aria-label="Mais telas" className="border-t pt-1.5" style={{ borderColor: C.border }}>
+        {telas.map((n, i) => {
+          const Icon = n.icon;
+          const atual = tab === n.id;
+          const badge = badgeDe(n.id);
+          return (
+            <button
+              key={n.id}
+              type="button"
+              data-foco-inicial={i === 0 ? true : undefined}
+              aria-current={atual ? "page" : undefined}
+              // o nome da tela (e quantos avisos) — a frase de baixo é só ajuda visual
+              aria-label={badge > 0 ? `${n.label} ${badge}` : n.label}
+              onClick={() => {
+                setConfirmandoSaida(false);
+                onEscolher(n.id);
+              }}
+              className="btn-press w-full grid items-center gap-3 min-h-[60px] px-2.5 rounded-2xl text-left"
+              style={{
+                gridTemplateColumns: "36px minmax(0,1fr) auto",
+                background: atual ? C.panel2 : "transparent",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="w-9 h-9 rounded-[10px] flex items-center justify-center"
+                style={{ background: atual ? C.rubro2 : C.panel2, color: C.ink }}
+              >
+                <Icon size={18} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold" style={{ color: C.ink }}>
+                  {n.label}
+                </span>
+                {O_QUE_CADA_TELA_FAZ[n.id] && (
+                  <span className="block text-[12.5px] truncate" style={{ color: C.inkSoft }}>
+                    {O_QUE_CADA_TELA_FAZ[n.id]}
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-1.5" style={{ color: C.inkFaint }}>
+                {badge > 0 && (
+                  <span
+                    className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                    style={{ background: C.brand, color: "#fff" }}
+                  >
+                    {badge}
+                  </span>
+                )}
+                {atual ? (
+                  <span className="text-[12px]">aberta</span>
+                ) : (
+                  <ChevronRight size={17} aria-hidden="true" />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="border-t mt-1.5 pt-1.5 px-0.5" style={{ borderColor: C.border }}>
+        {confirmandoSaida ? (
+          <div className="grid gap-2 px-2 py-1.5" role="group" aria-label="Confirmar saída">
+            <p className="text-[13.5px]" style={{ color: C.inkSoft }}>
+              Sair da conta neste aparelho? Para voltar, é preciso o e-mail e a senha.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmandoSaida(false)}
+                className="btn-press min-h-[46px] rounded-2xl text-[14.5px] font-semibold"
+                style={{ background: C.border, color: C.ink }}
+              >
+                Ficar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmandoSaida(false);
+                  onSair();
+                }}
+                className="btn-press min-h-[46px] rounded-2xl text-[14.5px] font-semibold"
+                style={{ background: C.brand, color: "#fff" }}
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmandoSaida(true)}
+            className="btn-press w-full flex items-center gap-3 min-h-[48px] px-3 rounded-2xl text-[15px] text-left"
+            style={{ color: C.brandText }}
+          >
+            <LogOut size={18} /> Sair da conta
+          </button>
+        )}
+      </div>
+    </FolhaDeBaixo>
   );
 }
 
@@ -918,6 +1038,7 @@ function MobileNav({
   maisAberto,
   setMaisAberto,
   onSair,
+  perfil = null,
   docada = false,
 }) {
   const badgeDe = (id) =>
@@ -939,45 +1060,16 @@ function MobileNav({
   const indiceAtivo = visiveis.findIndex((n) => n.id === tab);
   return (
     <>
-      {maisAberto && (
-        <div
-          className="md:hidden fixed inset-0 z-50 anim-fadeIn"
-          style={{ background: "rgba(0,0,0,.55)" }}
-          onClick={() => setMaisAberto(false)}
-        >
-          <div
-            className="absolute left-2 right-2 rounded-3xl border p-3 anim-slideDown"
-            style={{
-              top: "calc(76px + env(safe-area-inset-top))",
-              background: C.panel,
-              borderColor: C.border,
-              boxShadow: "0 24px 48px -16px #000",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="grid grid-cols-4 gap-2">
-              {extras.map((n) => (
-                <MobileNavItem
-                  key={n.id}
-                  n={n}
-                  grande
-                  active={tab === n.id}
-                  badge={badgeDe(n.id)}
-                  onClick={() => escolher(n.id)}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={onSair}
-              className="btn-press mt-2 w-full flex items-center justify-center gap-2 rounded-xl min-h-[48px] text-sm font-semibold"
-              style={{ background: C.panel2, color: C.inkSoft }}
-            >
-              <LogOut size={17} /> Sair da conta
-            </button>
-          </div>
-        </div>
-      )}
+      <MaisTelas
+        aberta={maisAberto}
+        onFechar={() => setMaisAberto(false)}
+        telas={extras}
+        tab={tab}
+        badgeDe={badgeDe}
+        onEscolher={escolher}
+        onSair={onSair}
+        perfil={perfil}
+      />
       <nav
         aria-label="Menu"
         data-testid="barra-de-baixo"
@@ -988,16 +1080,32 @@ function MobileNav({
           className="relative h-full grid"
           style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}
         >
+          {/* a luz vinho desliza até a tela tocada: no Início ocupa o item inteiro; encaixada nas
+              telas de trabalho, vira uma pílula atrás do ícone (visual v18, issue #446) */}
           {indiceAtivo >= 0 && (
             <span
               aria-hidden="true"
-              className="barra-at-luz absolute top-0 bottom-0 left-0 rounded-2xl"
+              data-testid="luz-da-barra"
+              className="absolute left-0 flex justify-center"
               style={{
+                top: docada ? 7 : 0,
+                height: docada ? 30 : "100%",
                 width: `${100 / colunas}%`,
                 transform: `translateX(${indiceAtivo * 100}%)`,
-                opacity: docada ? 0 : 1,
+                transition:
+                  "transform .26s cubic-bezier(.2,0,0,1), top .26s cubic-bezier(.2,0,0,1), height .26s cubic-bezier(.2,0,0,1)",
               }}
-            />
+            >
+              <span
+                className="barra-at-luz block h-full"
+                style={{
+                  width: docada ? 56 : "100%",
+                  borderRadius: docada ? 15 : 16,
+                  transition:
+                    "width .26s cubic-bezier(.2,0,0,1), border-radius .26s cubic-bezier(.2,0,0,1)",
+                }}
+              />
+            </span>
           )}
           {visiveis.map((n) => (
             <MobileNavItem
@@ -1438,6 +1546,7 @@ function AppInner() {
                 maisAberto={maisAberto}
                 setMaisAberto={setMaisAberto}
                 onSair={signOut}
+                perfil={profile}
                 docada={!noInicio}
               />
 

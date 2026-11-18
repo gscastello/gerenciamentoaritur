@@ -51,7 +51,7 @@ function Campo({ titulo, valor, rotulo }) {
       style={{ background: C.panel2 }}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] uppercase tracking-wide" style={{ color: C.inkFaint }}>
+        <div className="text-[12px]" style={{ color: C.inkFaint }}>
           {titulo}
         </div>
         <div className="text-xs break-all font-mono" style={{ color: C.ink }}>

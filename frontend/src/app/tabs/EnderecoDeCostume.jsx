@@ -85,7 +85,7 @@ function Sentido({
   return (
     <div data-testid={`costume-${direcao}`}>
       <div
-        className="text-[10px] uppercase tracking-wide mb-1 flex items-center gap-1.5"
+        className="text-[12px] mb-1 flex items-center gap-1.5"
         style={{ color: C.inkFaint }}
       >
         {ROTULO[direcao]}

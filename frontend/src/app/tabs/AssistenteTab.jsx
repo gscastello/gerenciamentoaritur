@@ -55,7 +55,7 @@ function CartaoDeAcao({ acao, onConfirmar, onDescartar }) {
         transition: "opacity var(--motion-base) var(--ease-out-quart)",
       }}
     >
-      <div className="text-[11px] uppercase tracking-wide mb-1" style={{ color: C.inkFaint }}>
+      <div className="text-[12px] mb-1" style={{ color: C.inkFaint }}>
         {titulo}
         {acao.estado !== "proposta" && ` · ${ROTULO_ESTADO[acao.estado] ?? acao.estado}`}
       </div>

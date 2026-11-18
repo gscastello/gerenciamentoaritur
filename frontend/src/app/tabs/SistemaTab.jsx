@@ -1432,7 +1432,7 @@ export default function SistemaTab({
               {["ida", "volta"].map((dir) => (
                 <div key={dir} className="mb-4">
                   <div
-                    className="text-xs font-semibold mb-2 uppercase tracking-[.06em]"
+                    className="text-[13px] font-semibold mb-2"
                     style={{ color: C.inkSoft }}
                   >
                     {cfg.trips[dir].nome}
