@@ -26,7 +26,7 @@ export type ConfigDoLembrete = {
 
 export const CONFIG_PADRAO: ConfigDoLembrete = {
   ativo: false,
-  ida_hora: "19:00",
+  ida_hora: "21:00",
   volta_antes_min: 60,
   silencio: { de: "22:00", ate: "06:00" },
 };

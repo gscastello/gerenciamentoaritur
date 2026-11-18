@@ -43,7 +43,7 @@ const volta: ReservaDoLembrete = {
 Deno.test("#458 config: padrão no que falta ou está errado; desligado por padrão", () => {
   assertEquals(configDoLembrete(null).ativo, false);
   const c = configDoLembrete({ ativo: true, ida_hora: "25:00", volta_antes_min: 5, silencio: { de: "x" } });
-  assertEquals([c.ida_hora, c.volta_antes_min, c.silencio.de, c.silencio.ate], ["19:00", 60, "22:00", "06:00"]);
+  assertEquals([c.ida_hora, c.volta_antes_min, c.silencio.de, c.silencio.ate], ["21:00", 60, "22:00", "06:00"]);
   assertEquals(configDoLembrete({ ida_hora: "20:30", volta_antes_min: 90 }).ida_hora, "20:30");
 });
 
