@@ -28,7 +28,7 @@ export const CONFIG_PADRAO: ConfigDoLembrete = {
   ativo: false,
   ida_hora: "21:00",
   volta_antes_min: 60,
-  silencio: { de: "22:00", ate: "06:00" },
+  silencio: { de: "23:00", ate: "06:00" },
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;

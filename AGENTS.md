@@ -568,7 +568,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   com dia, sentido, onde embarca, horário e quantidade, pedindo resposta se algo estiver diferente (nunca valor). A
   rotina roda de 5 em 5 min: quem agenda depois recebe na rodada seguinte enquanto a viagem não saiu; quem foi lançado
   pelo "Agendado ☑️" depois da hora do lembrete já recebeu a confirmação, que vale como lembrete. Uma vez por reserva
-  (registro em `avisos_passageiros`, tipo `horario`), nada no horário de silêncio, envio pelo `avisar-passageiros`.
+  (registro em `avisos_passageiros`, tipo `horario`), nada no horário de silêncio (23h–6h), envio pelo `avisar-passageiros`.
   Liga/desliga em `settings.lembrete_viagem.ativo` (autorizado pelo dono em 14/11; ligado em 17/11, modelo `aviso_horario` aprovado na Meta).
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.

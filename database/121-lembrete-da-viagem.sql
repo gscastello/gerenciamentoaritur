@@ -10,7 +10,7 @@
 --    revisor-reservas. Desligado, a função só responde e não faz nada.
 
 insert into settings (key, value)
-values ('lembrete_viagem', '{"ativo": false, "ida_hora": "21:00", "volta_antes_min": 60, "silencio": {"de": "22:00", "ate": "06:00"}}'::jsonb)
+values ('lembrete_viagem', '{"ativo": false, "ida_hora": "21:00", "volta_antes_min": 60, "silencio": {"de": "23:00", "ate": "06:00"}}'::jsonb)
 on conflict (key) do nothing;
 
 do $$
