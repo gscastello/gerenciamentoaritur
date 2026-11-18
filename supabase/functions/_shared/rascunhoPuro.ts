@@ -1110,6 +1110,21 @@ export function avisoDoAgendado(r: {
 }
 
 /**
+ * Nota privada no Chatwoot quando o Agendado não lança (issue #455): quem marcou vê ali mesmo, na
+ * hora, que o passageiro AINDA NÃO TEM LUGAR. Só a equipe vê; nada vai ao cliente. O texto não tem
+ * "agendado" nem ☑️/✅ — senão a própria nota seria lida como uma marca nova.
+ */
+export function notaDoAgendadoQueNaoLancou(aviso: { assunto: string; detalhe: string }): string {
+  const parte = /só parte/i.test(aviso.assunto);
+  const detalhe = aviso.detalhe.replace(/agendad[oa]s?/gi, "marca").replace(/[☑✅✔]️?/gu, "").trim();
+  return [
+    parte ? "⚠️ PARTE DESTE PEDIDO NÃO ENTROU NA AGENDA." : "⚠️ ESTA RESERVA NÃO ENTROU NA AGENDA.",
+    detalhe,
+    "O passageiro ainda não tem lugar: lance pela Agenda ou responda aqui o que falta.",
+  ].join("\n");
+}
+
+/**
  * A cidade da Volta que o CLIENTE escreveu nas mensagens do pedido (issue #301): o
  * leitor às vezes não marca, e o trecho que ele copia pode não ter a cidade. Lê todas
  * as mensagens do cliente; uma cidade só em todas = essa; as duas cidades = null.

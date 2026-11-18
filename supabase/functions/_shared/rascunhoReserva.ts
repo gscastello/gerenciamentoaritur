@@ -40,6 +40,7 @@ import {
   planejarAtualizacao,
   avisoDaCidadePelaBase,
   avisoDoAgendado,
+  notaDoAgendadoQueNaoLancou,
   avisoDosLugares,
   cidadeDaVolta,
   cidadePelaBase,
@@ -1235,6 +1236,10 @@ async function avisarAgendadoQueFalhou(
     });
     if (error) throw error;
     evento("bot_agendado_avisado", { conversa: entrada.chatwootConversationId, assunto: aviso.assunto });
+    // nota privada na conversa: quem marcou vê na hora que o passageiro ainda não tem lugar (issue #455)
+    await chatwootClient
+      .postMessage(entrada.chatwootConversationId, notaDoAgendadoQueNaoLancou(aviso), { private: true })
+      .catch((err) => evento("bot_aviso", { aviso: "nota_do_agendado", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) }));
   } catch (err) {
     evento("bot_aviso", { aviso: "agendado_nao_avisado", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
   }

@@ -514,7 +514,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   pelo app); criar a reserva por qualquer caminho fecha o rascunho. A IA nunca reserva nem decide preço por aqui,
   **exceto** quando a equipe escreve **"Agendado ☑️"** na conversa (issue #257): a marca é a confirmação manual e a
   reserva preparada é lançada com o preço da tabela (mesma regra do bot) e a vaga validada pelo banco; se faltar algo,
-  fica na lista com o motivo. Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
+  fica na lista com o motivo. **Agendado que não lançou não fica calado** (issue #455): nota privada na conversa ("esta reserva NÃO entrou na Agenda" + o motivo), faixa vermelha fixa no topo do app para quem agenda (`AvisoAgendadoSemReserva`, `domain/agendadoSemReserva.js`) e, quando alguém lança a reserva do passageiro, a pendência fecha sozinha (`database/120`). Vale em qualquer modo, **inclusive no sombra** (dono, 10/11). O Agendado **reserva como está** (dono, 10/11): sem endereço a
   vaga entra só com o nome, "Endereço a confirmar" e sem valor na Ida; Volta sem cidade usa a base de lugares ou o
   costume, senão fica pendente; "ida e volta" sem o dia da volta lança a Volta no mesmo dia marcada para confirmar. **"Hoje" dito pelo cliente nunca vira amanhã calado** (issue #307): se a viagem daquele sentido já saiu e o
   destino existe na do outro sentido (cidades do caminho, como Miranda), é a do outro sentido hoje; senão fica pendente.
