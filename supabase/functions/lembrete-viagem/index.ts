@@ -90,7 +90,9 @@ Deno.serve(async (req: Request) => {
     }
     for (const [id, n] of falhas) if (n >= 3) jaAvisadas.add(id);
 
-    const devidos = lembretesDevidos(reservas, jaAvisadas, agora, { ...cfg, ativo: true }, valor("monday_adjustment"));
+    // simular ignora o horário de silêncio (para conferir a lista a qualquer hora)
+    const regra = simular ? { ...cfg, ativo: true, silencio: { de: "00:00", ate: "00:00" } } : { ...cfg, ativo: true };
+    const devidos = lembretesDevidos(reservas, jaAvisadas, agora, regra, valor("monday_adjustment"));
     const itens = devidos.map(({ reserva, horario }) => ({
       reservation_id: reserva.id,
       texto: textoDoLembrete(reserva, horario, hoje),
