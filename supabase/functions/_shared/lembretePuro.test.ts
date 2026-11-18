@@ -100,6 +100,9 @@ Deno.test("#458 texto: dia, sentido, onde embarca, horário e quantidade; nunca 
   assertStringIncludes(textoDoLembrete(outro, "06:30", "2026-11-17"), "embarque em Posto Carone às 06:30");
   assertStringIncludes(textoDoLembrete({ ...base, bairro: null, endereco: null }, "05:00", "2026-11-17"), "embarque em casa a partir");
   assertStringIncludes(textoDoLembrete({ ...rod, pontoNome: null }, "05:40", "2026-11-17"), "no seu local de embarque");
+  const ret = { ...rod, pontoCodigo: "retorno", pontoNome: "Retorno das Vans" };
+  assertStringIncludes(textoDoLembrete(ret, "06:00", "2026-11-17"), "embarque no Retorno das Vans às 06:00");
+  assertEquals(variaveisDoModelo(ret, "06:00", "2026-11-17").ponto, "Retorno das Vans");
   assertStringIncludes(textoDoLembrete({ ...volta, endereco: null }, "13:00", "2026-11-18"), "embarque em Cantanhede a partir");
   assertEquals(/R\$/.test(t), false);
   assertEquals(variaveisDoModelo(base, "05:00", "2026-11-17"), { nome: "Maria Teste", dia: "amanhã, quarta (18/11)", ponto: "casa (Turu, Rua das Flores, 10)", horario: "05:00" });

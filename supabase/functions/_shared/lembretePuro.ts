@@ -147,7 +147,9 @@ function ondeEmbarca(r: ReservaDoLembrete): string {
     const rua = String(r.endereco ?? "").trim();
     return rua ? `em ${r.pontoNome} (${rua})` : `em ${r.pontoNome}`;
   }
-  return r.pontoNome ? `na ${r.pontoNome}` : "no seu local de embarque";
+  if (!r.pontoNome) return "no seu local de embarque";
+  // "na Rodoviária", "no Retorno das Vans"
+  return /^(retorno|posto|terminal)/i.test(r.pontoNome) ? `no ${r.pontoNome}` : `na ${r.pontoNome}`;
 }
 
 /**
@@ -170,7 +172,7 @@ export function variaveisDoModelo(r: ReservaDoLembrete, horario: string, hoje: s
   return {
     nome: r.nome,
     dia: rotuloDoDia(r.data, hoje).replace(/^de /, ""),
-    ponto: ondeEmbarca(r).replace(/^(em|na) /, ""),
+    ponto: ondeEmbarca(r).replace(/^(em|na|no) /, ""),
     horario,
   };
 }
