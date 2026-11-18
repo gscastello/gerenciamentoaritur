@@ -41,7 +41,10 @@ import {
   avisoDaCidadePelaBase,
   avisoDoAgendado,
   notaDoAgendadoQueNaoLancou,
+  assinaturaDaLeitura,
   duvidasDoPassageiro,
+  leituraDaMaioria,
+  falhaDoServicoDaIa,
   avisoDosLugares,
   cidadeDaVolta,
   cidadePelaBase,
@@ -214,6 +217,36 @@ async function lerPedidos(
   const pedidos = Array.isArray(bloco?.input?.pedidos) ? (bloco.input.pedidos as PedidoExtraido[]) : [];
   // até 4: ida e volta de duas pessoas (cortar em 2 perdia passageiro)
   return { pedidos: pedidos.slice(0, 4), uso };
+}
+
+const somarUso = (usos: (Bloco | undefined)[]): Bloco => ({
+  input_tokens: usos.reduce((t, u) => t + Number(u?.input_tokens ?? 0), 0),
+  output_tokens: usos.reduce((t, u) => t + Number(u?.output_tokens ?? 0), 0),
+});
+
+/**
+ * Leitura com consenso (issue #465): duas leituras em paralelo; se concordam no que decide a
+ * reserva (tipo, dia, sentido, quantidade, ponto), vale. Se discordam, uma terceira e vale a
+ * maioria. Sem maioria, fica a primeira e o Agendado relê com o modelo capaz (`divergente`).
+ * Só na leitura rápida: a releitura com o modelo capaz é uma só.
+ */
+async function lerPedidosComConsenso(
+  system: string,
+  conversa: string,
+  modelo?: string,
+): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco; divergente: boolean }> {
+  if (modelo && modelo !== MODELO) return { ...(await lerPedidos(system, conversa, modelo)), divergente: false };
+  const [a, b] = await Promise.all([lerPedidos(system, conversa), lerPedidos(system, conversa)]);
+  if (assinaturaDaLeitura(a.pedidos) === assinaturaDaLeitura(b.pedidos)) {
+    return { pedidos: a.pedidos, uso: somarUso([a.uso, b.uso]), divergente: false };
+  }
+  const c = await lerPedidos(system, conversa);
+  const leituras = [a, b, c];
+  const i = leituraDaMaioria(leituras.map((l) => l.pedidos));
+  const uso = somarUso(leituras.map((l) => l.uso));
+  evento("bot_leituras_divergentes", { maioria: i !== null });
+  if (i !== null) return { pedidos: leituras[i].pedidos, uso, divergente: false };
+  return { pedidos: a.pedidos, uso, divergente: true };
 }
 
 const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
@@ -414,7 +447,7 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
     : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
-  const lidos = await lerPedidos(system, conversa, opcoes.modelo);
+  const lidos = await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
   const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
@@ -856,7 +889,7 @@ async function lerEGravar(
       doCliente.some((m) => ehMensagemIlegivel(m.texto))
     ) {
       pendencia ??= {
-        motivo: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
+        motivo: "o cliente não escreveu o dia e mandou uma mensagem (ou um áudio sem transcrição) que o bot não conseguiu ler: confira o dia no WhatsApp",
         codigo: "dia_ilegivel",
       };
     }
@@ -939,7 +972,7 @@ async function lerEGravar(
     hoje,
   );
   if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
-  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas };
+  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas, divergente: lidos.divergente };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -1005,6 +1038,8 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
     let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
     // ia ficar pendente por falta de leitura? relê com o modelo mais capaz antes de desistir (issue #301)
     if (
+      // leituras sem maioria (issue #465): relê com o modelo capaz
+      lido.divergente ||
       agendadoPrecisaReler({
         pedidos: lido.pedidos.length,
         motivos: lido.motivos,
@@ -1155,7 +1190,10 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
     // sem o dia escrito, quem sabe é o passageiro: pergunta a ele (autorizado pelo dono, 14/11)
     { pendentes: duvidasDoPassageiro(motivosLidos, pendentes), nome: nomeDoCliente },
+    !!falhaDoServicoDaIa(erro),
   );
+  // a IA recusou ou caiu: a equipe fica sabendo na hora; voltou a ler: o aviso fecha (issue #462)
+  await situacaoDaIa(erro);
   // o cliente escreveu DURANTE esta leitura e ficou algo pendente: lê de novo uma vez, agora sem
   // concorrência — o que ele mandou nesses segundos não se perde (issue #337)
   if (!segundaRodada && (pendentes.length > 0 || lidos === 0)) {
@@ -1218,6 +1256,8 @@ async function avisarAgendadoQueFalhou(
   entrada: Entrada,
   aviso: { assunto: string; detalhe: string } | null,
   duvidas: { pendentes: string[]; nome: string | null } = { pendentes: [], nome: null },
+  /** a leitura falhou por erro técnico (serviço da IA): o revisor tenta de novo (issue #462) */
+  erroTecnico = false,
 ) {
   try {
     if (!aviso) {
@@ -1242,7 +1282,13 @@ async function avisarAgendadoQueFalhou(
     const pergunta = await perguntarAoCliente(entrada, duvidas, jaPerguntadas);
     const perguntas = pergunta ? [...jaPerguntadas, pergunta] : jaPerguntadas;
     if (aberta) {
-      if (pergunta) {
+      // a nova tentativa leu a conversa mas ficou pendente por outro motivo: a pendência passa a dizer esse
+      if (aberta.meta?.erro_tecnico && !erroTecnico) {
+        await supabaseAdmin
+          .from("support_tickets")
+          .update({ subject: aviso.assunto, detail: aviso.detalhe, meta: { ...aberta.meta, perguntas, erro_tecnico: false } })
+          .eq("id", aberta.id);
+      } else if (pergunta) {
         await supabaseAdmin.from("support_tickets").update({ meta: { ...aberta.meta, perguntas } }).eq("id", aberta.id);
       }
       return;
@@ -1263,6 +1309,7 @@ async function avisarAgendadoQueFalhou(
         chatwoot_conversation_id: entrada.chatwootConversationId,
         agendado_mensagem_id: String(entrada.mensagemId),
         perguntas,
+        ...(erroTecnico ? { erro_tecnico: true, tentativas: 0 } : {}),
       },
     });
     if (error) throw error;
@@ -1273,6 +1320,80 @@ async function avisarAgendadoQueFalhou(
       .catch((err) => evento("bot_aviso", { aviso: "nota_do_agendado", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) }));
   } catch (err) {
     evento("bot_aviso", { aviso: "agendado_nao_avisado", conversa: entrada.chatwootConversationId, erro: String(err).slice(0, 200) });
+  }
+}
+
+const ASSUNTO_IA_FORA = "IA fora do ar";
+
+/**
+ * Aviso único "IA fora do ar" (issue #462): a chave foi recusada ou o serviço caiu. Fecha sozinho
+ * na próxima leitura que funcionar. O Agendado que falhou é tentado de novo pelo revisor.
+ */
+export async function situacaoDaIa(erro: string | null) {
+  try {
+    const falha = falhaDoServicoDaIa(erro);
+    const { data: aberta } = await supabaseAdmin
+      .from("support_tickets")
+      .select("id")
+      .eq("status", "aberta")
+      .eq("subject", ASSUNTO_IA_FORA)
+      .limit(1)
+      .maybeSingle();
+    if (!falha) {
+      if (aberta && !erro) {
+        await supabaseAdmin.from("support_tickets").update({ status: "resolvida", resolved_at: new Date().toISOString() }).eq("id", aberta.id);
+        evento("bot_ia_voltou", {});
+      }
+      return;
+    }
+    if (aberta) return;
+    const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
+      p_subject: ASSUNTO_IA_FORA,
+      p_detail: falha === "chave"
+        ? "A IA recusou a leitura (chave recusada ou sem saldo). O bot tenta de novo os Agendados sozinho; se continuar, confira a chave da Anthropic e o saldo da conta."
+        : "O serviço da IA está fora do ar ou sobrecarregado. O bot tenta de novo os Agendados sozinho, de 5 em 5 minutos.",
+      p_phone: null,
+      p_customer_id: null,
+      p_source: "sistema",
+      p_meta: { falha, erro: String(erro ?? "").slice(0, 300) },
+    });
+    if (error) throw error;
+    evento("bot_ia_fora_do_ar", { falha });
+  } catch (err) {
+    evento("bot_aviso", { aviso: "ia_fora_nao_avisado", erro: String(err).slice(0, 200) });
+  }
+}
+
+/**
+ * Agendados que falharam por erro técnico (issue #462): o revisor chama a cada minuto e cada um é
+ * tentado de novo de 5 em 5 min, até 5 vezes nas 6 h seguintes. Deu certo, a pendência fecha
+ * sozinha (avisarAgendadoQueFalhou com aviso nulo); a reserva é idempotente pela marca.
+ */
+export async function tentarDeNovoAgendadosQueFalharam(agora = new Date()) {
+  const { data: abertas } = await supabaseAdmin
+    .from("support_tickets")
+    .select("id, meta, created_at")
+    .eq("status", "aberta")
+    .like("subject", "Agendado ☑️%")
+    .eq("meta->>erro_tecnico", "true")
+    .gte("created_at", new Date(agora.getTime() - 6 * 3600 * 1000).toISOString())
+    .order("created_at")
+    .limit(5);
+  for (const t of (abertas ?? []) as Bloco[]) {
+    const meta = t.meta ?? {};
+    const tentativas = Number(meta.tentativas ?? 0);
+    const ultima = Date.parse(meta.ultima_tentativa ?? t.created_at);
+    if (tentativas >= 5 || agora.getTime() - ultima < 5 * 60 * 1000) continue;
+    const mensagemId = Number(meta.agendado_mensagem_id);
+    const chatwootConversationId = Number(meta.chatwoot_conversation_id);
+    if (!mensagemId || !chatwootConversationId || !meta.conversation_id) continue;
+    await supabaseAdmin
+      .from("support_tickets")
+      .update({ meta: { ...meta, tentativas: tentativas + 1, ultima_tentativa: agora.toISOString() } })
+      .eq("id", t.id);
+    const { data: conv } = await supabaseAdmin.from("whatsapp_conversations").select("phone").eq("id", meta.conversation_id).maybeSingle();
+    evento("bot_agendado_nova_tentativa", { conversa: chatwootConversationId, tentativa: tentativas + 1 });
+    await lancarPeloAgendado({ conversationId: meta.conversation_id, chatwootConversationId, mensagemId, telefone: String(conv?.phone ?? "") });
   }
 }
 
@@ -1497,6 +1618,7 @@ export async function simularAgendado(c: {
   let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular, ...(c.modelo ? { modelo: c.modelo } : {}) });
   let releu = false;
   if (
+    lido.divergente ||
     agendadoPrecisaReler({
       pedidos: lido.pedidos.length,
       motivos: lido.motivos,

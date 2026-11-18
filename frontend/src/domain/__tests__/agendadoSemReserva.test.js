@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { agendadosSemReserva, ehPendenciaDoAgendado, motivoCurto } from "../agendadoSemReserva.js";
+import {
+  agendadosSemReserva,
+  ehPendenciaDoAgendado,
+  motivoCurto,
+  tituloDaFaixa,
+} from "../agendadoSemReserva.js";
 
 // Issue #455: o "Agendado ☑️" que não lançou vai para a faixa fixa do topo (dados fictícios).
 const rodape = " Confira a conversa e lance pela Agenda (ou por Atendimento → Reservas prontas).";
@@ -68,5 +73,39 @@ describe("Agendado sem reserva", () => {
       "A cidade da Volta não foi dita",
     );
     expect(motivoCurto("")).toBe("O bot não conseguiu ler o pedido");
+  });
+
+  it("#461/#462: pedido sem reserva da sentinela e IA fora do ar entram na faixa", () => {
+    const lista = agendadosSemReserva([
+      {
+        id: "p",
+        assunto: "Pedido sem reserva",
+        detail: `O cliente pediu Ida de amanhã (19/11) e ainda não está na Agenda.${rodape}`,
+        cliente: "Ana Teste",
+        created_at: "2026-11-18T12:00:00Z",
+      },
+      {
+        id: "ia",
+        assunto: "IA fora do ar",
+        detail: "A IA recusou a leitura.",
+        created_at: "2026-11-18T11:00:00Z",
+      },
+    ]);
+    expect(lista.map((p) => [p.id, p.tipo, p.quem])).toEqual([
+      ["ia", "ia", "Bot"],
+      ["p", "pedido", "Ana Teste"],
+    ]);
+    expect(lista[1].motivo).toBe(
+      "O cliente pediu Ida de amanhã (19/11) e ainda não está na Agenda",
+    );
+    expect(tituloDaFaixa(lista)).toBe("1 passageiro pediu e ainda não tem lugar na Agenda");
+    expect(tituloDaFaixa([lista[0]])).toMatch(/IA do bot está fora do ar/);
+    expect(tituloDaFaixa([{ tipo: "agendado" }, { tipo: "agendado" }])).toBe(
+      "2 passageiros marcados como Agendado ☑️ ainda não têm lugar na Agenda",
+    );
+    expect(tituloDaFaixa([{ tipo: "pedido" }, { tipo: "agendado" }])).toBe(
+      "2 passageiros pediram e ainda não têm lugar na Agenda",
+    );
+    expect(tituloDaFaixa(null)).toMatch(/IA do bot/);
   });
 });

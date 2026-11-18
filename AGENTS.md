@@ -113,7 +113,7 @@ O contrato acima é validado por `npm run arch`
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
 `opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
-`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`, `comprovantePuro`, `documentoPuro`, `lembretePuro`),
+`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`, `comprovantePuro`, `documentoPuro`, `lembretePuro`, `sentinelaPura`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -552,6 +552,25 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
   `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+- **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
+  **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
+  `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização
+  como `[localização: nome — link do mapa]` (`textoDosAnexos` em `chatwootPayload.ts`); a transcrição que chega depois
+  atualiza a observação. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
+  decide a reserva (tipo, dia, sentido, quantidade, ponto) → vale; discordam → terceira e vale a maioria; sem maioria →
+  relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. Nome de
+  parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
+  (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,
+  até 5 vezes em 6 h; chave recusada ou serviço caído abre UMA pendência "IA fora do ar", que fecha na próxima leitura
+  que funcionar. **Sentinela de pedido sem reserva** (#461, função `sentinela-pedidos`, `sentinelaPura.ts`,
+  `database/122`): de 10 em 10 min, conversa com pedido de vaga nas últimas 72 h, parada há 30 min e sem reserva lançada
+  depois → simula o Agendado sem gravar; viagem de hoje a 3 dias que não saiu (ou pedido de reserva com todas as letras
+  sem o dia) e sem "lotado"/"era só consulta" → pendência "Pedido sem reserva" + nota privada no Chatwoot. Fecha
+  sozinha ao lançar a reserva do passageiro. Nada vai ao cliente. **Casos que crescem sozinhos** (#463,
+  `database/123`): toda madrugada os Agendados novos viram casos e são avaliados na rodada `auto`; errado ou faltou vira
+  a pendência "Bot errou em casos reais". **Fila enxuta** (#464): o revisor preenche sozinho embarque, desembarque ou
+  bairro VAZIO com certeza média quando o valor está na própria prova (`campoVazio`, `valorNaProva`); "Revisão: conferir
+  reserva" com mais de 3 dias e "Pedido sem reserva" com mais de 4 fecham como vencidas (`fn_fechar_pendencias_vencidas`).
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,

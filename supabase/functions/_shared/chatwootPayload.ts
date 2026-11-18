@@ -56,12 +56,48 @@ export function textoDosContatos(contatos: ContatoCompartilhado[]): string | und
   return contatos.map((c) => `[contato compartilhado: ${c.nome ? `${c.nome} — ` : ""}${c.telefone}]`).join(" ");
 }
 
-/** Texto da mensagem com o card de contato junto (se houver). */
+/** Áudio que o Chatwoot não transcreveu: o bot sabe que existe, mas não sabe o que diz. */
+export const AUDIO_SEM_TRANSCRICAO = "[áudio sem transcrição — ouça no WhatsApp]";
+
+/**
+ * Áudio e localização como texto que o bot lê (issue #460). O Chatwoot transcreve o áudio em
+ * `transcribed_text` (às vezes só depois, num message_updated); a localização vem com as
+ * coordenadas e o nome do lugar. Sem isso, o dia ou o endereço mandados por áudio sumiam.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function textoDosAnexos(attachments: any): string | undefined {
+  if (!Array.isArray(attachments)) return undefined;
+  const partes: string[] = [];
+  for (const a of attachments) {
+    if (a?.file_type === "audio") {
+      const t = String(a.transcribed_text ?? "").replace(/\s+/g, " ").trim();
+      partes.push(t ? `[áudio: ${t}]` : AUDIO_SEM_TRANSCRICAO);
+    } else if (a?.file_type === "location") {
+      const lat = Number(a.coordinates_lat);
+      const lng = Number(a.coordinates_long);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue;
+      const nome = String(a.fallback_title ?? "").replace(/\s+/g, " ").trim();
+      partes.push(`[localização${nome ? `: ${nome}` : ""} — https://maps.google.com/?q=${lat},${lng}]`);
+    }
+  }
+  return partes.length ? partes.join(" ") : undefined;
+}
+
+/** Quantos áudios vieram com e sem transcrição (para o registro: o Chatwoot está transcrevendo?). */
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+export function audiosTranscritos(attachments: any): { com: number; sem: number } {
+  const audios = Array.isArray(attachments) ? attachments.filter((a) => a?.file_type === "audio") : [];
+  const com = audios.filter((a) => String(a.transcribed_text ?? "").trim()).length;
+  return { com, sem: audios.length - com };
+}
+
+/** Texto da mensagem com o card de contato, a transcrição do áudio e a localização (se houver). */
 // biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
 export function textoComContatos(conteudo: string | undefined, attachments: any): string | undefined {
   const contatos = textoDosContatos(contatosCompartilhados(attachments));
+  const anexos = textoDosAnexos(attachments);
   const t = (conteudo ?? "").trim();
-  return [t, contatos].filter(Boolean).join(" ") || undefined;
+  return [t, contatos, anexos].filter(Boolean).join(" ") || undefined;
 }
 
 export type MensagemDeCliente = {
@@ -159,7 +195,9 @@ export function extrairAtividade(body: any, inboxIdEsperado = 0): Atividade | nu
     const anexo = a ? tipoDoAnexo(a) : null;
     const conteudo = textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments) ?? "";
     const rotulo = { audio: "[áudio]", image: "[imagem]", sticker: "[figurinha]", document: "[arquivo]" };
-    previa = (conteudo || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
+    // na prévia da fila, áudio sem transcrição continua "[áudio]" (o texto longo é para o bot)
+    const paraPrevia = conteudo.replace(AUDIO_SEM_TRANSCRICAO, "").trim();
+    previa = (paraPrevia || (anexo ? rotulo[anexo] : "")).slice(0, PREVIA_MAX) || undefined;
     texto = conteudo || undefined;
     mensagemId = Number(body.id) || undefined;
   }

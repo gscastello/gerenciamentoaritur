@@ -5,7 +5,7 @@
 // quando a pendência é resolvida (lançar a reserva já resolve sozinho — database/120).
 
 import { AlertTriangle, ChevronRight } from "lucide-react";
-import { agendadosSemReserva } from "../domain/agendadoSemReserva.js";
+import { agendadosSemReserva, tituloDaFaixa } from "../domain/agendadoSemReserva.js";
 import { Presence, fadeSlideDown } from "../ui/motion/index.js";
 import { C } from "./tabShared.jsx";
 
@@ -36,15 +36,14 @@ export function AvisoAgendadoSemReserva({ pendencias, onResolver, agora = Date.n
           <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color: C.red }} />
           <div className="min-w-0 flex-1">
             <p className="text-[14px] font-semibold" style={{ color: C.ink }}>
-              {n === 1
-                ? "1 passageiro marcado como Agendado ☑️ ainda não tem lugar na Agenda"
-                : `${n} passageiros marcados como Agendado ☑️ ainda não têm lugar na Agenda`}
+              {tituloDaFaixa(lista)}
             </p>
             <ul className="mt-1.5 space-y-1">
               {lista.slice(0, MOSTRAR).map((p) => (
                 <li key={p.id} className="text-[12.5px] leading-snug" style={{ color: C.inkSoft }}>
                   <b style={{ color: C.ink }}>{p.quem}</b>
-                  {p.parte ? " (parte do pedido)" : ""}: {p.motivo}
+                  {p.parte ? " (parte do pedido)" : ""}
+                  {p.tipo === "pedido" ? " (pediu, sem Agendado)" : ""}: {p.motivo}
                   {p.em && <span style={{ color: C.inkFaint }}> · {haQuanto(p.em, agora)}</span>}
                 </li>
               ))}

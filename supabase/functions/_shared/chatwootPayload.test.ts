@@ -4,7 +4,9 @@ import {
   extrairAtividade,
   extrairMensagemDeCliente,
   extrairPedidoDeTeste,
+  audiosTranscritos,
   textoComContatos,
+  textoDosAnexos,
 } from "./chatwootPayload.ts";
 
 const base = () => ({
@@ -125,6 +127,8 @@ Deno.test("atividade: prévia de anexo e limite de tamanho", () => {
   assertEquals(com("audio")?.previa, "[áudio]");
   assertEquals(com("image")?.previa, "[imagem]");
   assertEquals(com("image", "a".repeat(500))?.previa?.length, 140);
+  // o bot lê o áudio (transcrição ou a marca de sem transcrição); a prévia fica curta (issue #460)
+  assertEquals(com("audio")?.texto, "[áudio sem transcrição — ouça no WhatsApp]");
 });
 
 Deno.test("atividade: outra caixa de entrada e eventos desconhecidos são ignorados", () => {
@@ -217,4 +221,28 @@ Deno.test("teste do dono: nota privada #testar da equipe (issue #278)", () => {
   assertEquals(extrairPedidoDeTeste(nota("vou #testar depois"), 1), null);
   assertEquals(extrairPedidoDeTeste(nota("#testar oi"), 2), null);
   assertEquals(extrairPedidoDeTeste(nota("#testarei"), 1), null);
+});
+
+Deno.test("#460: áudio entra com a transcrição do Chatwoot; sem ela, fica marcado", () => {
+  const audio = (t?: string) => ({ file_type: "audio", data_url: "https://x/a.ogg", ...(t === undefined ? {} : { transcribed_text: t }) });
+  assertEquals(textoDosAnexos([audio("Quero ir amanhã de manhã, buscar no Turu")]), "[áudio: Quero ir amanhã de manhã, buscar no Turu]");
+  assertEquals(textoDosAnexos([audio("")]), "[áudio sem transcrição — ouça no WhatsApp]");
+  assertEquals(textoDosAnexos([audio()]), "[áudio sem transcrição — ouça no WhatsApp]");
+  assertEquals(audiosTranscritos([audio("ok"), audio(""), { file_type: "image" }]), { com: 1, sem: 1 });
+  assertEquals(audiosTranscritos(null), { com: 0, sem: 0 });
+  // a transcrição junta com o texto e o card de contato
+  assertEquals(textoComContatos("Bom dia", [audio("dois lugares")]), "Bom dia [áudio: dois lugares]");
+  assertEquals(textoComContatos(undefined, [audio("  amanhã \n cedo ")]), "[áudio: amanhã cedo]");
+});
+
+Deno.test("#460: localização entra com o nome do lugar e o link do mapa", () => {
+  const loc = { file_type: "location", coordinates_lat: -2.53, coordinates_long: -44.28, fallback_title: "Rua das Flores, Turu" };
+  assertEquals(textoDosAnexos([loc]), "[localização: Rua das Flores, Turu — https://maps.google.com/?q=-2.53,-44.28]");
+  assertEquals(textoDosAnexos([{ ...loc, fallback_title: "" }]), "[localização — https://maps.google.com/?q=-2.53,-44.28]");
+  // sem coordenadas válidas não inventa
+  assertEquals(textoDosAnexos([{ file_type: "location", coordinates_lat: "x", coordinates_long: 1 }]), undefined);
+  assertEquals(textoDosAnexos([{ file_type: "location", coordinates_lat: 0, coordinates_long: 0 }]), undefined);
+  // foto e documento continuam fora do texto (o comprovante tem caminho próprio)
+  assertEquals(textoDosAnexos([{ file_type: "image" }, { file_type: "file" }]), undefined);
+  assertEquals(textoDosAnexos("x"), undefined);
 });
