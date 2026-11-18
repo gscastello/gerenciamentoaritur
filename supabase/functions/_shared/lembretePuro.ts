@@ -149,7 +149,7 @@ function ondeEmbarca(r: ReservaDoLembrete): string {
   }
   if (!r.pontoNome) return "no seu local de embarque";
   // "na Rodoviária", "no Retorno das Vans"
-  return /^(retorno|posto|terminal)/i.test(r.pontoNome) ? `no ${r.pontoNome}` : `na ${r.pontoNome}`;
+  return /^(retorno|posto|terminal) /i.test(r.pontoNome) ? `no ${r.pontoNome}` : `na ${r.pontoNome}`;
 }
 
 /**
