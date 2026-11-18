@@ -113,6 +113,47 @@ export const customersService = {
     return handle(supabase.rpc("fn_resumo_dos_passageiros"), "resumo");
   },
 
+  /** Outros cadastros que podem ser a mesma pessoa (database/119): mesmo nome ou telefone. */
+  async possiveisRepetidos(customerId) {
+    const data = await handle(
+      supabase.rpc("fn_possiveis_repetidos", { p_customer_id: customerId }),
+      "possiveisRepetidos",
+    );
+    return Array.isArray(data) ? data : [];
+  },
+
+  /** "Não é a mesma pessoa": o par sai da lista de possíveis repetidos. */
+  async marcarCadastrosDistintos(a, b) {
+    const data = await handle(
+      supabase.rpc("rpc_marcar_cadastros_distintos", { p_a: a, p_b: b }),
+      "marcarCadastrosDistintos",
+    );
+    if (!data?.success)
+      throw new ServiceError("Não foi possível guardar que não é a mesma pessoa.", {
+        retryable: false,
+      });
+    return data;
+  },
+
+  /**
+   * Junta dois cadastros (só admin): tudo do `remover` passa para o `manter`, e o `remover` sai
+   * da lista (apagado só logicamente). Devolve { reservas } (quantas reservas mudaram de dono).
+   */
+  async juntarCadastros(manter, remover) {
+    const data = await handle(
+      supabase.rpc("rpc_juntar_cadastros", { p_manter: manter, p_remover: remover }),
+      "juntarCadastros",
+    );
+    if (!data?.success)
+      throw new ServiceError(
+        data?.message === "SEM_PERMISSAO"
+          ? "Só o administrador pode juntar cadastros."
+          : "Não foi possível juntar os cadastros.",
+        { retryable: false },
+      );
+    return data;
+  },
+
   /** A aba Conversa da ficha: as últimas mensagens do WhatsApp e os avisos enviados. */
   async conversa(customerId) {
     const data = await handle(

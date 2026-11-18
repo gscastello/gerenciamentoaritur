@@ -19,7 +19,8 @@ test.describe("celular", () => {
       "aria-current",
       "page",
     );
-    const luz = barra.locator(".barra-at-luz");
+    // a luz vinho desliza também na barra encaixada (v18): o deslocamento fica no invólucro dela
+    const luz = barra.getByTestId("luz-da-barra");
     const antes = await luz.evaluate((el) => el.style.transform);
     await barra.getByRole("button", { name: /^Início$/ }).click();
     await expect(topo.getByRole("heading", { level: 1 })).toHaveText(

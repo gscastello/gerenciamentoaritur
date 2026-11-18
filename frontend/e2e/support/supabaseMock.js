@@ -780,6 +780,14 @@ export async function mockSupabase(page, opts = {}) {
           }),
         );
       }
+      if (fn === "fn_possiveis_repetidos") {
+        const b = req.postDataJSON?.() ?? {};
+        return route.fulfill(json(opts.repetidos?.[b.p_customer_id] ?? []));
+      }
+      if (fn === "rpc_juntar_cadastros") {
+        opts.onJuntar?.(req.postDataJSON?.() ?? {});
+        return route.fulfill(json({ success: true, reservas: 2 }));
+      }
       if (fn === "rpc_conversa_do_passageiro") {
         return route.fulfill(
           json({

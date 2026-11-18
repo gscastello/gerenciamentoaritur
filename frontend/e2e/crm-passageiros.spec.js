@@ -154,6 +154,35 @@ test("CRM: a ficha mostra o aviso, os números e marca pago", async ({ page }) =
   await expect(ficha.getByRole("button", { name: "Marcar pago" })).toHaveCount(1);
 });
 
+test("CRM: cadastro repetido aparece na ficha e o admin junta os dois", async ({ page }) => {
+  const juntados = [];
+  page.on("dialog", (d) => d.accept());
+  await abrirPassageiros(page, {
+    repetidos: {
+      "c-dev": [
+        {
+          customer_id: "c-outro",
+          nome: "Rita Devendo",
+          telefone: "98990009999",
+          viagens: 2,
+          motivo: "mesmo nome com outro número",
+        },
+      ],
+    },
+    onJuntar: (b) => juntados.push(b),
+  });
+  await page.getByRole("button", { name: /Rita Devendo/ }).click();
+  const ficha = page.getByRole("dialog", { name: /Ficha do passageiro/ });
+  await ficha.getByRole("tab", { name: "Cadastro" }).click();
+  const aviso = ficha.getByTestId("cadastros-repetidos");
+  await expect(aviso).toContainText("Pode ser a mesma pessoa");
+  await expect(aviso).toContainText("98990009999");
+  await aviso.getByRole("button", { name: "Juntar com este" }).click();
+  await expect.poll(() => juntados.length).toBe(1);
+  expect(juntados[0]).toEqual({ p_manter: "c-dev", p_remover: "c-outro" });
+  await expect(ficha.getByTestId("cadastros-repetidos")).toHaveCount(0);
+});
+
 test("CRM: a aba Conversa mostra o WhatsApp e os avisos enviados", async ({ page }) => {
   await abrirPassageiros(page);
   await page.getByRole("button", { name: /Rita Devendo/ }).click();
