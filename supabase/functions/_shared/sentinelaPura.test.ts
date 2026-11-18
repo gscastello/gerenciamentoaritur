@@ -1,0 +1,47 @@
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { ehMarcaDeAgendado } from "./rascunhoPuro.ts";
+import { notaDaSentinela, pedidoEncerrado, pedidosSemReserva, resumoDosPedidos } from "./sentinelaPura.ts";
+
+// Issue #461: sentinela de pedido sem reserva (dados fictícios). 18/11/2026 é quarta.
+
+Deno.test("#461 pedidos: de hoje a 3 dias, só o que ainda não saiu", () => {
+  const lidas = [
+    { type: "passagem", trip_date: "2026-11-18", direction: "ida", quantity: 1 }, // Ida de hoje já saiu às 10h
+    { type: "passagem", trip_date: "2026-11-18", direction: "volta", quantity: 2 }, // Volta de hoje ainda sai
+    { type: "passagem", trip_date: "2026-11-19", direction: "ida", quantity: null },
+    { type: "passagem", trip_date: "2026-11-25", direction: "ida", quantity: 1 }, // longe demais
+    { type: "passagem", trip_date: "2026-11-17", direction: "volta", quantity: 1 }, // passou
+    { type: "encomenda", trip_date: "2026-11-20", direction: "volta", quantity: 1 },
+    { trip_date: "x", direction: "ida" },
+    { trip_date: "2026-11-19", direction: "?" },
+  ];
+  assertEquals(pedidosSemReserva(lidas, { hoje: "2026-11-18", horaAgora: "10:00" }), [
+    { data: "2026-11-18", direcao: "volta", quantidade: 2, tipo: "passagem" },
+    { data: "2026-11-19", direcao: "ida", quantidade: 1, tipo: "passagem" },
+    { data: "2026-11-20", direcao: "volta", quantidade: 1, tipo: "encomenda" },
+  ]);
+  assertEquals(pedidosSemReserva([], { hoje: "2026-11-18", horaAgora: "10:00", dias: 1 }), []);
+});
+
+Deno.test("#461 pedido encerrado: lotado, só consulta ou desistência depois do pedido", () => {
+  const f = (quem: string, texto: string, min: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 18, 12, min)).toISOString() });
+  assertEquals(pedidoEncerrado([f("cliente", "Tem vaga pra amanhã?", 0), f("equipe", "Não temos mais vaga", 5)]), "a equipe disse que não há vaga");
+  assertEquals(pedidoEncerrado([f("cliente", "Ainda tem vaga amanhã a tarde?", 0), f("equipe", "Temos sim, qual o endereço?", 2), f("cliente", "Era só pra confirmar", 3)]), "o cliente disse que era só consulta ou desistiu");
+  assertEquals(pedidoEncerrado([f("cliente", "Guarda uma vaga pra mim amanhã", 0), f("equipe", "Qual o endereço?", 1)]), null);
+  // lotado ANTES de um pedido novo não encerra o pedido novo
+  assertEquals(pedidoEncerrado([f("cliente", "tem vaga hoje?", 0), f("equipe", "Pra hoje não temos mais vaga", 1), f("cliente", "Então marca uma vaga pra amanhã", 2)]), null);
+  assertEquals(pedidoEncerrado([]), null);
+});
+
+Deno.test("#461 nota e resumo: o que foi pedido, sem virar marca de Agendado", () => {
+  const pedidos = [
+    { data: "2026-11-19", direcao: "ida" as const, quantidade: 2, tipo: "passagem" },
+    { data: "2026-11-21", direcao: "volta" as const, quantidade: 1, tipo: "passagem" },
+    { data: "2026-11-18", direcao: "volta" as const, quantidade: 1, tipo: "encomenda" },
+  ];
+  assertEquals(resumoDosPedidos(pedidos, "2026-11-18"), "Ida de amanhã (19/11), 2 passagens; Volta de sábado (21/11); Encomenda de hoje (18/11)");
+  const nota = notaDaSentinela(pedidos, "2026-11-18");
+  assertStringIncludes(nota, "PEDIDO SEM RESERVA");
+  assertEquals(ehMarcaDeAgendado(nota), false);
+  assertEquals(/☑|✅/.test(nota), false);
+});
