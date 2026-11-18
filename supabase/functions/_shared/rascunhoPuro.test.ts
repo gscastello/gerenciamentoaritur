@@ -4,6 +4,7 @@ import {
 } from "./agentePuro.ts";
 import {
   ehMarcaDeAgendado,
+  notaDoAgendadoQueNaoLancou,
   perguntaAoCliente,
   assinaturaDaLeitura,
   duvidasDoPassageiro,
@@ -1092,6 +1093,19 @@ Deno.test("#418: busca em casa num local da BR (Estiva, Pedrinhas, Oleama…) é
   assertEquals(localDeOutros(["Cohatrac", "Condomínio Marsil"], locais), null);
   // palavra inteira: "Estivador" não é Estiva
   assertEquals(localDeOutros(["Rua dos Estivadores"], locais), null);
+});
+
+Deno.test("#455: a nota do Agendado que não lançou diz que o passageiro não tem lugar e não vira marca nova", () => {
+  const nao = avisoDoAgendado({ lancadas: 0, pedidos: 1, motivos: ["sem_data"], pendentes: [] });
+  assert(nao);
+  const nota = notaDoAgendadoQueNaoLancou(nao);
+  assertStringIncludes(nota, "ESTA RESERVA NÃO ENTROU NA AGENDA");
+  assertStringIncludes(nota, "o dia da viagem não aparece");
+  assertStringIncludes(nota, "ainda não tem lugar");
+  assertEquals(ehMarcaDeAgendado(nota), false);
+  const parte = notaDoAgendadoQueNaoLancou({ assunto: "Agendado ☑️ lançou só parte", detalhe: "1 reserva(s) lançada(s), mas o Agendado ✅ ficou pendente." });
+  assertStringIncludes(parte, "PARTE DESTE PEDIDO NÃO ENTROU");
+  assertEquals(/agendad|☑|✅/i.test(parte), false);
 });
 
 Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido, antes da viagem sair, é a de hoje", () => {

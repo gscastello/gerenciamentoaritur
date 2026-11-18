@@ -38,6 +38,7 @@ import { useViagensDoPeriodo } from "../hooks/useViagensDoPeriodo.js";
 import { useVehicles } from "../hooks/useVehicles.js";
 
 import { AvisoListaCortada } from "../ui/AvisoListaCortada.jsx";
+import { AvisoAgendadoSemReserva } from "./AvisoAgendadoSemReserva.jsx";
 import { AvisoSemInternet } from "../ui/AvisoSemInternet.jsx";
 import { FolhaDeBaixo } from "../ui/FolhaDeBaixo.jsx";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
@@ -1617,6 +1618,16 @@ function AppInner() {
                   texto={C.inkSoft}
                 />
                 <AvisoListaCortada cor={C.red} fundo={C.redSoft} texto={C.inkSoft} />
+                {podeAgendar && (
+                  <AvisoAgendadoSemReserva
+                    pendencias={pend.pendencias}
+                    onResolver={
+                      TELAS.includes("pendencias") && tab !== "pendencias"
+                        ? () => mudarAba("pendencias")
+                        : null
+                    }
+                  />
+                )}
                 {R.error && !loading && (
                   <div
                     className="anim-slideDown mx-4 md:mx-10 mt-4 rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3"
