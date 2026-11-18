@@ -6,6 +6,7 @@ import {
   ehMarcaDeAgendado,
   perguntaAoCliente,
   duvidasDoPassageiro,
+  falhaDoServicoDaIa,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
   mensagensRecentesDoCliente,
@@ -1129,4 +1130,15 @@ Deno.test("#457: as dúvidas do passageiro saem dos motivos mesmo sem nenhum ras
   // pendências dos rascunhos e motivos juntos, sem repetir e só o que o passageiro resolve
   assertEquals(duvidasDoPassageiro(["sem_data", "data_passada"], ["cidade", "conferir", "sem_data"]).sort(), ["cidade", "sem_data"]);
   assertEquals(duvidasDoPassageiro(["ja_reservado"], ["pedido_faltando"]), []);
+});
+
+Deno.test("#462: falha do serviço da IA (tenta de novo) × erro do programa (não)", () => {
+  assertEquals(falhaDoServicoDaIa('Error: Falha ao ler o pedido: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'), "chave");
+  assertEquals(falhaDoServicoDaIa("Your credit balance is too low"), "chave");
+  assertEquals(falhaDoServicoDaIa("Error: revisor: 503 "), "servico");
+  assertEquals(falhaDoServicoDaIa('529 {"type":"overloaded_error"}'), "servico");
+  assertEquals(falhaDoServicoDaIa("TypeError: fetch failed"), "servico");
+  assertEquals(falhaDoServicoDaIa("TypeError: Cannot read properties of undefined"), null);
+  assertEquals(falhaDoServicoDaIa(null), null);
+  assertEquals(falhaDoServicoDaIa(""), null);
 });

@@ -500,6 +500,19 @@ export function sentidoPeloHabito(
  * fica registrada com esta marca, em vez de sumir (issue #417).
  */
 export const MENSAGEM_ILEGIVEL = "[o cliente mandou uma mensagem que o bot não conseguiu ler — confira no WhatsApp]";
+/**
+ * O erro da leitura foi do SERVIÇO da IA (issue #462), não da conversa: chave recusada / sem saldo
+ * ("chave") ou fora do ar, sobrecarregado, tempo esgotado ("servico"). Esses o bot tenta de novo
+ * sozinho; o resto (erro de programa) fica só como pendência.
+ */
+export function falhaDoServicoDaIa(erro: string | null | undefined): "chave" | "servico" | null {
+  const e = String(erro ?? "").toLowerCase();
+  if (!e) return null;
+  if (/\b401\b|\b403\b|authentication_error|invalid x-api-key|permission_error|credit balance|billing/.test(e)) return "chave";
+  if (/\b(429|500|502|503|504|529)\b|overloaded|rate_limit|timeout|timed out|econnreset|fetch failed|network|api_error/.test(e)) return "servico";
+  return null;
+}
+
 /** Mensagem que o bot não leu: tipo que ele não lê (editada, enquete…) ou áudio sem transcrição (issue #460). */
 export const ehMensagemIlegivel = (t: string | null | undefined) =>
   String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler") ||

@@ -25,7 +25,8 @@ import {
   type ReservaRevisada,
   reservasParaOPrompt,
 } from "./revisaoPura.ts";
-import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
+import { falhaDoServicoDaIa, viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
+import { situacaoDaIa } from "./rascunhoReserva.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -497,6 +498,8 @@ export async function revisarCliente(
       custo,
     });
     evento("bot_erro", { etapa: "revisor", erro: String(err).slice(0, 300) });
+    // a IA recusou ou caiu: aviso único "IA fora do ar" (issue #462)
+    if (falhaDoServicoDaIa(String(err))) await situacaoDaIa(String(err));
     return { resultado: "erro", erro: String(err) };
   }
 }
