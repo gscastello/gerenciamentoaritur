@@ -59,7 +59,7 @@ import {
   perguntaAoCliente,
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
-  proximaViagemPeloAgendado,
+  viagemDeHojePeloAgendado,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
   juntarPedidosDaMesmaViagem,
@@ -517,8 +517,8 @@ async function lerEGravar(
     });
     Object.assign(p, conferido.pedido);
     if (!algumDiaEscrito && (p.tipo ?? "passagem") !== "encomenda") {
-      // "Tem vaga de Cantanhede pra São Luís?" + "Agendado ☑️" da equipe no mesmo dia = a próxima viagem (issue #452)
-      const proxima = proximaViagemPeloAgendado(p, {
+      // "Tem vaga de Cantanhede pra São Luís?" de manhã + "Agendado ☑️" antes da viagem sair = a de hoje (issue #452)
+      const proxima = viagemDeHojePeloAgendado(p, {
         agendado: opcoes.confirmadoPelaEquipe,
         hoje,
         horaAgora,
@@ -528,7 +528,7 @@ async function lerEGravar(
       });
       if (proxima) {
         if (p.data !== proxima) {
-          p.duvida = [p.duvida, `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a próxima viagem (${proxima === hoje ? "hoje" : "amanhã"}).`]
+          p.duvida = [p.duvida, `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a viagem de hoje, que ainda não tinha saído.`]
             .filter(Boolean)
             .join(" ");
         }

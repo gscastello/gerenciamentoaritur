@@ -551,7 +551,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   dos casos: busca em casa num endereço de Pirapemas/Cantanhede é Volta (escrito ou só conhecido lá; com algo de São
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
-  `sem_data` (com o "Agendado ☑️" no dia do pedido, é a próxima viagem daquele sentido: hoje se não saiu, senão amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,

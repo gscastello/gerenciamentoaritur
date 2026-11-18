@@ -191,16 +191,17 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
 }
 
 /**
- * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu:
- * é a PRÓXIMA viagem daquele sentido — a de hoje se ainda não saiu, senão a de amanhã (issue #452:
- * "Tem vaga de Cantanhede pra São Luís?" às 9h = Volta de hoje; "vou pro posto" às 16h, com a Ida
- * do dia já saída = Ida de amanhã; dono, 17/11). Só com a marca da equipe (quem marcou sabe qual
+ * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
+ * e a viagem daquele sentido AINDA NÃO SAIU: é a de hoje (issue #452: "Tem vaga de Cantanhede pra
+ * São Luís?" às 9h = Volta de hoje). Se já saiu, NÃO é "amanhã": "guarde uma vaga pra mim" numa
+ * sexta às 19h era para domingo (caso real) — fica sem dia, a equipe vê o aviso e o bot pergunta.
+ * Só com a marca da equipe (quem marcou sabe qual
  * viagem), com o sentido ESCRITO (pelo cliente, pela origem do trecho, na marca ou pelo ponto dito —
  * o sentido só lido pelo modelo pode estar errado e o dia não pode esconder isso) e igual ao lido, e
  * com tudo o que o cliente escreveu no pedido feito hoje; senão continua sem dia e o bot pergunta
  * (issue #419).
  */
-export function proximaViagemPeloAgendado(
+export function viagemDeHojePeloAgendado(
   p: Pick<PedidoExtraido, "direcao" | "ponto" | "tipo">,
   ctx: {
     agendado: boolean;
@@ -230,7 +231,7 @@ export function proximaViagemPeloAgendado(
     return Number.isFinite(t) && diaCivil(new Date(t)) === ctx.hoje;
   });
   if (!todoHoje) return null;
-  return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? somarDias(ctx.hoje, 1) : ctx.hoje;
+  return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? null : ctx.hoje;
 }
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */

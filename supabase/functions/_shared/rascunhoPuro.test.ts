@@ -18,7 +18,7 @@ import {
   cidadeEscritaPeloCliente,
   lugarDeOutraCidade,
   viagemDeHojeJaSaiu,
-  proximaViagemPeloAgendado,
+  viagemDeHojePeloAgendado,
   A_CONFIRMAR,
   avisoDoAgendado,
   comMarcaDoDia,
@@ -1089,32 +1089,33 @@ Deno.test("#418: busca em casa num local da BR (Estiva, Pedrinhas, Oleama…) é
   assertEquals(localDeOutros(["Rua dos Estivadores"], locais), null);
 });
 
-Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido é a próxima viagem daquele sentido", () => {
+Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido, antes da viagem sair, é a de hoje", () => {
   const pontos = { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] };
   // "Tem vaga de Cantanhede pra São Luís?" às 09:21 (12:21 UTC), Agendado às 10:37
   const doDia = [{ em: "2026-11-17T12:21:00Z" }, { em: "2026-11-17T13:30:00Z" }];
   const base = { agendado: true, hoje: "2026-11-17", horaAgora: "10:37", pontos, mensagensDoCliente: doDia, sentidoEscrito: "volta" as const };
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, base), "2026-11-17");
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, base), "2026-11-17");
   // o sentido pelo ponto, quando a leitura não disse
-  assertEquals(proximaViagemPeloAgendado({ ponto: "cantanhede" }, base), "2026-11-17");
+  assertEquals(viagemDeHojePeloAgendado({ ponto: "cantanhede" }, base), "2026-11-17");
   // sem a marca da equipe, o bot não decide o dia: pergunta (issue #419)
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, agendado: false }), null);
-  // a viagem daquele sentido já saiu: é a de amanhã ("vou pro posto" às 17h = Ida de amanhã; dono, 17/11)
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, agendado: false }), null);
+  // a viagem daquele sentido já saiu: NÃO vira amanhã ("guarde uma pra mim" na sexta às 19h era domingo)
   const ida = { ...base, sentidoEscrito: "ida" as const };
-  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "11:50" }), "2026-11-18");
-  assertEquals(proximaViagemPeloAgendado({ ponto: "outro" }, { ...ida, horaAgora: "17:58" }), "2026-11-18");
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "05:10" }), "2026-11-17");
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "19:12" }), null);
+  assertEquals(viagemDeHojePeloAgendado({ ponto: "outro" }, { ...ida, horaAgora: "17:58" }), null);
   // sentido só lido pelo modelo (ninguém escreveu) ou contrário ao escrito: o dia não esconde o chute
-  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, { ...base, sentidoEscrito: null }), null);
-  assertEquals(proximaViagemPeloAgendado({ direcao: "ida" }, base), null);
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, horaAgora: "15:10" }), "2026-11-18");
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, horaAgora: null }), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...base, sentidoEscrito: null }), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, base), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, horaAgora: "15:10" }), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, horaAgora: null }), null);
   // pedido que começou ontem: o dia pode ser outro
   assertEquals(
-    proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [{ em: "2026-11-16T22:00:00Z" }, ...doDia] }),
+    viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [{ em: "2026-11-16T22:00:00Z" }, ...doDia] }),
     null,
   );
   // sem sentido, encomenda ou sem mensagem do cliente: nada
-  assertEquals(proximaViagemPeloAgendado({}, base), null);
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta", tipo: "encomenda" }, base), null);
-  assertEquals(proximaViagemPeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [] }), null);
+  assertEquals(viagemDeHojePeloAgendado({}, base), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta", tipo: "encomenda" }, base), null);
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [] }), null);
 });

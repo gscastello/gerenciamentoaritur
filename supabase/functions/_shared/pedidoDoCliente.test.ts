@@ -55,6 +55,8 @@ Deno.test("ponto: rodoviária, retorno, busca em casa, Outros; 'estou em casa' n
   assertEquals(pontoEscrito(["fico na rodoviária"], pontosIda), null);
   assertEquals(pontoEscrito(["Ficar no retorno do Tirirical"], pontosIda), null);
   assertEquals(pontoEscrito(["fico esperando no retorno"], pontosIda), "retorno");
+  assertEquals(pontoEscrito(["Até no retorno"], pontosIda), null);
+  assertEquals(pontoEscrito(["aguardo até as 5h no retorno"], pontosIda), "retorno");
   assertEquals(pontoEscrito(["espero no retorno do aeroporto"], pontosIda), "retorno");
   assertEquals(pontoEscrito(["chego no aeroporto às 4h"], pontosIda), "outro");
   assertEquals(pontoEscrito(["pode me pegar em casa"], pontosIda), "busca");
