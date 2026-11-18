@@ -7,7 +7,7 @@
 // passageiro que pode ficar para trás. Antes de avisar, confere a conversa: a equipe disse que está
 // lotado, ou o cliente disse que era só consulta / desistiu? Então não é pedido vivo.
 
-import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
+import { ehMarcaDeAgendado, viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 
 /** Viagem lida pela simulação (formato de `simularAgendado().planejadas`). */
 export type ViagemLida = {
@@ -92,10 +92,38 @@ export function resumoDosPedidos(pedidos: PedidoSemReserva[], hoje: string): str
 /**
  * Nota privada no Chatwoot: só a equipe vê. Sem "agendado" nem ☑️/✅ (a nota não pode virar marca).
  */
-export function notaDaSentinela(pedidos: PedidoSemReserva[], hoje: string): string {
+export function notaDaSentinela(pedidos: PedidoSemReserva[], hoje: string, semDia: string | null = null): string {
+  if (!pedidos.length && semDia) {
+    return [
+      "⚠️ PEDIDO SEM RESERVA: o cliente pediu para reservar e o dia (ou o sentido) não ficou claro.",
+      `"${semDia}"`,
+      "Pergunte o dia ao cliente e lance pela Agenda.",
+    ].join("\n");
+  }
   return [
     "⚠️ PEDIDO SEM RESERVA: o cliente pediu e ainda não está na Agenda.",
     resumoDosPedidos(pedidos, hoje) + ".",
     "Lance pela Agenda, ou responda o cliente se não houver vaga.",
   ].join("\n");
+}
+
+const RE_PEDIU_RESERVA =
+  / (deix[ae] (ja )?(agendad[oa]|marcad[oa]|reservad[oa]|uma vaga|minha vaga|a vaga|uma passagem)|marc[ae] (pra|para|uma|minha|a)|reserv[ae] (pra|para|uma|minha)|guard[ae] (uma|minha|a) vaga|agend[ae] (pra|para|uma|minha|a)|quero (uma passagem|reservar|agendar|marcar)|vou querer (uma|a) (vaga|passagem)) /;
+
+/**
+ * Pedido de reserva com todas as letras DEPOIS do último "Agendado ☑️" (issue #461): "deixa
+ * agendada já a volta pra mim", "marca uma vaga". Quando a simulação não achou o dia (ou o sentido),
+ * é a equipe que pergunta — mas o pedido não pode morrer no "Ok". Pergunta ("tem passagem?") não
+ * conta. Devolve o trecho do cliente, ou null.
+ */
+export function pedidoDeReservaSemDia(falas: { quem: string; texto: string; em: string }[]): string | null {
+  const ordenadas = [...(falas ?? [])].sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
+  let inicio = 0;
+  ordenadas.forEach((f, i) => {
+    if (f.quem === "equipe" && ehMarcaDeAgendado(f.texto)) inicio = i + 1;
+  });
+  for (const f of ordenadas.slice(inicio)) {
+    if (f.quem === "cliente" && RE_PEDIU_RESERVA.test(norm(f.texto))) return String(f.texto).replace(/\s+/g, " ").trim().slice(0, 160);
+  }
+  return null;
 }

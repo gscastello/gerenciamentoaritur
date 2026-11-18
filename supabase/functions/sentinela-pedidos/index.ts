@@ -12,7 +12,14 @@
 import { diaCivil } from "../_shared/agentePuro.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
-import { notaDaSentinela, pedidoEncerrado, pedidosSemReserva, resumoDosPedidos, type ViagemLida } from "../_shared/sentinelaPura.ts";
+import {
+  notaDaSentinela,
+  pedidoDeReservaSemDia,
+  pedidoEncerrado,
+  pedidosSemReserva,
+  resumoDosPedidos,
+  type ViagemLida,
+} from "../_shared/sentinelaPura.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -37,26 +44,31 @@ async function verificar(c: Linha, simular: boolean) {
       marcaEm: agora.toISOString(),
     });
     const pedidos = pedidosSemReserva((lido.planejadas ?? []) as ViagemLida[], { hoje, horaAgora });
-    if (pedidos.length) {
-      const { data: falas } = await supabaseAdmin
-        .from("bot_observations")
-        .select("author, content, created_at")
-        .eq("conversation_id", c.conversation_id)
-        .in("author", ["cliente", "equipe"])
-        .gte("created_at", new Date(agora.getTime() - 72 * 3600 * 1000).toISOString())
-        .order("created_at");
-      const encerrado = pedidoEncerrado(((falas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at })));
+    const motivos: string[] = lido.motivos ?? [];
+    const { data: brutas } = await supabaseAdmin
+      .from("bot_observations")
+      .select("author, content, created_at")
+      .eq("conversation_id", c.conversation_id)
+      .in("author", ["cliente", "equipe"])
+      .gte("created_at", new Date(agora.getTime() - 72 * 3600 * 1000).toISOString())
+      .order("created_at");
+    const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
+    // pediu para reservar com todas as letras, mas a leitura não achou o dia ou o sentido
+    const semDia = !pedidos.length && motivos.some((m) => m === "sem_data" || m === "sem_sentido") ? pedidoDeReservaSemDia(falas) : null;
+    if (pedidos.length || semDia) {
+      const encerrado = pedidoEncerrado(falas);
       if (encerrado) {
         resultado = "encerrado";
         detalhe = { motivo: encerrado };
       } else {
-        resultado = "pedido_sem_reserva";
-        detalhe = { pedidos, resumo: resumoDosPedidos(pedidos, hoje) };
+        resultado = pedidos.length ? "pedido_sem_reserva" : "pedido_sem_dia";
+        const resumo = pedidos.length ? resumoDosPedidos(pedidos, hoje) : `uma viagem sem o dia (ou o sentido) claro: "${semDia}"`;
+        detalhe = { pedidos, resumo };
         if (!simular) {
           const { data: conv } = await supabaseAdmin.from("whatsapp_conversations").select("customer_id").eq("id", c.conversation_id).maybeSingle();
           const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
             p_subject: "Pedido sem reserva",
-            p_detail: `O cliente pediu ${resumoDosPedidos(pedidos, hoje)} e ainda não está na Agenda. Confira a conversa e lance pela Agenda (ou responda se não houver vaga).`,
+            p_detail: `O cliente pediu ${resumo} e ainda não está na Agenda. Confira a conversa e lance pela Agenda (ou responda se não houver vaga).`,
             p_phone: c.telefone ?? null,
             p_customer_id: conv?.customer_id ?? null,
             p_source: "whatsapp",
@@ -64,12 +76,12 @@ async function verificar(c: Linha, simular: boolean) {
           });
           if (error) throw error;
           await chatwootClient
-            .postMessage(Number(c.chatwoot_conversation_id), notaDaSentinela(pedidos, hoje), { private: true })
+            .postMessage(Number(c.chatwoot_conversation_id), notaDaSentinela(pedidos, hoje, semDia), { private: true })
             .catch((err) => evento("bot_aviso", { aviso: "nota_da_sentinela", conversa: c.chatwoot_conversation_id, erro: String(err).slice(0, 200) }));
         }
       }
     } else {
-      detalhe = { motivos: lido.motivos ?? [] };
+      detalhe = { motivos };
     }
   } catch (err) {
     // não grava a assinatura: tenta de novo na próxima rodada

@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   achadosValidos,
+  campoVazio,
   decidirRevisao,
   duplicadasDaRevisao,
   evidenciaNaConversa,
@@ -8,6 +9,7 @@ import {
   precoRevisado,
   type ReservaRevisada,
   reservasParaOPrompt,
+  valorNaProva,
 } from "./revisaoPura.ts";
 
 const pontos = { ida: ["busca", "rodoviaria", "retorno", "outro"], volta: ["pirapemas", "cantanhede"] };
@@ -312,4 +314,32 @@ Deno.test("#426 revisor: o lugar diz o sentido — não corrige para o contra e 
   assert(d.pendencias.some((a) => a.reserva_id === "r3"));
   // a reserva certa do exemplo base não vira pendência
   assertEquals(decidirRevisao([], ctx).pendencias, []);
+});
+
+Deno.test("#464 revisor: campo vazio preenchido com o que o cliente escreveu (certeza média, valor na prova)", () => {
+  const vazia: ReservaRevisada = { ...base, id: "rv", direcao: "volta", ponto: "pirapemas", embarque: null, desembarque: null, bairro: null };
+  const conv = `[12/11 08:40] CLIENTE: Até no retorno
+[12/11 08:41] CLIENTE: 1 vaga pra buscar na rua do matadouro
+[12/11 08:42] EQUIPE: Agendado ☑️`;
+  const achados = achadosValidos([
+    { reserva_id: "rv", campo: "desembarque", valor_atual: "—", valor_correto: "Retorno das Vans", evidencia: "Até no retorno", certeza: "media" },
+    { reserva_id: "rv", campo: "embarque", valor_atual: "—", valor_correto: "Rua do Matadouro", evidencia: "1 vaga pra buscar na rua do matadouro", certeza: "media" },
+    // valor que não está na prova: continua pendência
+    { reserva_id: "rv", campo: "bairro", valor_atual: "—", valor_correto: "Turu", evidencia: "Até no retorno", certeza: "media" },
+  ]);
+  const r = decidirRevisao(achados, { reservas: [vazia], conversa: conv, hoje: "2026-11-12", pontos });
+  assertEquals(r.correcoes.length, 1);
+  assertEquals(r.correcoes[0].desembarque, "Retorno das Vans");
+  assertEquals(r.correcoes[0].embarque, "Rua do Matadouro");
+  assertEquals(r.pendencias.map((a) => a.campo), ["bairro"]);
+  // campo já preenchido não é trocado com certeza média e prova anterior
+  const cheia = { ...vazia, id: "rc", desembarque: "Rodoviária" };
+  const troca = decidirRevisao(achadosValidos([{ reserva_id: "rc", campo: "desembarque", valor_correto: "Retorno das Vans", evidencia: "Até no retorno", certeza: "media" }]), { reservas: [cheia], conversa: conv, hoje: "2026-11-12", pontos });
+  assertEquals(troca.correcoes.length, 0);
+  assertEquals(campoVazio("Em casa (bairro)"), false);
+  assertEquals(campoVazio("—"), true);
+  assertEquals(campoVazio("Endereço a confirmar"), true);
+  assertEquals(campoVazio("Rua do Sol"), false);
+  assertEquals(valorNaProva("Retorno das Vans", "até no RETORNO"), true);
+  assertEquals(valorNaProva("Turu", "vou estar na parada"), false);
 });

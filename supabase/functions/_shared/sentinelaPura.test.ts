@@ -45,3 +45,21 @@ Deno.test("#461 nota e resumo: o que foi pedido, sem virar marca de Agendado", (
   assertEquals(ehMarcaDeAgendado(nota), false);
   assertEquals(/☑|✅/.test(nota), false);
 });
+
+Deno.test("#461 pedido sem dia: só pedido de reserva com todas as letras, depois do último Agendado", async () => {
+  const { pedidoDeReservaSemDia } = await import("./sentinelaPura.ts");
+  const f = (quem: string, texto: string, min: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 17, 13, min)).toISOString() });
+  // caso real (fictício): a Ida foi agendada, a Volta pedida depois ficou no "Ok"
+  assertEquals(
+    pedidoDeReservaSemDia([f("cliente", "Tem passagem amanhã?", 0), f("equipe", "Agendado ☑️", 5), f("cliente", "Deixa agendada já a volta pra mim, na quarta pela manhã", 10), f("equipe", "Ok", 11)]),
+    "Deixa agendada já a volta pra mim, na quarta pela manhã",
+  );
+  // pergunta não é pedido
+  assertEquals(pedidoDeReservaSemDia([f("cliente", "Tem passagem para Pirapemas", 0), f("equipe", "Tem sim", 1)]), null);
+  // o pedido de antes do Agendado já foi lançado
+  assertEquals(pedidoDeReservaSemDia([f("cliente", "Quero uma passagem amanhã", 0), f("equipe", "Agendado ☑️", 1), f("cliente", "O número da casa é 10", 2)]), null);
+  assertEquals(pedidoDeReservaSemDia([f("cliente", "marca uma vaga pra mim", 0)]), "marca uma vaga pra mim");
+  const nota = notaDaSentinela([], "2026-11-18", "Deixa agendada já a volta pra mim");
+  assertStringIncludes(nota, "o dia (ou o sentido) não ficou claro");
+  assertEquals(ehMarcaDeAgendado(nota), false);
+});
