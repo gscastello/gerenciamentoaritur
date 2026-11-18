@@ -132,18 +132,16 @@ const RE_ONDE_EMBARCA =
   / (rua|av|avenida|travessa|tv|praca|povoado|bairro|casa|condominio|residencial|perto|proximo|prox|frente|esquina|numero|quadra|bloco|apartamento|rodoviaria|retorno|posto|aguardo|espero|estarei) /;
 
 /**
- * O cliente CONCRETIZOU o pedido depois do último "Agendado ☑️" (issue #467)? Pediu para reservar
- * com todas as letras ("deixa agendada", "marca uma vaga") ou escreveu onde embarca sem ser em
- * forma de pergunta ("aqui na rua da torre, casa azul"). Pergunta solta ("tem vaga amanhã? qual o
- * valor?") não é pedido: a sentinela não avisa.
+ * O pedido é de verdade (issue #467)? A equipe marcou "Agendado ☑️", ou o cliente pediu para
+ * reservar com todas as letras ("deixa agendada", "marca uma vaga") ou escreveu onde embarca sem
+ * ser em forma de pergunta ("aqui na rua da torre, casa azul"). Pergunta solta ("tem vaga amanhã?
+ * qual o valor?") não é pedido: a sentinela não avisa.
  */
 export function clienteConcretizou(falas: { quem: string; texto: string; em: string }[]): boolean {
-  const ordenadas = [...(falas ?? [])].sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
-  let inicio = 0;
-  ordenadas.forEach((f, i) => {
-    if (f.quem === "equipe" && ehMarcaDeAgendado(f.texto)) inicio = i + 1;
-  });
-  return ordenadas.slice(inicio).some((f) => {
+  // Só é chamada quando a simulação achou viagem SEM reserva: a equipe ter marcado "Agendado ☑️" já
+  // é o pedido confirmado (o Agendado que não lançou — issue #469). Por isso não corta na marca.
+  return (falas ?? []).some((f) => {
+    if (f.quem === "equipe") return ehMarcaDeAgendado(f.texto);
     if (f.quem !== "cliente") return false;
     const t = norm(f.texto);
     if (RE_PEDIU_RESERVA.test(t)) return true;

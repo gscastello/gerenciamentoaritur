@@ -74,6 +74,7 @@ Deno.test("#467 sentinela: pergunta solta não é pedido; endereço ou pedido co
   assertEquals(clienteConcretizou([f("cliente", "Ainda tem vaga de Pirapemas pra São Luís?", 0), f("cliente", "Aqui na rua da torre, em frente ao primeiro quebra-mola", 1)]), true);
   // pediu com todas as letras
   assertEquals(clienteConcretizou([f("cliente", "Deixa agendada já a volta pra mim", 0)]), true);
-  // o que veio antes do último Agendado já foi lançado
-  assertEquals(clienteConcretizou([f("cliente", "Rua das Flores, 10", 0), f("equipe", "Agendado ☑️", 1), f("cliente", "Obrigada", 2)]), false);
+  // a equipe marcou o Agendado e ele não lançou (a simulação achou a viagem sem reserva): é pedido
+  assertEquals(clienteConcretizou([f("cliente", "Quero marcar uma passagem de São Luís a Pirapemas", 0), f("equipe", "Agendado ☑️", 1), f("cliente", "Amanhã", 2)]), true);
+  assertEquals(clienteConcretizou([f("cliente", "Tem vaga amanhã?", 0), f("equipe", "Agendado ☑️", 1)]), true);
 });

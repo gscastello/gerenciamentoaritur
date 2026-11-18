@@ -828,7 +828,11 @@ Deno.test("#337: resposta rápida do cliente não relê o Agendado enquanto a 1�
   const { deveRelerAgendado } = await import("./rascunhoPuro.ts");
   // "Bgd" 9 s depois do Agendado: a primeira leitura ainda está lançando
   assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 0, pendentes: 0, pendenciaAberta: false }), false);
-  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 0, pendentes: 1, pendenciaAberta: true }), false);
+  // ...mas com a pendência aberta a 1ª leitura já terminou: a resposta do cliente relê na hora (issue #469)
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 0, pendentes: 1, pendenciaAberta: true }), true);
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 19_000, lancadas: 0, pendentes: 0, pendenciaAberta: true }), true);
+  // lançou parte e ainda está no começo: espera (pode estar terminando)
+  assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 9_000, lancadas: 1, pendentes: 1, pendenciaAberta: true }), false);
   // depois: relê o que ficou pendente
   assertEquals(deveRelerAgendado({ idadeDaMarcaMs: 600_000, lancadas: 1, pendentes: 1, pendenciaAberta: true }), true);
   // terminou sem lançar e abriu pendência: o cliente completou, relê

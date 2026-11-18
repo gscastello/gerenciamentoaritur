@@ -1363,6 +1363,10 @@ export function deveRelerAgendado(p: {
   pendentes: number;
   pendenciaAberta: boolean;
 }): boolean {
+  // a 1ª leitura TERMINOU sem lançar e abriu a pendência (que só nasce no fim da leitura): a resposta
+  // do cliente à pergunta do bot ("qual o dia?" → "Amanhã", 19 s depois) relê na hora — esperar os
+  // 3 min deixava a resposta sem leitura e o passageiro sem reserva (issue #469)
+  if (p.lancadas === 0 && p.pendenciaAberta && Number.isFinite(p.idadeDaMarcaMs)) return true;
   if (!(p.idadeDaMarcaMs >= AGENDADO_EM_ANDAMENTO_MS)) return false;
   if (p.pendentes > 0) return true;
   return p.lancadas === 0 && p.pendenciaAberta;
