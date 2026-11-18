@@ -113,7 +113,7 @@ O contrato acima é validado por `npm run arch`
 **Fora do frontend:** `supabase/functions/` são Edge Functions em Deno. `_shared/`
 tem dois tipos de módulo: **puros** (sem `Deno.env`/rede — `telefone`,
 `opcoes`, `botGuard`, `chatwootSignature`, `chatwootPayload`, `dataOperacao`, `agentePuro`, `grafia`, `conversaPura`,
-`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`, `comprovantePuro`, `documentoPuro`),
+`assistentePuro`, `pedidoDoCliente`, `confirmacaoAoCliente`, `comprovantePuro`, `documentoPuro`, `lembretePuro`),
 que **precisam de teste** (`*.test.ts`) e rodam no CI (job *Funções (Deno)*); e
 módulos com I/O (`whatsappService`, `chatwootClient`, `conversationEngine`…).
 Regra de negócio testável vai pro módulo puro.
@@ -563,6 +563,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   para `extra_data.presenca` pela `fn_registrar_presenca` e aparece na Agenda — NÃO abre pendência para liberar a vaga,
   o bot nunca cancela; o bot responde só um obrigado) e **Em rota** ("já estamos em rota buscando os passageiros,
   aguarde no seu local de embarque"). Mensagens curtas, a pedido do dono ("Sua passagem está confirmada pra amanhã?"). Cada tipo tem o seu modelo da Meta em `settings.aviso_modelos` (`{horario, confirmacao, em_rota}`).
+  **Lembrete automático da viagem** (issue #458, função `lembrete-viagem`, `lembretePuro.ts`, `database/121`): Ida na
+  noite anterior (`settings.lembrete_viagem.ida_hora`), Volta 1 hora antes do horário do ponto (`volta_antes_min`),
+  com dia, sentido, onde embarca, horário e quantidade, pedindo resposta se algo estiver diferente (nunca valor). A
+  rotina roda de 5 em 5 min: quem agenda depois recebe na rodada seguinte enquanto a viagem não saiu; quem foi lançado
+  pelo "Agendado ☑️" depois da hora do lembrete já recebeu a confirmação, que vale como lembrete. Uma vez por reserva
+  (registro em `avisos_passageiros`, tipo `horario`), nada no horário de silêncio, envio pelo `avisar-passageiros`.
+  Liga/desliga em `settings.lembrete_viagem.ativo` (autorizado pelo dono em 14/11; horários em 17/11).
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
 
