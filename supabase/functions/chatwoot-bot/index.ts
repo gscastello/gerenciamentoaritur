@@ -40,7 +40,14 @@ import { registrarPresencaSePedida } from "../_shared/presenca.ts";
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
-import { extrairAtividade, extrairMensagemDeCliente, extrairPedidoDeTeste } from "../_shared/chatwootPayload.ts";
+import {
+  AUDIO_SEM_TRANSCRICAO,
+  audiosTranscritos,
+  extrairAtividade,
+  extrairMensagemDeCliente,
+  extrairPedidoDeTeste,
+  textoComContatos,
+} from "../_shared/chatwootPayload.ts";
 import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
@@ -115,25 +122,37 @@ async function processar(body: any) {
       tipo_mensagem: body.message_type ?? null,
       tipos: body.attachments.map((a: { file_type?: string }) => a?.file_type ?? null),
       campos: Object.keys(body.attachments[0] ?? {}),
+      // o Chatwoot está transcrevendo os áudios? (issue #460)
+      audios_transcritos: audiosTranscritos(body.attachments),
     });
   }
-  // mensagem EDITADA pelo cliente ou pela equipe (issue #417): o texto novo entra na conversa
-  if (body?.event === "message_updated" && !body.private && typeof body.content === "string" && body.content.trim()) {
+  // mensagem EDITADA pelo cliente ou pela equipe (issue #417): o texto novo entra na conversa.
+  // A transcrição do áudio também chega assim, segundos depois (issue #460).
+  const textoAtualizado = body?.event === "message_updated" && !body.private
+    ? textoComContatos(typeof body.content === "string" ? body.content : undefined, body.attachments)
+    : undefined;
+  if (textoAtualizado) {
     const tipo = body.message_type;
     const autor = tipo === "incoming" || tipo === 0 ? "cliente" : tipo === "outgoing" || tipo === 1 ? (body.sender?.type === "agent_bot" ? null : "equipe") : null;
     const conv = Number(body.conversation?.id);
     if (autor && conv) {
       const { data: original } = await supabaseAdmin
         .from("bot_observations")
-        .select("conversation_id, content")
+        .select("id, conversation_id, content")
         .eq("chatwoot_message_id", Number(body.id))
         .maybeSingle();
-      if (original && original.content !== body.content.trim()) {
+      // o áudio chegou sem transcrição e agora ela veio: troca no lugar (não é edição do cliente)
+      if (original && String(original.content ?? "").includes(AUDIO_SEM_TRANSCRICAO) && !textoAtualizado.includes(AUDIO_SEM_TRANSCRICAO)) {
+        await supabaseAdmin.from("bot_observations").update({ content: textoAtualizado }).eq("id", original.id);
+        evento("bot_audio_transcrito", { conversa: conv, autor });
+        return;
+      }
+      if (original && original.content !== textoAtualizado) {
         await registrarObservacao({
           conversationId: original.conversation_id ?? undefined,
           chatwootConversationId: conv,
           author: autor,
-          content: textoEditado(body.content.trim()),
+          content: textoEditado(textoAtualizado),
         });
         evento("bot_mensagem_editada", { conversa: conv, autor });
       }

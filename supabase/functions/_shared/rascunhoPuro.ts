@@ -500,7 +500,10 @@ export function sentidoPeloHabito(
  * fica registrada com esta marca, em vez de sumir (issue #417).
  */
 export const MENSAGEM_ILEGIVEL = "[o cliente mandou uma mensagem que o bot não conseguiu ler — confira no WhatsApp]";
-export const ehMensagemIlegivel = (t: string | null | undefined) => String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler");
+/** Mensagem que o bot não leu: tipo que ele não lê (editada, enquete…) ou áudio sem transcrição (issue #460). */
+export const ehMensagemIlegivel = (t: string | null | undefined) =>
+  String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler") ||
+  String(t ?? "").includes("[áudio sem transcrição");
 /** Texto guardado quando o cliente EDITA uma mensagem (o Chatwoot avisa por message_updated). */
 export const textoEditado = (t: string) => `(editou a mensagem anterior) ${t}`;
 

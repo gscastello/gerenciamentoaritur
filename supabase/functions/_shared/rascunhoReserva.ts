@@ -855,7 +855,7 @@ async function lerEGravar(
       doCliente.some((m) => ehMensagemIlegivel(m.texto))
     ) {
       pendencia ??= {
-        motivo: "o cliente não escreveu o dia e mandou uma mensagem que o bot não conseguiu ler (confira o dia no WhatsApp)",
+        motivo: "o cliente não escreveu o dia e mandou uma mensagem (ou um áudio sem transcrição) que o bot não conseguiu ler: confira o dia no WhatsApp",
         codigo: "dia_ilegivel",
       };
     }
