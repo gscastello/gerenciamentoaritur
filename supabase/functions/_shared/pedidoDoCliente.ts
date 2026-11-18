@@ -9,7 +9,7 @@
 //     sozinho: ida e volta têm dias diferentes, duas pessoas viram dois pedidos.
 // Nunca decide preço nem vaga.
 
-import { normalizarTexto } from "./grafia.ts";
+import { normalizarTexto, palavraParecida } from "./grafia.ts";
 
 export type MensagemDoCliente = { texto: string; em: string };
 
@@ -368,8 +368,17 @@ export function sentidoDoTrecho(de: Parada, para: Parada): "ida" | "volta" | nul
 }
 
 /** Origem escrita numa frase: "de Cantanhede pra Pirapemas", "saindo de São Luís". "Sou de Pirapemas" sozinho não conta. */
+/** Paradas de uma palavra só: o nome escrito errado ("entrocamento", "catanhede") vira o certo (issue #465). */
+const PARADAS_DE_UMA_PALAVRA = ["bacabeira", "entroncamento", "miranda", "matoes", "cantanhede", "campestre", "pirapemas"];
+export function paradasCorrigidas(textoNormalizado: string): string {
+  return textoNormalizado
+    .split(" ")
+    .map((w) => (w.length >= 6 && !PARADAS_DE_UMA_PALAVRA.includes(w) ? (PARADAS_DE_UMA_PALAVRA.find((c) => palavraParecida(w, c)) ?? w) : w))
+    .join(" ");
+}
+
 export function origemEscrita(texto: string): OrigemDoTrecho | null {
-  const n = ` ${normalizarTexto(texto)} `;
+  const n = ` ${paradasCorrigidas(normalizarTexto(texto))} `;
   // "Pirapemas/ São Luís", "São Luís x Cantanhede", "Cantanhede → São Luís": origem/destino (issue #419)
   const barra = ` ${normalizarTexto(String(texto ?? "").replace(/\s*(?:\/|->|→|\bx\b)\s*/gi, " qbarraq "))} `.match(RE_PAR_COM_BARRA);
   if (barra) {

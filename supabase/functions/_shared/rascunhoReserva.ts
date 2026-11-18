@@ -40,7 +40,9 @@ import {
   planejarAtualizacao,
   avisoDaCidadePelaBase,
   avisoDoAgendado,
+  assinaturaDaLeitura,
   duvidasDoPassageiro,
+  leituraDaMaioria,
   falhaDoServicoDaIa,
   avisoDosLugares,
   cidadeDaVolta,
@@ -214,6 +216,36 @@ async function lerPedidos(
   const pedidos = Array.isArray(bloco?.input?.pedidos) ? (bloco.input.pedidos as PedidoExtraido[]) : [];
   // até 4: ida e volta de duas pessoas (cortar em 2 perdia passageiro)
   return { pedidos: pedidos.slice(0, 4), uso };
+}
+
+const somarUso = (usos: (Bloco | undefined)[]): Bloco => ({
+  input_tokens: usos.reduce((t, u) => t + Number(u?.input_tokens ?? 0), 0),
+  output_tokens: usos.reduce((t, u) => t + Number(u?.output_tokens ?? 0), 0),
+});
+
+/**
+ * Leitura com consenso (issue #465): duas leituras em paralelo; se concordam no que decide a
+ * reserva (tipo, dia, sentido, quantidade, ponto), vale. Se discordam, uma terceira e vale a
+ * maioria. Sem maioria, fica a primeira e o Agendado relê com o modelo capaz (`divergente`).
+ * Só na leitura rápida: a releitura com o modelo capaz é uma só.
+ */
+async function lerPedidosComConsenso(
+  system: string,
+  conversa: string,
+  modelo?: string,
+): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco; divergente: boolean }> {
+  if (modelo && modelo !== MODELO) return { ...(await lerPedidos(system, conversa, modelo)), divergente: false };
+  const [a, b] = await Promise.all([lerPedidos(system, conversa), lerPedidos(system, conversa)]);
+  if (assinaturaDaLeitura(a.pedidos) === assinaturaDaLeitura(b.pedidos)) {
+    return { pedidos: a.pedidos, uso: somarUso([a.uso, b.uso]), divergente: false };
+  }
+  const c = await lerPedidos(system, conversa);
+  const leituras = [a, b, c];
+  const i = leituraDaMaioria(leituras.map((l) => l.pedidos));
+  const uso = somarUso(leituras.map((l) => l.uso));
+  evento("bot_leituras_divergentes", { maioria: i !== null });
+  if (i !== null) return { pedidos: leituras[i].pedidos, uso, divergente: false };
+  return { pedidos: a.pedidos, uso, divergente: true };
 }
 
 const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
@@ -414,7 +446,7 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
     : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
-  const lidos = await lerPedidos(system, conversa, opcoes.modelo);
+  const lidos = await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
   const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
@@ -939,7 +971,7 @@ async function lerEGravar(
     hoje,
   );
   if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
-  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas };
+  return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas, divergente: lidos.divergente };
 }
 
 export async function prepararRascunhoDeReserva(entrada: Entrada) {
@@ -1005,6 +1037,8 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
     let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true });
     // ia ficar pendente por falta de leitura? relê com o modelo mais capaz antes de desistir (issue #301)
     if (
+      // leituras sem maioria (issue #465): relê com o modelo capaz
+      lido.divergente ||
       agendadoPrecisaReler({
         pedidos: lido.pedidos.length,
         motivos: lido.motivos,
@@ -1579,6 +1613,7 @@ export async function simularAgendado(c: {
   let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular, ...(c.modelo ? { modelo: c.modelo } : {}) });
   let releu = false;
   if (
+    lido.divergente ||
     agendadoPrecisaReler({
       pedidos: lido.pedidos.length,
       motivos: lido.motivos,

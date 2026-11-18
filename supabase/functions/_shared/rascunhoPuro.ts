@@ -1411,3 +1411,36 @@ export function juntarPedidosDaMesmaViagem(pedidos: PedidoExtraido[]): PedidoExt
   }
   return juntos;
 }
+
+/**
+ * Assinatura de uma leitura (issue #465): o que decide a reserva — tipo, dia, sentido, quantidade
+ * e ponto de cada pedido, em ordem. Duas leituras com a mesma assinatura concordam.
+ */
+export function assinaturaDaLeitura(pedidos: PedidoExtraido[]): string {
+  return (pedidos ?? [])
+    .map((p) =>
+      [
+        p.tipo === "encomenda" ? "encomenda" : "passagem",
+        String(p.data ?? ""),
+        String(p.direcao ?? ""),
+        Math.max(1, Number(p.quantidade ?? 1) || 1),
+        String(p.ponto ?? "").toLowerCase(),
+      ].join("|")
+    )
+    .sort()
+    .join(" ; ");
+}
+
+/**
+ * Voto da maioria entre leituras da mesma conversa (issue #465): a leitura do modelo varia de uma
+ * vez para outra (o mesmo caso dava certo numa rodada e errado na outra). Devolve o índice da
+ * primeira leitura cuja assinatura aparece na maioria, ou null se todas discordam.
+ */
+export function leituraDaMaioria(leituras: PedidoExtraido[][]): number | null {
+  const assinaturas = leituras.map(assinaturaDaLeitura);
+  for (let i = 0; i < assinaturas.length; i++) {
+    const votos = assinaturas.filter((a) => a === assinaturas[i]).length;
+    if (votos * 2 > assinaturas.length) return i;
+  }
+  return null;
+}

@@ -5,7 +5,9 @@ import {
 import {
   ehMarcaDeAgendado,
   perguntaAoCliente,
+  assinaturaDaLeitura,
   duvidasDoPassageiro,
+  leituraDaMaioria,
   falhaDoServicoDaIa,
   FERRAMENTA_PEDIDOS,
   instrucoesDaLeitura,
@@ -1141,4 +1143,21 @@ Deno.test("#462: falha do serviço da IA (tenta de novo) × erro do programa (n�
   assertEquals(falhaDoServicoDaIa("TypeError: Cannot read properties of undefined"), null);
   assertEquals(falhaDoServicoDaIa(null), null);
   assertEquals(falhaDoServicoDaIa(""), null);
+});
+
+Deno.test("#465: voto da maioria entre leituras que variam", () => {
+  const ida = { tipo: "passagem", data: "2026-11-19", direcao: "ida", quantidade: 2, ponto: "busca", bairro: "Turu" };
+  const volta = { tipo: "passagem", data: "2026-11-19", direcao: "volta", quantidade: 2, ponto: "pirapemas" };
+  // a mesma leitura com bairro escrito diferente e ordem trocada: mesma assinatura
+  assertEquals(assinaturaDaLeitura([ida, volta]), assinaturaDaLeitura([volta, { ...ida, bairro: "turu" }]));
+  assertEquals(assinaturaDaLeitura([{ ...ida, quantidade: null }]), assinaturaDaLeitura([{ ...ida, quantidade: 1 }]));
+  // "ida e volta" lido uma vez como duas Idas: perde para as duas leituras certas
+  const duasIdas = [ida, { ...volta, direcao: "ida", ponto: "busca" }];
+  assertEquals(leituraDaMaioria([[ida, volta], duasIdas, [volta, ida]]), 0);
+  assertEquals(leituraDaMaioria([duasIdas, [ida, volta], [ida, volta]]), 1);
+  // quantidade: 2 contra 3 contra 2
+  assertEquals(leituraDaMaioria([[ida], [{ ...ida, quantidade: 3 }], [ida]]), 0);
+  // todas diferentes: sem maioria
+  assertEquals(leituraDaMaioria([[ida], [volta], []]), null);
+  assertEquals(leituraDaMaioria([[], []]), 0);
 });

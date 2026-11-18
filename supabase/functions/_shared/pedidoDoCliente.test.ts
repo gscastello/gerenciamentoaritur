@@ -434,3 +434,18 @@ Deno.test("#454 conferência final: 'Ficar no retorno' numa Volta é onde desce,
   const espera = [{ texto: "Aguardo vcs no retorno", em: "2026-11-17T23:40:00Z" }];
   assertEquals(conferenciaFinal({ ...volta, route_point_code: null }, espera, ctx).length, 1);
 });
+
+Deno.test("#465 origem com o nome da parada escrito errado", async () => {
+  const { origemEscrita, origemDoPedido, paradasCorrigidas } = await import("./pedidoDoCliente.ts");
+  assertEquals(origemEscrita("Qual o valor da passagem de entrocamento a Pirapemas?")?.de, "entroncamento");
+  assertEquals(origemEscrita("de catanhede pra são luis")?.sentido, "volta");
+  // caso real (fictício): esperam na rodoviária de Entroncamento — Ida saindo de lá, não a Rodoviária de São Luís
+  const o = origemDoPedido([
+    { quem: "cliente", texto: "Qual o valor da passagem de entrocamento a Pirapemas?" },
+    { quem: "equipe", texto: "40" },
+    { quem: "cliente", texto: "Vou lhe aguardar na rodoviária!" },
+  ]);
+  assertEquals(o, { sentido: "ida", de: "entroncamento", para: "pirapemas" });
+  // palavra comum não vira cidade
+  assertEquals(paradasCorrigidas("mirandinha matos cantando campeao"), "mirandinha matos cantando campeao");
+});

@@ -29,8 +29,9 @@ const fmtHora = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza"
 // deno-lint-ignore no-explicit-any
 type Linha = Record<string, any>;
 
-async function verificar(c: Linha, simular: boolean) {
-  const agora = new Date();
+async function verificar(c: Linha, simular: boolean, quando?: Date) {
+  // `quando`: simular como se fosse num momento passado (validar com casos reais)
+  const agora = quando ?? new Date();
   const hoje = diaCivil(agora);
   const horaAgora = fmtHora.format(agora);
   let resultado = "ok";
@@ -51,6 +52,7 @@ async function verificar(c: Linha, simular: boolean) {
       .eq("conversation_id", c.conversation_id)
       .in("author", ["cliente", "equipe"])
       .gte("created_at", new Date(agora.getTime() - 72 * 3600 * 1000).toISOString())
+      .lte("created_at", agora.toISOString())
       .order("created_at");
     const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
     // pediu para reservar com todas as letras, mas a leitura não achou o dia ou o sentido
@@ -110,6 +112,29 @@ Deno.serve(async (req: Request) => {
 
   const corpo = await req.json().catch(() => ({}));
   const simular = corpo?.simular === true;
+  // validação com um caso real: {"simular": true, "conversa": 722, "em": "2026-11-17T15:00:00Z"}
+  if (simular && Number(corpo?.conversa) && !Number.isNaN(Date.parse(String(corpo?.em ?? "")))) {
+    const em = new Date(String(corpo.em));
+    const { data: w } = await supabaseAdmin
+      .from("whatsapp_conversations")
+      .select("id, chatwoot_conversation_id, phone")
+      .eq("chatwoot_conversation_id", Number(corpo.conversa))
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (!w) return json({ success: false, message: "Conversa não encontrada." }, 404);
+    const { data: ultima } = await supabaseAdmin
+      .from("bot_observations")
+      .select("chatwoot_message_id")
+      .eq("conversation_id", w.id)
+      .eq("author", "cliente")
+      .lte("created_at", em.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const c = { conversation_id: w.id, chatwoot_conversation_id: w.chatwoot_conversation_id, telefone: w.phone, ultima_msg_id: ultima?.chatwoot_message_id ?? 0, assinatura: "teste" };
+    return json({ success: true, simular, resultados: [await verificar(c, true, em)] });
+  }
   const limite = Math.min(Math.max(Number(corpo?.limite) || 6, 1), 20);
   const { data: candidatas, error } = await supabaseAdmin.rpc("fn_conversas_para_sentinela", { p_limite: limite });
   if (error) return json({ success: false, message: error.message }, 500);
