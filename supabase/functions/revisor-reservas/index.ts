@@ -5,6 +5,7 @@
 // fn_rotina_autorizada). Responde na hora e revisa em segundo plano.
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
 
+import { tentarDeNovoAgendadosQueFalharam } from "../_shared/rascunhoReserva.ts";
 import { rodadaDoRevisor } from "../_shared/revisor.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
@@ -24,9 +25,15 @@ Deno.serve(async (req: Request) => {
     return json({ success: true, simulacao: await rodadaDoRevisor(limite, { simular: true }) });
   }
 
-  const trabalho = rodadaDoRevisor().catch((err) =>
-    console.log(JSON.stringify({ evento: "bot_erro", etapa: "revisor_rodada", erro: String(err).slice(0, 300) }))
-  );
+  const trabalho = Promise.all([
+    rodadaDoRevisor().catch((err) =>
+      console.log(JSON.stringify({ evento: "bot_erro", etapa: "revisor_rodada", erro: String(err).slice(0, 300) }))
+    ),
+    // Agendado que falhou por erro da IA: nova tentativa (issue #462)
+    tentarDeNovoAgendadosQueFalharam().catch((err) =>
+      console.log(JSON.stringify({ evento: "bot_erro", etapa: "agendado_nova_tentativa", erro: String(err).slice(0, 300) }))
+    ),
+  ]);
   // deno-lint-ignore no-explicit-any
   const runtime = (globalThis as any).EdgeRuntime;
   if (runtime?.waitUntil) {

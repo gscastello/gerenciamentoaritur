@@ -185,6 +185,23 @@ export function achadosValidos(bruto: unknown): Achado[] {
   return out;
 }
 
+const semAcento = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+/** Alguma palavra do valor (4 letras ou mais) está na prova escrita? */
+export function valorNaProva(valor: string | null | undefined, evidencia: string | null | undefined): boolean {
+  const prova = ` ${semAcento(String(evidencia ?? "")).replace(/[^a-z0-9 ]+/g, " ")} `;
+  return semAcento(String(valor ?? ""))
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter((p) => p.length >= 4)
+    .some((p) => prova.includes(` ${p} `));
+}
+
+/** Campo da reserva sem informação: vazio, "—" ou "a confirmar" ("Em casa (bairro)" é informação: deixar em casa). */
+export function campoVazio(v: string | null | undefined): boolean {
+  const t = String(v ?? "").trim();
+  return !t || /^(—|-|endere[cç]o a confirmar|a confirmar)$/i.test(t);
+}
+
 /**
  * Decide o destino de cada achado: corrigir sozinho, pendência para a equipe ou descartar.
  * Achados da mesma reserva viram UMA correção (dia + sentido + ponto juntos).
@@ -258,6 +275,13 @@ export function decidirRevisao(
     // ("na verdade é dia 15"). Prova anterior pode ser de outro pedido — a equipe confere.
     // Com o "Atualizado ☑️" a equipe já conferiu (issue #410).
     if (ok && mudaAViagem && !ctx.confirmadoPelaEquipe) ok = posterior;
+    // campo VAZIO (embarque, desembarque, bairro) preenchido com o que está na conversa: não apaga
+    // nada, então certeza média basta, mesmo com a prova antes da reserva (issue #464)
+    // E o valor tem de estar na própria prova (uma palavra dele, de 4 letras ou mais): o modelo não
+    // pode tirar um bairro de uma frase que não fala dele.
+    if (!ok && campoVazio(atual) && ["embarque", "desembarque", "bairro"].includes(a.campo) && (a.certeza === "alta" || a.certeza === "media")) {
+      ok = !!valor && !campoVazio(valor) && valorNaProva(valor, a.evidencia);
+    }
     const c = correcoes.get(r.id) ?? { reserva_id: r.id, motivos: [] };
     if (ok) {
       switch (a.campo) {

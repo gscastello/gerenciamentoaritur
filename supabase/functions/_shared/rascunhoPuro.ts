@@ -500,7 +500,23 @@ export function sentidoPeloHabito(
  * fica registrada com esta marca, em vez de sumir (issue #417).
  */
 export const MENSAGEM_ILEGIVEL = "[o cliente mandou uma mensagem que o bot não conseguiu ler — confira no WhatsApp]";
-export const ehMensagemIlegivel = (t: string | null | undefined) => String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler");
+/**
+ * O erro da leitura foi do SERVIÇO da IA (issue #462), não da conversa: chave recusada / sem saldo
+ * ("chave") ou fora do ar, sobrecarregado, tempo esgotado ("servico"). Esses o bot tenta de novo
+ * sozinho; o resto (erro de programa) fica só como pendência.
+ */
+export function falhaDoServicoDaIa(erro: string | null | undefined): "chave" | "servico" | null {
+  const e = String(erro ?? "").toLowerCase();
+  if (!e) return null;
+  if (/\b401\b|\b403\b|authentication_error|invalid x-api-key|permission_error|credit balance|billing/.test(e)) return "chave";
+  if (/\b(429|500|502|503|504|529)\b|overloaded|rate_limit|timeout|timed out|econnreset|fetch failed|network|api_error/.test(e)) return "servico";
+  return null;
+}
+
+/** Mensagem que o bot não leu: tipo que ele não lê (editada, enquete…) ou áudio sem transcrição (issue #460). */
+export const ehMensagemIlegivel = (t: string | null | undefined) =>
+  String(t ?? "").startsWith("[o cliente mandou uma mensagem que o bot não conseguiu ler") ||
+  String(t ?? "").includes("[áudio sem transcrição");
 /** Texto guardado quando o cliente EDITA uma mensagem (o Chatwoot avisa por message_updated). */
 export const textoEditado = (t: string) => `(editou a mensagem anterior) ${t}`;
 
@@ -1394,4 +1410,37 @@ export function juntarPedidosDaMesmaViagem(pedidos: PedidoExtraido[]): PedidoExt
     });
   }
   return juntos;
+}
+
+/**
+ * Assinatura de uma leitura (issue #465): o que decide a reserva — tipo, dia, sentido, quantidade
+ * e ponto de cada pedido, em ordem. Duas leituras com a mesma assinatura concordam.
+ */
+export function assinaturaDaLeitura(pedidos: PedidoExtraido[]): string {
+  return (pedidos ?? [])
+    .map((p) =>
+      [
+        p.tipo === "encomenda" ? "encomenda" : "passagem",
+        String(p.data ?? ""),
+        String(p.direcao ?? ""),
+        Math.max(1, Number(p.quantidade ?? 1) || 1),
+        String(p.ponto ?? "").toLowerCase(),
+      ].join("|")
+    )
+    .sort()
+    .join(" ; ");
+}
+
+/**
+ * Voto da maioria entre leituras da mesma conversa (issue #465): a leitura do modelo varia de uma
+ * vez para outra (o mesmo caso dava certo numa rodada e errado na outra). Devolve o índice da
+ * primeira leitura cuja assinatura aparece na maioria, ou null se todas discordam.
+ */
+export function leituraDaMaioria(leituras: PedidoExtraido[][]): number | null {
+  const assinaturas = leituras.map(assinaturaDaLeitura);
+  for (let i = 0; i < assinaturas.length; i++) {
+    const votos = assinaturas.filter((a) => a === assinaturas[i]).length;
+    if (votos * 2 > assinaturas.length) return i;
+  }
+  return null;
 }
