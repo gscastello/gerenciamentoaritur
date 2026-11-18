@@ -40,6 +40,7 @@ import {
   planejarAtualizacao,
   avisoDaCidadePelaBase,
   avisoDoAgendado,
+  duvidasDoPassageiro,
   avisoDosLugares,
   cidadeDaVolta,
   cidadePelaBase,
@@ -59,6 +60,7 @@ import {
   perguntaAoCliente,
   proximaViagemPeloLugar,
   viagemDeHojeJaSaiu,
+  viagemDeHojePeloAgendado,
   cidadeDaVoltaPelasPistas,
   cidadeDoCaminhoNoTexto,
   juntarPedidosDaMesmaViagem,
@@ -497,6 +499,12 @@ async function lerEGravar(
   const algumDiaEscrito = datasEscritas(mensagensDoCliente).length > 0 ||
     confirmadas.length > 0 ||
     datasEscritas(recentes.filter((m) => m.quem === "equipe" && m.id !== entrada.mensagemId).map((m) => ({ texto: m.texto, em: m.em }))).length > 0;
+  // o sentido ESCRITO na conversa (não o lido pelo modelo): só ele deixa o Agendado escolher o dia (issue #452)
+  const sentidoComprovado =
+    dadosMarca.direcao ??
+    origemUnica?.sentido ??
+    sentidoEscrito(textosDoCliente) ??
+    (pontoEscrito(textosDoCliente, ctx.pontos.ida) ? "ida" : null);
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -509,9 +517,28 @@ async function lerEGravar(
       sentidoDaEquipe: dadosMarca.direcao ?? null,
     });
     Object.assign(p, conferido.pedido);
-    if (!algumDiaEscrito && p.data && (p.tipo ?? "passagem") !== "encomenda") {
-      evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
-      p.data = null;
+    if (!algumDiaEscrito && (p.tipo ?? "passagem") !== "encomenda") {
+      // "Tem vaga de Cantanhede pra São Luís?" de manhã + "Agendado ☑️" antes da viagem sair = a de hoje (issue #452)
+      const proxima = viagemDeHojePeloAgendado(p, {
+        agendado: opcoes.confirmadoPelaEquipe,
+        hoje,
+        horaAgora,
+        pontos: ctx.pontos,
+        mensagensDoCliente,
+        sentidoEscrito: sentidoComprovado,
+      });
+      if (proxima) {
+        if (p.data !== proxima) {
+          p.duvida = [p.duvida, `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a viagem de hoje, que ainda não tinha saído.`]
+            .filter(Boolean)
+            .join(" ");
+        }
+        evento("bot_dia_pelo_agendado", { conversa: entrada.chatwootConversationId, lido: p.data ?? null });
+        p.data = proxima;
+      } else if (p.data) {
+        evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
+        p.data = null;
+      }
     }
     // busca em casa num endereço de Pirapemas/Cantanhede não existe: é a Volta saindo de lá (issue #419)
     if (
@@ -1002,7 +1029,11 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       .gte("trip_date", lido.hoje);
     if (!prontos?.length) {
       evento("bot_agendado_lancado", { conversa, lancadas: 0, pendentes: ["sem_rascunho"], motivos: lido.motivos });
-      await avisarAgendadoQueFalhou(entrada, avisoDoAgendado({ lancadas: 0, pedidos: lidos, motivos: motivosLidos, pendentes: [] }));
+      // nenhum rascunho (ex.: ninguém escreveu o dia): pergunta ao passageiro o que só ele sabe (issue #457)
+      await avisarAgendadoQueFalhou(entrada, avisoDoAgendado({ lancadas: 0, pedidos: lidos, motivos: motivosLidos, pendentes: [] }), {
+        pendentes: duvidasDoPassageiro(motivosLidos, []),
+        nome: nomeDoCliente,
+      });
       return;
     }
 
@@ -1122,7 +1153,7 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
     entrada,
     avisoDoAgendado({ lancadas: lancadas.length, pedidos: lidos, motivos: motivosLidos, pendentes, erro }),
     // sem o dia escrito, quem sabe é o passageiro: pergunta a ele (autorizado pelo dono, 14/11)
-    { pendentes: [...pendentes, ...(motivosLidos.includes("sem_data") ? ["sem_data"] : [])], nome: nomeDoCliente },
+    { pendentes: duvidasDoPassageiro(motivosLidos, pendentes), nome: nomeDoCliente },
   );
   // o cliente escreveu DURANTE esta leitura e ficou algo pendente: lê de novo uma vez, agora sem
   // concorrência — o que ele mandou nesses segundos não se perde (issue #337)

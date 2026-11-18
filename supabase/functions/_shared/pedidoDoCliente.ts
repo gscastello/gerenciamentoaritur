@@ -617,6 +617,15 @@ const SEMANA: Record<string, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sesta: 5, sabado: 6, sabdo: 6, sabadu: 6,
 };
 
+// Mensagem sobre encomenda é outro pedido: o dia dela não é o da passagem ("pra pegar hoje a
+// encomenda" de manhã não é o dia das passagens pedidas à tarde — issue #451).
+const FALA_DE_ENCOMENDA = /\b(encomendas?|pacotes?|mercadorias?)\b/;
+
+/** As mensagens do pedido de passagem, sem as que falam de encomenda (issue #451). */
+export function semFalaDeEncomenda(mensagens: MensagemDoCliente[]): MensagemDoCliente[] {
+  return mensagens.filter((m) => !FALA_DE_ENCOMENDA.test(normalizarTexto(String(m.texto ?? "").toLowerCase())));
+}
+
 /**
  * Datas que o cliente escreveu, contadas do DIA DE CADA MENSAGEM: hoje, amanhã
  * ("amnh", "amh"), depois de amanhã, dia da semana ("sexta", "sesta"), "dia 14", "14/11".
@@ -698,6 +707,8 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
     if (t.includes("?")) continue;
     const n = ` ${normalizarTexto(t)} `;
     if (/ (desco|desce|descer|desembarco|desembarque|me deixa|deixar|deixa) /.test(n)) continue;
+    // "Ficar no retorno do Tirirical" / "Até no retorno" é onde DESCE; "fico esperando no retorno" é onde embarca (issue #454)
+    if (/ (ficar|fico|fica|ficarei|ficaremos|ficamos|ficam|ate (o|a|no|na|ao)) /.test(n) && !/ (esper|aguard)\w* /.test(n)) continue;
     // "De Pirapemas a São Luís! Ficaremos no retorno": indo PARA São Luís, o ponto é onde desce (issue #419)
     if (origemEscrita(t)?.sentido === "volta" || RE_IR_PARA_SAO_LUIS.test(n)) continue;
     if (/ (rodoviaria|rodovaria|rodoviria|rodov|terminal) /.test(n)) achados.push("rodoviaria");
@@ -787,7 +798,7 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
     avisos.push(`o cliente escreveu ${sentido === "volta" ? "Volta (pra São Luís)" : "Ida (saindo de São Luís)"}`);
   }
 
-  const datas = datasEscritas(mensagens).filter((d) => d >= ctx.hoje);
+  const datas = datasEscritas(semFalaDeEncomenda(mensagens)).filter((d) => d >= ctx.hoje);
   if (!pedido.data && datas.length === 1) {
     pedido.data = datas[0];
     completados.push(`dia ${datas[0].split("-").reverse().slice(0, 2).join("/")}`);
@@ -865,7 +876,7 @@ export function conferenciaFinal(
   if (ctx.origem?.sentido === "volta") ctx = { ...ctx, cidadeEscrita: pontoDaVoltaPelaOrigem(ctx.origem.de) };
   const naoBate: string[] = [];
 
-  const datas = [...new Set([...datasEscritas(mensagens), ...(ctx.datasConfirmadas ?? [])])]
+  const datas = [...new Set([...datasEscritas(semFalaDeEncomenda(mensagens)), ...(ctx.datasConfirmadas ?? [])])]
     .filter((d) => d >= ctx.hoje)
     .sort();
   if (datas.length && !datas.includes(r.trip_date)) {
