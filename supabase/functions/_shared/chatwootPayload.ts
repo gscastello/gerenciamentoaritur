@@ -83,6 +83,17 @@ export function textoDosAnexos(attachments: any): string | undefined {
   return partes.length ? partes.join(" ") : undefined;
 }
 
+/**
+ * A mensagem é SÓ um áudio ainda sem transcrição (issue #470)? O Chatwoot transcreve em segundos e
+ * manda o texto num message_updated: até lá o bot não responde (senão diria "não consigo ouvir").
+ */
+export function soAudioSemTranscricao(texto: string | undefined): boolean {
+  return (texto ?? "").replaceAll(AUDIO_SEM_TRANSCRICAO, "").trim() === "" && (texto ?? "").includes(AUDIO_SEM_TRANSCRICAO);
+}
+
+/** Quanto o bot espera a transcrição do áudio antes de pedir para o cliente escrever (issue #470). */
+export const ESPERA_DA_TRANSCRICAO_MS = 40_000;
+
 /** Quantos áudios vieram com e sem transcrição (para o registro: o Chatwoot está transcrevendo?). */
 // biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
 export function audiosTranscritos(attachments: any): { com: number; sem: number } {
