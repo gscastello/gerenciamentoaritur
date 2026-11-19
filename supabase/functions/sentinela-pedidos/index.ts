@@ -13,6 +13,7 @@ import { diaCivil } from "../_shared/agentePuro.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import {
+  clienteConcretizou,
   notaDaSentinela,
   pedidoDeReservaSemDia,
   pedidoEncerrado,
@@ -57,7 +58,11 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
     const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
     // pediu para reservar com todas as letras, mas a leitura não achou o dia ou o sentido
     const semDia = !pedidos.length && motivos.some((m) => m === "sem_data" || m === "sem_sentido") ? pedidoDeReservaSemDia(falas) : null;
-    if (pedidos.length || semDia) {
+    if ((pedidos.length || semDia) && !clienteConcretizou(falas)) {
+      // só perguntou ("tem vaga amanhã? qual o valor?"): não é pedido de reserva (issue #467)
+      resultado = "so_pergunta";
+      detalhe = { pedidos };
+    } else if (pedidos.length || semDia) {
       const encerrado = pedidoEncerrado(falas);
       if (encerrado) {
         resultado = "encerrado";

@@ -127,3 +127,24 @@ export function pedidoDeReservaSemDia(falas: { quem: string; texto: string; em: 
   }
   return null;
 }
+
+const RE_ONDE_EMBARCA =
+  / (rua|av|avenida|travessa|tv|praca|povoado|bairro|casa|condominio|residencial|perto|proximo|prox|frente|esquina|numero|quadra|bloco|apartamento|rodoviaria|retorno|posto|aguardo|espero|estarei) /;
+
+/**
+ * O pedido é de verdade (issue #467)? A equipe marcou "Agendado ☑️", ou o cliente pediu para
+ * reservar com todas as letras ("deixa agendada", "marca uma vaga") ou escreveu onde embarca sem
+ * ser em forma de pergunta ("aqui na rua da torre, casa azul"). Pergunta solta ("tem vaga amanhã?
+ * qual o valor?") não é pedido: a sentinela não avisa.
+ */
+export function clienteConcretizou(falas: { quem: string; texto: string; em: string }[]): boolean {
+  // Só é chamada quando a simulação achou viagem SEM reserva: a equipe ter marcado "Agendado ☑️" já
+  // é o pedido confirmado (o Agendado que não lançou — issue #469). Por isso não corta na marca.
+  return (falas ?? []).some((f) => {
+    if (f.quem === "equipe") return ehMarcaDeAgendado(f.texto);
+    if (f.quem !== "cliente") return false;
+    const t = norm(f.texto);
+    if (RE_PEDIU_RESERVA.test(t)) return true;
+    return !String(f.texto).includes("?") && RE_ONDE_EMBARCA.test(t);
+  });
+}

@@ -570,7 +570,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `database/123`): toda madrugada os Agendados novos viram casos e são avaliados na rodada `auto`; errado ou faltou vira
   a pendência "Bot errou em casos reais". **Fila enxuta** (#464): o revisor preenche sozinho embarque, desembarque ou
   bairro VAZIO com certeza média quando o valor está na própria prova (`campoVazio`, `valorNaProva`); "Revisão: conferir
-  reserva" com mais de 3 dias e "Pedido sem reserva" com mais de 4 fecham como vencidas (`fn_fechar_pendencias_vencidas`).
+  reserva" com mais de 3 dias e "Pedido sem reserva" com mais de 4 fecham como vencidas (`fn_fechar_pendencias_vencidas`). **Pendência resolvida fecha sozinha** (#467, `database/124`): de 10 em 10 min
+  `fn_fechar_pendencias_resolvidas()` confere cada pendência aberta contra o app e fecha com o motivo em
+  `meta.resolvida_por` — reserva lançada depois, viagem que passou, revisor que conferiu de novo sem achar nada,
+  pendência do revisor substituída, diagnóstico que não existe mais ou repetido. A sentinela só avisa quando o cliente
+  pediu para reservar com todas as letras ou escreveu onde embarca (`clienteConcretizou`); pergunta solta não.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
