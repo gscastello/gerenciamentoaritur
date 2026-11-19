@@ -556,7 +556,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização
   como `[localização: nome — link do mapa]` (`textoDosAnexos` em `chatwootPayload.ts`); a transcrição que chega depois
-  atualiza a observação. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
+  atualiza a observação. **Transcrição ligada no Chatwoot** (dono, 19/11 — issue #470): o texto chega segundos depois
+  (`message_updated`), então o áudio sem texto não é respondido na hora (`soAudioSemTranscricao`); a transcrição do
+  cliente segue o caminho de uma mensagem de texto dele (resposta no `ia`, releitura do Agendado, reserva a confirmar,
+  SIM/NÃO). Só se ela não vier em 40 s (`ESPERA_DA_TRANSCRICAO_MS`, modo `ia`) o bot pede para escrever. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
   decide a reserva (tipo, dia, sentido, quantidade, ponto) → vale; discordam → terceira e vale a maioria; sem maioria →
   relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**

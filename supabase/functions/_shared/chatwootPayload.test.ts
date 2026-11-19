@@ -246,3 +246,14 @@ Deno.test("#460: localização entra com o nome do lugar e o link do mapa", () =
   assertEquals(textoDosAnexos([{ file_type: "image" }, { file_type: "file" }]), undefined);
   assertEquals(textoDosAnexos("x"), undefined);
 });
+
+Deno.test("#470 áudio ainda sem transcrição: o bot espera o texto antes de responder", async () => {
+  const { soAudioSemTranscricao, AUDIO_SEM_TRANSCRICAO } = await import("./chatwootPayload.ts");
+  assertEquals(soAudioSemTranscricao(AUDIO_SEM_TRANSCRICAO), true);
+  assertEquals(soAudioSemTranscricao(textoComContatos("", [{ file_type: "audio" }])), true);
+  // já transcrito, ou com texto junto: é mensagem de texto
+  assertEquals(soAudioSemTranscricao(textoComContatos("", [{ file_type: "audio", transcribed_text: "Quero uma passagem amanhã" }])), false);
+  assertEquals(soAudioSemTranscricao(`Amanhã ${AUDIO_SEM_TRANSCRICAO}`), false);
+  assertEquals(soAudioSemTranscricao(""), false);
+  assertEquals(soAudioSemTranscricao(undefined), false);
+});

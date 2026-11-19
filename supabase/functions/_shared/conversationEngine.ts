@@ -14,6 +14,7 @@
 import { responderComAgente } from "./agente.ts";
 import { getBotContext } from "./botContext.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { AUDIO_SEM_TRANSCRICAO, ESPERA_DA_TRANSCRICAO_MS, soAudioSemTranscricao } from "./chatwootPayload.ts";
 import { processarComprovante } from "./comprovante.ts";
 import { notaDaBaixa } from "./comprovantePuro.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
@@ -47,25 +48,27 @@ const MENU_ROWS = [
 
 const RESERVATION_STEPS = ["awaiting_date", "awaiting_route_point", "awaiting_detail", "awaiting_quantity", "awaiting_dropoff", "awaiting_dropoff_confirm", "awaiting_name", "awaiting_payment"];
 
-export async function handleIncomingMessage(msg: IncomingMessage) {
-  const conversation = await whatsappService.resolveConversation(msg.from);
-  if (await whatsappService.wasAlreadyProcessed(msg.waMessageId)) return;
+export async function handleIncomingMessage(recebida: IncomingMessage) {
+  const conversation = await whatsappService.resolveConversation(recebida.from);
+  if (await whatsappService.wasAlreadyProcessed(recebida.waMessageId)) return;
 
   await whatsappService.logMessage(conversation.id, "inbound", {
-    waMessageId: msg.waMessageId,
-    type: msg.media ? msg.media.kind : msg.interactiveId ? "interactive" : "text",
-    content: msg.raw,
+    waMessageId: recebida.waMessageId,
+    type: recebida.media ? recebida.media.kind : recebida.interactiveId ? "interactive" : "text",
+    content: recebida.raw,
   });
 
   // Figurinha: não é pedido nem comprovante — só fica no histórico, sem resposta.
-  if (msg.media?.kind === "sticker") return;
+  if (recebida.media?.kind === "sticker") return;
 
-  // Áudio: o modelo não entende voz. Pede pra escrever e, se insistir,
-  // passa pra equipe — só quando a conversa está com o bot.
-  if (msg.media?.kind === "audio") {
-    await handleAudio(conversation);
+  // Áudio sem transcrição (issue #470): o Chatwoot manda o texto em segundos (message_updated, que
+  // responde ao que foi falado). Só se ele não vier o bot pede para escrever.
+  if (recebida.media?.kind === "audio" && soAudioSemTranscricao(recebida.text)) {
+    await audioSemTranscricao(conversation, recebida);
     return;
   }
+  // áudio já transcrito: segue como a mensagem de texto que ele é
+  const msg: IncomingMessage = recebida.media?.kind === "audio" ? { ...recebida, media: undefined } : recebida;
 
   // Imagem/documento (possível comprovante Pix — issue #8). Arquiva e liga ao
   // pagamento pendente em QUALQUER modo (não é a IA decidindo nada), mas só
@@ -198,7 +201,25 @@ async function responderPergunta(conversation: any, state: any, text: string, to
   await sendText(conversation.id, to, "Vou chamar alguém da equipe para te ajudar com isso. 🙋");
 }
 
-/** Áudio: primeira vez pede pra escrever; se insistir, passa pra equipe. */
+/**
+ * Áudio que chegou sem texto (issue #470): espera a transcrição do Chatwoot. Chegou → o
+ * message_updated já respondeu ao que foi falado. Não chegou (transcrição falhou ou desligada) →
+ * pede para escrever, como antes. No sombra não gera resposta nenhuma.
+ */
+async function audioSemTranscricao(conversation: any, msg: IncomingMessage) {
+  if (getBotContext()?.shadow) return;
+  const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
+  if (mode !== "ia") return;
+  await new Promise((r) => setTimeout(r, ESPERA_DA_TRANSCRICAO_MS));
+  const id = Number((msg.raw as { chatwoot_message_id?: number } | null)?.chatwoot_message_id);
+  if (Number.isFinite(id) && id > 0) {
+    const { data } = await supabaseAdmin.from("bot_observations").select("content").eq("chatwoot_message_id", id).maybeSingle();
+    if (data && !String(data.content ?? "").includes(AUDIO_SEM_TRANSCRICAO)) return;
+  }
+  await handleAudio(conversation);
+}
+
+/** Áudio sem texto: primeira vez pede pra escrever; se insistir, passa pra equipe. */
 async function handleAudio(conversation: any) {
   const { data: mode } = await supabaseAdmin.rpc("fn_effective_attendance_mode", { p_conversation_id: conversation.id });
   if (mode !== "ia") return;
