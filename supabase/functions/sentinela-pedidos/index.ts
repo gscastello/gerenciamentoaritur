@@ -108,6 +108,44 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
   return { conversa: c.chatwoot_conversation_id, resultado, ...detalhe };
 }
 
+/**
+ * A sentinela revê as próprias pendências abertas com a regra de hoje (issue #472): pergunta solta
+ * (inclusive o endereço numa pergunta de preço) ou pedido que a conversa encerrou (lotado, desistiu)
+ * fecha sozinho. Só regra pura: não chama o modelo.
+ */
+async function reverPendencias(): Promise<number> {
+  const { data: abertas } = await supabaseAdmin
+    .from("support_tickets")
+    .select("id, meta, created_at")
+    .eq("status", "aberta")
+    .eq("subject", "Pedido sem reserva")
+    .limit(50);
+  let fechadas = 0;
+  for (const t of (abertas ?? []) as Linha[]) {
+    const conversa = t.meta?.conversation_id;
+    if (!conversa) continue;
+    const { data: brutas } = await supabaseAdmin
+      .from("bot_observations")
+      .select("author, content, created_at")
+      .eq("conversation_id", conversa)
+      .in("author", ["cliente", "equipe"])
+      .gte("created_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString())
+      .order("created_at");
+    const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
+    if (!falas.length) continue;
+    const motivo = !clienteConcretizou(falas) ? "so_pergunta" : pedidoEncerrado(falas) ? "pedido_encerrado" : null;
+    if (!motivo) continue;
+    const { error } = await supabaseAdmin
+      .from("support_tickets")
+      .update({ status: "resolvida", resolved_at: new Date().toISOString(), meta: { ...(t.meta ?? {}), resolvida_por: motivo } })
+      .eq("id", t.id)
+      .eq("status", "aberta");
+    if (!error) fechadas++;
+  }
+  if (fechadas) evento("sentinela_reviu", { fechadas });
+  return fechadas;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ success: false, message: "Método não permitido." }, 405);
   const chave = req.headers.get("x-rotina") ?? "";
@@ -145,6 +183,7 @@ Deno.serve(async (req: Request) => {
   if (error) return json({ success: false, message: error.message }, 500);
 
   const trabalho = (async () => {
+    if (!simular) await reverPendencias().catch((err) => evento("bot_erro", { etapa: "sentinela_rever", erro: String(err).slice(0, 300) }));
     const out = [];
     for (const c of (candidatas ?? []) as Linha[]) out.push(await verificar(c, simular));
     return out;
