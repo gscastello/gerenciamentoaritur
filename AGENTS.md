@@ -575,6 +575,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `meta.resolvida_por` — reserva lançada depois, viagem que passou, revisor que conferiu de novo sem achar nada,
   pendência do revisor substituída, diagnóstico que não existe mais ou repetido. A sentinela só avisa quando o cliente
   pediu para reservar com todas as letras ou escreveu onde embarca (`clienteConcretizou`); pergunta solta não.
+  **Já resolvidas** (issue #472, `database/125`, `fn_fechar_pendencias_ja_resolvidas`): "Pedido sem reserva" fecha
+  quando o passageiro tem reserva lançada depois do último PEDIDO dele (não da última mensagem: "Aguardando" não reabre),
+  quando a conversa espera o cliente (`fn_conversa_aguarda_cliente`: a equipe pediu endereço/dia/nome ou ele disse que
+  manda depois) e quando a viagem de hoje já saiu (Ida 08 h, Volta 15 h); "lançou só parte" fecha quando o revisor releu
+  depois sem achar nada. A sentinela não simula essas conversas e revê as próprias pendências abertas a cada rodada;
+  endereço picado numa pergunta de preço ("quanto é pra me deixar nesse endereço" / rua / "?") não é pedido.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,

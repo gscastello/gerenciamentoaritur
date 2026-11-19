@@ -140,11 +140,28 @@ const RE_ONDE_EMBARCA =
 export function clienteConcretizou(falas: { quem: string; texto: string; em: string }[]): boolean {
   // Só é chamada quando a simulação achou viagem SEM reserva: a equipe ter marcado "Agendado ☑️" já
   // é o pedido confirmado (o Agendado que não lançou — issue #469). Por isso não corta na marca.
+  const doCliente = [...(falas ?? [])].filter((f) => f.quem === "cliente").sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
   return (falas ?? []).some((f) => {
     if (f.quem === "equipe") return ehMarcaDeAgendado(f.texto);
     if (f.quem !== "cliente") return false;
     const t = norm(f.texto);
     if (RE_PEDIU_RESERVA.test(t)) return true;
-    return !String(f.texto).includes("?") && RE_ONDE_EMBARCA.test(t);
+    return !String(f.texto).includes("?") && RE_ONDE_EMBARCA.test(t) && !parteDeUmaPergunta(f, doCliente);
   });
+}
+
+// "quanto é pra me deixar nesse endereço", "qual o valor até esse endereço"
+const RE_PERGUNTA_DE_PRECO = / (quanto|valor|preco) .*(endereco|deixar|deixa|ate) /;
+
+/**
+ * O endereço veio picado numa pergunta (issue #472)? "Quanto é pra me deixar nesse endereço" /
+ * "Rua X, bairro Y" / "?": a mensagem vizinha do cliente (até 2 min) é só "?" ou pergunta o preço
+ * daquele endereço. Endereço depois de "tem vaga? quanto é?" continua contando como pedido.
+ */
+function parteDeUmaPergunta(f: { texto: string; em: string }, doCliente: { texto: string; em: string }[]): boolean {
+  const i = doCliente.indexOf(f as (typeof doCliente)[number]);
+  const vizinhas = [doCliente[i - 1], doCliente[i + 1]].filter(
+    (v) => v && Math.abs(Date.parse(v.em) - Date.parse(f.em)) <= 2 * 60 * 1000,
+  );
+  return vizinhas.some((v) => /^\s*\?+\s*$/.test(v.texto) || RE_PERGUNTA_DE_PRECO.test(norm(v.texto)));
 }
