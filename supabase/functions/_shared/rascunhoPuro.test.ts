@@ -1191,3 +1191,14 @@ Deno.test("#478 dia dito pela equipe (um só) + áudio sem transcrição: o Agen
   assertEquals(diaDitoPelaEquipe([], "2026-11-23"), false);
   assertEquals(diaDitoPelaEquipe(["2026-11-23"], null), false);
 });
+
+Deno.test("#480 áudio do cliente sem transcrição: o bot não pergunta o que a equipe já ouviu", async () => {
+  const { naoPerguntarPorAudioNaoLido } = await import("./rascunhoPuro.ts");
+  const { AUDIO_SEM_TRANSCRICAO } = await import("./chatwootPayload.ts");
+  // caso real (fictício): dois áudios sem texto e a equipe marca o Agendado
+  assertEquals(naoPerguntarPorAudioNaoLido([AUDIO_SEM_TRANSCRICAO, AUDIO_SEM_TRANSCRICAO]), true);
+  assertEquals(naoPerguntarPorAudioNaoLido(["Rua das Flores", AUDIO_SEM_TRANSCRICAO]), true);
+  // texto e áudio transcrito: pode perguntar
+  assertEquals(naoPerguntarPorAudioNaoLido(["Quero uma vaga", "[áudio: Quero ir amanhã.]"]), false);
+  assertEquals(naoPerguntarPorAudioNaoLido([]), false);
+});

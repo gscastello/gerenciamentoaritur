@@ -1481,3 +1481,12 @@ export function diaDitoPelaEquipe(datasDaEquipe: string[], dataLida: string | nu
 /** Aviso na reserva quando o dia veio da equipe e o cliente mandou algo que o bot não leu. */
 export const AVISO_DIA_DA_EQUIPE =
   "Dia dito pela equipe; o cliente mandou um áudio (ou mensagem) que o bot não leu: confira o dia no WhatsApp.";
+
+/**
+ * Há áudio do cliente que o bot não leu (issue #480)? Então a dúvida ("qual o dia?") pode estar
+ * respondida dentro do áudio, que a equipe ouviu: o bot NÃO pergunta ao cliente e deixa a pendência
+ * para a equipe. Só as mensagens do cliente contam.
+ */
+export function naoPerguntarPorAudioNaoLido(textosDoCliente: string[]): boolean {
+  return (textosDoCliente ?? []).some((t) => ehMensagemIlegivel(String(t ?? "")));
+}

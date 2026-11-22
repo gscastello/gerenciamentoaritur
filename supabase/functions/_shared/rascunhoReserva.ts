@@ -43,6 +43,7 @@ import {
   notaDoAgendadoQueNaoLancou,
   assinaturaDaLeitura,
   duvidasDoPassageiro,
+  naoPerguntarPorAudioNaoLido,
   leituraDaMaioria,
   falhaDoServicoDaIa,
   avisoDosLugares,
@@ -1234,6 +1235,17 @@ async function perguntarAoCliente(
 ): Promise<string | null> {
   const pergunta = perguntaAoCliente(duvidas.pendentes, jaPerguntadas, duvidas.nome);
   if (!pergunta) return null;
+  // áudio do cliente sem transcrição: a resposta pode estar nele e a equipe já ouviu — não pergunta (issue #480)
+  const { data: dele } = await supabaseAdmin
+    .from("bot_observations")
+    .select("content")
+    .eq("chatwoot_conversation_id", entrada.chatwootConversationId)
+    .eq("author", "cliente")
+    .gte("created_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString());
+  if (naoPerguntarPorAudioNaoLido(((dele ?? []) as Bloco[]).map((o) => String(o.content ?? "")))) {
+    evento("bot_pergunta_adiada_audio", { conversa: entrada.chatwootConversationId, duvida: pergunta.codigo });
+    return null;
+  }
   try {
     const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
     if (cfg?.value?.ativo === false) return null;
