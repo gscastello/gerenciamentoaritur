@@ -241,3 +241,31 @@ Deno.test("#419 'Na volta, onde lhe busco?' → a resposta é o embarque da Volt
   assertEquals(r.map((p) => p.direcao), ["ida", "volta"]);
   assertEquals(datasEscritas([{ texto: "Tem vaga para São Luís agora tarde", em: "2026-11-11T14:00:00Z" }]), ["2026-11-11"]);
 });
+
+Deno.test("#476 respondeu 'Indo pra São Luís' ao 'Ida ou Volta?': a dúvida do lugar vira a Volta", async () => {
+  const { sentidoEscrito } = await import("./pedidoDoCliente.ts");
+  const rua: LugarNasCidades = {
+    tipo: "rua",
+    chave: "rua exemplo",
+    nome: "Rua Exemplo",
+    em_pirapemas: true,
+    em_cantanhede: false,
+    reservas_pirapemas: 5,
+    reservas_cantanhede: 0,
+    junto_pirapemas: null,
+    junto_cantanhede: null,
+  } as LugarNasCidades;
+  // caso real (fictício): rua de Pirapemas com um condomínio de mesmo nome em São Luís
+  const falas = ["Quero ir com você domingo", "Somos duas", "Na rua Exemplo ao lado da casa 72", "Ok", "Indo pra  são  Luís"];
+  const sentido = sentidoEscrito(falas);
+  assertEquals(sentido, "volta");
+  assertEquals(sentidoPeloLugarDoEmbarque({ lugares: [rua], bairroDeSaoLuisEscrito: false, lugarDeSaoLuis: true, sentidoEscrito: sentido }), {
+    cidade: "pirapemas",
+    nome: "Rua Exemplo",
+    reservas: 5,
+  });
+  // antes da resposta (sem sentido escrito) continua perguntando
+  assertEquals(sentidoPeloLugarDoEmbarque({ lugares: [rua], bairroDeSaoLuisEscrito: false, lugarDeSaoLuis: true, sentidoEscrito: sentidoEscrito(falas.slice(0, 4)) }), "duvida");
+  // escreveu Ida: não vira Volta
+  assertEquals(sentidoPeloLugarDoEmbarque({ lugares: [rua], bairroDeSaoLuisEscrito: true, lugarDeSaoLuis: false, sentidoEscrito: "ida" }), "duvida");
+});

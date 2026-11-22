@@ -595,6 +595,7 @@ async function lerEGravar(
           lugares,
           bairroDeSaoLuisEscrito: !!bairroEscrito(textosDoCliente, ctx.bairrosTabela),
           lugarDeSaoLuis: !!bairroPelosLugares((deSaoLuis ?? []) as LugarDeSaoLuis[]),
+          sentidoEscrito: pedidos.length === 1 ? sentidoEscrito(textosDoCliente) : null,
         });
         if (decisao === "duvida") {
           ondeEmbarca.add(p);

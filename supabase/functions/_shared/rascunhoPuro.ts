@@ -889,10 +889,14 @@ export function sentidoPeloLugarDoEmbarque(p: {
   lugares: LugarNasCidades[];
   bairroDeSaoLuisEscrito: boolean;
   lugarDeSaoLuis: boolean;
+  /** o sentido que o CLIENTE escreveu ("indo pra São Luís" = Volta), se escreveu */
+  sentidoEscrito?: "ida" | "volta" | null;
 }): { cidade: "pirapemas" | "cantanhede"; nome: string; reservas: number } | "duvida" | null {
   const achado = cidadePelaBase(p.lugares);
   if (!achado || achado.reservas < 3) return null;
-  if (p.bairroDeSaoLuisEscrito || p.lugarDeSaoLuis) return "duvida";
+  // o cliente escreveu que vai PARA São Luís (ou respondeu assim ao "Ida ou Volta?" do bot): o que
+  // lembra São Luís é o destino, e o embarque é a cidade do lugar (issue #476)
+  if (p.bairroDeSaoLuisEscrito || p.lugarDeSaoLuis) return p.sentidoEscrito === "volta" ? achado : "duvida";
   return achado;
 }
 

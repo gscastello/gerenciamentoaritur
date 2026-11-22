@@ -60,3 +60,36 @@ test("Agendado sem reserva: o motorista não vê a faixa", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Agenda$/ }).first()).toBeVisible();
   await expect(page.getByTestId("aviso-agendado-sem-reserva")).toHaveCount(0);
 });
+
+// Issue #476: tocar no passageiro da faixa abre a Pendências já na pendência dele, destacada; a
+// "Revisão: dia ou sentido errado" também entra na faixa.
+test("Faixa vermelha: tocar no passageiro abre a pendência dele", async ({ page }) => {
+  const REVISAO = {
+    ...AGENDADO,
+    id: "tkt-revisao",
+    assunto: "Revisão: dia ou sentido errado",
+    detail:
+      'data: está "2026-11-23", parece "2026-11-22" (alta) — "quero ir domingo". O domingo é 22/11.',
+    cliente: "Ana Teste",
+    created_at: new Date(Date.now() - 3600000).toISOString(),
+  };
+  await mockSupabase(page, { role: "atendente", pendencias: [AGENDADO, OUTRA, REVISAO] });
+  await page.goto("/");
+  const faixa = page.getByTestId("aviso-agendado-sem-reserva");
+  await expect(faixa).toContainText("Ana Teste");
+  await expect(faixa).toContainText("Dia na Agenda 23/11, pedido 22/11");
+
+  await faixa.getByTestId("abrir-pendencia").filter({ hasText: "Ana Teste" }).click();
+  const destacada = page.locator('[data-destacada="true"]');
+  await expect(destacada).toHaveCount(1);
+  await expect(destacada).toHaveAttribute("data-pendencia", "tkt-revisao");
+  await expect(destacada).toContainText("Revisão: dia ou sentido errado");
+  await expect(destacada).toBeInViewport();
+
+  // a outra da faixa também abre a dela
+  await faixa.getByTestId("abrir-pendencia").filter({ hasText: "Maria Teste" }).click();
+  await expect(page.locator('[data-destacada="true"]')).toHaveAttribute(
+    "data-pendencia",
+    "tkt-agendado",
+  );
+});

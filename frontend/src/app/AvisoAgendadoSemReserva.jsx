@@ -21,7 +21,20 @@ function haQuanto(em, agora) {
   return h < 48 ? `há ${h} h` : `há ${Math.round(h / 24)} dias`;
 }
 
-export function AvisoAgendadoSemReserva({ pendencias, onResolver, agora = Date.now() }) {
+/** A linha de um passageiro: quem, o motivo e há quanto tempo. */
+function Linha({ p, agora }) {
+  return (
+    <>
+      <b style={{ color: C.ink }}>{p.quem}</b>
+      {p.parte ? " (parte do pedido)" : ""}
+      {p.tipo === "pedido" ? " (pediu, sem Agendado)" : ""}: {p.motivo}
+      {p.em && <span style={{ color: C.inkFaint }}> · {haQuanto(p.em, agora)}</span>}
+    </>
+  );
+}
+
+// `onAbrir(id)`: tocar no passageiro abre a Pendências já na pendência dele (issue #476)
+export function AvisoAgendadoSemReserva({ pendencias, onResolver, onAbrir, agora = Date.now() }) {
   const lista = agendadosSemReserva(pendencias);
   const n = lista.length;
   return (
@@ -41,10 +54,26 @@ export function AvisoAgendadoSemReserva({ pendencias, onResolver, agora = Date.n
             <ul className="mt-1.5 space-y-1">
               {lista.slice(0, MOSTRAR).map((p) => (
                 <li key={p.id} className="text-[12.5px] leading-snug" style={{ color: C.inkSoft }}>
-                  <b style={{ color: C.ink }}>{p.quem}</b>
-                  {p.parte ? " (parte do pedido)" : ""}
-                  {p.tipo === "pedido" ? " (pediu, sem Agendado)" : ""}: {p.motivo}
-                  {p.em && <span style={{ color: C.inkFaint }}> · {haQuanto(p.em, agora)}</span>}
+                  {onAbrir ? (
+                    <button
+                      type="button"
+                      onClick={() => onAbrir(p.id)}
+                      data-testid="abrir-pendencia"
+                      className="btn-press toque-at w-full min-h-[44px] -my-1 py-1 text-left flex items-center gap-1 rounded-lg"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <Linha p={p} agora={agora} />
+                      </span>
+                      <ChevronRight
+                        size={15}
+                        className="shrink-0"
+                        style={{ color: C.red }}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : (
+                    <Linha p={p} agora={agora} />
+                  )}
                 </li>
               ))}
             </ul>

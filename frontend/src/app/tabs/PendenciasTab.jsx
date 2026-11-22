@@ -1,15 +1,27 @@
 import { Check, MessageCircle, PhoneCall, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mensagemAmigavel } from "../../lib/erros.js";
-import { Skeleton } from "../../ui/motion/index.js";
+import { Skeleton, useReducedMotion } from "../../ui/motion/index.js";
 import { C, Card, ErrorBanner, Header, TextInput, digitos, tempoRelativo } from "../tabShared.jsx";
 
 /* ===================== PENDÊNCIAS (fila de atendimento) ===================== */
 // Atendimentos que precisam da equipe: o bot de WhatsApp transferiu, ou
 // alguém abriu à mão ("ligar de volta para o cliente X"). Cada pendência
 // nova também toca o sino (database/32).
-export default function PendenciasTab({ pend }) {
+export default function PendenciasTab({ pend, deepLink = null }) {
   const [novo, setNovo] = useState({ subject: "", detail: "", phone: "" });
+  // tocar num passageiro da faixa vermelha abre aqui, na pendência dele (issue #476)
+  const destacada = deepLink?.kind === "pendencia" ? deepLink.id : null;
+  const reduzir = useReducedMotion();
+  const cartoes = useRef({});
+  const existe = !!destacada && pend.pendencias.some((p) => p.id === destacada);
+  useEffect(() => {
+    if (!destacada || !existe) return;
+    cartoes.current[destacada]?.scrollIntoView?.({
+      block: "center",
+      behavior: reduzir ? "auto" : "smooth",
+    });
+  }, [destacada, existe, reduzir, deepLink?.at]);
   const [formAberto, setFormAberto] = useState(false);
   const [erro, setErro] = useState("");
   const limparTodas = async () => {
@@ -149,65 +161,93 @@ export default function PendenciasTab({ pend }) {
             </button>
           </div>
         )}
+        {destacada && !existe && !pend.loading && (
+          <p
+            className="text-[13px]"
+            style={{ color: C.inkFaint }}
+            data-testid="pendencia-ja-resolvida"
+          >
+            Essa pendência já foi resolvida.
+          </p>
+        )}
         {pend.pendencias.map((p) => {
           const tel = digitos(p.phone);
+          const aberta = p.id === destacada;
           return (
-            <Card key={p.id}>
-              <div
-                className="text-sm font-semibold"
-                style={{ color: C.ink, overflowWrap: "anywhere" }}
-              >
-                {p.assunto}
-              </div>
-              {p.detail && (
+            <div
+              key={p.id}
+              ref={(el) => {
+                cartoes.current[p.id] = el;
+              }}
+              data-pendencia={p.id}
+              data-destacada={aberta ? "true" : undefined}
+              className="rounded-2xl"
+              style={
+                aberta
+                  ? {
+                      boxShadow: `0 0 0 2px ${C.red}`,
+                      transition: reduzir ? "none" : "box-shadow 240ms var(--ease-out-quart)",
+                    }
+                  : undefined
+              }
+            >
+              <Card>
                 <div
-                  className="text-xs mt-0.5"
-                  style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
+                  className="text-sm font-semibold"
+                  style={{ color: C.ink, overflowWrap: "anywhere" }}
                 >
-                  {p.detail}
+                  {p.assunto}
                 </div>
-              )}
-              <div
-                className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5"
-                style={{ color: C.inkFaint }}
-              >
-                <span>{fonte(p.source)}</span>
-                {p.cliente && <span>· {p.cliente}</span>}
-                {p.phone && <span>· {p.phone}</span>}
-                <span>· {tempoRelativo(p.created_at)}</span>
-                {p.aberto_por && <span>· por {p.aberto_por}</span>}
-              </div>
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                {tel && (
-                  <a
-                    href={`https://wa.me/55${tel}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
-                    style={{ background: C.panel2, color: C.ink }}
+                {p.detail && (
+                  <div
+                    className="text-xs mt-0.5"
+                    style={{ color: C.inkSoft, overflowWrap: "anywhere" }}
                   >
-                    <MessageCircle size={13} /> Abrir no WhatsApp
-                  </a>
+                    {p.detail}
+                  </div>
                 )}
-                {tel && (
-                  <a
-                    href={`tel:${tel}`}
-                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
-                    style={{ background: C.panel2, color: C.inkSoft }}
-                  >
-                    <PhoneCall size={13} /> Ligar
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() => resolver(p.id)}
-                  className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
-                  style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+                <div
+                  className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5"
+                  style={{ color: C.inkFaint }}
                 >
-                  <Check size={13} /> Resolver
-                </button>
-              </div>
-            </Card>
+                  <span>{fonte(p.source)}</span>
+                  {p.cliente && <span>· {p.cliente}</span>}
+                  {p.phone && <span>· {p.phone}</span>}
+                  <span>· {tempoRelativo(p.created_at)}</span>
+                  {p.aberto_por && <span>· por {p.aberto_por}</span>}
+                </div>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {tel && (
+                    <a
+                      href={`https://wa.me/55${tel}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                      style={{ background: C.panel2, color: C.ink }}
+                    >
+                      <MessageCircle size={13} /> Abrir no WhatsApp
+                    </a>
+                  )}
+                  {tel && (
+                    <a
+                      href={`tel:${tel}`}
+                      className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                      style={{ background: C.panel2, color: C.inkSoft }}
+                    >
+                      <PhoneCall size={13} /> Ligar
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => resolver(p.id)}
+                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
+                    style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
+                  >
+                    <Check size={13} /> Resolver
+                  </button>
+                </div>
+              </Card>
+            </div>
           );
         })}
       </div>

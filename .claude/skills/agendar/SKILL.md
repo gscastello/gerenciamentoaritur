@@ -65,8 +65,16 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
   de lugares das cidades (ruas, referências, "casa de fulano", povoados; aprende sozinha com as
   reservas): `select * from fn_lugares_no_texto('<endereço>');`. Lugar nas duas cidades ou só na
   outra: avise o dono no relatório. Só referência ("perto da choperia do Riba"): a coluna `junto_*`
-  diz a rua que costuma vir junto; use para propor ao dono, nunca para decidir sozinho. Data relativa ("amanhã", "segunda") pelo
-  calendário de hoje em Fortaleza; se ambígua, pergunte.
+  diz a rua que costuma vir junto; use para propor ao dono, nunca para decidir sozinho.
+- **Data relativa ("amanhã", "domingo", "segunda") se calcula NO BANCO, nunca de cabeça** (issue #476: "domingo"
+  escrito na quinta 19/11 foi lançado na segunda 23/11 e a passageira não viajou). Conta a partir do dia em que a
+  MENSAGEM foi escrita (não de hoje), em Fortaleza:
+  ```sql
+  -- dia da mensagem e os próximos 7 dias, com o nome do dia (escolha a linha do dia pedido)
+  select d::date, to_char(d, 'TMDay') from generate_series('<AAAA-MM-DD da mensagem>'::date, '<mesma data>'::date + 7, interval '1 day') d;
+  ```
+  "Domingo" escrito num domingo pode ser hoje ou o próximo: pergunte ao dono. No relatório, escreva sempre o dia da semana junto
+  com a data ("domingo, 22/11"), para o dono conferir. Se ambígua, pergunte.
 - **Ponto de embarque** (`route_points.code`, conferir no banco, `active`):
   ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno` e `outro` (Outros); volta `pirapemas`,
   `cantanhede`. **Qualquer outro local de embarque** (BR, Posto Carone, aeroporto, beira da estrada…) é

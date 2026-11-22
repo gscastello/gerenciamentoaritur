@@ -514,3 +514,26 @@ export const FERRAMENTA_DA_REVISAO = {
     required: ["achados"],
   },
 };
+
+/** Assunto da pendência do revisor que põe o passageiro em risco (vai para a faixa vermelha — issue #476). */
+export const ASSUNTO_DIA_OU_SENTIDO = "Revisão: dia ou sentido errado";
+
+/**
+ * O revisor achou DIA ou SENTIDO errado, com certeza alta, numa viagem de hoje até 7 dias (issue #476)?
+ * Esse erro deixa o passageiro fora da lista da viagem: a pendência vai para a faixa vermelha, não
+ * para a fila comum (onde uma foi fechada sem corrigir e a passageira não viajou).
+ */
+export function pendenciaDeDiaOuSentido(
+  pendencias: Pick<Achado, "reserva_id" | "campo" | "certeza">[],
+  reservas: { id: string; data: string }[],
+  hoje: string,
+): boolean {
+  const limite = new Date(`${hoje}T12:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() + 7);
+  const ate = limite.toISOString().slice(0, 10);
+  return (pendencias ?? []).some((a) => {
+    if ((a.campo !== "data" && a.campo !== "sentido") || a.certeza !== "alta") return false;
+    const r = (reservas ?? []).find((x) => x.id === a.reserva_id);
+    return !!r && r.data >= hoje && r.data <= ate;
+  });
+}

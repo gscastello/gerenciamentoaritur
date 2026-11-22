@@ -6,8 +6,11 @@
 // faixa fixa no topo do app: quem é, o motivo em poucas palavras e há quanto tempo. Regra pura.
 // Também entram o "Pedido sem reserva" da sentinela (issue #461: o cliente pediu e ninguém marcou)
 // e o "IA fora do ar" (issue #462: a IA recusou ou caiu e os Agendados não estão sendo lidos).
+// E a "Revisão: dia ou sentido errado" (issue #476): o revisor achou, com certeza alta, a reserva
+// no dia ou no sentido errado — o passageiro não está na lista da viagem que pediu.
 
-const RE_DO_AGENDADO = /^(Agendado ☑️|Pedido sem reserva|IA fora do ar)/;
+const RE_DO_AGENDADO =
+  /^(Agendado ☑️|Pedido sem reserva|IA fora do ar|Revisão: dia ou sentido errado)/;
 const RODAPE = /\s*Confira a conversa e lance pela Agenda.*$/s;
 
 /** A pendência põe passageiro em risco: Agendado que não lançou, pedido sem reserva ou IA fora do ar? */
@@ -36,19 +39,42 @@ function telefoneLegivel(fone) {
   return `${ddd} ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
 }
 
-/** "agendado" (marca que não lançou), "pedido" (sentinela) ou "ia" (IA fora do ar). */
+/** "agendado" (marca que não lançou), "pedido" (sentinela), "revisao" (dia/sentido errado) ou "ia". */
 function tipoDaPendencia(p) {
   const assunto = String(p?.assunto ?? p?.subject ?? "");
   if (assunto.startsWith("IA fora do ar")) return "ia";
   if (assunto.startsWith("Pedido sem reserva")) return "pedido";
+  if (assunto.startsWith("Revisão:")) return "revisao";
   return "agendado";
+}
+
+const ddmm = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v.slice(8, 10)}/${v.slice(5, 7)}` : v);
+
+/**
+ * O que o revisor achou, curto: 'data: está "2026-11-23", parece "2026-11-22" (alta) — …' vira
+ * "Dia na Agenda 23/11, pedido 22/11". Sem esse formato, a primeira linha do detalhe.
+ */
+export function motivoDaRevisao(detalhe) {
+  const linha = String(detalhe ?? "").split("\n")[0];
+  const m = linha.match(/^(data|sentido): está "([^"]*)", parece "([^"]*)"/);
+  if (!m) return motivoCurto(linha);
+  const campo = m[1] === "data" ? "Dia" : "Sentido";
+  return `${campo} na Agenda ${ddmm(m[2])}, pedido ${ddmm(m[3])}`;
 }
 
 /** O título da faixa conforme o que está aberto. */
 export function tituloDaFaixa(lista) {
   const passageiros = (lista ?? []).filter((p) => p.tipo !== "ia").length;
   const soAgendado = (lista ?? []).every((p) => p.tipo === "agendado");
+  const soRevisao =
+    passageiros > 0 &&
+    (lista ?? []).filter((p) => p.tipo !== "ia").every((p) => p.tipo === "revisao");
   if (!passageiros) return "A IA do bot está fora do ar: os Agendados não estão sendo lidos";
+  if (soRevisao) {
+    return passageiros === 1
+      ? "1 reserva está no dia ou no sentido errado"
+      : `${passageiros} reservas estão no dia ou no sentido errado`;
+  }
   if (soAgendado) {
     return passageiros === 1
       ? "1 passageiro marcado como Agendado ☑️ ainda não tem lugar na Agenda"
@@ -73,7 +99,7 @@ export function agendadosSemReserva(pendencias) {
         tipoDaPendencia(p) === "ia"
           ? "Bot"
           : String(p.cliente ?? "").trim() || telefoneLegivel(p.phone) || "Passageiro sem nome",
-      motivo: motivoCurto(p.detail),
+      motivo: tipoDaPendencia(p) === "revisao" ? motivoDaRevisao(p.detail) : motivoCurto(p.detail),
       parte: /só parte/i.test(String(p.assunto ?? p.subject ?? "")),
       em: p.created_at ?? null,
     }))
