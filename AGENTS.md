@@ -578,6 +578,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `meta.resolvida_por` — reserva lançada depois, viagem que passou, revisor que conferiu de novo sem achar nada,
   pendência do revisor substituída, diagnóstico que não existe mais ou repetido. A sentinela só avisa quando o cliente
   pediu para reservar com todas as letras ou escreveu onde embarca (`clienteConcretizou`); pergunta solta não.
+  **Dia ou sentido errado** (issue #476, `database/127`): o revisor que acha erro de DIA ou SENTIDO com certeza alta
+  numa viagem até 7 dias abre "Revisão: dia ou sentido errado" (`pendenciaDeDiaOuSentido`), que vai para a faixa
+  vermelha ("Dia na Agenda 23/11, pedido 22/11"); as regras de fechamento das revisões valem para as duas. Tocar no
+  passageiro da faixa abre a Pendências já na pendência dele, destacada. No leitor, o sentido que o cliente escreveu
+  ("indo pra São Luís", inclusive em resposta ao "Ida ou Volta?" do bot) resolve a dúvida do lugar do embarque
+  (`sentidoPeloLugarDoEmbarque`). No `/agendar`, data relativa é calculada no banco, com o dia da semana no relatório.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
