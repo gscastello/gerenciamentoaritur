@@ -257,3 +257,32 @@ Deno.test("#470 áudio ainda sem transcrição: o bot espera o texto antes de re
   assertEquals(soAudioSemTranscricao(""), false);
   assertEquals(soAudioSemTranscricao(undefined), false);
 });
+
+Deno.test("#482 transcrição feita pelo bot: o que baixar, onde pôr o texto e como a leitura vê", async () => {
+  const { audiosSemTexto, anexosComTranscricao, comTranscricoesDoBot, transcricaoRepetida, AUDIO_SEM_TRANSCRICAO } = await import(
+    "./chatwootPayload.ts"
+  );
+  const audio = { file_type: "audio", data_url: "https://exemplo.test/a.ogg", content_type: "audio/ogg" };
+  // só o áudio sem texto, com URL
+  assertEquals(audiosSemTexto([audio, { file_type: "audio", transcribed_text: "já tem" }, { file_type: "image", data_url: "https://x" }]), [
+    { indice: 0, url: "https://exemplo.test/a.ogg", tipo: "audio/ogg" },
+  ]);
+  assertEquals(audiosSemTexto([{ file_type: "audio" }]), []);
+  assertEquals(audiosSemTexto(null), []);
+  // o texto do bot entra no lugar do transcribed_text e vira "[áudio: …]" como o do Chatwoot
+  const anexos = anexosComTranscricao([audio], new Map([[0, "Quero uma passagem pra amanhã"]]));
+  assertEquals(textoComContatos("", anexos), "[áudio: Quero uma passagem pra amanhã]");
+  // a leitura pela API do Chatwoot (áudio ainda vazio lá) passa a ver o que o bot transcreveu
+  const lidas = comTranscricoesDoBot(
+    [{ id: 10, content: "", attachments: [audio] }, { id: 11, content: "Rua das Flores", attachments: [] }],
+    new Map([[10, "[áudio: Quero uma passagem pra amanhã]"], [11, "[áudio: não deve trocar]"]]),
+  );
+  assertEquals(lidas[0], { id: 10, content: "[áudio: Quero uma passagem pra amanhã]", attachments: [] });
+  assertEquals(lidas[1].content, "Rua das Flores");
+  // observação ainda sem transcrição: fica como está
+  assertEquals(comTranscricoesDoBot([{ id: 10, attachments: [audio] }], new Map([[10, AUDIO_SEM_TRANSCRICAO]]))[0].attachments, [audio]);
+  // a transcrição do Chatwoot que chega depois da do bot não é edição
+  assertEquals(transcricaoRepetida("[áudio: Quero ir amanhã]", [{ file_type: "audio", transcribed_text: "Quero ir amanhã" }]), true);
+  assertEquals(transcricaoRepetida("Quero ir amanhã", [{ file_type: "audio" }]), false);
+  assertEquals(transcricaoRepetida("[áudio: Quero ir amanhã]", []), false);
+});

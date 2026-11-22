@@ -11,6 +11,8 @@
 
 import { diaCivil } from "../_shared/agentePuro.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
+import { anexosComTranscricao, audiosSemTexto, textoComContatos } from "../_shared/chatwootPayload.ts";
+import { transcreverAudiosAntigos } from "../_shared/transcricao.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import {
   clienteConcretizou,
@@ -116,6 +118,17 @@ Deno.serve(async (req: Request) => {
   if (autorizada !== true) return json({ success: false, message: "Não autorizado." }, 401);
 
   const corpo = await req.json().catch(() => ({}));
+  // áudios antigos sem texto de uma conversa: o bot transcreve agora (issue #482)
+  if (Number(corpo?.transcrever)) {
+    const feitas = await transcreverAudiosAntigos(
+      Number(corpo.transcrever),
+      (cw) => chatwootClient.listarMensagens(cw, 6),
+      textoComContatos,
+      audiosSemTexto,
+      anexosComTranscricao,
+    );
+    return json({ success: true, transcritas: feitas });
+  }
   const simular = corpo?.simular === true;
   // validação com um caso real: {"simular": true, "conversa": 722, "em": "2026-11-17T15:00:00Z"}
   if (simular && Number(corpo?.conversa) && !Number.isNaN(Date.parse(String(corpo?.em ?? "")))) {

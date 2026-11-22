@@ -42,12 +42,16 @@ import { runWithBotContext } from "../_shared/botContext.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import {
   AUDIO_SEM_TRANSCRICAO,
+  anexosComTranscricao,
+  audiosSemTexto,
   audiosTranscritos,
   extrairAtividade,
   extrairMensagemDeCliente,
   extrairPedidoDeTeste,
   textoComContatos,
+  transcricaoRepetida,
 } from "../_shared/chatwootPayload.ts";
+import { transcreverAudio, transcricaoPropriaLigada } from "../_shared/transcricao.ts";
 import { responderComAgente } from "../_shared/agente.ts";
 import { assinaturaChatwootValida } from "../_shared/chatwootSignature.ts";
 import { handleIncomingMessage } from "../_shared/conversationEngine.ts";
@@ -107,6 +111,47 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
   }
 }
 
+/** Trabalho que continua depois da resposta ao Chatwoot (o timeout dele é de ~5 s). */
+function emSegundoPlano(p: Promise<unknown>) {
+  const seguro = p.catch((err) => evento("bot_erro", { etapa: "segundo_plano", erro: String(err).slice(0, 300) }));
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(seguro);
+}
+
+/** Tempo para a transcrição do Chatwoot chegar antes de o bot transcrever sozinho (ela leva 4–11 s). */
+const ESPERA_DO_CHATWOOT_MS = 12_000;
+
+/**
+ * O Chatwoot não transcreveu o áudio (o crédito do Captain acabou em 22/11 — issue #482): o bot
+ * baixa e transcreve. O texto segue o mesmo caminho da transcrição do Chatwoot (message_updated):
+ * troca a observação no lugar e, se for do cliente, passa pelo que uma mensagem de texto passa.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
+async function transcreverSeOChatwootNaoTranscrever(body: any) {
+  const audios = audiosSemTexto(body?.attachments);
+  if (!audios.length || body.private || !transcricaoPropriaLigada()) return;
+  const tipo = body.message_type;
+  const doCliente = tipo === "incoming" || tipo === 0;
+  const daEquipe = (tipo === "outgoing" || tipo === 1) && body.sender?.type !== "agent_bot";
+  if (!doCliente && !daEquipe) return;
+  await new Promise((r) => setTimeout(r, ESPERA_DO_CHATWOOT_MS));
+  const { data: obs } = await supabaseAdmin
+    .from("bot_observations")
+    .select("content")
+    .eq("chatwoot_message_id", Number(body.id))
+    .maybeSingle();
+  // sem observação (não é desta caixa) ou o Chatwoot já transcreveu: nada a fazer
+  if (!obs || !String(obs.content ?? "").includes(AUDIO_SEM_TRANSCRICAO)) return;
+  const textos = new Map<number, string>();
+  for (const a of audios) {
+    const t = await transcreverAudio(a.url, a.tipo, Number(body.conversation?.id));
+    if (t) textos.set(a.indice, t);
+  }
+  if (!textos.size) return;
+  await processar({ ...body, event: "message_updated", attachments: anexosComTranscricao(body.attachments, textos) });
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
 async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
   // teste do dono: nota privada "#testar …" (issue #278)
@@ -125,6 +170,8 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
       // o Chatwoot está transcrevendo os áudios? (issue #460)
       audios_transcritos: audiosTranscritos(body.attachments),
     });
+    // áudio sem texto: se o Chatwoot não transcrever em alguns segundos, o bot transcreve (issue #482)
+    if (!opcoes.transcricao) emSegundoPlano(transcreverSeOChatwootNaoTranscrever(body));
   }
   // mensagem EDITADA pelo cliente ou pela equipe (issue #417): o texto novo entra na conversa.
   // A transcrição do áudio também chega assim, segundos depois (issue #460).
@@ -152,6 +199,8 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
         }
         return;
       }
+      // o bot já transcreveu e o Chatwoot mandou a dele depois: não é edição do cliente (issue #482)
+      if (original && transcricaoRepetida(original.content, body.attachments)) return;
       if (original && original.content !== textoAtualizado) {
         await registrarObservacao({
           conversationId: original.conversation_id ?? undefined,
