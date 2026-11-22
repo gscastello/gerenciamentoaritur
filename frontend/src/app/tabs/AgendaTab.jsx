@@ -292,6 +292,7 @@ export default function AgendaTab({
     pagamento,
     comprovante,
     cancel,
+    tornarEnderecoPadrao = false,
   }) => {
     setAcaoErro("");
     try {
@@ -302,7 +303,8 @@ export default function AgendaTab({
         setEditando(null);
         return;
       }
-      await R.editReservationFull(id, {
+      const editada = await R.editReservationFull(id, {
+        tornarEnderecoPadrao,
         move: move
           ? {
               trip_date: move.tripDate,
@@ -332,9 +334,14 @@ export default function AgendaTab({
           contato && "contato",
           pagamento && "pagamento",
           comprovante && "comprovante",
+          tornarEnderecoPadrao && "endereco_padrao",
         ].filter(Boolean),
       });
       setEditando(null);
+      if (editada?.enderecoPadraoErro)
+        setAcaoErro(
+          `Reserva salva, mas o endereço padrão não foi gravado: ${editada.enderecoPadraoErro}`,
+        );
     } catch (e) {
       setAcaoErro(mensagemAmigavel(e, "Não foi possível salvar a edição."));
     }
@@ -1712,6 +1719,29 @@ function ViagemOperacional({
 // campos que não mexem em vaga. Quantidade, nome e telefone ficam para a
 // fase 2 (precisam de RPC própria / edição de cliente). Status muda pelos
 // botões da linha, não aqui.
+/**
+ * "Tornar endereço padrão" (issue #474): o embarque e o desembarque desta reserva viram o endereço
+ * de costume do passageiro no sentido dela — o mesmo que fixar pela ficha do passageiro.
+ */
+function CaixaEnderecoPadrao({ direcao, marcada, onChange }) {
+  return (
+    <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: C.inkSoft }}>
+      <input
+        type="checkbox"
+        className="mt-0.5"
+        checked={marcada}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        Tornar este o endereço padrão da {direcao === "volta" ? "Volta" : "Ida"} deste passageiro
+        <span className="block" style={{ color: C.inkFaint }}>
+          Embarque e desembarque desta reserva passam a vir preenchidos nas próximas.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function EditarReservaModal({ reserva, onClose, onSave, trips }) {
   const [f, setF] = useState({ ...reserva, anotacao: anotacaoBase(reserva) });
   const [salvando, setSalvando] = useState(false);
@@ -1796,7 +1826,16 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
           }
         : null;
 
-    await onSave({ id: reserva.id, move, details, quantidade, contato, pagamento, comprovante });
+    await onSave({
+      id: reserva.id,
+      move,
+      details,
+      quantidade,
+      contato,
+      pagamento,
+      comprovante,
+      tornarEnderecoPadrao: !!f.tornarPadrao,
+    });
     setSalvando(false);
   };
 
@@ -1981,6 +2020,13 @@ function EditarReservaModal({ reserva, onClose, onSave, trips }) {
             />
             Comprovante recebido
           </label>
+          {reserva.customer_id && (
+            <CaixaEnderecoPadrao
+              direcao={f.direcao || "ida"}
+              marcada={!!f.tornarPadrao}
+              onChange={(v) => setF({ ...f, tornarPadrao: v })}
+            />
+          )}
         </div>
         <div className="flex items-center justify-between mt-4">
           <button
@@ -2048,6 +2094,7 @@ export function NovaReservaModal({
     telefone2: "",
     comoPendente: false,
     foraLotacao: extraInicial,
+    tornarPadrao: false,
   });
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -2172,6 +2219,7 @@ export function NovaReservaModal({
       extraData: f.foraLotacao
         ? { origem: "agendamento_manual", fora_lotacao: true }
         : { origem: "agendamento_manual" },
+      tornarEnderecoPadrao: !!f.tornarPadrao,
     };
   };
 
@@ -2201,7 +2249,16 @@ export function NovaReservaModal({
         status: res?.status || status,
         duplicada: res?.message === "duplicate_ignored",
       });
-      onClose({ ok: true, nome: f.nome.trim(), status: res?.status || status, data: f.data });
+      onClose({
+        ok: true,
+        nome: f.nome.trim(),
+        status: res?.status || status,
+        data: f.data,
+        // a reserva entrou; só o endereço padrão não (issue #474)
+        aviso: res?.enderecoPadraoErro
+          ? `O endereço padrão não foi gravado: ${res.enderecoPadraoErro}`
+          : null,
+      });
     } catch (e) {
       if (e?.code === "CAPACITY_OR_BUSINESS_RULE" && status !== "espera") {
         setOfereceEspera(true);
@@ -2500,6 +2557,16 @@ export function NovaReservaModal({
           />
           Deixar como pendente (não reserva a vaga ainda)
         </label>
+
+        {!extraInicial && (
+          <div className="mb-4">
+            <CaixaEnderecoPadrao
+              direcao={f.direcao}
+              marcada={f.tornarPadrao}
+              onChange={(v) => setF({ ...f, tornarPadrao: v })}
+            />
+          </div>
+        )}
 
         <div
           className="flex items-center justify-between text-xs mb-3 rounded-lg px-3 py-2"

@@ -1387,11 +1387,12 @@ function AppInner() {
                         setTab("lista");
                         setDeepLink({ kind: "data", data: r.data, at: Date.now() });
                         setAgendou(
-                          r.status === "pendente"
+                          (r.status === "pendente"
                             ? `${r.nome} agendado(a) como pendente.`
                             : r.status === "espera"
                               ? `${r.nome} entrou na lista de espera.`
-                              : `${r.nome} agendado(a) e confirmado(a).`,
+                              : `${r.nome} agendado(a) e confirmado(a).`) +
+                            (r.aviso ? ` ${r.aviso}` : ""),
                         );
                       }
                     }}
