@@ -108,7 +108,7 @@ async function alinharNomeDoContato(telefone: string, contatoId?: number, nomeAt
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: payload externo do Chatwoot
-async function processar(body: any) {
+async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
   // teste do dono: nota privada "#testar …" (issue #278)
   const teste = extrairPedidoDeTeste(body, INBOX_ID);
   if (teste) {
@@ -145,6 +145,11 @@ async function processar(body: any) {
       if (original && String(original.content ?? "").includes(AUDIO_SEM_TRANSCRICAO) && !textoAtualizado.includes(AUDIO_SEM_TRANSCRICAO)) {
         await supabaseAdmin.from("bot_observations").update({ content: textoAtualizado }).eq("id", original.id);
         evento("bot_audio_transcrito", { conversa: conv, autor });
+        // o que o cliente FALOU segue o caminho de uma mensagem de texto dele (issue #470): resposta do
+        // atendente no modo ia, releitura do Agendado pendente, reserva "a confirmar", SIM/NÃO da viagem
+        if (autor === "cliente") {
+          await processar({ ...body, event: "message_created", content: textoAtualizado, attachments: [] }, { transcricao: true });
+        }
         return;
       }
       if (original && original.content !== textoAtualizado) {
@@ -189,7 +194,9 @@ async function processar(body: any) {
   // e o que o próprio bot enviou. É assim que ele aprende como os clientes falam,
   // como a equipe atende e agenda e como a empresa funciona (issue #218).
   let observou = false;
-  if (atividade?.autor && atividade.texto && conversaEspelhada) {
+  if (opcoes.transcricao) {
+    observou = true; // a observação do áudio já foi trocada pela transcrição, no lugar
+  } else if (atividade?.autor && atividade.texto && conversaEspelhada) {
     await registrarObservacao({
       conversationId: conversaEspelhada,
       chatwootConversationId: atividade.chatwootConversationId,
@@ -299,7 +306,8 @@ async function processar(body: any) {
     () =>
       handleIncomingMessage({
         from: m.telefone,
-        waMessageId: `cw-${m.chatwootMessageId}`,
+        // a transcrição é outra entrada da mesma mensagem: o áudio (cw-<id>) já foi registrado
+        waMessageId: `cw-${m.chatwootMessageId}${opcoes.transcricao ? "-transcricao" : ""}`,
         text: m.texto,
         media: m.anexo ? { mediaId: m.anexo.url, kind: m.anexo.tipo, caption: m.texto } : undefined,
         raw: { chatwoot_message_id: m.chatwootMessageId, content: m.texto ?? null, anexo: m.anexo?.tipo ?? null },
