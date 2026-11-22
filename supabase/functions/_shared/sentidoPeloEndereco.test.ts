@@ -269,3 +269,16 @@ Deno.test("#476 respondeu 'Indo pra São Luís' ao 'Ida ou Volta?': a dúvida do
   // escreveu Ida: não vira Volta
   assertEquals(sentidoPeloLugarDoEmbarque({ lugares: [rua], bairroDeSaoLuisEscrito: true, lugarDeSaoLuis: false, sentidoEscrito: "ida" }), "duvida");
 });
+
+Deno.test("#476 o destino vence a palavra ida/volta", async () => {
+  const { sentidoEscrito } = await import("./pedidoDoCliente.ts");
+  // caso real (fictício): saindo de Pirapemas, a cliente chama de "ida" a viagem para São Luís
+  assertEquals(sentidoEscrito(["Queria marcar duas passagens pra amanhã", "Ida pra São Luís", "De Pirapemas"]), "volta");
+  // quem mora no interior chama de "volta" a viagem para casa
+  assertEquals(sentidoEscrito(["Quero a volta pra Pirapemas no sábado"]), "ida");
+  // sem destino, a palavra continua valendo
+  assertEquals(sentidoEscrito(["A volta é na terça"]), "volta");
+  assertEquals(sentidoEscrito(["A ida é segunda"]), "ida");
+  // os dois destinos na mesma mensagem: não decide por ela
+  assertEquals(sentidoEscrito(["Ida pra Pirapemas dia 20 e volta pra São Luís dia 22"]), null);
+});
