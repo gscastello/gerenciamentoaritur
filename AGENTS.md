@@ -584,6 +584,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   passageiro da faixa abre a Pendências já na pendência dele, destacada. No leitor, o sentido que o cliente escreveu
   ("indo pra São Luís", inclusive em resposta ao "Ida ou Volta?" do bot) resolve a dúvida do lugar do embarque
   (`sentidoPeloLugarDoEmbarque`). No `/agendar`, data relativa é calculada no banco, com o dia da semana no relatório.
+  **Dia dito pela equipe** (issue #478): a trava #417 (o cliente não escreveu o dia e mandou um áudio sem transcrição)
+  não segura o "Agendado ☑️" quando a EQUIPE escreveu um único dia ("só teremos vaga pra amanhã") e a leitura deu esse
+  dia (`diaDitoPelaEquipe`): lança com o aviso para conferir. Dois dias oferecidos, ou outro dia lido: pendente.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
