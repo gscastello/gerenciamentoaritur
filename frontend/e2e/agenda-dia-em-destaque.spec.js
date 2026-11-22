@@ -80,10 +80,15 @@ test("Agenda: tocar num dia da semana leva a Agenda para ele", async ({ page }) 
     .click();
   const titulo = page.getByTestId("dia-da-agenda").filter({ visible: true });
   await expect(titulo).toHaveAttribute("data-dia", iso(outro));
-  await expect(titulo).toContainText(
-    iso(outro) === iso(somar(alvo, 1)) ? "Amanhã" : diaDaSemana(outro).slice(0, 3),
-    { ignoreCase: true },
-  );
+  // no domingo o "outro" é o sábado: a Agenda abre no dia de hoje, então ele é "Ontem"
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
+  const rotulo =
+    iso(outro) === iso(somar(new Date(`${hoje}T12:00:00Z`), -1))
+      ? "Ontem"
+      : iso(outro) === iso(somar(alvo, 1))
+        ? "Amanhã"
+        : diaDaSemana(outro).slice(0, 3);
+  await expect(titulo).toContainText(rotulo, { ignoreCase: true });
 });
 
 test("Agenda: o calendário do mês leva a outro mês e volta para hoje", async ({ page }) => {
