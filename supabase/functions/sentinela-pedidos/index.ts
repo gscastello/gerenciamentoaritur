@@ -122,7 +122,9 @@ Deno.serve(async (req: Request) => {
   if (Number(corpo?.transcrever)) {
     const feitas = await transcreverAudiosAntigos(
       Number(corpo.transcrever),
-      (cw) => chatwootClient.listarMensagens(cw, 6),
+      // o Chatwoot não deixa o bot listar as mensagens (401 "not authorized for bots"): a lista vem no
+      // pedido, lida pela sessão de quem está no Chatwoot; sem ela, tenta pela API
+      (cw) => Array.isArray(corpo?.mensagens) ? Promise.resolve(corpo.mensagens) : chatwootClient.listarMensagens(cw, 6),
       textoComContatos,
       audiosSemTexto,
       anexosComTranscricao,

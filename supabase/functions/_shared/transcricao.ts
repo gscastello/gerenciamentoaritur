@@ -34,10 +34,20 @@ const EXTENSAO: Record<string, string> = {
   "audio/webm": "webm",
 };
 
+/** Só baixa arquivo do próprio Chatwoot (o anexo vem de lá). */
+export function urlDoChatwoot(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (u.hostname === "chatwoot.com" || u.hostname.endsWith(".chatwoot.com"));
+  } catch {
+    return false;
+  }
+}
+
 /** Baixa o áudio e transcreve. null se não deu (sem chave, falha do download ou da OpenAI). */
 export async function transcreverAudio(url: string, tipo: string | null, conversa?: number): Promise<string | null> {
   const chave = Deno.env.get("OPENAI_API_KEY");
-  if (!chave) return null;
+  if (!chave || !urlDoChatwoot(url)) return null;
   const inicio = Date.now();
   try {
     const baixado = await fetch(url, { signal: AbortSignal.timeout(20000) });
