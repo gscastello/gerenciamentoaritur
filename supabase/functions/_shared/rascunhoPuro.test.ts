@@ -1179,3 +1179,15 @@ Deno.test("#465: voto da maioria entre leituras que variam", () => {
   assertEquals(leituraDaMaioria([[ida], [volta], []]), null);
   assertEquals(leituraDaMaioria([[], []]), 0);
 });
+
+Deno.test("#478 dia dito pela equipe (um só) + áudio sem transcrição: o Agendado lança com aviso", async () => {
+  const { diaDitoPelaEquipe } = await import("./rascunhoPuro.ts");
+  // caso real (fictício): "Só teremos vaga pra amanhã" → áudio sem transcrição → "Agendado ☑️"
+  assertEquals(diaDitoPelaEquipe(["2026-11-23"], "2026-11-23"), true);
+  assertEquals(diaDitoPelaEquipe(["2026-11-23", "2026-11-23"], "2026-11-23"), true);
+  // a equipe ofereceu dois dias, ou a leitura deu outro: continua pendente
+  assertEquals(diaDitoPelaEquipe(["2026-11-23", "2026-11-24"], "2026-11-23"), false);
+  assertEquals(diaDitoPelaEquipe(["2026-11-23"], "2026-11-24"), false);
+  assertEquals(diaDitoPelaEquipe([], "2026-11-23"), false);
+  assertEquals(diaDitoPelaEquipe(["2026-11-23"], null), false);
+});

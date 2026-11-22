@@ -1467,3 +1467,17 @@ export function leituraDaMaioria(leituras: PedidoExtraido[][]): number | null {
   }
   return null;
 }
+
+/**
+ * O dia veio da EQUIPE e é um só ("Só teremos vaga pra amanhã"), e a leitura deu esse dia (issue #478)?
+ * Então a mensagem que o bot não lê (áudio sem transcrição) não segura o "Agendado ☑️": quem marcou
+ * ouviu o áudio. Mais de um dia oferecido, ou a leitura em outro dia: continua pendente (#417).
+ */
+export function diaDitoPelaEquipe(datasDaEquipe: string[], dataLida: string | null | undefined): boolean {
+  const unicas = [...new Set((datasDaEquipe ?? []).filter(Boolean))];
+  return unicas.length === 1 && !!dataLida && unicas[0] === dataLida;
+}
+
+/** Aviso na reserva quando o dia veio da equipe e o cliente mandou algo que o bot não leu. */
+export const AVISO_DIA_DA_EQUIPE =
+  "Dia dito pela equipe; o cliente mandou um áudio (ou mensagem) que o bot não leu: confira o dia no WhatsApp.";
