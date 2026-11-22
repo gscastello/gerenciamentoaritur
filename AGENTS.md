@@ -592,6 +592,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **Dia dito pela equipe** (issue #478): a trava #417 (o cliente não escreveu o dia e mandou um áudio sem transcrição)
   não segura o "Agendado ☑️" quando a EQUIPE escreveu um único dia ("só teremos vaga pra amanhã") e a leitura deu esse
   dia (`diaDitoPelaEquipe`): lança com o aviso para conferir. Dois dias oferecidos, ou outro dia lido: pendente.
+  **Transcrição parada** (issue #480, `database/128`): a transcrição gasta o crédito do Captain (Chatwoot → Cobrança,
+  300 por mês, renova dia 26); acabou em 22/11 às 13 h. Com áudio do cliente sem transcrição nas últimas 72 h, o bot
+  não pergunta nada ao cliente (`naoPerguntarPorAudioNaoLido`: a resposta pode estar no áudio, que a equipe ouviu) e a
+  pendência fica para a equipe. 5+ áudios em 2 h sem nenhum transcrito abrem a pendência "Chatwoot não está
+  transcrevendo os áudios" (`fn_avisar_transcricao_parada`, 10 em 10 min), que fecha sozinha quando volta.
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
