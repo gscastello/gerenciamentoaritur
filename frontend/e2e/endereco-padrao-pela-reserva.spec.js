@@ -37,7 +37,13 @@ test("Agendar passagem com 'Tornar endereço padrão': depois da reserva, o ende
 
 test("Agendar passagem sem marcar a caixa não mexe no endereço padrão", async ({ page }) => {
   let criou = false;
-  await mockSupabase(page, { role: "admin", occupancy: {}, onCreate: () => (criou = true) });
+  await mockSupabase(page, {
+    role: "admin",
+    occupancy: {},
+    onCreate: () => {
+      criou = true;
+    },
+  });
   const padrao = chamadasDe(page, "rpc_tornar_endereco_padrao");
   await page.goto("/");
   await page.getByRole("button", { name: "Nova reserva" }).click();

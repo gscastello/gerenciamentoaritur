@@ -121,12 +121,7 @@ describe("edição do cadastro do passageiro sem 'sem permissão' (issue #474)",
       "default_route_point_code",
       "default_payment_method",
     ];
-    const migracao = readFileSync(
-      resolve(aqui, "../../../../database/126-cadastro-e-endereco-padrao.sql"),
-      "utf8",
-    );
-    for (const c of ["phone_secondary", "default_route_point_code", "default_payment_method"])
-      expect(migracao).toContain(c);
+    // (o banco confere o mesmo na própria migração 126: ela falha se faltar o grant de uma coluna)
     expect(colunas.filter((c) => !permitidas.includes(c))).toEqual([]);
   });
 });
