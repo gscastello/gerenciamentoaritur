@@ -389,7 +389,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Cliente recorrente / endereço de costume** (issue #228, `WHATSAPP.md §6d`): por cliente e sentido, fixado pela
   equipe (Passageiros) ou o mais frequente no histórico (`rpc_endereco_de_costume`, regra única no banco). No app dá
   *Agendar Ida/Volta* com a nova reserva já preenchida; no bot é a ferramenta `endereco_de_costume`, que propõe o
-  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data. **Passageiro
+  pedido pronto **sem citar valor** e só cria depois do "sim" do cliente. Nada disso decide preço, vaga ou data.
+  **Pela reserva** (issue #474, `database/126`): em Agendar passagem e Editar reserva, a caixa "Tornar este o endereço
+  padrão da Ida/Volta" copia o embarque e o desembarque da reserva para o costume do passageiro no sentido dela
+  (`rpc_tornar_endereco_padrao`, mesma regra de `rpc_definir_endereco_de_costume`); a reserva salva mesmo se o padrão
+  falhar, e a tela avisa. A edição do cadastro em Passageiros grava telefone secundário, ponto e pagamento padrão: essas
+  colunas estão no grant por coluna de `customers` (trava na própria migração e teste `enderecoPadrao.test.js`). **Passageiro
   recorrente** (issue #416, `sentidoPeloHabito`): "guarde uma vaga pra mim amanhã" sem sentido dito → o sentido sai do
   hábito (já tem reserva no dia → o outro sentido; senão o oposto da última viagem; costume de um lado só → esse) e
   embarque/desembarque vêm do costume: o Agendado lança, sem pendência.

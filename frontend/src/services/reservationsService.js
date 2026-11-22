@@ -8,7 +8,7 @@
 // papel enxerga).
 
 import { buscarTodasAsPaginas } from "../lib/paginas.js";
-import { supabase, getCurrentUserId, ServiceError, isRetryableError } from "../lib/supabaseClient";
+import { ServiceError, getCurrentUserId, isRetryableError, supabase } from "../lib/supabaseClient";
 
 // A leitura da UI passa pela view `v_reservations_flat`, que já entrega o
 // objeto "achatado" com os MESMOS nomes de campo que o App.jsx usa
@@ -40,7 +40,7 @@ export const reservationsService = {
         .select(FLAT_SELECT)
         .eq("data", tripDate)
         .order("criadoEm", { ascending: true }),
-      { context: "listByDate" }
+      { context: "listByDate" },
     );
   },
 
@@ -71,7 +71,7 @@ export const reservationsService = {
           // ordem estável entre as páginas
           .order("id", { ascending: true }),
       ),
-      { context: "listWindow" }
+      { context: "listWindow" },
     );
   },
 
@@ -89,7 +89,7 @@ export const reservationsService = {
           .order("criadoEm", { ascending: true })
           .order("id", { ascending: true }),
       ),
-      { context: "listPending" }
+      { context: "listPending" },
     );
   },
 
@@ -127,7 +127,10 @@ export const reservationsService = {
       p_customer_phone_secondary: payload.customerPhoneSecondary ?? null,
     });
     if (error) {
-      throw new ServiceError(`create: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+      throw new ServiceError(`create: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
     }
     // a função RPC nunca lança exceção de negócio pro cliente — ela devolve
     // { success:false, message } quando a capacidade foi excedida.
@@ -144,7 +147,46 @@ export const reservationsService = {
         code: "CAPACITY_OR_BUSINESS_RULE",
       });
     }
-    return data; // { success, reservation_id, status, message }
+    // "Tornar endereço padrão" (issue #474): a reserva já está salva; se o padrão falhar, ela fica e a
+    // tela avisa (nunca relançar a reserva por isso)
+    if (payload.tornarEnderecoPadrao && data.reservation_id) {
+      data.enderecoPadraoErro = await reservationsService.tornarEnderecoPadraoSemFalhar(
+        data.reservation_id,
+      );
+    }
+    return data; // { success, reservation_id, status, message, enderecoPadraoErro? }
+  },
+
+  /**
+   * Copia o embarque e o desembarque da reserva para o endereço de costume do passageiro no sentido
+   * dela (database/126, issue #474). Mesma regra de fixar o costume pela ficha do passageiro.
+   */
+  async tornarEnderecoPadrao(reservationId) {
+    const { data, error } = await supabase.rpc("rpc_tornar_endereco_padrao", {
+      p_reservation_id: reservationId,
+    });
+    if (error) {
+      throw new ServiceError(`tornarEnderecoPadrao: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    }
+    if (!data?.success) {
+      throw new ServiceError(data?.message || "Não foi possível tornar o endereço padrão.", {
+        retryable: false,
+      });
+    }
+    return data;
+  },
+
+  /** Igual a `tornarEnderecoPadrao`, mas devolve a mensagem do erro (ou null) em vez de lançar. */
+  async tornarEnderecoPadraoSemFalhar(reservationId) {
+    try {
+      await reservationsService.tornarEnderecoPadrao(reservationId);
+      return null;
+    } catch (e) {
+      return e?.message || "Não foi possível tornar o endereço padrão.";
+    }
   },
 
   /** Confirma uma reserva pendente/em espera — só aqui a vaga é de fato reservada. */
@@ -155,8 +197,13 @@ export const reservationsService = {
       p_route_point_code: routePointCode ?? null,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`confirm: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível confirmar.", { retryable: false });
+    if (error)
+      throw new ServiceError(`confirm: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível confirmar.", { retryable: false });
     return data;
   },
 
@@ -167,8 +214,15 @@ export const reservationsService = {
       p_reservation_id: reservationId,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`restore: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível restaurar a reserva.", { retryable: false });
+    if (error)
+      throw new ServiceError(`restore: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível restaurar a reserva.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -180,8 +234,15 @@ export const reservationsService = {
       p_extra: extra,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`setExtra: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar a passagem.", { retryable: false });
+    if (error)
+      throw new ServiceError(`setExtra: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível alterar a passagem.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -191,7 +252,11 @@ export const reservationsService = {
       p_reservation_id: reservationId,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`cancel: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
+    if (error)
+      throw new ServiceError(`cancel: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
     return data;
   },
 
@@ -203,8 +268,15 @@ export const reservationsService = {
       p_status: status,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`setPassengersStatus: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível atualizar o status.", { retryable: false });
+    if (error)
+      throw new ServiceError(`setPassengersStatus: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível atualizar o status.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -218,8 +290,15 @@ export const reservationsService = {
       p_new_route_point_code: routePointCode,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`move: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não há vaga na viagem de destino.", { retryable: false });
+    if (error)
+      throw new ServiceError(`move: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não há vaga na viagem de destino.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -233,7 +312,7 @@ export const reservationsService = {
    */
   async editReservationFull(
     reservationId,
-    { details, quantity, contact, move, paid, proof, extraData, status } = {},
+    { details, quantity, contact, move, paid, proof, extraData, status, tornarEnderecoPadrao } = {},
   ) {
     const actor = await getCurrentUserId();
     const { data, error } = await supabase.rpc("rpc_edit_reservation", {
@@ -261,6 +340,10 @@ export const reservationsService = {
         retryable: false,
       });
     }
+    // depois da edição: o endereço que ficou na reserva vira o padrão (issue #474)
+    if (tornarEnderecoPadrao)
+      data.enderecoPadraoErro =
+        await reservationsService.tornarEnderecoPadraoSemFalhar(reservationId);
     return data;
   },
 
@@ -274,7 +357,7 @@ export const reservationsService = {
         .eq("id", reservationId)
         .select()
         .single(),
-      { context: "updateDetails" }
+      { context: "updateDetails" },
     );
   },
 
@@ -290,8 +373,16 @@ export const reservationsService = {
       p_quantity: quantity,
       p_actor: actor,
     });
-    if (error) throw new ServiceError(`setQuantity: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível mudar a quantidade (viagem pode estar lotada).", { retryable: false });
+    if (error)
+      throw new ServiceError(`setQuantity: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(
+        data?.message || "Não foi possível mudar a quantidade (viagem pode estar lotada).",
+        { retryable: false },
+      );
     return data;
   },
 
@@ -307,8 +398,15 @@ export const reservationsService = {
       p_area: area ?? null,
       p_detail: detail ?? null,
     });
-    if (error) throw new ServiceError(`setDropoff: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar o desembarque.", { retryable: false });
+    if (error)
+      throw new ServiceError(`setDropoff: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível salvar o desembarque.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -321,16 +419,30 @@ export const reservationsService = {
       p_reservation_id: reservationId,
       p_mode: mode,
     });
-    if (error) throw new ServiceError(`setPickupTransport: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", { retryable: false });
+    if (error)
+      throw new ServiceError(`setPickupTransport: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", {
+        retryable: false,
+      });
     return data;
   },
 
   /** Grava a ordem da lista "Buscar em casa" — `orderedIds` na ordem desejada (database/56). */
   async reorderPickup(orderedIds) {
     const { data, error } = await supabase.rpc("rpc_reorder_pickup", { p_ids: orderedIds });
-    if (error) throw new ServiceError(`reorderPickup: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível salvar a ordem.", { retryable: false });
+    if (error)
+      throw new ServiceError(`reorderPickup: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível salvar a ordem.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -340,8 +452,15 @@ export const reservationsService = {
       p_ids: ids,
       p_mode: mode,
     });
-    if (error) throw new ServiceError(`setPickupTransportMany: ${error.message}`, { cause: error, retryable: isRetryableError(error) });
-    if (!data?.success) throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", { retryable: false });
+    if (error)
+      throw new ServiceError(`setPickupTransportMany: ${error.message}`, {
+        cause: error,
+        retryable: isRetryableError(error),
+      });
+    if (!data?.success)
+      throw new ServiceError(data?.message || "Não foi possível alterar quem busca.", {
+        retryable: false,
+      });
     return data;
   },
 
@@ -351,9 +470,8 @@ export const reservationsService = {
     const patch = { updated_by: actor };
     if (name != null) patch.name = name;
     if (phone != null) patch.phone = phone;
-    return handle(
-      supabase.from("customers").update(patch).eq("id", customerId).select().single(),
-      { context: "updateCustomerContact" }
-    );
+    return handle(supabase.from("customers").update(patch).eq("id", customerId).select().single(), {
+      context: "updateCustomerContact",
+    });
   },
 };
