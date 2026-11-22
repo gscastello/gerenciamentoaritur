@@ -78,3 +78,18 @@ Deno.test("#467 sentinela: pergunta solta não é pedido; endereço ou pedido co
   assertEquals(clienteConcretizou([f("cliente", "Quero marcar uma passagem de São Luís a Pirapemas", 0), f("equipe", "Agendado ☑️", 1), f("cliente", "Amanhã", 2)]), true);
   assertEquals(clienteConcretizou([f("cliente", "Tem vaga amanhã?", 0), f("equipe", "Agendado ☑️", 1)]), true);
 });
+
+Deno.test("#482 pedido novo depois do 'lotado' não é pedido encerrado", () => {
+  const f = (quem: string, texto: string, min: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 22, 18, min)).toISOString() });
+  // caso real (fictício): amanhã lotado; o cliente pede terça e a equipe diz "ok"
+  const falas = [
+    f("cliente", "[áudio: Marcar duas passagens pra Pirapemas pra amanhã.]", 0),
+    f("equipe", "[áudio: Então, pra amanhã a gente não tem mais vaga, já tá lotado.]", 10),
+    f("equipe", "[áudio: Tem vaga só na terça agora.]", 11),
+    f("cliente", "[áudio: Pois terça-feira eu vou com vocês, já deixa minhas duas passagens agendadas aí, tá bom?]", 30),
+    f("equipe", "Ok", 31),
+  ];
+  assertEquals(pedidoEncerrado(falas), null);
+  // o lotado depois do pedido continua encerrando
+  assertEquals(pedidoEncerrado(falas.slice(0, 2)), "a equipe disse que não há vaga");
+});

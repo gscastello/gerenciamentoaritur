@@ -597,6 +597,14 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   não pergunta nada ao cliente (`naoPerguntarPorAudioNaoLido`: a resposta pode estar no áudio, que a equipe ouviu) e a
   pendência fica para a equipe. 5+ áudios em 2 h sem nenhum transcrito abrem a pendência "Chatwoot não está
   transcrevendo os áudios" (`fn_avisar_transcricao_parada`, 10 em 10 min), que fecha sozinha quando volta.
+  **Transcrição própria** (issue #482, `_shared/transcricao.ts`, secret `OPENAI_API_KEY` cadastrado pelo dono em 22/11):
+  o Claude não ouve áudio. Áudio sem texto 12 s depois de chegar → o bot baixa (só de `*.chatwoot.com`) e transcreve
+  na OpenAI (`gpt-4o-mini-transcribe`, ~US$ 0,003/min; `TRANSCRICAO_MODELO` troca). O texto segue o caminho da
+  transcrição do Chatwoot (observação trocada no lugar; do cliente, passa pelo que uma mensagem de texto passa); a do
+  Chatwoot que chegar depois não vira "editada" (`transcricaoRepetida`). **O Chatwoot não deixa o Agent Bot listar
+  mensagens** (401 "not authorized for bots"): a leitura do Agendado usa o histórico do banco, onde a transcrição entra.
+  Áudios antigos sem texto: `sentinela-pedidos` com `{"transcrever": <conversa>, "mensagens": [...]}` (a lista vem da
+  sessão de quem está no Chatwoot).
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,
