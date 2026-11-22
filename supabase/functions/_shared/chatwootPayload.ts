@@ -266,3 +266,52 @@ export function extrairPedidoDeTeste(body: any, inboxIdEsperado = 0): PedidoDeTe
   const pergunta = conteudo.replace(RE_TESTE, "").trim();
   return { chatwootConversationId, telefone, pergunta: pergunta || null };
 }
+
+// ---------------------------------------------------------------------------
+// Transcrição feita pelo próprio bot (issue #482): quando o Chatwoot não transcreve (o crédito do
+// Captain acabou em 22/11), o bot transcreve o áudio e guarda o texto na observação da mensagem.
+// ---------------------------------------------------------------------------
+
+// biome-ignore lint/suspicious/noExplicitAny: anexos externos do Chatwoot
+type Anexo = Record<string, any>;
+
+/** Os áudios sem texto que dá para baixar: a URL e o tipo do arquivo. */
+export function audiosSemTexto(attachments: unknown): { indice: number; url: string; tipo: string | null }[] {
+  if (!Array.isArray(attachments)) return [];
+  return (attachments as Anexo[]).flatMap((a, indice) =>
+    a?.file_type === "audio" && !String(a.transcribed_text ?? "").trim() && /^https:\/\//.test(String(a.data_url ?? ""))
+      ? [{ indice, url: String(a.data_url), tipo: a.content_type ? String(a.content_type) : null }]
+      : []
+  );
+}
+
+/** Os anexos com o texto que o bot transcreveu no lugar do `transcribed_text` que faltava. */
+export function anexosComTranscricao(attachments: unknown, textos: Map<number, string>): Anexo[] {
+  if (!Array.isArray(attachments)) return [];
+  return (attachments as Anexo[]).map((a, i) => (textos.get(i)?.trim() ? { ...a, transcribed_text: textos.get(i)!.trim() } : a));
+}
+
+/**
+ * As mensagens lidas do Chatwoot com a transcrição que o BOT fez (guardada na observação): o
+ * Chatwoot continua mostrando o áudio vazio, mas a leitura do Agendado precisa do que foi falado.
+ * `transcritas`: id da mensagem → texto da observação (só as que já têm "[áudio: …]").
+ */
+export function comTranscricoesDoBot<T extends { id?: number; attachments?: unknown; content?: unknown }>(
+  mensagens: T[],
+  transcritas: Map<number, string>,
+): T[] {
+  return (mensagens ?? []).map((m) => {
+    const texto = m?.id != null ? transcritas.get(Number(m.id)) : undefined;
+    const audioSemTexto = Array.isArray(m?.attachments) &&
+      (m.attachments as Anexo[]).some((a) => a?.file_type === "audio" && !String(a.transcribed_text ?? "").trim());
+    if (!texto || !texto.includes("[áudio:") || !audioSemTexto) return m;
+    // o texto da observação já traz o que foi escrito, os cards de contato e o áudio transcrito
+    return { ...m, content: texto, attachments: [] };
+  });
+}
+
+/** O Chatwoot mandou a transcrição DEPOIS da que o bot já fez: não é edição do cliente. */
+export function transcricaoRepetida(textoGuardado: unknown, attachments: unknown): boolean {
+  return String(textoGuardado ?? "").includes("[áudio:") &&
+    Array.isArray(attachments) && (attachments as Anexo[]).some((a) => a?.file_type === "audio");
+}

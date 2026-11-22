@@ -37,6 +37,7 @@ import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 import { getBotContext } from "./botContext.ts";
 import { blocoDasLicoes, blocoDoClienteAtual } from "./botLicoes.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { mensagensComTranscricoesDoBot } from "./transcricao.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
@@ -209,7 +210,8 @@ async function carregarConversa(
   mensagemId: number,
 ): Promise<{ historico: MensagemDaConversa[]; cedeu: boolean }> {
   try {
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 2);
+    // com o que o bot transcreveu dos áudios que o Chatwoot não transcreveu (issue #482)
+    const brutas = await mensagensComTranscricoesDoBot(await chatwootClient.listarMensagens(chatwootConversationId, 2));
     return { historico: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch (err) {
     evento("bot_aviso", { aviso: "historico_pelo_banco", erro: String(err).slice(0, 200) });

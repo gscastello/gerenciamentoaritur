@@ -31,6 +31,7 @@ import {
   type LugarDeSaoLuis,
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { mensagensComTranscricoesDoBot } from "./transcricao.ts";
 import {
   type AtualizacaoLida,
   FERRAMENTA_ATUALIZACAO,
@@ -140,7 +141,8 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
     // 4 páginas: além do pedido atual, as conversas anteriores mostram onde o cliente costuma embarcar
     // 6 páginas: o pedido atual inteiro e as conversas anteriores (onde o cliente costuma embarcar) — issue #303
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 6);
+    // com o que o bot transcreveu dos áudios que o Chatwoot não transcreveu (issue #482)
+    const brutas = await mensagensComTranscricoesDoBot(await chatwootClient.listarMensagens(chatwootConversationId, 6));
     return { mensagens: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch {
     const { data } = await supabaseAdmin
@@ -1618,7 +1620,7 @@ export async function simularAgendado(c: {
   const ate = Date.parse(c.marcaEm) + 30_000;
   let mensagens: MensagemDaConversa[];
   try {
-    mensagens = converterMensagensDoChatwoot(await chatwootClient.listarMensagens(c.chatwootConversationId, 6));
+    mensagens = converterMensagensDoChatwoot(await mensagensComTranscricoesDoBot(await chatwootClient.listarMensagens(c.chatwootConversationId, 6)));
   } catch {
     const { data } = await supabaseAdmin
       .from("bot_observations")
