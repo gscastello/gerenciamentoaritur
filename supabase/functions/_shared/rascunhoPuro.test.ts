@@ -114,6 +114,18 @@ Deno.test("sem endereço nem ponto: não vira rascunho", () => {
   });
 });
 
+Deno.test("#504 'para hoje' sem sentido, com o Agendado: a única viagem de hoje que ainda sai", () => {
+  const hoje = ctx.hoje;
+  // 07:38: a Ida já saiu, a Volta ainda sai → o sentido vem só da regra (Volta); o que faltar é outro motivo
+  const r = validarPedidoExtraido({ data: hoje, bairro: "Anil" }, { ...ctx, horaAgora: "07:38", hojeDito: true, agendado: true });
+  assert(r.ok || r.motivo !== "sem_sentido", JSON.stringify(r));
+  if (r.ok) assertEquals(r.rascunho.direction, "volta");
+  // sem o Agendado, ou de madrugada (as duas ainda saem), ou de noite (nenhuma sai): continua sem sentido
+  assertEquals(validarPedidoExtraido({ data: hoje, bairro: "Anil" }, { ...ctx, horaAgora: "07:38", hojeDito: true }), { ok: false, motivo: "sem_sentido" });
+  assertEquals(validarPedidoExtraido({ data: hoje, bairro: "Anil" }, { ...ctx, horaAgora: "04:00", hojeDito: true, agendado: true }), { ok: false, motivo: "sem_sentido" });
+  assertEquals(validarPedidoExtraido({ data: hoje, bairro: "Anil" }, { ...ctx, horaAgora: "19:00", hojeDito: true, agendado: true }), { ok: false, motivo: "sem_sentido" });
+});
+
 Deno.test("sem sentido e sem ponto conhecido: não vira rascunho", () => {
   assertEquals(validarPedidoExtraido({ data: "2026-11-10", bairro: "Anil" }, ctx), { ok: false, motivo: "sem_sentido" });
   assertEquals(validarPedidoExtraido({ data: "2026-11-10", ponto: "marte" }, ctx), { ok: false, motivo: "sem_sentido" });
@@ -1132,9 +1144,20 @@ Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido, antes d
   assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, base), null);
   assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, horaAgora: "15:10" }), null);
   assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, horaAgora: null }), null);
-  // pedido que começou ontem: o dia pode ser outro
+  // pedido que começou ontem DEPOIS da Volta de ontem (19h) e Agendado hoje antes da Volta sair: só a de hoje
+  // é possível (issue #504, caso df956d96: "qual o endereço" às 23h, resposta às 5h, Agendado às 8h14)
   assertEquals(
     viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [{ em: "2026-11-16T22:00:00Z" }, ...doDia] }),
+    "2026-11-17",
+  );
+  // começou ontem ANTES da Volta de ontem sair (10h): podia ser a de ontem ou outra — o dia fica em aberto
+  assertEquals(
+    viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [{ em: "2026-11-16T13:00:00Z" }, ...doDia] }),
+    null,
+  );
+  // anteontem: o dia fica em aberto
+  assertEquals(
+    viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, mensagensDoCliente: [{ em: "2026-11-15T22:00:00Z" }, ...doDia] }),
     null,
   );
   // sem sentido, encomenda ou sem mensagem do cliente: nada

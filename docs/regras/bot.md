@@ -247,7 +247,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   dos casos: busca em casa num endereço de Pirapemas/Cantanhede é Volta (escrito ou só conhecido lá; com algo de São
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
-  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro. **Pendências do Agendado** (dono, 23/11 — issue #504): o pedido feito
+  DEPOIS da viagem anterior daquele sentido (ontem, depois da saída) com o Agendado hoje antes da viagem sair também é
+  a de hoje; o endereço de onde ele sai no interior ("Cantanhede rua do cajueiro…", "aqui em Pirapemas";
+  `embarqueNoInteriorEscrito`) é sentido escrito (Volta); a mensagem que o bot não leu não trava o dia que veio dessa
+  regra (a equipe viu e marcou; aviso "Conferir dia"); "para hoje" sem sentido, com o Agendado, quando só uma viagem
+  de hoje ainda sai, é essa; a correção do cliente ("marca só uma") vence a quantidade dita antes.
 - **Prova do atendente de IA** (etapa 2 do bot autônomo — issue #501, `provaDoAtendente.ts`, `provaPura.ts`,
   `database/133`): `avaliar-bot` com `{"atendente": true, "rodada": "atendente-…"}` refaz cada caso de `bot_casos` com o
   ATENDENTE (modo `ia`) no lugar da equipe. As mensagens do cliente até a marca entram em turnos (seguidas, sem a equipe

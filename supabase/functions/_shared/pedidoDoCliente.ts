@@ -511,6 +511,27 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   return unico(achados);
 }
 
+// rua, referência ou "aqui": o endereço de onde ele SAI
+const ENDERECO_DEPOIS = "(rua|r|travessa|tv|avenida|av|estrada|beco|praca|povoado|vila|bairro|perto|proximo|frente|ao lado|atras|casa|bar|mercado|mercearia|igreja|escola|posto|loja)";
+const RE_CIDADE_E_ENDERECO = new RegExp(` (pirapemas|cantanhede) ${ENDERECO_DEPOIS} `);
+// "moro em Cantanhede" fica de fora: quem mora lá também vai para casa (Ida)
+const RE_AQUI_NA_CIDADE = / (aqui|daqui|to|estou) (em|no|na|de)? ?(pirapemas|cantanhede) /;
+// "pra Pirapemas, rua X" é onde ele DESCE (Ida): a cidade não pode vir depois de uma palavra de destino
+const RE_DESTINO_ANTES = / (pra|pro|para|p|ate|ir|deixar|deixa|descer|desce|ficar|fico|chegar|chego|levar|voltar|volto) (em |no |na |a |o )?(pirapemas|cantanhede) /;
+
+/**
+ * O cliente escreveu o ENDEREÇO DE ONDE SAI no interior: "Cantanhede rua do cajueiro bar nascer do sol",
+ * "aqui em Pirapemas" — então é Volta (issue #504, caso 2d59a917). A cidade que vem depois de "pra", "até",
+ * "deixar", "ficar"… é destino e não conta; texto que também fala de São Luís como origem não conta.
+ */
+export function embarqueNoInteriorEscrito(textos: string[]): boolean {
+  return textos.some((t) => {
+    const n = ` ${normalizarTexto(t)} `;
+    if (RE_DESTINO_ANTES.test(n) || / (de|saindo de|sai de) (sao luis|slz|s luis|sao luiz) /.test(n)) return false;
+    return RE_CIDADE_E_ENDERECO.test(n) || RE_AQUI_NA_CIDADE.test(n);
+  });
+}
+
 const RESPOSTA_DE_SIM = /^(sim|isso|certo|exato|correto|isso mesmo|e isso|pode ser|ok|blz|beleza|s)\b/;
 
 /**
@@ -752,11 +773,27 @@ const NUMERO: Record<string, number> = {
   um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
 };
 
-/** "duas passagens", "3 pessoas", "uma vaga". Números diferentes = null. */
+/**
+ * "duas passagens", "3 pessoas", "uma vaga". Números diferentes = null. A CORREÇÃO do cliente vence o que
+ * ele disse antes (issue #504, caso a71f0cbb: "Pra 3 pessoas" e, horas depois, "Marca só uma tá" = 1).
+ */
 export function quantidadeEscrita(textos: string[]): number | null {
-  const achados: number[] = [];
+  let achados: number[] = [];
   for (const t of textos) {
     const n = ` ${normalizarTexto(t)} `;
+    // "marca só uma", "só 2 passagens", "só uma tá" — nunca "só uma dúvida"
+    const correcao =
+      n.match(/ (?:marca|marque|reserva|reserve|coloca|bota|deixa|agenda|agende) (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) /) ??
+      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passagens?|pessoas?|vagas?|ta|ok|mesmo|por favor)? ?$/) ??
+      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passagens?|pessoas?|vagas?) /);
+    if (correcao) {
+      const q = correcao[1];
+      const v = /^\d+$/.test(q) ? Number(q) : NUMERO[q];
+      if (v >= 1 && v <= 31) {
+        achados = [v];
+        continue;
+      }
+    }
     // "um lugar perto do posto" não é quantidade: só passagem, pessoa, vaga, passageiro, adulto
     for (const [, q] of n.matchAll(/ (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez) (passagens?|pessoas?|vagas?|passageiros?|adultos?) /g)) {
       const v = /^\d+$/.test(q) ? Number(q) : NUMERO[q];

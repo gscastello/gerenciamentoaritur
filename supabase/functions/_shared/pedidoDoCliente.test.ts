@@ -6,6 +6,7 @@ import {
   datasEscritas,
   pontoEscrito,
   quantidadeEscrita,
+  embarqueNoInteriorEscrito,
   sentidoEscrito,
 } from "./pedidoDoCliente.ts";
 
@@ -44,6 +45,12 @@ Deno.test("dia: conta do dia de cada mensagem; erros comuns; 'quarto' e 'Domingo
 Deno.test("quantidade: 'duas passagens', '3 pessoas'; 'um lugar perto do posto' não conta", () => {
   assertEquals(quantidadeEscrita(["gostaria de agendar duas passagens"]), 2);
   assertEquals(quantidadeEscrita(["somos 3 pessoas"]), 3);
+  // a correção do cliente vence o que ele disse antes (issue #504, caso a71f0cbb)
+  assertEquals(quantidadeEscrita(["Pra 3 pessoas", "Marca só uma tá", "É aqui na estrada matoes"]), 1);
+  assertEquals(quantidadeEscrita(["quero 3 passagens", "só 2 passagens"]), 2);
+  assertEquals(quantidadeEscrita(["duas passagens", "só uma"]), 1);
+  // "só uma dúvida" não é quantidade
+  assertEquals(quantidadeEscrita(["duas passagens", "só uma dúvida, que horas sai?"]), 2);
   assertEquals(quantidadeEscrita(["uma vaga por favor"]), 1);
   assertEquals(quantidadeEscrita(["é um lugar perto do posto"]), null);
   assertEquals(quantidadeEscrita(["duas passagens", "não, três pessoas"]), null); // mudou: não decide
@@ -484,4 +491,19 @@ Deno.test("#494: 'mesmo endereço que me deixou hoje' = sentido contrário da ú
   // viagem futura ou antiga não conta; sem a frase, nada
   assertEquals(viagemDeOndeDeixou(["mesmo lugar que me deixou"], [{ ...ida, data: "2026-11-22" }, { ...ida, data: "2026-11-01" }], "2026-11-20"), null);
   assertEquals(viagemDeOndeDeixou(["no mesmo endereço"], [ida], "2026-11-20"), null);
+});
+
+Deno.test("#504 sentido: endereço de onde ele sai no interior é Volta", () => {
+  assertEquals(embarqueNoInteriorEscrito(["Bom dia seu Ari tem vaga quero 2 Cantanhede rua do cajueiro bar nascer do sol manda a resposta"]), true);
+  assertEquals(embarqueNoInteriorEscrito(["to aqui em Pirapemas, perto da praça"]), true);
+  // quem mora lá também vai para casa (Ida); "Cantanhede no sábado" é data, não endereço
+  assertEquals(embarqueNoInteriorEscrito(["moro em Cantanhede"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["Cantanhede no sábado"]), false);
+  // destino no interior (Ida) não conta
+  assertEquals(embarqueNoInteriorEscrito(["quero ir pra Pirapemas, rua do cajueiro"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["me deixa em Cantanhede na rua da areia"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["saindo de São Luís, vou pra Cantanhede rua nova"]), false);
+  // só a cidade, sem endereço, não diz nada
+  assertEquals(embarqueNoInteriorEscrito(["Cantanhede"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["tem vaga amanhã?"]), false);
 });
