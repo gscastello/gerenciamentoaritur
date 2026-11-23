@@ -187,13 +187,13 @@ export const whatsappService = {
       .eq("direction", direction)
       .maybeSingle();
     if (error) throw new WhatsappServiceError(`Falha ao consultar disponibilidade: ${error.message}`);
-    // se a viagem ainda não existe no banco, a capacidade "provável" vem do veículo padrão —
-    // ainda assim é uma leitura real da tabela vehicles, não um número inventado
-    if (!data) {
-      const { data: defaultVehicle } = await supabaseAdmin.from("vehicles").select("capacity").eq("is_default", true).maybeSingle();
-      return { trip_date: tripDate, direction, capacity: defaultVehicle?.capacity ?? null, occupied: 0, available: defaultVehicle?.capacity ?? null, boarded: 0 };
-    }
-    return data;
+    // o que o bot SOZINHO pode vender (issue #502): vendas fechadas = 0; veículo do dia não confirmado = até
+    // settings.bot_autonomia.lugares_sem_confirmacao. Sem essa resposta, não vende (a trava do banco é a mesma)
+    const { data: doBot, error: erroBot } = await supabaseAdmin.rpc("fn_vagas_para_o_bot", { p_trip_date: tripDate, p_direction: direction });
+    if (erroBot || !doBot) throw new WhatsappServiceError(`Falha ao consultar as vagas do bot: ${erroBot?.message ?? "sem resposta"}`);
+    const vagas = { capacity: doBot.capacity ?? null, available: doBot.available ?? null };
+    if (!data) return { trip_date: tripDate, direction, occupied: 0, boarded: 0, ...vagas };
+    return { ...data, ...vagas };
   },
 
   /** Pontos de embarque configurados de verdade (nunca uma lista fixa no código do bot). */
