@@ -307,7 +307,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   transcrevendo os áudios" (`fn_avisar_transcricao_parada`, 10 em 10 min), que fecha sozinha quando volta.
   **Transcrição própria** (issue #482, `_shared/transcricao.ts`, secret `OPENAI_API_KEY` cadastrado pelo dono em 22/11):
   o Claude não ouve áudio. Áudio sem texto 12 s depois de chegar → o bot baixa (só de `*.chatwoot.com`) e transcreve
-  na OpenAI (`gpt-4o-mini-transcribe`, ~US$ 0,003/min; `TRANSCRICAO_MODELO` troca). O texto segue o caminho da
+  na OpenAI (`gpt-4o-mini-transcribe`, ~US$ 0,003/min; `TRANSCRICAO_MODELO` troca). As ruas da base vão junto como vocabulário
+  (`contextoDaTranscricao`, issue #499: "Eurico Ribeiro" virava "Rio Cur Ribeiro"). O texto segue o caminho da
   transcrição do Chatwoot (observação trocada no lugar; do cliente, passa pelo que uma mensagem de texto passa); a do
   Chatwoot que chegar depois não vira "editada" (`transcricaoRepetida`). **O Chatwoot não deixa o Agent Bot listar
   mensagens** (401 "not authorized for bots"): a leitura do Agendado usa o histórico do banco, onde a transcrição entra.
