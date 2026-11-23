@@ -76,8 +76,8 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
   "Domingo" escrito num domingo pode ser hoje ou o próximo: pergunte ao dono. No relatório, escreva sempre o dia da semana junto
   com a data ("domingo, 22/11"), para o dono conferir. Se ambígua, pergunte.
 - **Ponto de embarque** (`route_points.code`, conferir no banco, `active`):
-  ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno` e `outro` (Outros); volta `pirapemas`,
-  `cantanhede`. **Qualquer outro local de embarque** (BR, Posto Carone, aeroporto, beira da estrada…) é
+  ida `busca` (Buscar em Casa, por bairro), `rodoviaria`, `retorno`, `postocarone` (Posto Carone, ponto próprio desde 22/11) e `outro` (Outros); volta `pirapemas`,
+  `cantanhede`. **Qualquer outro local de embarque** (BR, aeroporto, beira da estrada…) é
   `outro`, com o local que o cliente citou em `p_pickup_detail` (ex.: "Aeroporto de São Luís", "BR — Maracanã").
   Nunca lance aeroporto ou BR como busca em casa.
 - **Retorno do aeroporto ≠ aeroporto.** "Retorno do aeroporto", "no retorno" = ponto `retorno` (R$ 60). Embarque

@@ -33,7 +33,7 @@ import {
 } from "./agentePuro.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
-import { type LugarNasCidades, lugarDeOutraCidade, telefoneDoPassageiro } from "./rascunhoPuro.ts";
+import { ehPostoCarone, type LugarNasCidades, lugarDeOutraCidade, PONTO_POSTO_CARONE, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { lugaresContraOSentido } from "./ladoDaRota.ts";
@@ -555,7 +555,13 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const pedido: PedidoValidado = valido.pedido;
 
   const pontos = (await whatsappService.listRoutePoints(pedido.direcao)) ?? [];
-  const ponto = acharPonto(pontos, pedido.ponto);
+  let ponto = acharPonto(pontos, pedido.ponto);
+  // "Outros · Posto Carone": o posto voltou a ser ponto próprio, com o horário dele (issue #486)
+  const carone = pontos.find((p) => p.code === PONTO_POSTO_CARONE);
+  if (carone && pedido.direcao === "ida" && (!ponto || ponto.code === "outro") && ehPostoCarone(pedido.enderecoEmbarque)) {
+    ponto = carone;
+    pedido.enderecoEmbarque = null;
+  }
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
 
   // Volta: o lugar citado (rua, referência, casa) só é conhecido na outra cidade? confirma com o cliente (issue #274)
@@ -643,7 +649,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
 
   const cidadeFora = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.enderecoEmbarque, pedido.bairro]);
   // cidade intermediária é válida (issue #326): R$ 50+ é normal; abaixo, só pede confirmação em dia cheio.
-  // "Outros" reúne locais de São Luís (BR, Posto Carone, aeroporto…) e não conta como cidade (#261)
+  // "Outros" reúne locais de São Luís (BR, aeroporto…) e não conta como cidade (#261)
   let fora = false;
   let motivoPendente: string | null = null;
   if (cidadeFora && semAcentoMinusculo(cidadeFora) !== "campestre") {

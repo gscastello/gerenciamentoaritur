@@ -5,6 +5,7 @@ import {
   Check,
   Clock,
   Copy,
+  Fuel,
   Home,
   Hourglass,
   MapPin,
@@ -1292,6 +1293,7 @@ const ICONES_DOS_PONTOS = {
   busca: Home,
   rodoviaria: Bus,
   retorno: Undo2,
+  postocarone: Fuel,
   pirapemas: Building2,
   cantanhede: Building2,
 };

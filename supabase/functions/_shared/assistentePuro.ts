@@ -485,7 +485,7 @@ Sentidos e horários
 - "Pra São Luís" é Volta (também encomenda); "pra Pirapemas/Cantanhede" é Ida. "Madrugada", "amanhã cedo", "5 horas" = Ida; "meio-dia", "à tarde", "após as 12" = Volta.
 - Pedido para HOJE depois que a Ida saiu (a Volta ainda sai) é a Volta de hoje quando o destino ou o embarque é do caminho (Miranda, Pirapemas, Cantanhede…); "hoje" nunca vira amanhã sem perguntar. Sem dia e as duas viagens de hoje já saíram: é amanhã. Data relativa de uma mensagem conta do dia em que ela foi escrita.
 Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto certo)
-- Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, outro (Outros: BR, Posto Carone, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
+- Ida: busca (Buscar em Casa, preço pelo bairro de São Luís), rodoviaria, retorno, postocarone (Posto Carone, ponto próprio com horário próprio), outro (Outros: BR, aeroporto, beira da estrada; o local vai no embarque). Nunca lance BR ou aeroporto como busca em casa.
 - Trechos da BR (Estiva, Pedrinhas, Oleama, Maracanã, Vila Itamar — os locais de Outros): a empresa NÃO busca em casa ali; o cliente espera na BR e a van para (ponto Outros com o local).
 - "Retorno do aeroporto" / "no retorno" é o ponto retorno. Dentro do aeroporto (terminal, chegando de voo) é outro com "Aeroporto de São Luís", que tem preço próprio. Na dúvida, pergunte qual.
 - Busca em casa precisa do bairro (nome da tabela). Bairro da tabela escrito no endereço ("…, Estrada da Maioba") é o bairro. Condomínio ou rua sem bairro: use onde_fica (São Luís aprende rua/condomínio → bairro com as reservas); sem certeza, pergunte, ou use "(bairro a confirmar)" e sem valor.
