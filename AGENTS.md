@@ -374,7 +374,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   em Sistema → Locais em Outros; ali o cliente espera na BR e a van para. Busca em casa num desses locais vira Outros (BR).
   **Posto Carone é ponto próprio** (dono, 22/11 — issue #486, `database/130`): volta a ser a categoria `postocarone`
   da Ida, com o horário dele em Sistema (05:40; na segunda, 04:40), e não fica mais em Outros, onde a mensagem dizia o
-  horário de Outros. "Outros · Posto Carone" vira o ponto no leitor e no atendimento (`ehPostoCarone`).
+  horário de Outros. "Outros · Posto Carone" vira o ponto **no código** (`ehPostoCarone`): as instruções do
+  leitor continuam dizendo "outro", porque trocar essa frase piorou leituras que nem falam do posto (issue #491).
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e
@@ -575,9 +576,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   SIM/NÃO). Só se ela não vier em 40 s (`ESPERA_DA_TRANSCRICAO_MS`, modo `ia`) o bot pede para escrever. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
   decide a reserva (tipo, dia, sentido, quantidade, ponto) → vale; discordam → terceira e vale a maioria; sem maioria →
   relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. **Cache
-  das instruções** (issue #488, `partesDaLeitura`, `sistemaComCache`): a parte FIXA da leitura e do revisor (regras,
-  pontos, desembarques, bairros) vai na frente com cache de 1 h e a VARIÁVEL (calendário, costume, instruções do
-  passageiro) depois. Nada que muda por conversa ou por hora entra na parte fixa, e as listas saem em ordem fixa;
+  das instruções** (issues #488 e #491, `partesDaLeitura`, `sistemaComCache`): as REGRAS da leitura e do revisor vão
+  na frente com cache de 1 h; o resto vem depois, na MESMA ordem de sempre (pôr as listas antes do calendário piorou a
+  leitura na avaliação). Nada que muda por conversa ou por hora entra na parte fixa;
   senão o cache não pega e o custo volta (confira `cache_lido` nos registros). Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
   (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,
