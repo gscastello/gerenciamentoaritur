@@ -28,6 +28,7 @@ import {
   numerosPorExtenso,
   problemasDaResposta,
   somarUso,
+  soCortesiaSemPergunta,
   ultimaFoiDoCliente,
   USO_ZERADO,
 } from "./agentePuro.ts";
@@ -43,7 +44,10 @@ import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 
-const MODELO = "claude-sonnet-5";
+// Sonnet 5.5 (issue #504): mesmo preço do Sonnet 5, com a leitura do cache pela metade; esforço médio,
+// como o assistente. Recusa por engano do classificador cai num modelo de reserva (fallback do servidor).
+const MODELO = "claude-sonnet-5-5";
+const ESFORCO = "medium";
 const MAX_VOLTAS = 8;
 const MAX_CORRECOES = 2;
 const ESPERA_PARA_JUNTAR_MS = Number(Deno.env.get("BOT_ESPERA_MS") ?? "5000");
@@ -129,20 +133,30 @@ LIMITES
 
 type Bloco = Record<string, any>;
 
-async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco }> {
+async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco; model?: string; stop_reason?: string; stop_details?: Bloco | null }> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
   for (let tentativa = 0; ; tentativa++) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+      },
       body: JSON.stringify({
         model: MODELO,
-        max_tokens: 1500,
+        max_tokens: 4000,
         system,
         tools: FERRAMENTAS,
         tool_choice: { type: "auto" },
         messages,
+        // a conversa e os resultados das ferramentas também ficam no cache: cada volta de ferramenta
+        // do mesmo turno relia tudo isso sem cache (issue #504); 5 min, depois das instruções de 1 h
+        cache_control: { type: "ephemeral" },
+        output_config: { effort: ESFORCO },
+        fallbacks: "default",
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -249,6 +263,11 @@ export async function rodarAgente(
   ctx: ContextoDoAgente,
   conversa: number,
 ): Promise<{ resposta: string; ferramentasUsadas: string[]; uso: typeof USO_ZERADO; correcoes: number; custoUsd: number }> {
+  // só "ok"/"obrigado"/👍 e nada perguntado: silêncio sem chamar o modelo (issue #504)
+  if (soCortesiaSemPergunta(historico)) {
+    ctx.silencio = true;
+    return { resposta: "", ferramentasUsadas: [], uso: USO_ZERADO, correcoes: 0, custoUsd: 0 };
+  }
   const textoDoHistorico = formatarHistorico(historico);
   const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
   const ferramentasUsadas: string[] = [];
@@ -267,7 +286,13 @@ export async function rodarAgente(
   for (let volta = 0; volta < MAX_VOLTAS; volta++) {
     const res = await chamarModelo(system, messages);
     uso = somarUso(uso, res.usage);
-    custo += custoUsd(MODELO, res.usage);
+    // o fallback pode ter respondido com outro modelo: o preço é o de quem respondeu
+    custo += custoUsd(String(res.model ?? MODELO), res.usage);
+    // recusa (sem modelo de reserva que aceite): sem resposta segura, a equipe assume
+    if (res.stop_reason === "refusal") {
+      evento("bot_agente_recusa", { conversa, categoria: res.stop_details?.category ?? null });
+      break;
+    }
     messages.push({ role: "assistant", content: res.content });
 
     const usos = res.content.filter((c) => c.type === "tool_use");

@@ -264,6 +264,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   quantidade, bairro, tipo ou **preço** diferente do que ficou, viagem não pedida, ou mexer numa reserva que já existia
   (para conferir). Respostas e ações de cada turno em `lido.turnos`/`lido.acoes`; custo em `tokens.custo_usd`
   (`custoMensal`: média por conversa × 82/dia × 30; teto do dono US$ 120/mês). Meta para a etapa 3: zero errado.
+  **Atendente mais barato** (issue #504, depois do piloto que deu US$ 0,09–0,30 por conversa): Sonnet 5.5 (mesmo preço do
+  Sonnet 5, leitura do cache pela metade) com esforço médio e fallback do servidor para recusa; instruções fixas com
+  cache de **1 h** (entre conversas passam de 5 a 60 min) e a conversa com cache de 5 min dentro do turno (cada volta de
+  ferramenta relia tudo); "ok"/"obrigado"/👍 depois de uma resposta SEM pergunta nem chama o modelo
+  (`soCortesiaSemPergunta`; "ok" depois de pergunta, número, cumprimento e áudio vão para o modelo). Recusa sem reserva →
+  a equipe assume. Toda mudança dessas passa pela prova antes de valer no `ia`.
 - **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização

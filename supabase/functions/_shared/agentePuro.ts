@@ -165,6 +165,28 @@ export function ultimaFoiDoCliente(mensagens: MensagemDaConversa[]): boolean {
   return ultima?.quem === "cliente";
 }
 
+// "ok", "obrigado", "valeu", "👍", "tá bom", "beleza", "show", "amém"… e nada mais (com pontuação e emoji).
+// Cumprimento ("bom dia") fica de fora: costuma abrir um pedido novo.
+const CORTESIA =
+  /^(?:(?:ok(?:ay)?|okk+|blz|beleza|valeu|vlw|obrigad[oa]s?|obg|brigad[oa]|muito obrigad[oa]|t[aá] (?:bom|certo|ok)|certo|certinho|combinado|show|perfeito|[oó]timo|top|amém|am[eé]m|deus (?:te )?aben[cç]oe|tchau|at[eé] (?:mais|logo|amanh[aã]))[\s!.,\p{Extended_Pictographic}\u{200D}\u{FE0F}\u{1F3FB}-\u{1F3FF}]*)+$/iu;
+const SO_EMOJI = /^[\p{Extended_Pictographic}\u{200D}\u{FE0F}\u{1F3FB}-\u{1F3FF}\s!.,]+$/u;
+
+/**
+ * O cliente só agradeceu ou concordou e o atendente não tinha perguntado nada (issue #504): não há o que
+ * responder, então nem chama o modelo (era o "nao_responder", pago). "Ok" depois de uma PERGUNTA é resposta
+ * (pode ser o "sim" de uma confirmação) e segue para o modelo, como mensagem sem texto, áudio ou anexo.
+ */
+export function soCortesiaSemPergunta(mensagens: MensagemDaConversa[]): boolean {
+  const ordenadas = [...mensagens].sort((a, b) => a.em.localeCompare(b.em));
+  let i = ordenadas.length - 1;
+  const doCliente: string[] = [];
+  while (i >= 0 && ordenadas[i].quem === "cliente") doCliente.unshift(ordenadas[i--].texto.trim());
+  if (!doCliente.length || i < 0) return false;
+  if (!doCliente.every((t) => t && !t.startsWith("[") && (CORTESIA.test(t) || SO_EMOJI.test(t)))) return false;
+  const antes = ordenadas[i].texto.trim();
+  return !/\?\s*[\p{Extended_Pictographic}\s]*$/u.test(antes);
+}
+
 export type PedidoDeReserva = {
   data?: unknown;
   direcao?: unknown;
@@ -406,7 +428,7 @@ export function costumeParaFerramenta(r: {
   };
 }
 
-export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } };
 
 /**
  * Instruções do modelo com cache de prompt. O cache só reaproveita um início idêntico,
@@ -415,7 +437,8 @@ export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { typ
  */
 export function blocosDoSistema(estavel: string[], variavel: string[]): BlocoDoSistema[] {
   const juntar = (partes: string[]) => partes.filter(Boolean).join("\n\n");
-  const blocos: BlocoDoSistema[] = [{ type: "text", text: juntar(estavel), cache_control: { type: "ephemeral" } }];
+  // 1 h (issue #504): entre uma conversa e outra passam de 5 a 60 min; com 5 min o cache era regravado a cada conversa
+  const blocos: BlocoDoSistema[] = [{ type: "text", text: juntar(estavel), cache_control: { type: "ephemeral", ttl: "1h" } }];
   const resto = juntar(variavel);
   if (resto) blocos.push({ type: "text", text: resto });
   return blocos;

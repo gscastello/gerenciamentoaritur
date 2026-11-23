@@ -22,6 +22,7 @@ import {
   numerosPorExtenso,
   problemasDaResposta,
   somarUso,
+  soCortesiaSemPergunta,
   USO_ZERADO,
   existeTextoNovoDoCliente,
   PREFIXO_DO_RASCUNHO,
@@ -367,7 +368,7 @@ Deno.test("costume: uma viagem só vira 'última viagem'; sem costume avisa que 
 Deno.test("cache: o que varia fica depois do ponto de cache", () => {
   const blocos = blocosDoSistema(["REGRAS", "", "FATOS"], ["Agora são 14:32", "", "CLIENTE: Ana"]);
   assertEquals(blocos, [
-    { type: "text", text: "REGRAS\n\nFATOS", cache_control: { type: "ephemeral" } },
+    { type: "text", text: "REGRAS\n\nFATOS", cache_control: { type: "ephemeral", ttl: "1h" } },
     { type: "text", text: "Agora são 14:32\n\nCLIENTE: Ana" },
   ]);
 });
@@ -699,4 +700,31 @@ Deno.test("#494: bairro como está na tabela", async () => {
   // "Turu, Planalto Vinhais" não é "Planalto Turu"
   assertEquals(bairroComoNaTabela("Turu", "Turu, Planalto Vinhais", tabela), null);
   assertEquals(bairroComoNaTabela(null, "Cohatrac novo", tabela), null);
+});
+
+const fala = (quem: "cliente" | "bot" | "equipe", texto: string, min: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 23, 10, min)).toISOString() });
+
+Deno.test("#504 cortesia: 'ok'/'obrigado'/👍 depois de uma resposta sem pergunta não chama o modelo", () => {
+  const feito = fala("bot", "Reserva confirmada! Ida amanhã às 05:40 da Rodoviária.", 0);
+  for (const t of ["ok", "Obrigado!", "valeu 🙏", "👍", "👍🏽", "tá bom", "Ok obrigada", "amém", "beleza, até amanhã"]) {
+    assertEquals(soCortesiaSemPergunta([feito, fala("cliente", t, 1)]), true, t);
+  }
+  // várias seguidas, todas de cortesia
+  assertEquals(soCortesiaSemPergunta([feito, fala("cliente", "ok", 1), fala("cliente", "obrigado", 2)]), true);
+});
+
+Deno.test("#504 cortesia: 'ok' depois de uma pergunta é resposta e vai para o modelo", () => {
+  const pergunta = fala("bot", "Resumo: Ida amanhã, 2 passagens. Posso confirmar?", 0);
+  assertEquals(soCortesiaSemPergunta([pergunta, fala("cliente", "ok", 1)]), false);
+  assertEquals(soCortesiaSemPergunta([fala("bot", "Pode ser às 5h? 🙂", 0), fala("cliente", "👍", 1)]), false);
+});
+
+Deno.test("#504 cortesia: pedido, número, cumprimento, áudio ou conversa nova vão para o modelo", () => {
+  const feito = fala("bot", "Reserva confirmada!", 0);
+  for (const t of ["2", "ok, e a volta?", "Bom dia", "boa tarde", "obrigado, quero mais uma", "[áudio: quero ir amanhã]", "[anexo sem texto]", ""]) {
+    assertEquals(soCortesiaSemPergunta([feito, fala("cliente", t, 1)]), false, t);
+  }
+  // sem nada antes (primeira mensagem) ou a última não é do cliente
+  assertEquals(soCortesiaSemPergunta([fala("cliente", "ok", 1)]), false);
+  assertEquals(soCortesiaSemPergunta([fala("cliente", "ok", 1), fala("bot", "Reserva confirmada!", 2)]), false);
 });
