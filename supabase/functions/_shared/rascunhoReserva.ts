@@ -162,7 +162,7 @@ async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
-    supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null).order("sort_order").order("code"),
+    supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null),
     supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood"),
     // locais da BR em "Outros" (Estiva, Pedrinhas, Oleama…): não buscamos em casa ali (issue #418)
     supabaseAdmin.from("boarding_spot_prices").select("local"),

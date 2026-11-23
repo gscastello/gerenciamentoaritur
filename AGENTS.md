@@ -570,9 +570,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   SIM/NÃO). Só se ela não vier em 40 s (`ESPERA_DA_TRANSCRICAO_MS`, modo `ia`) o bot pede para escrever. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
   decide a reserva (tipo, dia, sentido, quantidade, ponto) → vale; discordam → terceira e vale a maioria; sem maioria →
   relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. **Cache
-  das instruções** (issue #488, `partesDaLeitura`, `sistemaComCache`): a parte FIXA da leitura e do revisor (regras,
-  pontos, desembarques, bairros) vai na frente com cache de 1 h e a VARIÁVEL (calendário, costume, instruções do
-  passageiro) depois. Nada que muda por conversa ou por hora entra na parte fixa, e as listas saem em ordem fixa;
+  das instruções** (issues #488 e #491, `partesDaLeitura`, `sistemaComCache`): as REGRAS da leitura e do revisor vão
+  na frente com cache de 1 h; o resto vem depois, na MESMA ordem de sempre (pôr as listas antes do calendário piorou a
+  leitura na avaliação). Nada que muda por conversa ou por hora entra na parte fixa;
   senão o cache não pega e o custo volta (confira `cache_lido` nos registros). Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
   (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,
