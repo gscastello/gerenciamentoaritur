@@ -27,7 +27,7 @@ import {
   type ReservaRevisada,
   reservasParaOPrompt,
 } from "./revisaoPura.ts";
-import { falhaDoServicoDaIa, viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
+import { falhaDoServicoDaIa, sistemaComCache, viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 import { situacaoDaIa } from "./rascunhoReserva.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 
@@ -146,7 +146,7 @@ async function viagensPassadas(customerId: string, hoje: string): Promise<string
   return linhas.length ? linhas.join("\n") : "(nenhuma nos últimos 10 dias)";
 }
 
-async function chamarRevisor(system: string, conteudo: string): Promise<{ entrada: Linha | null; custo: number }> {
+async function chamarRevisor(system: ReturnType<typeof sistemaComCache>, conteudo: string): Promise<{ entrada: Linha | null; custo: number }> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -415,11 +415,11 @@ export async function revisarCliente(
         cliente.bot_instructions ? `INSTRUÇÕES DA EQUIPE SOBRE ESTE PASSAGEIRO:\n${cliente.bot_instructions}` : "",
         costume?.ida || costume?.volta ? `ENDEREÇO DE COSTUME: ${JSON.stringify({ ida: costume?.ida ?? null, volta: costume?.volta ?? null })}` : "",
       ].filter(Boolean).join("\n\n");
-      const system = instrucoesDoRevisor({
-        pontos: lista.map((p) => `- ${p.direction}: ${p.code} = ${p.name}`).join("\n"),
-        hoje,
+      // a parte fixa (regras, dia e pontos) fica no cache; o que é deste passageiro vem depois (issue #488)
+      const system = sistemaComCache(
+        instrucoesDoRevisor({ pontos: lista.map((p) => `- ${p.direction}: ${p.code} = ${p.name}`).join("\n"), hoje }),
         extras,
-      });
+      );
       const passadas = await viagensPassadas(customerId, hoje);
       const marcaDaEquipe = equipeConfirmou
         ? 'A EQUIPE ACABOU DE MARCAR "Atualizado ☑️" NA CONVERSA: as reservas têm de ficar como a conversa combinou. Aponte TODA diferença (dia, sentido, ponto, bairro, embarque, desembarque, quantidade), com o trecho literal.\n\n'

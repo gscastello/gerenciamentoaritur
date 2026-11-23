@@ -372,6 +372,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Sistema → Bairros. Nomes de cidades da rota (Matões, "Residencial Pirapemas") não entram como bairro. **Trechos da BR
   não são busca em casa** (issue #418, `database/110`, `localDeOutros`): Estiva, Pedrinhas, Oleama, Maracanã, Vila Itamar… estão
   em Sistema → Locais em Outros; ali o cliente espera na BR e a van para. Busca em casa num desses locais vira Outros (BR).
+  **Posto Carone é ponto próprio** (dono, 22/11 — issue #486, `database/130`): volta a ser a categoria `postocarone`
+  da Ida, com o horário dele em Sistema (05:40; na segunda, 04:40), e não fica mais em Outros, onde a mensagem dizia o
+  horário de Outros. "Outros · Posto Carone" vira o ponto no leitor e no atendimento (`ehPostoCarone`).
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e
@@ -566,7 +569,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   cliente segue o caminho de uma mensagem de texto dele (resposta no `ia`, releitura do Agendado, reserva a confirmar,
   SIM/NÃO). Só se ela não vier em 40 s (`ESPERA_DA_TRANSCRICAO_MS`, modo `ia`) o bot pede para escrever. **Leitura com voto de maioria** (#465): o Agendado lê duas vezes em paralelo; concordam no que
   decide a reserva (tipo, dia, sentido, quantidade, ponto) → vale; discordam → terceira e vale a maioria; sem maioria →
-  relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. Nome de
+  relê com o modelo capaz (`leituraDaMaioria`). Trocar só o modelo não resolve: a rodada com o Sonnet foi pior. **Cache
+  das instruções** (issue #488, `partesDaLeitura`, `sistemaComCache`): a parte FIXA da leitura e do revisor (regras,
+  pontos, desembarques, bairros) vai na frente com cache de 1 h e a VARIÁVEL (calendário, costume, instruções do
+  passageiro) depois. Nada que muda por conversa ou por hora entra na parte fixa, e as listas saem em ordem fixa;
+  senão o cache não pega e o custo volta (confira `cache_lido` nos registros). Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
   (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,
   até 5 vezes em 6 h; chave recusada ou serviço caído abre UMA pendência "IA fora do ar", que fecha na próxima leitura
@@ -597,6 +604,14 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   não pergunta nada ao cliente (`naoPerguntarPorAudioNaoLido`: a resposta pode estar no áudio, que a equipe ouviu) e a
   pendência fica para a equipe. 5+ áudios em 2 h sem nenhum transcrito abrem a pendência "Chatwoot não está
   transcrevendo os áudios" (`fn_avisar_transcricao_parada`, 10 em 10 min), que fecha sozinha quando volta.
+  **Transcrição própria** (issue #482, `_shared/transcricao.ts`, secret `OPENAI_API_KEY` cadastrado pelo dono em 22/11):
+  o Claude não ouve áudio. Áudio sem texto 12 s depois de chegar → o bot baixa (só de `*.chatwoot.com`) e transcreve
+  na OpenAI (`gpt-4o-mini-transcribe`, ~US$ 0,003/min; `TRANSCRICAO_MODELO` troca). O texto segue o caminho da
+  transcrição do Chatwoot (observação trocada no lugar; do cliente, passa pelo que uma mensagem de texto passa); a do
+  Chatwoot que chegar depois não vira "editada" (`transcricaoRepetida`). **O Chatwoot não deixa o Agent Bot listar
+  mensagens** (401 "not authorized for bots"): a leitura do Agendado usa o histórico do banco, onde a transcrição entra.
+  Áudios antigos sem texto: `sentinela-pedidos` com `{"transcrever": <conversa>, "mensagens": [...]}` (a lista vem da
+  sessão de quem está no Chatwoot).
 - **Avisar passageiros** (issue #432, Agenda → "Avisar passageiros", só admin/atendente; Edge Function
   `avisar-passageiros`, `avisoPuro.ts`, `domain/avisoAosPassageiros.js`, `database/114`): a mensagem de cada passageiro
   com o horário do ponto DELE (os da Agenda: `route_points.base_time` + a Ida da segunda mais cedo), texto editável,

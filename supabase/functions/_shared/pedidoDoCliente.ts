@@ -714,7 +714,7 @@ export function quantidadeEscrita(textos: string[]): number | null {
 // Ponto de embarque (Ida) e bairro
 // ---------------------------------------------------------------------------
 
-/** rodoviária, retorno, buscar em casa, Outros (aeroporto, BR, Posto Carone). Vários = null. */
+/** rodoviária, retorno, Posto Carone, buscar em casa, Outros (aeroporto, BR). Vários = null. */
 const RE_RETORNO_E_VIAGEM =
   / (e retorno|retorno (no|na|dia|em|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha|depois|semana|de manha|a tarde|pra|para)) /;
 
@@ -734,7 +734,9 @@ export function pontoEscrito(textos: string[], pontos: string[]): string | null 
     // "e retorno segunda-feira de manhã" é a viagem de volta, não o ponto Retorno (issue #419)
     const retornoEhViagem = RE_RETORNO_E_VIAGEM.test(n);
     if ((!retornoEhViagem && / retorno /.test(n)) || / (parada|ponto) das? vans? /.test(n)) achados.push("retorno");
-    else if (/ (aeroporto|posto carone|carone|br) /.test(n)) achados.push("outro");
+    // o Posto Carone voltou a ser ponto próprio (issue #486); sem ele na lista, é Outros como antes
+    else if (/ carone /.test(n)) achados.push(pontos.includes("postocarone") ? "postocarone" : "outro");
+    else if (/ (aeroporto|br) /.test(n)) achados.push("outro");
     // "estou em casa" no meio da conversa não é pedido de busca: só com buscar/pegar ou numa resposta curta
     const curta = n.trim().split(" ").length <= 5;
     if (/ (buscar|busca|pegar|pega|me pega|apanhar)( (em|na|la))? (casa|minha casa) /.test(n) || (curta && / em casa /.test(n))) {

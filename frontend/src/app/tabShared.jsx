@@ -399,9 +399,9 @@ export const BUSCA_MODOS = {
 
 /* Config de rota (pontos, valores, ajuste de segunda) vem do Postgres via
  * useRouteConfig. Ordem de agrupamento da Lista/Agenda: */
-// Ida: só Buscar em Casa, Rodoviária, Retorno e Outros (issue #261) — BR, Posto
-// Carone, aeroporto… são "Outros", com o local que o cliente citou.
-export const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "outro"];
+// Ida: Buscar em Casa, Rodoviária, Retorno, Posto Carone (de volta como ponto próprio, issue #486)
+// e Outros — BR, aeroporto… são "Outros", com o local que o cliente citou (issue #261).
+export const IDA_ORDEM_SECOES = ["busca", "rodoviaria", "retorno", "postocarone", "outro"];
 export const VOLTA_ORDEM = ["cantanhede", "pirapemas"];
 
 /* ---- Desembarque (rota do motorista) — ver database/10-dropoff-plan.sql --- */

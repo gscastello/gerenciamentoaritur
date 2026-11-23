@@ -768,7 +768,7 @@ Deno.test("#328: desembarque de costume fixado vale mesmo com o embarque variand
     volta: null,
   };
   const r = validarPedidoExtraido(
-    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Estiva" },
     { ...ctx, costume, areaDoDesembarque: () => "pirapemas" },
   );
   assert(r.ok);
@@ -782,7 +782,7 @@ Deno.test("#328: desembarque de costume fixado vale mesmo com o embarque variand
   if (semEmbarque.ok) assertEquals(semEmbarque.rascunho.dropoff_location, "Beco do Hospital");
   // costume que veio só do histórico não força o desembarque
   const doHistorico = validarPedidoExtraido(
-    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Estiva" },
     { ...ctx, costume: { ida: { ...costume.ida, fonte: "historico" }, volta: null } },
   );
   assert(doHistorico.ok);
@@ -1201,4 +1201,42 @@ Deno.test("#480 áudio do cliente sem transcrição: o bot não pergunta o que a
   // texto e áudio transcrito: pode perguntar
   assertEquals(naoPerguntarPorAudioNaoLido(["Quero uma vaga", "[áudio: Quero ir amanhã.]"]), false);
   assertEquals(naoPerguntarPorAudioNaoLido([]), false);
+});
+
+Deno.test("#486: Posto Carone é ponto próprio (Outros · Posto Carone vira o ponto)", async () => {
+  const { ehPostoCarone } = await import("./rascunhoPuro.ts");
+  assert(ehPostoCarone("Posto Carone"));
+  assert(ehPostoCarone("no posto do Carone"));
+  assert(ehPostoCarone("carone"));
+  assert(!ehPostoCarone("Rua do Carone, 12"));
+  assert(!ehPostoCarone("Posto Ipiranga"));
+  for (const ponto of ["outro", null]) {
+    const r = validarPedidoExtraido({ data: "2026-11-10", direcao: "ida", ponto, endereco: "Posto Carone" }, ctx);
+    assert(r.ok);
+    if (!r.ok) continue;
+    assertEquals(r.rascunho.route_point_code, "postocarone");
+    assertEquals(r.rascunho.pickup_detail, null);
+  }
+  // sem o ponto na lista (desativado), continua Outros com o local
+  const semPonto = validarPedidoExtraido(
+    { data: "2026-11-10", direcao: "ida", ponto: "outro", endereco: "Posto Carone" },
+    { ...ctx, pontos: { ...pontos, ida: pontos.ida.filter((c) => c !== "postocarone") } },
+  );
+  assert(semPonto.ok);
+  if (semPonto.ok) assertEquals(semPonto.rascunho.route_point_code, "outro");
+});
+
+Deno.test("#488: a parte fixa da leitura não muda com o dia nem com o passageiro (cache)", async () => {
+  const { partesDaLeitura, sistemaComCache } = await import("./rascunhoPuro.ts");
+  const base = { pontos: "busca = Buscar em Casa", desembarques: "-", bairrosSaoLuis: "Anil, Cohatrac" };
+  const a = partesDaLeitura({ ...base, calendario: "Hoje: segunda (2026-11-23)", costume: "Ida: Rodoviária" });
+  const b = partesDaLeitura({ ...base, calendario: "Hoje: terça (2026-11-24)", instrucoesDoCliente: "perguntar o bairro" });
+  assertEquals(a.fixa, b.fixa);
+  assert(a.fixa.includes("BAIRROS DE SÃO LUÍS: Anil, Cohatrac"));
+  assert(!a.fixa.includes("2026-11-23") && a.variavel.includes("2026-11-23"));
+  assert(a.variavel.includes("Ida: Rodoviária") && b.variavel.includes("perguntar o bairro"));
+  const blocos = sistemaComCache(a.fixa, a.variavel);
+  assertEquals(blocos[0].cache_control, { type: "ephemeral", ttl: "1h" });
+  assertEquals(blocos.length, 2);
+  assertEquals(sistemaComCache(a.fixa, "").length, 1);
 });

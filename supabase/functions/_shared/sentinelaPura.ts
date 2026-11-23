@@ -48,6 +48,7 @@ export function pedidosSemReserva(
 const norm = (t: string) =>
   ` ${String(t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim()} `;
 
+const RE_PEDIDO_DE_VAGA = / (vagas?|passage[mn]s?|reserv\w*|agend\w*|guard\w*|marc\w*|viaj\w*|ir) /;
 const RE_LOTADO = / (nao temos (mais )?vaga|nao tem (mais )?vaga|sem vaga|lotad[oa]|saiu lotad|ja esta lotad|nao ha (mais )?vaga|so (na|no|pra|para) (segunda|terca|quarta|quinta|sexta|sabado|domingo)) /;
 const RE_SO_CONSULTA = / (era so (pra|para) (confirmar|saber|perguntar)|so (pra|para) (saber|confirmar)|so perguntando|so uma pergunta|desisti|nao vou mais|nao vou poder|vou nao|deixa (pra|para) (la|outra|depois)|cancela|cancelar|desmarca) /;
 
@@ -60,7 +61,9 @@ export function pedidoEncerrado(falas: { quem: string; texto: string; em: string
   // a partir da última fala do cliente que pede algo (ou da primeira, se nenhuma "pede")
   let inicio = 0;
   ordenadas.forEach((f, i) => {
-    if (f.quem === "cliente" && / (vaga|passage|reserv|agend|guard|marca|viajar|ir) /.test(norm(f.texto))) inicio = i;
+    // palavra inteira OU começo de palavra ("passagens", "agendadas", "marcar"): antes só a exata valia e
+    // o pedido novo depois de um "lotado" passava batido (issue #482)
+    if (f.quem === "cliente" && RE_PEDIDO_DE_VAGA.test(norm(f.texto))) inicio = i;
   });
   for (const f of ordenadas.slice(inicio)) {
     const t = norm(f.texto);
