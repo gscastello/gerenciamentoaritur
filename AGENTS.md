@@ -374,7 +374,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   em Sistema → Locais em Outros; ali o cliente espera na BR e a van para. Busca em casa num desses locais vira Outros (BR).
   **Posto Carone é ponto próprio** (dono, 22/11 — issue #486, `database/130`): volta a ser a categoria `postocarone`
   da Ida, com o horário dele em Sistema (05:40; na segunda, 04:40), e não fica mais em Outros, onde a mensagem dizia o
-  horário de Outros. "Outros · Posto Carone" vira o ponto no leitor e no atendimento (`ehPostoCarone`).
+  horário de Outros. "Outros · Posto Carone" vira o ponto **no código** (`ehPostoCarone`): as instruções do
+  leitor continuam dizendo "outro", porque trocar essa frase piorou leituras que nem falam do posto (issue #491).
 - **Atendente de IA conversacional** (issue #224, `WHATSAPP.md §6c`): o Claude lê a conversa
   inteira e **consulta o app por ferramentas** (vagas, status da viagem, pontos, preços, reservas
   e pagamentos do próprio cliente); não há menu numerado. Ele **pode informar** vaga, preço e

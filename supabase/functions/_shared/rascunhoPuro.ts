@@ -259,7 +259,11 @@ const texto = (v: unknown, max = 200): string | null => {
  * Regra do dono: **data + endereço (ou ponto) já bastam**. O sentido sai do
  * ponto quando o modelo não disse; quantidade sem número = 1.
  */
-/** Código do ponto Posto Carone (Ida), categoria própria desde a database/130 (issue #486). */
+/**
+ * Código do ponto Posto Carone (Ida), categoria própria desde a database/130 (issue #486). As instruções
+ * do leitor seguem dizendo "outro" de propósito: trocar a frase piorou leituras que nem falam do posto
+ * (14 de 25 certas contra 24 — issue #491). Quem põe no ponto é o código (`ehPostoCarone`).
+ */
 export const PONTO_POSTO_CARONE = "postocarone";
 
 /** "Posto Carone", "posto do carone", "no Carone" — o endereço é só o posto (nada além dele). */
@@ -758,7 +762,7 @@ ${quando}
 - ${REGRA_DO_LUGAR} Exemplos: "Aguardo vcs no retorno" = Ida, ponto Retorno; "Rua das Acácias, Pirapemas" como embarque = Volta saindo de Pirapemas; "vou ficar no Cohatrac" = desce em São Luís = Volta; "vou esperar na Estiva" = Ida (Outros). Cada viagem do pedido tem o seu sentido: confira embarque e desembarque de cada uma.
 - Sem origem dita, o DESTINO diz o sentido (dono, 10/11): "para São Luís", "pra São Luís", "ir pra São Luís", "mandar pra São Luís" = sentido São Luís = VOLTA (sai de Pirapemas/Cantanhede). "Para Pirapemas", "pra Cantanhede" = IDA. Vale também para encomenda: documento ou pacote que vai PARA São Luís é Volta.
 - Trechos da BR (Estiva, Pedrinhas, Oleama, Maracanã, Vila Itamar… — os LOCAIS de Outros): a empresa NÃO busca em casa ali; o cliente espera na BR e a van para. Use ponto "outro" com o local em endereco, nunca "busca".
-- Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Posto Carone é ponto PRÓPRIO: ponto "postocarone", endereco vazio. Qualquer outro local de embarque (BR, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
+- Endereço em São Luís sem ponto dito = busca em casa (ponto "busca") com o bairro e a rua. O bairro tem de ser um dos bairros de São Luís da lista; se o cliente citou condomínio/residencial e a equipe confirmou o bairro na conversa ("Turu, certo?" → "sim"), use esse bairro e ponha o condomínio no endereco; sem confirmação, ponha o condomínio no endereco e deixe bairro vazio (o sistema descobre). Qualquer outro local de embarque (BR, Posto Carone, aeroporto, beira da estrada) = ponto "outro" com o local em endereco.
 - Passageiro RECORRENTE (tem ENDEREÇO DE COSTUME) que só pede "guarde uma vaga pra mim amanhã", sem dizer o sentido: registre o pedido com o dia e deixe direcao vazia (o sistema decide pelo hábito dele) e o local vazio (vem do costume). Não deixe de registrar por faltar sentido ou endereço.
 - Não disse de onde sai: use o ENDEREÇO DE COSTUME (se houver) ou o local que o cliente usou nas CONVERSAS ANTERIORES, e diga em duvida que veio do costume. Sem nada disso, deixe o local vazio.
 - Não disse o dia: veja a hora no calendário. Se a viagem de hoje naquele sentido já saiu (a Ida termina por volta das 06:30; a Volta sai de Pirapemas/Cantanhede até por volta das 13:00), "à tarde", "mais tarde" ou "a próxima" é a de AMANHÃ.
