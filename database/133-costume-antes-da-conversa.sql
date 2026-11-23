@@ -1,16 +1,15 @@
--- 133-costume-antes-da-conversa.sql — etapa 2 do bot autônomo (issue #501)
+-- 133-costume-antes-da-conversa.sql — etapa 2 do bot autônomo (issue #504)
 --
 -- A prova do atendente de IA refaz conversas reais que já viraram reserva. O endereço de costume
 -- tem de ser o de ANTES da conversa: com a reserva do próprio caso na conta, o "sentido sugerido"
 -- e o local mais frequente entregariam a resposta e a prova sairia melhor do que é.
 --
--- `p_antes_de` (opcional, padrão null = como sempre): só conta reserva e endereço fixado pela equipe
--- criados antes desse instante. Quem chama sem ele (app, bot, revisor, assistente) não muda nada.
--- Troca a assinatura: a de 1 parâmetro sai para não haver duas funções com o mesmo nome.
+-- A regra passa para `fn_endereco_de_costume(p_customer_id, p_antes_de)`: só conta reserva e endereço
+-- fixado pela equipe criados antes de `p_antes_de` (null = todos, como sempre). `rpc_endereco_de_costume`
+-- fica com a mesma assinatura e chama a nova sem data: app, bot, revisor e assistente não mudam.
+-- Sem `drop` (a assinatura antiga continua), para não haver duas funções com o mesmo nome.
 
-drop function if exists public.rpc_endereco_de_costume(uuid);
-
-create or replace function public.rpc_endereco_de_costume(p_customer_id uuid, p_antes_de timestamptz default null)
+create or replace function public.fn_endereco_de_costume(p_customer_id uuid, p_antes_de timestamptz)
 returns jsonb
 language plpgsql
 security definer
@@ -66,5 +65,14 @@ begin
 end;
 $$;
 
-revoke execute on function public.rpc_endereco_de_costume(uuid, timestamptz) from public, anon;
-grant execute on function public.rpc_endereco_de_costume(uuid, timestamptz) to authenticated, service_role;
+revoke execute on function public.fn_endereco_de_costume(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.fn_endereco_de_costume(uuid, timestamptz) to service_role;
+
+create or replace function public.rpc_endereco_de_costume(p_customer_id uuid)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select public.fn_endereco_de_costume(p_customer_id, null);
+$$;

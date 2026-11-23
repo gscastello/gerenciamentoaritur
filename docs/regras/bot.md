@@ -254,7 +254,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   no meio e até 3 min entre elas; no máximo os 12 últimos); a cada turno ele lê o que o cliente escreveu e o que ELE
   respondeu antes, na hora do turno. **Nada é enviado nem gravado**: com `ctx.prova` as ferramentas anotam o que fariam
   (reserva, remarcar, cancelar, espera, avisar, chamar a equipe) e o contexto vai em sombra como segunda trava.
-  Cadastro, reservas e endereço de costume são os de **antes** da conversa (`rpc_endereco_de_costume(p_antes_de)`;
+  Cadastro, reservas e endereço de costume são os de **antes** da conversa (`fn_endereco_de_costume(p_customer_id, p_antes_de)`;
   sem ela, nenhum costume) e sem a anotação do cliente, para não vazar a resposta. **Vagas da época**: os passageiros de
   reservas criadas depois do início da conversa saem da lotação de hoje. **O "sim" da prova**: na conversa real a equipe
   lançou sem pedir confirmação, então, se o atendente termina só pedindo a confirmação do resumo (`pedeConfirmacao`;

@@ -618,10 +618,9 @@ async function enderecoDeCostume(ctx: ContextoDoAgente) {
   const cliente = await clienteDaConversa(ctx);
   if (!cliente) return { ok: true, cliente_cadastrado: false, tem_endereco_de_costume: false };
   // na prova, o costume de antes da conversa (database/133); sem a migração, nenhum — nunca o de hoje
-  const { data, error } = await supabaseAdmin.rpc(
-    "rpc_endereco_de_costume",
-    ctx.prova ? { p_customer_id: cliente.id, p_antes_de: ctx.prova.antesDe } : { p_customer_id: cliente.id },
-  );
+  const { data, error } = ctx.prova
+    ? await supabaseAdmin.rpc("fn_endereco_de_costume", { p_customer_id: cliente.id, p_antes_de: ctx.prova.antesDe })
+    : await supabaseAdmin.rpc("rpc_endereco_de_costume", { p_customer_id: cliente.id });
   if (error && ctx.prova) return { ok: true, cliente_cadastrado: true, tem_endereco_de_costume: false };
   if (error || !data?.success) throw new Error(`rpc_endereco_de_costume: ${error?.message ?? data?.message}`);
   return costumeParaFerramenta(data);
