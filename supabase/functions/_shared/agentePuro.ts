@@ -709,6 +709,30 @@ export function bairroPorApelido(
 }
 
 /**
+ * O nome do bairro como está na tabela (issue #494): "Novo Aurora" → "Aurora" (o que a tabela tem);
+ * "Cohatrac novo" → "Novo Cohatrac" (as duas palavras trocadas, no fim de um trecho do endereço).
+ * Devolve null quando já está igual ou a tabela não tem nada parecido.
+ */
+export function bairroComoNaTabela(
+  bairro: string | null | undefined,
+  detalhe: string | null | undefined,
+  tabela: { neighborhood: string }[],
+): string | null {
+  const achado = bairroDaTabela(bairro, tabela);
+  if (!achado) return null;
+  const base = normalizar(achado.neighborhood);
+  const trechos = [bairro, detalhe]
+    .flatMap((t) => String(t ?? "").split(/[,;/\n·–—-]+/))
+    .map((t) => ` ${normalizar(t)}`);
+  for (const b of tabela) {
+    const partes = normalizar(b.neighborhood).split(" ");
+    if (partes.length !== 2 || partes[0] === partes[1] || !partes.includes(base)) continue;
+    if (trechos.some((t) => t.endsWith(` ${partes[1]} ${partes[0]}`))) return b.neighborhood;
+  }
+  return base === normalizar(bairro ?? "") ? null : achado.neighborhood;
+}
+
+/**
  * Bairro da tabela citado com erro de escrita ("cohatrc", "bequimao", "turuu"), quando
  * bairroDaTabela não acha o nome exato (issue #276). Dois bairros igualmente parecidos = null.
  */

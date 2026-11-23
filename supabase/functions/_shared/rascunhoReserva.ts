@@ -16,6 +16,7 @@ import { acharPonto, lugaresNasCidades, valorDoPedido } from "./agenteFerramenta
 import { avisoDoBairro, resolverBairro } from "./bairroResolver.ts";
 import {
   areaDoDesembarque,
+  bairroComoNaTabela,
   bairroDaTabela,
   bairroParecido,
   calendarioParaOPrompt,
@@ -97,7 +98,9 @@ import {
   sugestoesRecusadas,
   datasConfirmadas,
   datasSemPedido,
+  pedeDeOndeDeixou,
   sentidoEscrito,
+  viagemDeOndeDeixou,
   segundaViagemEhAOutra,
   origemDoPedido,
   pedidosPelaOrigem,
@@ -268,6 +271,23 @@ async function lerPedidosComConsenso(
   return { pedidos: a.pedidos, uso, divergente: true };
 }
 
+/**
+ * Avaliação sem gastar API (issue #494): o mesmo texto (modelo, instruções, ferramenta e conversa) já
+ * lido devolve a leitura guardada. Mudou uma palavra das instruções, lê de novo. Só na simulação da
+ * avaliação: o Agendado de verdade sempre lê.
+ */
+async function lerComMemoria(system: Instrucoes, conversa: string, modelo?: string): ReturnType<typeof lerPedidosComConsenso> {
+  const partes = [modelo ?? MODELO, JSON.stringify(FERRAMENTA_PEDIDOS), system.fixa, system.variavel, conversa];
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(partes)));
+  const chave = [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const { data } = await supabaseAdmin.from("bot_leituras_memo").select("pedidos, divergente").eq("chave", chave).maybeSingle();
+  if (data) return { pedidos: data.pedidos as PedidoExtraido[], divergente: data.divergente === true };
+  const lido = await lerPedidosComConsenso(system, conversa, modelo);
+  // guarda antes das regras do código, que mudam os pedidos no lugar
+  await supabaseAdmin.from("bot_leituras_memo").upsert({ chave, pedidos: structuredClone(lido.pedidos), divergente: lido.divergente });
+  return lido;
+}
+
 const fmtHoraSaoLuis = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Fortaleza",
   hour: "2-digit",
@@ -299,17 +319,21 @@ function textoDoCostume(c: CostumeDoCliente): string {
 }
 
 /** Viagens do passageiro de 60 dias para trás até 60 à frente (sem as canceladas) — para o hábito (issue #416). */
-async function viagensRecentes(customerId: string): Promise<{ data: string; direcao: string }[]> {
+async function viagensRecentes(customerId: string): Promise<{ data: string; direcao: string; desembarque: string | null }[]> {
   const hoje = diaCivil(new Date());
   const { data } = await supabaseAdmin
     .from("reservations")
-    .select("status, trips!inner(trip_date, direction)")
+    .select("status, dropoff_location, trips!inner(trip_date, direction)")
     .eq("customer_id", customerId)
     .is("deleted_at", null)
     .neq("status", "cancelada")
     .gte("trips.trip_date", somarDias(hoje, -60))
     .lte("trips.trip_date", somarDias(hoje, 60));
-  return ((data ?? []) as Bloco[]).map((r) => ({ data: String(r.trips.trip_date), direcao: String(r.trips.direction) }));
+  return ((data ?? []) as Bloco[]).map((r) => ({
+    data: String(r.trips.trip_date),
+    direcao: String(r.trips.direction),
+    desembarque: r.dropoff_location ?? null,
+  }));
 }
 
 /** Viagens (data|sentido) em que o cliente já tem reserva ativa. */
@@ -414,7 +438,7 @@ async function textosAntigosDoCliente(conversationId: string): Promise<string[]>
  * da marca (`agora`), conta como "já reservado" só o que existia ANTES da marca e não grava nada —
  * devolve as reservas que o Agendado lançaria em `planejadas`.
  */
-export type SimulacaoDaLeitura = { agora: Date; reservasAntesDe: string };
+export type SimulacaoDaLeitura = { agora: Date; reservasAntesDe: string; /** usa a leitura guardada (avaliação) */ memoria?: boolean };
 
 /** settings.monday_adjustment (a Ida da segunda sai mais cedo), lido uma vez por chamada. */
 let ajusteEmCache: { active?: boolean; hours?: number } | null | undefined;
@@ -466,7 +490,7 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
     : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
-  const lidos = await lerPedidosComConsenso(system, conversa, opcoes.modelo);
+  const lidos = simular?.memoria ? await lerComMemoria(system, conversa, opcoes.modelo) : await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
   const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
@@ -593,6 +617,29 @@ async function lerEGravar(
       } else if (p.data) {
         evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
         p.data = null;
+      }
+    }
+    // "mesmo endereço que me deixou hoje": a viagem é no sentido contrário da última (issue #494)
+    if (
+      (p.tipo ?? "passagem") !== "encomenda" &&
+      pedidos.length === 1 &&
+      cliente &&
+      !origemUnica &&
+      !dadosMarca.direcao &&
+      !sentidoEscrito(textosDoCliente) &&
+      pedeDeOndeDeixou(textosDoCliente)
+    ) {
+      const de = viagemDeOndeDeixou(textosDoCliente, await viagensRecentes(cliente.id), hoje);
+      if (de) {
+        if (de.direcao === "volta" && p.direcao !== "volta") {
+          p.endereco = p.endereco || p.bairro || null;
+          p.bairro = null;
+          p.ponto = null;
+        }
+        p.direcao = de.direcao;
+        if (de.cidade) p.cidade_dita = de.cidade;
+        p.duvida = [p.duvida, `Embarca onde desceu na última viagem (${de.ultima}): ${de.direcao === "volta" ? "Volta" : "Ida"}. Confira.`].filter(Boolean).join(" ");
+        evento("bot_de_onde_deixou", { conversa: entrada.chatwootConversationId, direcao: de.direcao });
       }
     }
     // busca em casa num endereço de Pirapemas/Cantanhede não existe: é a Volta saindo de lá (issue #419)
@@ -813,6 +860,18 @@ async function lerEGravar(
         r.pickup_detail = original || null;
         r.pickup_neighborhood = deduzido.bairro;
         r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
+      }
+    }
+    // o bairro fica como está na tabela ("Novo Aurora" → Aurora); o que o cliente escreveu vai no endereço (issue #494)
+    if (r.route_point_code === "busca" && r.pickup_neighborhood) {
+      const naTabela = bairroComoNaTabela(r.pickup_neighborhood, r.pickup_detail, ctx.bairrosTabela);
+      if (naTabela) {
+        const escrito = r.pickup_neighborhood;
+        const jaNoEndereco = String(r.pickup_detail ?? "").toLowerCase().includes(escrito.toLowerCase());
+        if (!jaNoEndereco && !naTabela.toLowerCase().includes(escrito.toLowerCase())) {
+          r.pickup_detail = [escrito, r.pickup_detail].filter(Boolean).join(", ");
+        }
+        r.pickup_neighborhood = naTabela;
       }
     }
     // trecho da BR (Estiva, Pedrinhas, Oleama, Maracanã…): a empresa não busca em casa ali — o cliente
@@ -1633,6 +1692,8 @@ export async function simularAgendado(c: {
   telefone: string;
   marcaEm: string;
   modelo?: string;
+  /** avaliação: usa a leitura guardada quando o texto é o mesmo (issue #494) */
+  memoria?: boolean;
 }) {
   // o Agendado lê alguns segundos depois da marca
   const ate = Date.parse(c.marcaEm) + 30_000;
@@ -1656,7 +1717,7 @@ export async function simularAgendado(c: {
     mensagemId: c.mensagemId,
     telefone: c.telefone,
   };
-  const simular: SimulacaoDaLeitura = { agora: new Date(ate), reservasAntesDe: c.marcaEm };
+  const simular: SimulacaoDaLeitura = { agora: new Date(ate), reservasAntesDe: c.marcaEm, memoria: c.memoria };
   // c.modelo: avaliar a primeira leitura com outro modelo (issue #421)
   let lido = await lerEGravar(entrada, mensagens, { confirmadoPelaEquipe: true, simular, ...(c.modelo ? { modelo: c.modelo } : {}) });
   let releu = false;

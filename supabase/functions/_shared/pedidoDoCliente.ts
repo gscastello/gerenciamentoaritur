@@ -414,6 +414,57 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
 const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate|no|na) (sao luis|slz|s luis|sao luiz) /;
 const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate) (pirapemas|cantanhede) /;
 
+/**
+ * "Quanto é pra buscar em casa e deixar aqui em casa, aqui na minha, em Cantanhede?" (issue #494):
+ * onde DEIXAR é o destino. "Deixar marcada", "deixar uma vaga pra sair em…" não é desembarque.
+ */
+const RE_DEIXAR_EM =
+  / (?:deixar|levar|trazer) (?:(?!sair|saindo|saio|buscar|pegar|embarc|agend|marcad|reserv|vaga|passage)[a-z0-9]+ ){0,8}?(?:em|no|na|pra|para|ate) (pirapemas|cantanhede|sao luis|slz|sao luiz) /;
+const RE_BUSCAR_EM = / (?:buscar|busca|pegar|pega|embarc\w*|saindo|sair|saio) (?:[a-z0-9]+ ){0,4}?(?:em|de|no|na) (pirapemas|cantanhede|sao luis|slz|sao luiz) /;
+
+function sentidoDeOndeDeixar(n: string): "ida" | "volta" | null {
+  const deixar = n.match(RE_DEIXAR_EM);
+  if (!deixar) return null;
+  const interior = deixar[1] === "pirapemas" || deixar[1] === "cantanhede";
+  const buscar = n.match(RE_BUSCAR_EM);
+  // busca e deixa do mesmo lado (ou a busca também no interior): o trecho decide, não esta regra
+  if (buscar && (buscar[1] === "pirapemas" || buscar[1] === "cantanhede") === interior) return null;
+  return interior ? "ida" : "volta";
+}
+
+/** "Msm endereço q me deixou hj": embarca onde a última viagem o deixou (issue #494). */
+const RE_ONDE_DEIXOU =
+  / (?:mesm[oa]|msm[oa]?) (?:endereco|lugar|local|canto|casa|ponto|rua) (?:em |no |na )?(?:q|que|onde|aonde)(?: (?:voce|vc|voces|vcs|senhor|o senhor|a van|o onibus))?(?: me| nos)? (?:deixou|deixaram|desci|descemos) /;
+
+export function pedeDeOndeDeixou(textos: string[]): boolean {
+  return textos.some((t) => RE_ONDE_DEIXOU.test(` ${normalizarTexto(t)} `));
+}
+
+/**
+ * Se o cliente embarca onde a última viagem o deixou, a viagem é no sentido CONTRÁRIO: foi na Ida de
+ * hoje e desceu em Cantanhede → Volta saindo de Cantanhede. Vale a última viagem de até 7 dias; no mesmo
+ * dia com Ida e Volta, a última foi a Volta.
+ */
+export function viagemDeOndeDeixou(
+  textos: string[],
+  viagens: { data: string; direcao: string; desembarque?: string | null }[],
+  hoje: string,
+): { direcao: "ida" | "volta"; cidade: "pirapemas" | "cantanhede" | null; ultima: string } | null {
+  if (!pedeDeOndeDeixou(textos)) return null;
+  const limite = new Date(`${hoje}T12:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() - 7);
+  const desde = limite.toISOString().slice(0, 10);
+  const passadas = viagens
+    .filter((v) => v.data <= hoje && v.data >= desde)
+    .sort((a, b) => b.data.localeCompare(a.data) || (a.direcao === "volta" ? -1 : 1));
+  const ultima = passadas[0];
+  if (!ultima) return null;
+  const direcao = ultima.direcao === "volta" ? "ida" : "volta";
+  const n = ` ${normalizarTexto(ultima.desembarque ?? "")} `;
+  const cidades = (["pirapemas", "cantanhede"] as const).filter((c) => n.includes(` ${c} `));
+  return { direcao, cidade: direcao === "volta" && cidades.length === 1 ? cidades[0] : null, ultima: `${ultima.direcao} ${ultima.data}` };
+}
+
 export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
   const achados: ("ida" | "volta")[] = [];
   for (const t of textos) {
@@ -423,6 +474,11 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
       continue;
     }
     const n = ` ${normalizarTexto(t)} `;
+    const deixar = sentidoDeOndeDeixar(n);
+    if (deixar) {
+      achados.push(deixar);
+      continue;
+    }
     // "uma vaga para ir em S.Luís" é ir PARA São Luís = Volta; "pra ir pra Pirapemas" = Ida (issue #419)
     if (RE_IR_PARA_SAO_LUIS.test(n)) {
       achados.push("volta");

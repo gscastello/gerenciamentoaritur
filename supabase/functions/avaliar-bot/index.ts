@@ -21,7 +21,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 type Linha = Record<string, any>;
 
-async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, modelo: string | null) {
+async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, modelo: string | null, memoria: boolean) {
   try {
     const r = await simularAgendado({
       conversationId: caso.conversation_id,
@@ -30,6 +30,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
       telefone: String(caso.telefone),
       marcaEm: String(caso.marca_em),
       ...(modelo ? { modelo } : {}),
+      memoria,
     });
     const planejadas = r.planejadas.map((p: Linha) => ({
       trip_date: p.trip_date,
@@ -85,6 +86,9 @@ Deno.serve(async (req: Request) => {
   // só os modelos que o bot usa (issue #421: comparar a primeira leitura com o modelo capaz)
   const modelo = ["claude-haiku-5-5", "claude-sonnet-5-5"].includes(corpo?.modelo) ? String(corpo.modelo) : null;
 
+  // mesmo texto já lido: usa a leitura guardada, sem gastar API; {"fresco": true} lê tudo de novo (issue #494)
+  const memoria = corpo?.fresco !== true;
+
   // erro técnico (limite da API, tempo) não conta como feito: a próxima chamada refaz
   const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada).neq("resultado", "erro");
   const jaFeitos = new Set(((feitos ?? []) as Linha[]).map((f) => f.caso_id));
@@ -95,7 +99,7 @@ Deno.serve(async (req: Request) => {
 
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo));
+    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo, memoria));
     evento("avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
   })().catch((err) => evento("bot_erro", { etapa: "avaliacao", erro: String(err).slice(0, 300) }));
 
