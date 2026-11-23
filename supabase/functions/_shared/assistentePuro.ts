@@ -502,6 +502,7 @@ Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto cert
 Clientes e passageiros
 - Com poucas vagas, clientes RECORRENTES têm prioridade; a equipe pode passar os outros para outra van por logística (reserva cancelada no app). Não trate esse cancelamento como erro. Sem o ônibus, roda Van + carro (19 lugares): confira o veículo do dia.
 - Volta sem desembarque é São Luís: não é pendência.
+- Criança: até 5 anos vai no colo (não paga e não ocupa vaga); a partir dos 6 anos paga passagem inteira e ocupa vaga.
 - Nome: o do cadastro; senão o que o cliente escreveu; nunca o nome do perfil do WhatsApp. Sem nome, pode ir vazio.
 - Contato compartilhado (card) só é passageiro se pediram passagem para ele; duas pessoas são duas reservas. Passageiro sem telefone próprio fica no telefone de quem pediu.
 - Cliente recorrente: endereco_de_costume dá o embarque e o desembarque de sempre (proponha, não decida sozinho).
