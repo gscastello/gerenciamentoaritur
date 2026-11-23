@@ -123,10 +123,10 @@ export const FERRAMENTAS: Ferramenta[] = [
         ponto: { type: "string", description: "Código ou nome do ponto de embarque (ex.: rodoviaria, busca)." },
         bairro: { type: "string", description: "Bairro, só para busca em casa." },
         endereco_embarque: { type: "string", description: "Rua ou cidade de onde ele sai, se disse." },
-        desembarque: { type: "string", description: "Onde o cliente vai descer. Se não souber, pergunte antes." },
-        quantidade: { type: "integer", description: "Número de passagens." },
+        desembarque: { type: "string", description: "Onde o cliente vai descer, se disse (a cidade basta). Sem ele, vale o valor do ponto." },
+        quantidade: { type: "integer", description: "Número de passagens (1 se ele não disse)." },
       },
-      required: ["direcao", "ponto", "desembarque", "quantidade"],
+      required: ["direcao", "ponto", "quantidade"],
     },
   },
   {
@@ -154,7 +154,7 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     name: "criar_reserva",
     description:
-      "Cria a reserva do cliente no app. Só chame depois de: (1) ter todos os dados, (2) ter consultado a viagem (há vaga) e o valor, (3) ter mostrado o resumo ao cliente e ele ter dito sim (cliente_confirmou=true). O preço e a vaga são conferidos pelo sistema. Trajeto fora da área padrão vira 'pendente' para a equipe confirmar. Encomenda NÃO é criada aqui (use chamar_atendente).",
+      "Cria a reserva do cliente no app. Só chame depois de: (1) ter o essencial (dia, sentido, onde ele embarca — na busca em casa, o endereço ou o bairro — e quantas passagens, 1 se ele não disse), (2) ter consultado a viagem (há vaga) e o valor, (3) ter mostrado o resumo ao cliente e ele ter dito sim (cliente_confirmou=true). Nome e onde ele desce são complementares: sem eles a reserva sai, e o resultado diz o que pedir depois. O preço e a vaga são conferidos pelo sistema. Trajeto fora da área padrão vira 'pendente' para a equipe confirmar. Encomenda NÃO é criada aqui (use chamar_atendente).",
     input_schema: {
       type: "object",
       properties: {
@@ -162,10 +162,10 @@ export const FERRAMENTAS: Ferramenta[] = [
         direcao: DIRECAO,
         ponto: { type: "string", description: "Código ou nome do ponto de embarque." },
         quantidade: { type: "integer" },
-        nome_cliente: { type: "string", description: "Nome completo, obrigatório se o cliente ainda não está cadastrado (nunca use o nome do perfil do WhatsApp: pergunte)." },
+        nome_cliente: { type: "string", description: "O nome que o cliente ESCREVEU na conversa, mesmo que só o primeiro (cliente ainda não cadastrado). Nunca o nome do perfil do WhatsApp. Opcional." },
         bairro: { type: "string", description: "Bairro (busca em casa)." },
         endereco_embarque: { type: "string", description: "Rua/ponto de referência onde buscar, ou detalhe do local de embarque." },
-        desembarque: { type: "string", description: "Onde o cliente vai ficar/descer." },
+        desembarque: { type: "string", description: "Onde ele desce: a cidade (São Luís, Pirapemas, Cantanhede ou cidade do caminho) e, se ele disse, o lugar. Opcional." },
         forma_pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
         cliente_confirmou: { type: "boolean", description: "true só se o cliente confirmou o resumo com um sim claro nesta conversa." },
         telefone_passageiro: {
@@ -182,7 +182,7 @@ export const FERRAMENTAS: Ferramenta[] = [
           description: "Só depois de um SENTIDO_NAO_COMBINA: true se o cliente confirmou que embarca e desce mesmo onde está no pedido.",
         },
       },
-      required: ["data", "direcao", "ponto", "quantidade", "desembarque", "cliente_confirmou"],
+      required: ["data", "direcao", "ponto", "quantidade", "cliente_confirmou"],
     },
   },
   {
@@ -573,8 +573,8 @@ async function calcularValor(args: Linha) {
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
   const quantidade = Number(args.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) return { ok: false, erro: "quantidade deve ser um inteiro de 1 em diante" };
+  // sem onde desce: o valor do ponto, como a equipe cobra (cidade do caminho ou casa em São Luís pode mudar)
   const desembarque = String(args.desembarque ?? "").trim();
-  if (!desembarque) return { ok: false, codigo: "FALTA_DESEMBARQUE", erro: "O valor depende de onde ele desce: pergunte antes de calcular." };
   const preco = await valorDoPedido(ponto, {
     bairro: String(args.bairro ?? "").trim() || null,
     endereco: String(args.endereco_embarque ?? "").trim() || null,
@@ -588,6 +588,7 @@ async function calcularValor(args: Linha) {
     preco_por_passagem: preco.preco,
     quantidade,
     total: calcularTotal(preco.preco, quantidade),
+    ...(desembarque ? {} : { observacao: "Valor do ponto, sem saber onde ele desce. Se descer numa cidade do caminho (ou em casa, em São Luís, na Volta), o valor pode mudar." }),
   };
 }
 
@@ -686,8 +687,16 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
   const outro = !!telPassageiro && !variantesTelefone(ctx.telefone).includes(telPassageiro);
   const cliente = outro ? await clienteAntesDe(telPassageiro as string, ctx.prova?.antesDe) : await clienteDaConversa(ctx);
-  const nome = cliente?.name ?? (outro ? String(args.nome_passageiro ?? "").trim() || null : pedido.nomeCliente);
-  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Pergunte o nome completo do passageiro antes de reservar." };
+  // nome é complementar (dono, 23/11 — issue #504): o que o cliente escreveu, mesmo só o primeiro; sem
+  // nenhum, a reserva sai pelo telefone e o nome vem depois. Nunca o do perfil do WhatsApp.
+  const nome = cliente?.name || (outro ? String(args.nome_passageiro ?? "").trim() || null : pedido.nomeCliente) || "";
+  const complementar = [...(nome ? [] : ["nome"]), ...(pedido.desembarque ? [] : ["destino"])];
+  const faltaCompletar = complementar.length
+    ? {
+        falta_completar: complementar.map((c) => (c === "nome" ? "o nome do passageiro" : "a cidade onde ele desce (e o lugar, se quiser dizer)")),
+        proximo_passo: "A reserva está feita. Conte isso ao cliente e, na mesma mensagem, peça o que falta em UMA pergunta. Não diga que a reserva depende disso.",
+      }
+    : {};
 
   const preco = await valorDoPedido(ponto, {
     bairro: pedido.bairro,
@@ -756,7 +765,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       quantity: pedido.quantidade,
       pickup_neighborhood: pedido.bairro,
       pickup_detail: pedido.enderecoEmbarque,
-      dropoff_location: pedido.desembarque,
+      dropoff_location: pedido.desembarque || null,
       unit_price: preco.preco,
       status: fora ? "pendente" : "confirmada",
       turno: ctx.prova.turno,
@@ -776,6 +785,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       forma_pagamento: pedido.formaPagamento,
       chave_pix: pix ? { chave: pix.key, titular: pix.name ?? null } : null,
       lembrete: pix ? "Se pagar por Pix, o cliente envia o comprovante aqui mesmo." : null,
+      ...faltaCompletar,
     };
   }
 
@@ -791,10 +801,11 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       paymentMethod: pedido.formaPagamento,
       pickupNeighborhood: pedido.bairro,
       pickupDetail: pedido.enderecoEmbarque,
-      dropoffLocation: pedido.desembarque,
+      dropoffLocation: pedido.desembarque || null,
       dropoffArea,
       status: fora ? "pendente" : "confirmada",
       pendingReason: motivoPendente,
+      extraData: { origem: "agente", ...(complementar.length ? { complementar } : {}) },
       waMessageId: `cw-${ctx.mensagemId}-agente`,
     });
     ctx.escrita.criou = true;
@@ -828,6 +839,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       chave_pix: pix ? { chave: pix.key, titular: pix.name ?? null } : null,
       lembrete: pix ? "Se pagar por Pix, o cliente envia o comprovante aqui mesmo." : null,
       simulado: getBotContext()?.shadow === true,
+      ...faltaCompletar,
     };
   } catch (err) {
     if (err instanceof WhatsappServiceError && err.code === "RESERVATION_REJECTED") {
@@ -918,8 +930,8 @@ async function entrarNaListaDeEspera(args: Linha, ctx: ContextoDoAgente) {
   if (direcao !== "ida" && direcao !== "volta") return { ok: false, erro: "direcao deve ser ida ou volta" };
   if (!Number.isInteger(quantidade) || quantidade < 1) return { ok: false, erro: "quantidade inválida" };
   const cliente = await clienteDaConversa(ctx);
-  const nome = cliente?.name ?? String(args.nome_cliente ?? "").trim();
-  if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo." };
+  // nome é complementar (issue #504): a espera vale pelo telefone
+  const nome = cliente?.name || String(args.nome_cliente ?? "").trim() || "";
   if (ctx.prova) {
     anotarNaProva(ctx, { tipo: "espera", trip_date: data, direction: direcao, quantity: quantidade, turno: ctx.prova.turno });
     ctx.escrita.esperou = true;

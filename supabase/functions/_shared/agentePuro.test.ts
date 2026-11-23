@@ -148,9 +148,27 @@ Deno.test("pedido: data passada, quantidade ruim e campos faltando voltam como e
     assertStringIncludes(t, "direcao");
     assertStringIncludes(t, "ponto de embarque");
     assertStringIncludes(t, "quantidade");
-    assertStringIncludes(t, "desembarque");
     assertStringIncludes(t, "forma_pagamento");
   }
+});
+
+Deno.test("#504 pedido: onde desce, nome e quantidade não dita não travam a reserva (dono, 23/11)", () => {
+  const minimo = { data: "2026-11-04", direcao: "volta", ponto: "cantanhede", cliente_confirmou: true };
+  const r = validarPedidoDeReserva(minimo, "2026-11-03");
+  assertEquals(r.ok, true);
+  if (r.ok) {
+    assertEquals(r.pedido.desembarque, "");
+    assertEquals(r.pedido.quantidade, 1);
+    assertEquals(r.pedido.nomeCliente, null);
+    assertEquals(r.pedido.formaPagamento, "dinheiro");
+  }
+  // o que é crucial continua travando: dia, sentido, embarque e a confirmação do cliente
+  for (const falta of ["data", "direcao", "ponto", "cliente_confirmou"]) {
+    const sem = { ...minimo, [falta]: undefined };
+    assertEquals(validarPedidoDeReserva(sem, "2026-11-03").ok, false, falta);
+  }
+  // quantidade dita errada continua sendo erro (0 não vira 1)
+  assertEquals(validarPedidoDeReserva({ ...minimo, quantidade: 0 }, "2026-11-03").ok, false);
 });
 
 Deno.test("pedido: hoje vale; limite de passagens por pedido; nome curto", () => {

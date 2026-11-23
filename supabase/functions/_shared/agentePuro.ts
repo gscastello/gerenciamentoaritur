@@ -208,6 +208,7 @@ export type PedidoValidado = {
   nomeCliente: string | null;
   bairro: string | null;
   enderecoEmbarque: string | null;
+  /** onde desce; "" = não disse (complementar: reserva com o valor do ponto e pergunta depois) */
   desembarque: string;
   formaPagamento: "dinheiro" | "pix" | "cartao";
 };
@@ -228,13 +229,14 @@ export function validarPedidoDeReserva(
   if (direcao !== "ida" && direcao !== "volta") erros.push("direcao deve ser ida ou volta");
   const ponto = texto(p.ponto);
   if (!ponto) erros.push("falta o ponto de embarque");
-  const quantidade = Number(p.quantidade);
+  // não disse quantas: 1, como a equipe faz (escrita no resumo para ele corrigir) — dono, 23/11
+  const quantidade = p.quantidade == null || texto(p.quantidade) === "" ? 1 : Number(p.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) erros.push("quantidade deve ser um inteiro de 1 em diante");
   else if (quantidade > MAX_PASSAGENS_POR_PEDIDO) {
     erros.push(`mais de ${MAX_PASSAGENS_POR_PEDIDO} passagens num pedido só a equipe resolve (chame o atendente)`);
   }
-  const desembarque = texto(p.desembarque);
-  if (desembarque.length < 2) erros.push("falta o local de desembarque");
+  // onde desce é complementar (dono, 23/11 — issue #504): sem ele, reserva e pergunta depois
+  const desembarque = texto(p.desembarque).length >= 2 ? texto(p.desembarque) : "";
   const pagamento = texto(p.forma_pagamento || "dinheiro").toLowerCase();
   if (pagamento !== "dinheiro" && pagamento !== "pix" && pagamento !== "cartao") {
     erros.push("forma_pagamento deve ser dinheiro, pix ou cartao");

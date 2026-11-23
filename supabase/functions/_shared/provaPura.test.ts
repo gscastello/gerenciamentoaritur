@@ -82,6 +82,8 @@ Deno.test("#501 prova: passar para a equipe ou perguntar ao cliente é pendente;
   assertEquals(compararProva([esperada], [{ tipo: "chamar_atendente", texto: "encomenda", turno: 0 }]).resultado, "pendente");
   assertEquals(compararProva([esperada], [], { ultimaResposta: "Qual o seu nome completo? 😊" }).resultado, "pendente");
   assertEquals(compararProva([esperada], [], { ultimaResposta: "Tudo certo, até amanhã!" }).resultado, "faltou");
+  // a pergunta no meio da resposta também é esperar o cliente (caso d04e0972)
+  assertEquals(compararProva([esperada], [], { ultimaResposta: "Anotei o embarque. Onde você vai descer? Se for em casa, me diga o bairro." }).resultado, "pendente");
   // fora da área: a reserva fica pendente para a equipe
   assertEquals(compararProva([esperada], [criar({ status: "pendente" })]).resultado, "pendente");
 });

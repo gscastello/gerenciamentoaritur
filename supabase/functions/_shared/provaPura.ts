@@ -103,7 +103,8 @@ export function compararProva(
   const motivos: string[] = [];
   if (acoes.some((a) => a.tipo === "chamar_atendente")) motivos.push("passou_para_equipe");
   if (acoes.some((a) => a.tipo === "espera")) motivos.push("lista_de_espera");
-  if (!criadas.length && terminaPerguntando(opcoes.ultimaResposta)) motivos.push("perguntou_ao_cliente");
+  // pergunta em qualquer parte da resposta: ele esperava o cliente (não sumiu calado)
+  if (!criadas.length && perguntou(opcoes.ultimaResposta)) motivos.push("perguntou_ao_cliente");
   const base = compararCaso(esperadas, planejadas, {
     motivos,
     pendenteOk: opcoes.pendenteOk,
@@ -146,6 +147,11 @@ export function pedeConfirmacao(texto: string | null | undefined): boolean {
   const ultima = t.split(/\n+/).filter((l) => l.trim()).pop() ?? "";
   if (/\b(nome|endere[cç]o|rua|bairro|quantas|quantos|qual|onde|que horas|de onde|para onde)\b/i.test(ultima)) return false;
   return /\b(posso|podemos)\s+(confirmar|reservar|agendar|fechar|marcar|lan[cç]ar|garantir)|\bconfirm(a|o|ar|amos)\b|\bpode ser\b|\bfechado\b|\btudo certo\b|\bcerto\s*\?/i.test(ultima);
+}
+
+/** A resposta faz alguma pergunta ao cliente ("?" em qualquer parte: a pergunta nem sempre vem no fim). */
+export function perguntou(texto: string | null | undefined): boolean {
+  return String(texto ?? "").includes("?");
 }
 
 /** A última resposta termina com uma pergunta ao cliente (ele ainda ia responder). */

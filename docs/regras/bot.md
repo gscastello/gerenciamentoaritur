@@ -270,6 +270,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   ferramenta relia tudo); "ok"/"obrigado"/👍 depois de uma resposta SEM pergunta nem chama o modelo
   (`soCortesiaSemPergunta`; "ok" depois de pergunta, número, cumprimento e áudio vão para o modelo). Recusa sem reserva →
   a equipe assume. Toda mudança dessas passa pela prova antes de valer no `ia`.
+  **O que é preciso para reservar** (dono, 23/11 — issue #504: "não deixar nenhum agendamento para trás"): só o
+  ESSENCIAL trava a reserva do atendente — dia, sentido, onde embarca (na Volta, a cidade e a rua/referência; na busca
+  em casa, o endereço ou o bairro), quantidade (não dita = 1, escrita no resumo) e o telefone da conversa. Nome, onde
+  desce (cidade e lugar) e pagamento são COMPLEMENTARES: sem eles a reserva sai (preço do ponto, como a equipe cobra;
+  `extra_data.complementar`) e o atendente pede o que falta numa pergunta, na mensagem que conta que reservou. Nome = o
+  que o cliente escreveu, mesmo só o primeiro; nunca o do perfil do WhatsApp. Base: nos 14 dias até 23/11, 57% das
+  reservas tinham nome de uma palavra, 47% das Voltas e 22% das Idas não tinham desembarque.
 - **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização
