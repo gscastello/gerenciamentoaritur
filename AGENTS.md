@@ -585,7 +585,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Rodada completa = 1 caso por chamada, ondas de até 80; confira `feitos = ativos`. Diferença → repetir o caso 5 vezes na
   versão nova e na antiga antes de chamar de variação. **Regras de código do leitor** (#494): "mesmo endereço que me
   deixou hoje" = sentido contrário da última viagem (`viagemDeOndeDeixou`); "buscar em casa e deixar em Cantanhede" = Ida;
-  bairro gravado como está na tabela (`bairroComoNaTabela`). A sentinela confere a conversa antes do modelo; o revisor
+  "Cohatrac novo" = Novo Cohatrac (`bairroComoNaTabela`). A sentinela confere a conversa antes do modelo; o revisor
   não relê por cortesia nem por "ok" logo depois da confirmação (`fn_mensagem_sem_novidade`). Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
   (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,

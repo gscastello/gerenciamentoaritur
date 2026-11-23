@@ -709,9 +709,10 @@ export function bairroPorApelido(
 }
 
 /**
- * O nome do bairro como está na tabela (issue #494): "Novo Aurora" → "Aurora" (o que a tabela tem);
- * "Cohatrac novo" → "Novo Cohatrac" (as duas palavras trocadas, no fim de um trecho do endereço).
- * Devolve null quando já está igual ou a tabela não tem nada parecido.
+ * O nome de duas palavras que o cliente escreveu ao contrário (issue #494): "Cohatrac novo" é o "Novo
+ * Cohatrac" da tabela. Só no fim de um trecho do endereço ("Turu, Planalto Vinhais" não é "Planalto
+ * Turu") e quando o bairro lido é uma das duas palavras. O resto fica como o cliente escreveu: "Jardim
+ * Turu" e "Novo Aurora" já saem pelo preço de Turu e Aurora, e o motorista precisa do nome inteiro.
  */
 export function bairroComoNaTabela(
   bairro: string | null | undefined,
@@ -729,7 +730,7 @@ export function bairroComoNaTabela(
     if (partes.length !== 2 || partes[0] === partes[1] || !partes.includes(base)) continue;
     if (trechos.some((t) => t.endsWith(` ${partes[1]} ${partes[0]}`))) return b.neighborhood;
   }
-  return base === normalizar(bairro ?? "") ? null : achado.neighborhood;
+  return null;
 }
 
 /**

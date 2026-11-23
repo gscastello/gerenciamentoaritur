@@ -862,17 +862,9 @@ async function lerEGravar(
         r.notes = [r.notes, avisoDoBairro(original, deduzido)].filter(Boolean).join(" ").slice(0, 300);
       }
     }
-    // o bairro fica como está na tabela ("Novo Aurora" → Aurora); o que o cliente escreveu vai no endereço (issue #494)
+    // "Cohatrac novo" é o Novo Cohatrac da tabela; o endereço fica como o cliente escreveu (issue #494)
     if (r.route_point_code === "busca" && r.pickup_neighborhood) {
-      const naTabela = bairroComoNaTabela(r.pickup_neighborhood, r.pickup_detail, ctx.bairrosTabela);
-      if (naTabela) {
-        const escrito = r.pickup_neighborhood;
-        const jaNoEndereco = String(r.pickup_detail ?? "").toLowerCase().includes(escrito.toLowerCase());
-        if (!jaNoEndereco && !naTabela.toLowerCase().includes(escrito.toLowerCase())) {
-          r.pickup_detail = [escrito, r.pickup_detail].filter(Boolean).join(", ");
-        }
-        r.pickup_neighborhood = naTabela;
-      }
+      r.pickup_neighborhood = bairroComoNaTabela(r.pickup_neighborhood, r.pickup_detail, ctx.bairrosTabela) ?? r.pickup_neighborhood;
     }
     // trecho da BR (Estiva, Pedrinhas, Oleama, Maracanã…): a empresa não busca em casa ali — o cliente
     // espera na BR e a van para. Busca em casa num local de "Outros" vira Outros (issue #418)
