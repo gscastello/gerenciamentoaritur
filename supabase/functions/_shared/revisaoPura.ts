@@ -577,7 +577,12 @@ const RE_VOLTOU_ATRAS =
   / (vou sim|vou mesmo|ainda vou|mudei de ideia|(quero|vou querer) (remarcar|marcar|agendar|reservar|a passagem|uma passagem|a vaga)|remarc\w*|(agend|marc|reserv)\w* de novo|deixa (marcad|agendad|reservad)\w*|nao cancel\w*|nao desmarc\w*) /;
 /** Mudar de dia não é desistir: "desmarca segunda e marca pra quarta", "passa pra terça", "adiar". */
 const RE_MUDANCA =
-  / (remarc\w*|marc(a|ar|ando)|agend(a|ar|e)|reserv(a|ar|e)|adi(a|ar|e|ando)|trocar?|troca|mud(a|ar|e|ando)|passa(r)? (pra|para)|outro dia|outra data|no lugar) /;
+  / (remarc\w*|marc(a|ar|ando)|agend(a|ar|e)|reservar|adi(a|ar|e|ando)|trocar?|troca|mud(a|ar|e|ando)|passa(r)? (pra|para)|outro dia|outra data|no lugar) /;
+/** Pergunta sem interrogação: "tem como desmarcar", "posso cancelar". */
+const RE_PERGUNTA = / (tem como|teria como|posso|podemos|da pra|da para|daria|sera que|consigo|queria saber|e se) /;
+/** Quem não vai é outra pessoa: "a menina que ia comigo não vai mais". */
+const RE_TERCEIRO =
+  / (comigo|ele|ela|eles|elas|menin[oa]s?|rapaz|moc[oa]|amig[oa]s?|mae|pai|filh[oa]s?|espos[oa]|marido|mulher|irma|irmao|sobrinh[oa]s?|net[oa]s?|prim[oa]s?|ti[oa]|avo) (\w+ ){0,6}(nao (vai|vao|ira|irao|pode|podera|quer)|desist\w*|cancel\w*|desmarc\w*) /;
 /** Desistência da reserva inteira quando ela tem mais de uma passagem. */
 const RE_TODAS = / (todas|todos|toda|tudo|nossas? (passagens?|vagas?|viagem|reserva)|minhas (passagens|vagas)|as passagens|as vagas|ninguem (vai|mais)|nao vamos) /;
 const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
@@ -586,12 +591,24 @@ const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sab
  * A frase da desistência diz QUAL reserva ("a ida", "a de segunda", "dia 23")? Devolve as reservas
  * que combinam com o que ela cita; sem citar nada, todas.
  */
-export function reservasCitadas<T extends { id: string; data: string; direcao: "ida" | "volta" }>(evidencia: string, reservas: T[]): T[] {
+export function reservasCitadas<T extends { id: string; data: string; direcao: "ida" | "volta" }>(
+  evidencia: string,
+  reservas: T[],
+  /** quando a frase foi escrita: "hoje" e "amanhã" contam desse dia (em São Luís) */
+  em?: string,
+): T[] {
   const n = ` ${normalizarTexto(evidencia)} `;
   let candidatas = reservas;
   const ida = / (ida|de ida) /.test(n);
   const volta = / (volta|de volta) /.test(n);
   if (ida !== volta) candidatas = candidatas.filter((r) => r.direcao === (ida ? "ida" : "volta"));
+  // "não vou mais hoje" depois que a de hoje saiu não é a reserva de sexta
+  const relativo = / (hoje|hj) /.test(n) ? 0 : / (amanha|amnh|amanhã) /.test(n) ? 1 : null;
+  if (relativo !== null && em && Number.isFinite(Date.parse(em))) {
+    // São Luís é UTC-3 o ano todo
+    const citado = new Date(Date.parse(em) - 3 * 3600_000 + relativo * 86400_000).toISOString().slice(0, 10);
+    candidatas = candidatas.filter((r) => r.data === citado);
+  }
   const dia = SEMANA.findIndex((d) => n.includes(` ${d} `));
   if (dia >= 0) candidatas = candidatas.filter((r) => new Date(`${r.data}T12:00:00Z`).getUTCDay() === dia);
   const ddmm = n.match(/ (\d{1,2}) (\d{1,2}) /);
@@ -649,12 +666,16 @@ export function decidirCancelamentos(
       pendencia("a frase não diz que ele desiste");
       continue;
     }
-    if (falaDele.texto.includes("?")) {
+    if (falaDele.texto.includes("?") || RE_PERGUNTA.test(` ${normalizarTexto(falaDele.texto)} `)) {
       pendencia("é uma pergunta");
       continue;
     }
     if (RE_MUDANCA.test(` ${normalizarTexto(falaDele.texto)} `)) {
       pendencia("parece mudança de dia, não desistência");
+      continue;
+    }
+    if (RE_TERCEIRO.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia("parece que quem não vai é outra pessoa");
       continue;
     }
     if (r.quantidade > 1 && !RE_TODAS.test(` ${normalizarTexto(falaDele.texto)} `)) {
@@ -687,9 +708,9 @@ export function decidirCancelamentos(
       pendencia("a reserva está paga (ver reembolso)");
       continue;
     }
-    const citadas = reservasCitadas(falaDele.texto, ctx.reservas);
+    const citadas = reservasCitadas(falaDele.texto, ctx.reservas, falaDele.em);
     if (!ctx.confirmadoPelaEquipe && (citadas.length !== 1 || citadas[0].id !== r.id)) {
-      pendencia("ele tem outra reserva e a frase não diz qual");
+      pendencia("a frase não aponta só para esta reserva");
       continue;
     }
     cancelar.push({ reserva_id: r.id, evidencia: p.evidencia });

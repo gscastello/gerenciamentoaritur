@@ -412,15 +412,27 @@ Deno.test("#490 desistência: cancela sozinho só quando é claro; qualquer dúv
   vira({ depois: [{ quem: "equipe", texto: "Agendado ☑️" }] }, "marcou a conversa depois");
   vira({ mexida: "2026-11-23T01:00:00+00:00" }, "mexeu na reserva depois");
   vira({ reservas: [reserva({ tipo: "encomenda" })] }, "encomenda");
-  vira({ reservas: [reserva({ quantidade: 3 })], texto: "Cancela uma passagem, minha mãe não vai mais" }, "3 passagens");
+  vira({ reservas: [reserva({ quantidade: 3 })], texto: "Cancela uma passagem por favor" }, "3 passagens");
   assertEquals(cancela({ reservas: [reserva({ quantidade: 3 })], texto: "Pode cancelar todas as passagens" }), ["r1"]);
   // mexida ANTES da frase não impede
   assertEquals(cancela({ mexida: "2026-11-22T10:00:00+00:00" }), ["r1"]);
   // duas reservas: só com a frase dizendo qual
   const duas = [reserva(), reserva({ id: "r2", direcao: "ida", data: "2026-11-25" })];
-  vira({ reservas: duas }, "não diz qual");
+  vira({ reservas: duas }, "não aponta só para esta reserva");
   assertEquals(cancela({ reservas: duas, texto: "Cancela a volta de segunda por favor" }), ["r1"]);
-  vira({ reservas: duas, texto: "Cancela a ida por favor" }, "não diz qual"); // o modelo apontou a outra
+  vira({ reservas: duas, texto: "Cancela a ida por favor" }, "não aponta só para esta reserva"); // o modelo apontou a outra
+  // frases reais (histórico de novembro)
+  for (const t of ["Pode cancelar, não conseguirei ir", "Olá\nBoa noite\nPreciso cancelar a passagem", "Eu não vou mais amanhã não viu", "Gostaria de cancelar minha reserva de passagem, não vou poder ir amanhã", "Boa noite, não vou poder ir amanhã mais não, minha filha não ta bem!", "Eu não vou mais", "Cancela"]) {
+    assertEquals(cancela({ texto: t, em: "2026-11-22T20:00:00.000Z" }), ["r1"], t);
+  }
+  vira({ texto: "boa noite, tem como desmarcar" }, "pergunta");
+  vira({ texto: "Desculpa aí a menina que ia comigo não vai mais" }, "outra pessoa");
+  vira({ texto: "Minha mãe não vai mais" }, "outra pessoa");
+  // "hoje"/"amanhã" contam do dia da mensagem: a reserva de outro dia não é a citada
+  vira({ texto: "Não vou mais hoje", em: "2026-11-22T11:00:00.000Z" }, "não aponta só para esta reserva");
+  assertEquals(cancela({ texto: "Não vou mais hoje", em: "2026-11-23T11:00:00.000Z" }), ["r1"]);
+  // 22/11 às 23h52 em São Luís já é 23/11 em UTC
+  assertEquals(cancela({ texto: "Não vou mais amanhã", em: "2026-11-23T02:52:00.000Z" }), ["r1"]);
   // "Atualizado ☑️" da equipe: certeza média basta
   assertEquals(cancela({ certeza: "media", equipe: true }), ["r1"]);
   assertEquals(
