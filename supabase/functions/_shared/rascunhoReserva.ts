@@ -31,6 +31,7 @@ import {
   type LugarDeSaoLuis,
 } from "./agentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { mensagensComTranscricoesDoBot } from "./transcricao.ts";
 import {
   type AtualizacaoLida,
   FERRAMENTA_ATUALIZACAO,
@@ -52,7 +53,8 @@ import {
   type CostumeDoSentido,
   ehMarcaDeAgendado,
   FERRAMENTA_PEDIDOS,
-  instrucoesDaLeitura,
+  partesDaLeitura,
+  sistemaComCache,
   mensagensRecentesDoCliente,
   type PedidoExtraido,
   pareceTerPedido,
@@ -140,7 +142,8 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   try {
     // 4 páginas: além do pedido atual, as conversas anteriores mostram onde o cliente costuma embarcar
     // 6 páginas: o pedido atual inteiro e as conversas anteriores (onde o cliente costuma embarcar) — issue #303
-    const brutas = await chatwootClient.listarMensagens(chatwootConversationId, 6);
+    // com o que o bot transcreveu dos áudios que o Chatwoot não transcreveu (issue #482)
+    const brutas = await mensagensComTranscricoesDoBot(await chatwootClient.listarMensagens(chatwootConversationId, 6));
     return { mensagens: converterMensagensDoChatwoot(brutas), cedeu: existeTextoNovoDoCliente(brutas, mensagemId) };
   } catch {
     const { data } = await supabaseAdmin
@@ -159,7 +162,7 @@ async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
     whatsappService.listRoutePoints("volta"),
-    supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null),
+    supabaseAdmin.from("dropoff_areas").select("direction, code, label").eq("active", true).is("deleted_at", null).order("sort_order").order("code"),
     supabaseAdmin.from("neighborhood_pricing").select("neighborhood").order("neighborhood"),
     // locais da BR em "Outros" (Estiva, Pedrinhas, Oleama…): não buscamos em casa ali (issue #418)
     supabaseAdmin.from("boarding_spot_prices").select("local"),
@@ -190,8 +193,11 @@ const MOTIVO_NAO_CONFIRMADO =
 /** Modelo para reler o que o rápido não entendeu (issue #301). */
 const MODELO_CAPAZ = Deno.env.get("BOT_RASCUNHO_MODELO_CAPAZ") ?? "claude-sonnet-5-5";
 
+/** Instruções da leitura: a parte fixa (guardada no cache) e a variável (issue #488). */
+type Instrucoes = { fixa: string; variavel: string };
+
 async function lerPedidos(
-  system: string,
+  system: Instrucoes,
   conversa: string,
   modelo = MODELO,
 ): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco }> {
@@ -205,7 +211,13 @@ async function lerPedidos(
     body: JSON.stringify({
       model: modelo,
       max_tokens: forcado ? 2000 : 6000, // até 4 pedidos com trecho e dúvida: 800 cortava (conversa com 2 passageiros)
-      system: forcado ? system : `${system}\n\nResponda SEMPRE chamando a ferramenta ${FERRAMENTA_PEDIDOS.name} (lista vazia se não houver pedido).`,
+      // a parte fixa vai na frente, guardada por 1 h; o que muda por conversa vem depois (issue #488)
+      system: sistemaComCache(
+        system.fixa,
+        forcado
+          ? system.variavel
+          : `${system.variavel}\n\nResponda SEMPRE chamando a ferramenta ${FERRAMENTA_PEDIDOS.name} (lista vazia se não houver pedido).`,
+      ),
       tools: [FERRAMENTA_PEDIDOS],
       tool_choice: forcado ? { type: "tool", name: FERRAMENTA_PEDIDOS.name } : { type: "auto" },
       messages: [{ role: "user", content: `CONVERSA (mais recentes por último):\n${conversa}` }],
@@ -222,9 +234,13 @@ async function lerPedidos(
   return { pedidos: pedidos.slice(0, 4), uso };
 }
 
+const somar = (usos: (Bloco | undefined)[], campo: string) => usos.reduce((t, u) => t + Number(u?.[campo] ?? 0), 0);
 const somarUso = (usos: (Bloco | undefined)[]): Bloco => ({
-  input_tokens: usos.reduce((t, u) => t + Number(u?.input_tokens ?? 0), 0),
-  output_tokens: usos.reduce((t, u) => t + Number(u?.output_tokens ?? 0), 0),
+  input_tokens: somar(usos, "input_tokens"),
+  output_tokens: somar(usos, "output_tokens"),
+  // cache (issue #488): o lido sai a 10% do preço (5% nos 5.5 maiores); o gravado, a 2x (TTL de 1 h)
+  cache_read_input_tokens: somar(usos, "cache_read_input_tokens"),
+  cache_creation_input_tokens: somar(usos, "cache_creation_input_tokens"),
 });
 
 /**
@@ -234,7 +250,7 @@ const somarUso = (usos: (Bloco | undefined)[]): Bloco => ({
  * Só na leitura rápida: a releitura com o modelo capaz é uma só.
  */
 async function lerPedidosComConsenso(
-  system: string,
+  system: Instrucoes,
   conversa: string,
   modelo?: string,
 ): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco; divergente: boolean }> {
@@ -438,7 +454,7 @@ async function lerEGravar(
   const costume = cliente ? await costumeDoCliente(cliente.id) : null;
   const viagensDoPassageiro = costume && cliente ? await viagensRecentes(cliente.id) : [];
   const instrucoesDoCliente = cliente ? await instrucoesDaEquipe(cliente.id) : "";
-  const system = instrucoesDaLeitura({
+  const system = partesDaLeitura({
     calendario: calendarioParaOPrompt(agora),
     pontos: ctx.listaPontos,
     desembarques: ctx.desembarques,
@@ -1007,6 +1023,8 @@ export async function prepararRascunhoDeReserva(entrada: Entrada) {
       motivos: r.motivos,
       entrada: r.uso?.input_tokens ?? null,
       saida: r.uso?.output_tokens ?? null,
+      cache_lido: r.uso?.cache_read_input_tokens ?? null,
+      cache_gravado: r.uso?.cache_creation_input_tokens ?? null,
     });
   } catch (err) {
     evento("bot_aviso", { aviso: "rascunho_falhou", conversa, erro: String(err).slice(0, 300) });
@@ -1189,6 +1207,8 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       motivos: lido.motivos,
       entrada: lido.uso?.input_tokens ?? null,
       saida: lido.uso?.output_tokens ?? null,
+      cache_lido: lido.uso?.cache_read_input_tokens ?? null,
+      cache_gravado: lido.uso?.cache_creation_input_tokens ?? null,
     });
   } catch (err) {
     erro = String(err);
@@ -1618,7 +1638,7 @@ export async function simularAgendado(c: {
   const ate = Date.parse(c.marcaEm) + 30_000;
   let mensagens: MensagemDaConversa[];
   try {
-    mensagens = converterMensagensDoChatwoot(await chatwootClient.listarMensagens(c.chatwootConversationId, 6));
+    mensagens = converterMensagensDoChatwoot(await mensagensComTranscricoesDoBot(await chatwootClient.listarMensagens(c.chatwootConversationId, 6)));
   } catch {
     const { data } = await supabaseAdmin
       .from("bot_observations")
@@ -1657,6 +1677,11 @@ export async function simularAgendado(c: {
     diasSemPedido: lido.diasSemPedido,
     motivos: lido.motivos,
     releu,
-    tokens: { entrada: lido.uso?.input_tokens ?? 0, saida: lido.uso?.output_tokens ?? 0 },
+    tokens: {
+      entrada: lido.uso?.input_tokens ?? 0,
+      saida: lido.uso?.output_tokens ?? 0,
+      cache_lido: lido.uso?.cache_read_input_tokens ?? 0,
+      cache_gravado: lido.uso?.cache_creation_input_tokens ?? 0,
+    },
   };
 }

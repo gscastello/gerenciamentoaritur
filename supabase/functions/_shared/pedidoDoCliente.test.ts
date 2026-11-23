@@ -449,3 +449,9 @@ Deno.test("#465 origem com o nome da parada escrito errado", async () => {
   // palavra comum não vira cidade
   assertEquals(paradasCorrigidas("mirandinha matos cantando campeao"), "mirandinha matos cantando campeao");
 });
+
+Deno.test("#486: 'espero no posto Carone' é o ponto Posto Carone (Outros se ele não existir)", () => {
+  assertEquals(pontoEscrito(["espero no posto Carone"], ["busca", "rodoviaria", "retorno", "postocarone", "outro"]), "postocarone");
+  assertEquals(pontoEscrito(["espero no posto Carone"], ["busca", "rodoviaria", "retorno", "outro"]), "outro");
+  assertEquals(pontoEscrito(["fico esperando no aeroporto"], ["busca", "rodoviaria", "retorno", "postocarone", "outro"]), "outro");
+});
