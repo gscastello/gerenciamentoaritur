@@ -7,13 +7,25 @@
 
 import { comTranscricoesDoBot } from "./chatwootPayload.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
+import { contextoDaTranscricao } from "./transcricaoPura.ts";
 
 const MODELO = Deno.env.get("TRANSCRICAO_MODELO") ?? "gpt-4o-mini-transcribe";
-// vocabulário da operação: ajuda a acertar nomes de cidades e pontos
-const CONTEXTO =
-  "Mensagem de WhatsApp de um passageiro da AriTur, vans e ônibus entre São Luís, Pirapemas e Cantanhede (Maranhão). " +
-  "Palavras comuns: passagem, vaga, ida, volta, amanhã, hoje, Rodoviária, Retorno, Pirapemas, Cantanhede, São Luís, " +
-  "Bacabeira, Santa Rita, Miranda, Matões, Campestre, Seu Ari.";
+/** Ruas conhecidas (mapa, ou citadas em 2+ reservas: o que veio de um áudio só não entra), guardadas 1 h. */
+let vocabulario: { em: number; texto: string } | null = null;
+async function contexto(): Promise<string> {
+  if (vocabulario && Date.now() - vocabulario.em < 3600_000) return vocabulario.texto;
+  const { data } = await supabaseAdmin
+    .from("cidade_lugares")
+    .select("nome")
+    .eq("tipo", "rua")
+    .or("fonte.eq.mapa,ocorrencias.gte.2")
+    .order("ocorrencias", { ascending: false })
+    .order("nome")
+    .limit(80);
+  const texto = contextoDaTranscricao(((data ?? []) as { nome: string }[]).map((l) => l.nome));
+  if (data?.length) vocabulario = { em: Date.now(), texto };
+  return texto;
+}
 
 function evento(nome: string, dados: Record<string, unknown>) {
   console.log(JSON.stringify({ evento: nome, ...dados }));
@@ -58,7 +70,7 @@ export async function transcreverAudio(url: string, tipo: string | null, convers
     form.append("file", new File([arquivo], `audio.${EXTENSAO[mime] ?? "ogg"}`, { type: mime }));
     form.append("model", MODELO);
     form.append("language", "pt");
-    form.append("prompt", CONTEXTO);
+    form.append("prompt", await contexto());
     form.append("response_format", "json");
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",

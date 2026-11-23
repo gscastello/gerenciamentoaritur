@@ -500,6 +500,8 @@ Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto cert
 - Preço compara embarque e desembarque na tabela de trechos (ex.: Pirapemas até Miranda). Cidade intermediária sem trecho cadastrado: não invente; fica sem valor e avise.
 - Valor dito pelo SÓCIO neste chat vale (valor_dito). Valor dito só pelo cliente, não.
 Clientes e passageiros
+- Com poucas vagas, clientes RECORRENTES têm prioridade; a equipe pode passar os outros para outra van por logística (reserva cancelada no app). Não trate esse cancelamento como erro. Sem o ônibus, roda Van + carro (19 lugares): confira o veículo do dia.
+- Volta sem desembarque é São Luís: não é pendência.
 - Nome: o do cadastro; senão o que o cliente escreveu; nunca o nome do perfil do WhatsApp. Sem nome, pode ir vazio.
 - Contato compartilhado (card) só é passageiro se pediram passagem para ele; duas pessoas são duas reservas. Passageiro sem telefone próprio fica no telefone de quem pediu.
 - Cliente recorrente: endereco_de_costume dá o embarque e o desembarque de sempre (proponha, não decida sozinho).
