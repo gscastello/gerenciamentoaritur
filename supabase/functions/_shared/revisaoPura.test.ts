@@ -357,3 +357,75 @@ Deno.test("#476 dia ou sentido errado (certeza alta) numa viagem até 7 dias vai
   assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r2", campo: "data", certeza: "alta" }], reservas, hoje), false);
   assertEquals(pendenciaDeDiaOuSentido([], reservas, hoje), false);
 });
+
+Deno.test("#490 desistência: cancela sozinho só quando é claro; qualquer dúvida vira pendência", async () => {
+  const { decidirCancelamentos, cancelamentosValidos, mensagemDeCancelamento } = await import("./revisaoPura.ts");
+  const reserva = (x: Record<string, unknown> = {}) => ({
+    id: "r1", data: "2026-11-23", direcao: "volta" as const, trip_id: "t1", ponto: "pirapemas", bairro: null, embarque: "Rua A",
+    desembarque: null, quantidade: 1, valor: 60, tipo: "passagem" as const, status: "confirmada", criada_pelo_bot: true,
+    criada_em: "2026-11-21T15:05:00+00:00", ...x,
+  });
+  // caso real (fictício): a passageira desmarca na véspera
+  const frase = "Boa noite! Desculpe, estou desmarcando minha passagem, minha excursão vai sair pela manhã";
+  const caso = (o: {
+    texto?: string; evidencia?: string; certeza?: string; quem?: "cliente" | "equipe"; em?: string; reservas?: unknown[];
+    depois?: { quem: "cliente" | "equipe"; texto: string }[]; pagas?: string[]; equipe?: boolean; mexida?: string;
+  } = {}) => {
+    const texto = o.texto ?? frase;
+    const falas = [
+      { em: o.em ?? "2026-11-23T00:50:00.000Z", texto, quem: o.quem ?? "cliente" as const },
+      ...(o.depois ?? []).map((d) => ({ em: "2026-11-23T01:30:00.000Z", ...d })),
+    ];
+    return decidirCancelamentos(
+      cancelamentosValidos([{ reserva_id: "r1", evidencia: o.evidencia ?? texto, certeza: o.certeza ?? "alta" }]),
+      {
+        // deno-lint-ignore no-explicit-any
+        reservas: (o.reservas ?? [reserva()]) as any,
+        conversa: falas.map((f) => f.texto).join("\n"),
+        falas,
+        pagas: o.pagas,
+        confirmadoPelaEquipe: o.equipe,
+        mexidaPelaEquipe: o.mexida ? { r1: o.mexida } : undefined,
+      },
+    );
+  };
+  const cancela = (o?: Parameters<typeof caso>[0]) => caso(o).cancelar.map((c) => c.reserva_id);
+  assertEquals(cancela(), ["r1"]);
+  assertEquals(caso().pendencias, []);
+  // sem a frase na conversa: descartado, nem pendência
+  assertEquals(caso({ evidencia: "não quero mais viajar com vocês" }), { cancelar: [], pendencias: [] });
+  const vira = (o: Parameters<typeof caso>[0], motivo: string) => {
+    const r = caso(o);
+    assertEquals(r.cancelar, [], motivo);
+    assertEquals(r.pendencias.length, 1, motivo);
+    assertEquals(r.pendencias[0].includes(motivo), true, r.pendencias[0]);
+  };
+  vira({ quem: "equipe" }, "não é do cliente");
+  vira({ em: "2026-11-21T10:00:00.000Z" }, "antes da reserva");
+  vira({ texto: "minha excursão vai sair pela manhã" }, "não diz que ele desiste");
+  vira({ certeza: "media" }, "certeza media");
+  vira({ texto: "Posso cancelar minha passagem?" }, "pergunta");
+  vira({ texto: "Vou desmarcar segunda e marca pra quarta" }, "mudança de dia");
+  vira({ texto: "Cancela, vou remarcar depois" }, "mudança de dia");
+  vira({ pagas: ["r1"] }, "paga");
+  vira({ depois: [{ quem: "cliente", texto: "mudei de ideia, vou sim" }] }, "voltado atrás");
+  vira({ depois: [{ quem: "equipe", texto: "Agendado ☑️" }] }, "marcou a conversa depois");
+  vira({ mexida: "2026-11-23T01:00:00+00:00" }, "mexeu na reserva depois");
+  vira({ reservas: [reserva({ tipo: "encomenda" })] }, "encomenda");
+  vira({ reservas: [reserva({ quantidade: 3 })], texto: "Cancela uma passagem, minha mãe não vai mais" }, "3 passagens");
+  assertEquals(cancela({ reservas: [reserva({ quantidade: 3 })], texto: "Pode cancelar todas as passagens" }), ["r1"]);
+  // mexida ANTES da frase não impede
+  assertEquals(cancela({ mexida: "2026-11-22T10:00:00+00:00" }), ["r1"]);
+  // duas reservas: só com a frase dizendo qual
+  const duas = [reserva(), reserva({ id: "r2", direcao: "ida", data: "2026-11-25" })];
+  vira({ reservas: duas }, "não diz qual");
+  assertEquals(cancela({ reservas: duas, texto: "Cancela a volta de segunda por favor" }), ["r1"]);
+  vira({ reservas: duas, texto: "Cancela a ida por favor" }, "não diz qual"); // o modelo apontou a outra
+  // "Atualizado ☑️" da equipe: certeza média basta
+  assertEquals(cancela({ certeza: "media", equipe: true }), ["r1"]);
+  assertEquals(
+    mensagemDeCancelamento([reserva()], { hoje: "2026-11-22", nome: "Maria Souza" }),
+    "Maria, cancelei a passagem da Volta de amanhã (23/11), como você pediu. Se foi engano ou quiser remarcar, é só responder aqui.",
+  );
+  assertEquals(mensagemDeCancelamento([], { hoje: "2026-11-22" }), null);
+});

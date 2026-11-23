@@ -15,12 +15,16 @@ import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoA
 import {
   achadosValidos,
   ASSUNTO_DIA_OU_SENTIDO,
+  cancelamentosValidos,
   type Correcao,
+  decidirCancelamentos,
   decidirRevisao,
   duplicadasDaRevisao,
   camposMudadosPelaEquipe,
+  type FalaDaRevisao,
   FERRAMENTA_DA_REVISAO,
   instrucoesDoRevisor,
+  mensagemDeCancelamento,
   type MudancaAuditada,
   pendenciaDeDiaOuSentido,
   precoRevisado,
@@ -103,7 +107,7 @@ async function conversaDoCliente(telefone: string) {
     .in("phone", formas)
     .is("deleted_at", null);
   const ids = ((convs ?? []) as Linha[]).map((c) => c.id);
-  if (!ids.length) return { texto: "", prova: "", falas: [] as { em: string; texto: string }[], chatwoot: null as number | null };
+  if (!ids.length) return { texto: "", prova: "", falas: [] as FalaDaRevisao[], chatwoot: null as number | null };
   const desde = new Date(Date.now() - 14 * 86400 * 1000).toISOString();
   const { data: obs } = await supabaseAdmin
     .from("bot_observations")
@@ -123,7 +127,7 @@ async function conversaDoCliente(telefone: string) {
     prova: linhas.filter((l) => l.quem === "cliente" || l.quem === "equipe").map((l) => l.linha).join("\n"),
     falas: ((obs ?? []) as Linha[])
       .filter((o) => o.author === "cliente" || o.author === "equipe")
-      .map((o) => ({ em: new Date(o.created_at).toISOString(), texto: String(o.content ?? "") })),
+      .map((o): FalaDaRevisao => ({ em: new Date(o.created_at).toISOString(), texto: String(o.content ?? ""), quem: o.author === "equipe" ? "equipe" : "cliente" })),
     chatwoot: chatwoot as number | null,
   };
 }
@@ -332,6 +336,46 @@ async function geografiaDeSaoLuis() {
   return geografiaEmCache;
 }
 
+/** Reservas com pagamento recebido: o revisor não cancela (reembolso é com a equipe — issue #490). */
+async function reservasPagas(ids: string[]): Promise<string[]> {
+  if (!ids.length) return [];
+  const { data, error } = await supabaseAdmin
+    .from("payments")
+    .select("reservation_id")
+    .in("reservation_id", ids)
+    .eq("status", "pago")
+    .is("deleted_at", null);
+  if (error) return ids; // sem saber, trata como paga: vira pendência, nunca cancela às cegas
+  return ((data ?? []) as Linha[]).map((p) => String(p.reservation_id));
+}
+
+/** Última vez que uma PESSOA (não o bot) mexeu em cada reserva, inclusive restaurar uma cancelada (issue #490). */
+async function mexidaPelaEquipe(ids: string[], botId: string | null): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!ids.length) return out;
+  const { data, error } = await supabaseAdmin
+    .from("audit_logs")
+    .select("entity_id, performed_by, performed_at")
+    .eq("entity_table", "reservations")
+    .in("entity_id", ids)
+    .not("performed_by", "is", null)
+    .order("performed_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(`audit_logs: ${error.message}`); // sem a auditoria não se cancela às cegas
+  for (const l of (data ?? []) as Linha[]) {
+    if (l.performed_by !== botId && !out[l.entity_id]) out[l.entity_id] = l.performed_at;
+  }
+  return out;
+}
+
+/** "Cancelei a passagem da Volta de segunda…" (mesma chave da confirmação). */
+async function avisarCancelamento(chatwoot: number, reservas: ReservaRevisada[], nome: string | null, hoje: string) {
+  const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
+  if (cfg?.value?.ativo === false) return;
+  const texto = mensagemDeCancelamento(reservas, { hoje, nome });
+  if (texto) await chatwootClient.postMessage(chatwoot, texto);
+}
+
 export async function revisarCliente(
   customerId: string,
   assinaturaAntes: string,
@@ -432,8 +476,45 @@ export async function revisarCliente(
       observacoes = r.entrada?.equipe_precisa_agir === true && typeof r.entrada?.observacoes === "string"
         ? r.entrada.observacoes.slice(0, 600)
         : null;
-      const decisao = decidirRevisao(achados, {
+      // 2a) desistência do cliente: cancela sozinho só com todas as travas (issue #490)
+      const pedidosDeCancelar = cancelamentosValidos(r.entrada?.cancelamentos);
+      const idsDeCancelar = pedidosDeCancelar.map((c) => c.reserva_id).filter((id) => ativas.some((x) => x.id === id));
+      const desistencias = decidirCancelamentos(pedidosDeCancelar, {
         reservas: ativas,
+        conversa: conversa.prova,
+        falas: conversa.falas,
+        pagas: await reservasPagas(idsDeCancelar),
+        confirmadoPelaEquipe: equipeConfirmou,
+        mexidaPelaEquipe: await mexidaPelaEquipe(idsDeCancelar, botId),
+      });
+      pendenciasTexto.push(...desistencias.pendencias);
+      const canceladas: ReservaRevisada[] = [];
+      for (const c of desistencias.cancelar) {
+        const alvo = ativas.find((x) => x.id === c.reserva_id) as ReservaRevisada;
+        const qual = `${alvo.direcao === "ida" ? "Ida" : "Volta"} ${alvo.data}`;
+        if (simular) {
+          aplicados.push(`[simulação] cancelaria a ${qual}: "${c.evidencia}"`);
+          continue;
+        }
+        const { data, error } = await supabaseAdmin.rpc("rpc_cancel_reservation", { p_reservation_id: alvo.id, p_actor: botId });
+        if (error || data?.success === false) {
+          pendenciasTexto.push(`O cliente desistiu da ${qual} ("${c.evidencia}") e não consegui cancelar: cancele pela Agenda.`);
+          continue;
+        }
+        canceladas.push(alvo);
+        aplicados.push(`cancelada a ${qual}: o cliente desistiu ("${c.evidencia}")`);
+        evento("revisor_cancelou", { reserva: alvo.id, data: alvo.data, direcao: alvo.direcao });
+      }
+      if (canceladas.length && conversa.chatwoot) {
+        await avisarCancelamento(conversa.chatwoot, canceladas, cliente.name, hoje).catch((err) =>
+          evento("bot_aviso", { aviso: "cancelamento_sem_aviso", erro: String(err).slice(0, 200) })
+        );
+      }
+      // a desistência tratada não vira pendência de novo pela observação do modelo
+      if (canceladas.length && canceladas.length === ativas.length) observacoes = null;
+      const restantes = ativas.filter((x) => !canceladas.some((c) => c.id === x.id));
+      const decisao = decidirRevisao(achados.filter((a) => restantes.some((x) => x.id === a.reserva_id)), {
+        reservas: restantes,
         conversa: conversa.prova,
         hoje,
         pontos: porSentido,

@@ -471,6 +471,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   **"Atualizado ☑️"** (ou Corrigido/Alterado/Remarcado com ☑️/✅) na conversa e o revisor corrige NA HORA, com a marca
   como confirmação: certeza média basta, inclusive para dia e sentido (`confirmadoPelaEquipe`). Sem reserva futura, vale
   como Agendado; nada a mudar vira pendência "Atualizado ☑️ não mudou nada".
+  **Desistência do cliente** (dono, 22/11 — issue #490, `decidirCancelamentos`): em qualquer modo, o revisor cancela
+  sozinho quando o CLIENTE desmarca com todas as letras, depois da reserva, com certeza alta, e a reserva é a única que
+  a frase pode querer dizer; avisa o cliente (`mensagemDeCancelamento`, mesma chave da confirmação). Pergunta, mudança de
+  dia, só uma de várias passagens, encomenda, reserva paga, cliente que voltou atrás, equipe que marcou ou mexeu depois →
+  pendência, nunca cancela. Próxima etapa (lançar pedidos claros sem a marca) só depois do banco de casos.
   Duplicada do bot na mesma viagem → cancela a mais nova. Tudo auditado (`revisoes_reservas`, `audit_logs`,
   `extra_data.revisao`), o cliente recebe "atualizei sua reserva" (mesma chave da confirmação) e há teto mensal em
   `settings.revisao_budget` (US$ 40 por padrão). `{"simular": true}` no corpo revisa sem mudar nada. Viagem que já saiu não é revisada; **dia e sentido** só mudam sozinhos
