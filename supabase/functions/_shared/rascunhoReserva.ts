@@ -43,6 +43,7 @@ import {
   notaDoAgendadoQueNaoLancou,
   assinaturaDaLeitura,
   duvidasDoPassageiro,
+  naoPerguntarPorAudioNaoLido,
   leituraDaMaioria,
   falhaDoServicoDaIa,
   avisoDosLugares,
@@ -57,6 +58,8 @@ import {
   pareceTerPedido,
   validarPedidoExtraido,
   sentidoPeloHabito,
+  AVISO_DIA_DA_EQUIPE,
+  diaDitoPelaEquipe,
   ehMensagemIlegivel,
   localDeOutros,
   agendadoPrecisaReler,
@@ -530,9 +533,11 @@ async function lerEGravar(
   const origemUnica = pedidos.length === 1 ? origem : null;
   // NINGUÉM escreveu o dia (cliente, equipe, marca): a leitura não chuta "amanhã" — fica sem dia e o
   // bot pergunta ao passageiro (issue #419: "guarde uma vaga pra mim" lido como amanhã; era segunda)
-  const algumDiaEscrito = datasEscritas(mensagensDoCliente).length > 0 ||
-    confirmadas.length > 0 ||
-    datasEscritas(recentes.filter((m) => m.quem === "equipe" && m.id !== entrada.mensagemId).map((m) => ({ texto: m.texto, em: m.em }))).length > 0;
+  // os dias que a EQUIPE escreveu no pedido atual (sem a própria marca)
+  const datasDaEquipe = datasEscritas(
+    recentes.filter((m) => m.quem === "equipe" && m.id !== entrada.mensagemId).map((m) => ({ texto: m.texto, em: m.em })),
+  );
+  const algumDiaEscrito = datasEscritas(mensagensDoCliente).length > 0 || confirmadas.length > 0 || datasDaEquipe.length > 0;
   // o sentido ESCRITO na conversa (não o lido pelo modelo): só ele deixa o Agendado escolher o dia (issue #452)
   const sentidoComprovado =
     dadosMarca.direcao ??
@@ -595,6 +600,7 @@ async function lerEGravar(
           lugares,
           bairroDeSaoLuisEscrito: !!bairroEscrito(textosDoCliente, ctx.bairrosTabela),
           lugarDeSaoLuis: !!bairroPelosLugares((deSaoLuis ?? []) as LugarDeSaoLuis[]),
+          sentidoEscrito: pedidos.length === 1 ? sentidoEscrito(textosDoCliente) : null,
         });
         if (decisao === "duvida") {
           ondeEmbarca.add(p);
@@ -888,10 +894,16 @@ async function lerEGravar(
       opcoes.confirmadoPelaEquipe && !datasEscritas(mensagensDoCliente).length && !confirmadas.length &&
       doCliente.some((m) => ehMensagemIlegivel(m.texto))
     ) {
-      pendencia ??= {
-        motivo: "o cliente não escreveu o dia e mandou uma mensagem (ou um áudio sem transcrição) que o bot não conseguiu ler: confira o dia no WhatsApp",
-        codigo: "dia_ilegivel",
-      };
+      // a equipe disse UM dia ("só teremos vaga pra amanhã") e marcou depois de ouvir: lança com aviso (issue #478)
+      if (diaDitoPelaEquipe(datasDaEquipe, r.trip_date as string | null)) {
+        r.notes = [r.notes, AVISO_DIA_DA_EQUIPE].filter(Boolean).join(" ").slice(0, 300);
+        evento("bot_dia_da_equipe", { conversa: entrada.chatwootConversationId });
+      } else {
+        pendencia ??= {
+          motivo: "o cliente não escreveu o dia e mandou uma mensagem (ou um áudio sem transcrição) que o bot não conseguiu ler: confira o dia no WhatsApp",
+          codigo: "dia_ilegivel",
+        };
+      }
     }
     // O LUGAR DIZ O SENTIDO (dono, 15/11 — issue #426): embarque em São Luís só na Ida, no interior
     // só na Volta; desembarque o contrário. Não combina → não lança calado: pergunta ao passageiro.
@@ -1223,6 +1235,17 @@ async function perguntarAoCliente(
 ): Promise<string | null> {
   const pergunta = perguntaAoCliente(duvidas.pendentes, jaPerguntadas, duvidas.nome);
   if (!pergunta) return null;
+  // áudio do cliente sem transcrição: a resposta pode estar nele e a equipe já ouviu — não pergunta (issue #480)
+  const { data: dele } = await supabaseAdmin
+    .from("bot_observations")
+    .select("content")
+    .eq("chatwoot_conversation_id", entrada.chatwootConversationId)
+    .eq("author", "cliente")
+    .gte("created_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString());
+  if (naoPerguntarPorAudioNaoLido(((dele ?? []) as Bloco[]).map((o) => String(o.content ?? "")))) {
+    evento("bot_pergunta_adiada_audio", { conversa: entrada.chatwootConversationId, duvida: pergunta.codigo });
+    return null;
+  }
   try {
     const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "agendado_confirmacao").maybeSingle();
     if (cfg?.value?.ativo === false) return null;

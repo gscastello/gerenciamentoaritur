@@ -889,10 +889,14 @@ export function sentidoPeloLugarDoEmbarque(p: {
   lugares: LugarNasCidades[];
   bairroDeSaoLuisEscrito: boolean;
   lugarDeSaoLuis: boolean;
+  /** o sentido que o CLIENTE escreveu ("indo pra São Luís" = Volta), se escreveu */
+  sentidoEscrito?: "ida" | "volta" | null;
 }): { cidade: "pirapemas" | "cantanhede"; nome: string; reservas: number } | "duvida" | null {
   const achado = cidadePelaBase(p.lugares);
   if (!achado || achado.reservas < 3) return null;
-  if (p.bairroDeSaoLuisEscrito || p.lugarDeSaoLuis) return "duvida";
+  // o cliente escreveu que vai PARA São Luís (ou respondeu assim ao "Ida ou Volta?" do bot): o que
+  // lembra São Luís é o destino, e o embarque é a cidade do lugar (issue #476)
+  if (p.bairroDeSaoLuisEscrito || p.lugarDeSaoLuis) return p.sentidoEscrito === "volta" ? achado : "duvida";
   return achado;
 }
 
@@ -1462,4 +1466,27 @@ export function leituraDaMaioria(leituras: PedidoExtraido[][]): number | null {
     if (votos * 2 > assinaturas.length) return i;
   }
   return null;
+}
+
+/**
+ * O dia veio da EQUIPE e é um só ("Só teremos vaga pra amanhã"), e a leitura deu esse dia (issue #478)?
+ * Então a mensagem que o bot não lê (áudio sem transcrição) não segura o "Agendado ☑️": quem marcou
+ * ouviu o áudio. Mais de um dia oferecido, ou a leitura em outro dia: continua pendente (#417).
+ */
+export function diaDitoPelaEquipe(datasDaEquipe: string[], dataLida: string | null | undefined): boolean {
+  const unicas = [...new Set((datasDaEquipe ?? []).filter(Boolean))];
+  return unicas.length === 1 && !!dataLida && unicas[0] === dataLida;
+}
+
+/** Aviso na reserva quando o dia veio da equipe e o cliente mandou algo que o bot não leu. */
+export const AVISO_DIA_DA_EQUIPE =
+  "Dia dito pela equipe; o cliente mandou um áudio (ou mensagem) que o bot não leu: confira o dia no WhatsApp.";
+
+/**
+ * Há áudio do cliente que o bot não leu (issue #480)? Então a dúvida ("qual o dia?") pode estar
+ * respondida dentro do áudio, que a equipe ouviu: o bot NÃO pergunta ao cliente e deixa a pendência
+ * para a equipe. Só as mensagens do cliente contam.
+ */
+export function naoPerguntarPorAudioNaoLido(textosDoCliente: string[]): boolean {
+  return (textosDoCliente ?? []).some((t) => ehMensagemIlegivel(String(t ?? "")));
 }

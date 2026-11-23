@@ -14,6 +14,7 @@ import { chatwootClient } from "./chatwootClient.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
   achadosValidos,
+  ASSUNTO_DIA_OU_SENTIDO,
   type Correcao,
   decidirRevisao,
   duplicadasDaRevisao,
@@ -21,6 +22,7 @@ import {
   FERRAMENTA_DA_REVISAO,
   instrucoesDoRevisor,
   type MudancaAuditada,
+  pendenciaDeDiaOuSentido,
   precoRevisado,
   type ReservaRevisada,
   reservasParaOPrompt,
@@ -273,15 +275,17 @@ async function conferirPreco(r: ReservaRevisada, ctx: { botId: string | null }):
   return `valor: R$ ${r.valor ?? 0} → R$ ${novo} (tabela)`;
 }
 
-async function abrirPendencia(customerId: string, telefone: string, detalhe: string, assinatura: string) {
-  const { count } = await supabaseAdmin
+async function abrirPendencia(customerId: string, telefone: string, detalhe: string, assinatura: string, urgente = false) {
+  const { data: abertas } = await supabaseAdmin
     .from("support_tickets")
-    .select("id", { count: "exact", head: true })
+    .select("id, subject")
     .eq("status", "aberta")
     .eq("meta->>revisao_cliente", customerId);
-  if ((count ?? 0) > 0) return;
+  // já tem a urgente aberta, ou esta não é urgente e já há uma aberta: não repete
+  if ((abertas ?? []).some((t) => t.subject === ASSUNTO_DIA_OU_SENTIDO || !urgente)) return;
   await supabaseAdmin.rpc("rpc_open_support_ticket", {
-    p_subject: "Revisão: conferir reserva",
+    // dia ou sentido errado numa viagem próxima: faixa vermelha da Agenda (issue #476)
+    p_subject: urgente ? ASSUNTO_DIA_OU_SENTIDO : "Revisão: conferir reserva",
     p_detail: detalhe.slice(0, 1500),
     p_phone: telefone,
     p_customer_id: customerId,
@@ -396,6 +400,8 @@ export async function revisarCliente(
     // 2) leitura crítica da conversa
     let achados: ReturnType<typeof achadosValidos> = [];
     let observacoes: string | null = null;
+    // erro de dia ou sentido (certeza alta) numa viagem próxima: a pendência vai para a faixa vermelha (issue #476)
+    let urgente = false;
     if (conversa.prova && ativas.length) {
       const { data: pontos } = await supabaseAdmin.from("route_points").select("code, name, direction, active").is("deleted_at", null);
       const lista = ((pontos ?? []) as Linha[]).filter((p) => p.active !== false);
@@ -457,6 +463,7 @@ export async function revisarCliente(
         pendenciasTexto.push(`${a.campo}: está "${a.valor_atual ?? "—"}", parece "${a.valor_correto ?? "—"}" (${a.certeza}) — "${a.evidencia}". ${a.explicacao}`);
       }
       if (observacoes) pendenciasTexto.push(`Observação do revisor: ${observacoes}`);
+      urgente = pendenciaDeDiaOuSentido(decisao.pendencias, ativas, hoje);
     }
 
     // 3) preço pela tabela, com os dados já corrigidos
@@ -475,7 +482,7 @@ export async function revisarCliente(
       await avisarCliente(conversa.chatwoot, await reservasDoCliente(customerId, hoje, botId), cliente.name, hoje).catch(() => {});
     }
     if (pendenciasTexto.length) {
-      await abrirPendencia(customerId, cliente.phone, pendenciasTexto.join("\n"), assinaturaAntes);
+      await abrirPendencia(customerId, cliente.phone, pendenciasTexto.join("\n"), assinaturaAntes, urgente);
     }
     const resultado = aplicados.length ? "corrigida" : pendenciasTexto.length ? "pendencia" : "ok";
     const { data: assinatura } = await supabaseAdmin.rpc("fn_assinatura_revisao", { p_customer_id: customerId });

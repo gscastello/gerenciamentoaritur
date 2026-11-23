@@ -343,3 +343,17 @@ Deno.test("#464 revisor: campo vazio preenchido com o que o cliente escreveu (ce
   assertEquals(valorNaProva("Retorno das Vans", "até no RETORNO"), true);
   assertEquals(valorNaProva("Turu", "vou estar na parada"), false);
 });
+
+Deno.test("#476 dia ou sentido errado (certeza alta) numa viagem até 7 dias vai para a faixa vermelha", async () => {
+  const { pendenciaDeDiaOuSentido } = await import("./revisaoPura.ts");
+  const reservas = [{ id: "r1", data: "2026-11-23" }, { id: "r2", data: "2026-11-30" }];
+  const hoje = "2026-11-19";
+  // caso real (fictício): pediu domingo 22/11, a reserva ficou na segunda 23/11
+  assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r1", campo: "data", certeza: "alta" }], reservas, hoje), true);
+  assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r1", campo: "sentido", certeza: "alta" }], reservas, hoje), true);
+  // certeza média, outro campo ou viagem longe: fila comum
+  assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r1", campo: "data", certeza: "media" }], reservas, hoje), false);
+  assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r1", campo: "embarque", certeza: "alta" }], reservas, hoje), false);
+  assertEquals(pendenciaDeDiaOuSentido([{ reserva_id: "r2", campo: "data", certeza: "alta" }], reservas, hoje), false);
+  assertEquals(pendenciaDeDiaOuSentido([], reservas, hoje), false);
+});

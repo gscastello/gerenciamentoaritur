@@ -1627,6 +1627,14 @@ function AppInner() {
                         ? () => mudarAba("pendencias")
                         : null
                     }
+                    onAbrir={
+                      TELAS.includes("pendencias")
+                        ? (id) => {
+                            setTab("pendencias");
+                            setDeepLink({ kind: "pendencia", id, at: Date.now() });
+                          }
+                        : null
+                    }
                   />
                 )}
                 {R.error && !loading && (
@@ -1711,7 +1719,7 @@ function AppInner() {
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
                         />
                       )}
-                      {tab === "pendencias" && <PendenciasTab pend={pend} />}
+                      {tab === "pendencias" && <PendenciasTab pend={pend} deepLink={deepLink} />}
                       {tab === "assistente" && <AssistenteTab />}
                       {tab === "passageiros" && (
                         <PassageirosTab

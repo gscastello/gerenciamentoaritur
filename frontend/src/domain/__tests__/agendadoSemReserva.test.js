@@ -109,3 +109,52 @@ describe("Agendado sem reserva", () => {
     expect(tituloDaFaixa(null)).toMatch(/IA do bot/);
   });
 });
+
+// Issue #476: o revisor achou o dia (ou o sentido) errado numa viagem próxima — vai para a faixa.
+describe("Revisão: dia ou sentido errado na faixa", () => {
+  const revisao = {
+    id: "t-rev",
+    subject: "Revisão: dia ou sentido errado",
+    status: "aberta",
+    phone: "98999990000",
+    cliente: "Maria Teste",
+    created_at: "2026-11-19T17:43:00Z",
+    detail:
+      'data: está "2026-11-23", parece "2026-11-22" (alta) — "quero ir domingo". O domingo é 22/11.\nObservação do revisor: confira.',
+  };
+
+  it("entra na faixa com o dia da Agenda e o pedido", async () => {
+    const { motivoDaRevisao } = await import("../agendadoSemReserva.js");
+    expect(ehPendenciaDoAgendado(revisao)).toBe(true);
+    // a revisão comum continua só na fila
+    expect(ehPendenciaDoAgendado({ subject: "Revisão: conferir reserva" })).toBe(false);
+    const [item] = agendadosSemReserva([revisao]);
+    expect(item).toEqual({
+      id: "t-rev",
+      tipo: "revisao",
+      quem: "Maria Teste",
+      motivo: "Dia na Agenda 23/11, pedido 22/11",
+      parte: false,
+      em: "2026-11-19T17:43:00Z",
+    });
+    expect(
+      motivoDaRevisao('sentido: está "ida", parece "volta" (alta) — "indo pra São Luís"'),
+    ).toBe("Sentido na Agenda ida, pedido volta");
+    // fora do formato: a primeira linha do detalhe
+    expect(motivoDaRevisao("embarque errado\nmais coisa")).toBe("Embarque errado");
+    expect(motivoDaRevisao(null)).toBe("O bot não conseguiu ler o pedido");
+  });
+
+  it("título: só revisões, ou misturadas com os outros avisos", () => {
+    expect(tituloDaFaixa([{ tipo: "revisao" }])).toBe("1 reserva está no dia ou no sentido errado");
+    expect(tituloDaFaixa([{ tipo: "revisao" }, { tipo: "revisao" }])).toBe(
+      "2 reservas estão no dia ou no sentido errado",
+    );
+    expect(tituloDaFaixa([{ tipo: "revisao" }, { tipo: "agendado" }])).toBe(
+      "2 passageiros pediram e ainda não têm lugar na Agenda",
+    );
+    expect(tituloDaFaixa([{ tipo: "revisao" }, { tipo: "ia" }])).toBe(
+      "1 reserva está no dia ou no sentido errado",
+    );
+  });
+});

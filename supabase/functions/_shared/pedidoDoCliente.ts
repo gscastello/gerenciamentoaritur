@@ -432,6 +432,15 @@ export function sentidoEscrito(textos: string[]): "ida" | "volta" | null {
       achados.push("ida");
       continue;
     }
+    // o DESTINO vence a palavra ida/volta (issue #476): quem mora no interior chama de "ida" a viagem
+    // para São Luís ("Ida pra São Luís" saindo de Pirapemas = Volta) e de "volta" a viagem para casa
+    // ("volta pra Pirapemas" = Ida). Só um destino na mensagem; os dois = segue para o rótulo.
+    const paraSaoLuis = / (pra|pro|para|p|ate) (sao luis|slz|s luis|sao luiz) /.test(n);
+    const paraOInterior = / (pra|pro|para|p|ate) (pirapemas|cantanhede) /.test(n);
+    if (paraSaoLuis !== paraOInterior) {
+      achados.push(paraSaoLuis ? "volta" : "ida");
+      continue;
+    }
     // "Volta na terça…", "a ida é segunda": o rótulo escrito diz o sentido (issue #415); os dois = nenhum
     const rotuloVolta = / volta /.test(n);
     const rotuloIda = / (ida|pra ir|para ir) /.test(n);
