@@ -39,16 +39,20 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
   const horaAgora = fmtHora.format(agora);
   let resultado = "ok";
   let detalhe: Record<string, unknown> = {};
+  const fim = async () => {
+    if (!simular) {
+      await supabaseAdmin.from("sentinela_pedidos").upsert({
+        conversation_id: c.conversation_id,
+        assinatura: c.assinatura,
+        resultado,
+        detalhe,
+        verificado_em: new Date().toISOString(),
+      });
+    }
+    evento("sentinela_conversa", { conversa: c.chatwoot_conversation_id, resultado, simular });
+    return { conversa: c.chatwoot_conversation_id, resultado, ...detalhe };
+  };
   try {
-    const lido = await simularAgendado({
-      conversationId: c.conversation_id,
-      chatwootConversationId: Number(c.chatwoot_conversation_id),
-      mensagemId: Number(c.ultima_msg_id),
-      telefone: String(c.telefone ?? ""),
-      marcaEm: agora.toISOString(),
-    });
-    const pedidos = pedidosSemReserva((lido.planejadas ?? []) as ViagemLida[], { hoje, horaAgora });
-    const motivos: string[] = lido.motivos ?? [];
     const { data: brutas } = await supabaseAdmin
       .from("bot_observations")
       .select("author, content, created_at")
@@ -58,36 +62,43 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
       .lte("created_at", agora.toISOString())
       .order("created_at");
     const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
+    // a conferência é gratuita e vem antes do modelo (issue #494): só perguntou, ou a conversa já encerrou o
+    // pedido → não haveria aviso qualquer que fosse a leitura
+    const encerrado = pedidoEncerrado(falas);
+    if (!clienteConcretizou(falas) || encerrado) {
+      resultado = encerrado ? "encerrado" : "so_pergunta";
+      detalhe = encerrado ? { motivo: encerrado } : {};
+      return await fim();
+    }
+    const lido = await simularAgendado({
+      conversationId: c.conversation_id,
+      chatwootConversationId: Number(c.chatwoot_conversation_id),
+      mensagemId: Number(c.ultima_msg_id),
+      telefone: String(c.telefone ?? ""),
+      marcaEm: agora.toISOString(),
+    });
+    const pedidos = pedidosSemReserva((lido.planejadas ?? []) as ViagemLida[], { hoje, horaAgora });
+    const motivos: string[] = lido.motivos ?? [];
     // pediu para reservar com todas as letras, mas a leitura não achou o dia ou o sentido
     const semDia = !pedidos.length && motivos.some((m) => m === "sem_data" || m === "sem_sentido") ? pedidoDeReservaSemDia(falas) : null;
-    if ((pedidos.length || semDia) && !clienteConcretizou(falas)) {
-      // só perguntou ("tem vaga amanhã? qual o valor?"): não é pedido de reserva (issue #467)
-      resultado = "so_pergunta";
-      detalhe = { pedidos };
-    } else if (pedidos.length || semDia) {
-      const encerrado = pedidoEncerrado(falas);
-      if (encerrado) {
-        resultado = "encerrado";
-        detalhe = { motivo: encerrado };
-      } else {
-        resultado = pedidos.length ? "pedido_sem_reserva" : "pedido_sem_dia";
-        const resumo = pedidos.length ? resumoDosPedidos(pedidos, hoje) : `uma viagem sem o dia (ou o sentido) claro: "${semDia}"`;
-        detalhe = { pedidos, resumo };
-        if (!simular) {
-          const { data: conv } = await supabaseAdmin.from("whatsapp_conversations").select("customer_id").eq("id", c.conversation_id).maybeSingle();
-          const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
-            p_subject: "Pedido sem reserva",
-            p_detail: `O cliente pediu ${resumo} e ainda não está na Agenda. Confira a conversa e lance pela Agenda (ou responda se não houver vaga).`,
-            p_phone: c.telefone ?? null,
-            p_customer_id: conv?.customer_id ?? null,
-            p_source: "whatsapp",
-            p_meta: { conversation_id: c.conversation_id, chatwoot_conversation_id: Number(c.chatwoot_conversation_id), sentinela: true, pedidos },
-          });
-          if (error) throw error;
-          await chatwootClient
-            .postMessage(Number(c.chatwoot_conversation_id), notaDaSentinela(pedidos, hoje, semDia), { private: true })
-            .catch((err) => evento("bot_aviso", { aviso: "nota_da_sentinela", conversa: c.chatwoot_conversation_id, erro: String(err).slice(0, 200) }));
-        }
+    if (pedidos.length || semDia) {
+      resultado = pedidos.length ? "pedido_sem_reserva" : "pedido_sem_dia";
+      const resumo = pedidos.length ? resumoDosPedidos(pedidos, hoje) : `uma viagem sem o dia (ou o sentido) claro: "${semDia}"`;
+      detalhe = { pedidos, resumo };
+      if (!simular) {
+        const { data: conv } = await supabaseAdmin.from("whatsapp_conversations").select("customer_id").eq("id", c.conversation_id).maybeSingle();
+        const { error } = await supabaseAdmin.rpc("rpc_open_support_ticket", {
+          p_subject: "Pedido sem reserva",
+          p_detail: `O cliente pediu ${resumo} e ainda não está na Agenda. Confira a conversa e lance pela Agenda (ou responda se não houver vaga).`,
+          p_phone: c.telefone ?? null,
+          p_customer_id: conv?.customer_id ?? null,
+          p_source: "whatsapp",
+          p_meta: { conversation_id: c.conversation_id, chatwoot_conversation_id: Number(c.chatwoot_conversation_id), sentinela: true, pedidos },
+        });
+        if (error) throw error;
+        await chatwootClient
+          .postMessage(Number(c.chatwoot_conversation_id), notaDaSentinela(pedidos, hoje, semDia), { private: true })
+          .catch((err) => evento("bot_aviso", { aviso: "nota_da_sentinela", conversa: c.chatwoot_conversation_id, erro: String(err).slice(0, 200) }));
       }
     } else {
       detalhe = { motivos };
@@ -97,17 +108,45 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
     evento("bot_erro", { etapa: "sentinela", conversa: c.chatwoot_conversation_id, erro: String(err).slice(0, 300) });
     return { conversa: c.chatwoot_conversation_id, resultado: "erro" };
   }
-  if (!simular) {
-    await supabaseAdmin.from("sentinela_pedidos").upsert({
-      conversation_id: c.conversation_id,
-      assinatura: c.assinatura,
-      resultado,
-      detalhe,
-      verificado_em: new Date().toISOString(),
-    });
+  return await fim();
+}
+
+/**
+ * A sentinela revê as próprias pendências abertas com a regra de hoje (issue #472): pergunta solta
+ * (inclusive o endereço numa pergunta de preço) ou pedido que a conversa encerrou (lotado, desistiu)
+ * fecha sozinho. Só regra pura: não chama o modelo.
+ */
+async function reverPendencias(): Promise<number> {
+  const { data: abertas } = await supabaseAdmin
+    .from("support_tickets")
+    .select("id, meta, created_at")
+    .eq("status", "aberta")
+    .eq("subject", "Pedido sem reserva")
+    .limit(50);
+  let fechadas = 0;
+  for (const t of (abertas ?? []) as Linha[]) {
+    const conversa = t.meta?.conversation_id;
+    if (!conversa) continue;
+    const { data: brutas } = await supabaseAdmin
+      .from("bot_observations")
+      .select("author, content, created_at")
+      .eq("conversation_id", conversa)
+      .in("author", ["cliente", "equipe"])
+      .gte("created_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString())
+      .order("created_at");
+    const falas = ((brutas ?? []) as Linha[]).map((f) => ({ quem: f.author, texto: f.content, em: f.created_at }));
+    if (!falas.length) continue;
+    const motivo = !clienteConcretizou(falas) ? "so_pergunta" : pedidoEncerrado(falas) ? "pedido_encerrado" : null;
+    if (!motivo) continue;
+    const { error } = await supabaseAdmin
+      .from("support_tickets")
+      .update({ status: "resolvida", resolved_at: new Date().toISOString(), meta: { ...(t.meta ?? {}), resolvida_por: motivo } })
+      .eq("id", t.id)
+      .eq("status", "aberta");
+    if (!error) fechadas++;
   }
-  evento("sentinela_conversa", { conversa: c.chatwoot_conversation_id, resultado, simular });
-  return { conversa: c.chatwoot_conversation_id, resultado, ...detalhe };
+  if (fechadas) evento("sentinela_reviu", { fechadas });
+  return fechadas;
 }
 
 Deno.serve(async (req: Request) => {
@@ -160,6 +199,7 @@ Deno.serve(async (req: Request) => {
   if (error) return json({ success: false, message: error.message }, 500);
 
   const trabalho = (async () => {
+    if (!simular) await reverPendencias().catch((err) => evento("bot_erro", { etapa: "sentinela_rever", erro: String(err).slice(0, 300) }));
     const out = [];
     for (const c of (candidatas ?? []) as Linha[]) out.push(await verificar(c, simular));
     return out;

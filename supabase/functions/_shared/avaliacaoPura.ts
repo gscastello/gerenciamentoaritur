@@ -34,7 +34,13 @@ const rotulo = (v: ViagemDoCaso) => `${v.direction === "volta" ? "Volta" : "Ida"
 const mesmoTexto = (a: unknown, b: unknown) => normalizarTexto(String(a ?? "")) === normalizarTexto(String(b ?? ""));
 
 /** Campos que, errados, fazem o passageiro perder a viagem ou pagar errado. */
-function camposDiferentes(esperada: ViagemDoCaso, lida: ViagemDoCaso): string[] {
+function camposDiferentes(esperada: ViagemDoCaso, lida: ViagemDoCaso, naTabela?: (bairro: string) => string | null): string[] {
+  // "Novo Aurora" e "Aurora" são o mesmo bairro da tabela (mesmo preço); "Alto do Turu" e "Turu", não (issue #494)
+  const mesmoBairro = (a: string, b: string) => {
+    if (mesmoTexto(a, b)) return true;
+    const ta = naTabela?.(a) ?? null;
+    return ta !== null && ta === (naTabela?.(b) ?? null);
+  };
   const out: string[] = [];
   if ((esperada.type ?? "passagem") !== (lida.type ?? "passagem")) out.push(`tipo: ${lida.type} ≠ ${esperada.type}`);
   if (esperada.route_point_code !== lida.route_point_code) {
@@ -43,7 +49,7 @@ function camposDiferentes(esperada: ViagemDoCaso, lida: ViagemDoCaso): string[] 
   if (Number(esperada.quantity || 1) !== Number(lida.quantity || 1)) out.push(`quantidade: ${lida.quantity} ≠ ${esperada.quantity}`);
   if (esperada.route_point_code === "busca" && lida.route_point_code === "busca" &&
     // bairro vazio = "endereço a confirmar" (o bot pergunta ao passageiro), não bairro errado
-    esperada.pickup_neighborhood && lida.pickup_neighborhood && !mesmoTexto(esperada.pickup_neighborhood, lida.pickup_neighborhood)) {
+    esperada.pickup_neighborhood && lida.pickup_neighborhood && !mesmoBairro(esperada.pickup_neighborhood, lida.pickup_neighborhood)) {
     out.push(`bairro: ${lida.pickup_neighborhood ?? "—"} ≠ ${esperada.pickup_neighborhood}`);
   }
   return out;
@@ -61,6 +67,8 @@ export function compararCaso(
     motivos?: string[];
     /** caso conferido em que o certo é perguntar (o cliente não escreveu o dia, por exemplo) */
     pendenteOk?: boolean;
+    /** nome do bairro na tabela de preços (null = não está nela) */
+    bairroNaTabela?: (bairro: string) => string | null;
   } = {},
 ): ResultadoDoCaso {
   const diferencas: string[] = [];
@@ -85,7 +93,7 @@ export function compararCaso(
     }
     usadas.add(i);
     const p = planejadas[i];
-    const campos = camposDiferentes(e, p);
+    const campos = camposDiferentes(e, p, opcoes.bairroNaTabela);
     if (p.pendencia) {
       pendente = true;
       diferencas.push(`${rotulo(e)} ficaria pendente: ${p.pendencia.motivo}${campos.length ? ` (e leria ${campos.join("; ")})` : ""}`);

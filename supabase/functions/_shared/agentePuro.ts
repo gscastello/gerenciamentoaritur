@@ -709,6 +709,31 @@ export function bairroPorApelido(
 }
 
 /**
+ * O nome de duas palavras que o cliente escreveu ao contrário (issue #494): "Cohatrac novo" é o "Novo
+ * Cohatrac" da tabela. Só no fim de um trecho do endereço ("Turu, Planalto Vinhais" não é "Planalto
+ * Turu") e quando o bairro lido é uma das duas palavras. O resto fica como o cliente escreveu: "Jardim
+ * Turu" e "Novo Aurora" já saem pelo preço de Turu e Aurora, e o motorista precisa do nome inteiro.
+ */
+export function bairroComoNaTabela(
+  bairro: string | null | undefined,
+  detalhe: string | null | undefined,
+  tabela: { neighborhood: string }[],
+): string | null {
+  const achado = bairroDaTabela(bairro, tabela);
+  if (!achado) return null;
+  const base = normalizar(achado.neighborhood);
+  const trechos = [bairro, detalhe]
+    .flatMap((t) => String(t ?? "").split(/[,;/\n·–—-]+/))
+    .map((t) => ` ${normalizar(t)}`);
+  for (const b of tabela) {
+    const partes = normalizar(b.neighborhood).split(" ");
+    if (partes.length !== 2 || partes[0] === partes[1] || !partes.includes(base)) continue;
+    if (trechos.some((t) => t.endsWith(` ${partes[1]} ${partes[0]}`))) return b.neighborhood;
+  }
+  return null;
+}
+
+/**
  * Bairro da tabela citado com erro de escrita ("cohatrc", "bequimao", "turuu"), quando
  * bairroDaTabela não acha o nome exato (issue #276). Dois bairros igualmente parecidos = null.
  */

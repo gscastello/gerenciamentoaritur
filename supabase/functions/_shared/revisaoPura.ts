@@ -12,10 +12,10 @@
 
 import { normalizarTexto } from "./grafia.ts";
 import { lugaresContraOSentido, REGRA_DO_LUGAR } from "./ladoDaRota.ts";
-import { viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
+import { ehMarcaDeAgendado, ehMarcaDeCorrecao, viagemDeHojeJaSaiu } from "./rascunhoPuro.ts";
 
 /** Uma fala da conversa (cliente ou equipe) com a hora em que foi escrita. */
-export type FalaDaRevisao = { em: string; texto: string };
+export type FalaDaRevisao = { em: string; texto: string; quem?: "cliente" | "equipe" };
 
 /**
  * A prova pode juntar várias falas ("EQUIPE: Qual dia mesmo da sua viagem? / CLIENTE: Sábado",
@@ -463,7 +463,8 @@ O que conferir em cada reserva:
 - endereço trocado de lugar: rua/referência da cidade de embarque gravada como desembarque (na Volta, rua de Cantanhede/Pirapemas no desembarque), ou o NOME do passageiro lido como lugar ("De Cantanhede pra Luís / Maria Souza / Rua X perto do banco": "Luís" = São Luís, "Maria Souza" = nome, a rua = embarque). Confira cada parte do que o cliente escreveu e onde ela foi parar. Rua com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a rua, não a cidade do caminho.
 - quantidade: é o número que o cliente PEDIU. Frase de costume ("eu e minhas filhas viajamos sempre com vocês") não pede mais vagas: não aponte. N passagens com desembarques diferentes na mesma viagem formam UMA reserva de N (todas têm de estar reservadas).
 - apartamento/bloco/casa mandados depois são complemento: o endereço tem de manter a rua e o condomínio.
-- reserva que o cliente desistiu ou que está repetida; pedido da conversa que ficou sem reserva (não aponte como achado: só explique em observacoes).
+- DESISTÊNCIA: o CLIENTE escreveu, depois da reserva, que desmarca/cancela/não vai mais nesta viagem ("estou desmarcando minha passagem", "não vou mais") → ponha em cancelamentos (reserva_id + trecho LITERAL do cliente + certeza), não em achados nem em observacoes. Remarcar ("passa pra quarta") é mudança de dia, não desistência. Se ele voltou atrás depois, se só perguntou ("posso cancelar?") ou se não dá para saber de qual reserva fala, certeza "baixa".
+- reserva repetida; pedido da conversa que ficou sem reserva (não aponte como achado: só explique em observacoes).
 - CUIDADO com pedidos antigos: a conversa traz pedidos de viagens JÁ FEITAS (listadas em VIAGENS PASSADAS). Mensagem que pediu uma viagem passada não vale para as futuras. Cada reserva futura corresponde ao pedido mais recente antes dela.
 - A resposta do cliente vale para o que a equipe perguntou ("Te buscamos aonde?" → embarque). Sugestão da equipe que o cliente negou não vale. "Parada das vans" = ponto retorno. Campestre na Volta = ponto pirapemas; outras cidades do caminho na Volta = ponto cantanhede.
 
@@ -505,10 +506,23 @@ export const FERRAMENTA_DA_REVISAO = {
           required: ["reserva_id", "campo", "valor_correto", "evidencia", "certeza"],
         },
       },
-      observacoes: { type: "string", description: "pedido sem reserva, desistência ou dúvida que a equipe deve ver" },
+      cancelamentos: {
+        type: "array",
+        description: "reservas de que o CLIENTE desistiu com todas as letras (vazio se nenhuma)",
+        items: {
+          type: "object",
+          properties: {
+            reserva_id: { type: "string" },
+            evidencia: { type: "string", description: "trecho LITERAL em que o cliente desiste" },
+            certeza: { type: "string", enum: ["alta", "media", "baixa"] },
+          },
+          required: ["reserva_id", "evidencia", "certeza"],
+        },
+      },
+      observacoes: { type: "string", description: "pedido sem reserva ou dúvida que a equipe deve ver" },
       equipe_precisa_agir: {
         type: "boolean",
-        description: "true SÓ se a observação pede uma ação da equipe (pedido sem reserva, desistência, dúvida que você não resolve). Tudo certo = false.",
+        description: "true SÓ se a observação pede uma ação da equipe (pedido sem reserva, dúvida que você não resolve). Tudo certo = false.",
       },
     },
     required: ["achados"],
@@ -536,4 +550,194 @@ export function pendenciaDeDiaOuSentido(
     const r = (reservas ?? []).find((x) => x.id === a.reserva_id);
     return !!r && r.data >= hoje && r.data <= ate;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Desistência do cliente (issue #490): o revisor cancela sozinho quando é claro
+// ---------------------------------------------------------------------------
+
+/** O que o modelo apontou como desistência do cliente numa reserva. */
+export type PedidoDeCancelamento = { reserva_id: string; evidencia: string; certeza: "alta" | "media" | "baixa" };
+
+export function cancelamentosValidos(bruto: unknown): PedidoDeCancelamento[] {
+  const lista = Array.isArray(bruto) ? bruto : [];
+  const out: PedidoDeCancelamento[] = [];
+  for (const c of lista as Record<string, unknown>[]) {
+    const reserva = txt(c?.reserva_id, 60);
+    const evidencia = txt(c?.evidencia, 400);
+    if (!reserva || !evidencia) continue;
+    out.push({ reserva_id: reserva, evidencia, certeza: c.certeza === "alta" || c.certeza === "media" ? c.certeza : "baixa" });
+  }
+  return out;
+}
+
+const RE_DESISTENCIA =
+  / (desmarc\w*|cancel\w*|desist\w*|nao vou (mais|poder|conseguir|viajar|precisar|ir)|nao (preciso|precisarei|irei|viajo|viajarei) mais|nao vai (dar|mais)|tira (meu nome|minha passagem|minha vaga|a minha)|pode tirar|libera (a|minha) vaga) /;
+const RE_VOLTOU_ATRAS =
+  / (vou sim|vou mesmo|ainda vou|mudei de ideia|(quero|vou querer) (remarcar|marcar|agendar|reservar|a passagem|uma passagem|a vaga)|remarc\w*|(agend|marc|reserv)\w* de novo|deixa (marcad|agendad|reservad)\w*|nao cancel\w*|nao desmarc\w*) /;
+/** Mudar de dia não é desistir: "desmarca segunda e marca pra quarta", "passa pra terça", "adiar". */
+const RE_MUDANCA =
+  / (remarc\w*|marc(a|ar|ando)|agend(a|ar|e)|reservar|adi(a|ar|e|ando)|trocar?|troca|mud(a|ar|e|ando)|passa(r)? (pra|para)|outro dia|outra data|no lugar) /;
+/** Pergunta sem interrogação: "tem como desmarcar", "posso cancelar". */
+const RE_PERGUNTA = / (tem como|teria como|posso|podemos|da pra|da para|daria|sera que|consigo|queria saber|e se) /;
+/** Quem não vai é outra pessoa: "a menina que ia comigo não vai mais". */
+const RE_TERCEIRO =
+  / (comigo|ele|ela|eles|elas|menin[oa]s?|rapaz|moc[oa]|amig[oa]s?|mae|pai|filh[oa]s?|espos[oa]|marido|mulher|irma|irmao|sobrinh[oa]s?|net[oa]s?|prim[oa]s?|ti[oa]|avo) (\w+ ){0,6}(nao (vai|vao|ira|irao|pode|podera|quer)|desist\w*|cancel\w*|desmarc\w*) /;
+/** Desistência da reserva inteira quando ela tem mais de uma passagem. */
+const RE_TODAS = / (todas|todos|toda|tudo|nossas? (passagens?|vagas?|viagem|reserva)|minhas (passagens|vagas)|as passagens|as vagas|ninguem (vai|mais)|nao vamos) /;
+const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
+
+/**
+ * A frase da desistência diz QUAL reserva ("a ida", "a de segunda", "dia 23")? Devolve as reservas
+ * que combinam com o que ela cita; sem citar nada, todas.
+ */
+export function reservasCitadas<T extends { id: string; data: string; direcao: "ida" | "volta" }>(
+  evidencia: string,
+  reservas: T[],
+  /** quando a frase foi escrita: "hoje" e "amanhã" contam desse dia (em São Luís) */
+  em?: string,
+): T[] {
+  const n = ` ${normalizarTexto(evidencia)} `;
+  let candidatas = reservas;
+  const ida = / (ida|de ida) /.test(n);
+  const volta = / (volta|de volta) /.test(n);
+  if (ida !== volta) candidatas = candidatas.filter((r) => r.direcao === (ida ? "ida" : "volta"));
+  // "não vou mais hoje" depois que a de hoje saiu não é a reserva de sexta
+  const relativo = / (hoje|hj) /.test(n) ? 0 : / (amanha|amnh|amanhã) /.test(n) ? 1 : null;
+  if (relativo !== null && em && Number.isFinite(Date.parse(em))) {
+    // São Luís é UTC-3 o ano todo
+    const citado = new Date(Date.parse(em) - 3 * 3600_000 + relativo * 86400_000).toISOString().slice(0, 10);
+    candidatas = candidatas.filter((r) => r.data === citado);
+  }
+  const dia = SEMANA.findIndex((d) => n.includes(` ${d} `));
+  if (dia >= 0) candidatas = candidatas.filter((r) => new Date(`${r.data}T12:00:00Z`).getUTCDay() === dia);
+  const ddmm = n.match(/ (\d{1,2}) (\d{1,2}) /);
+  const diaDoMes = n.match(/ dia (\d{1,2}) /);
+  const numero = ddmm ? Number(ddmm[1]) : diaDoMes ? Number(diaDoMes[1]) : null;
+  if (numero) candidatas = candidatas.filter((r) => Number(r.data.slice(8, 10)) === numero);
+  return candidatas;
+}
+
+/**
+ * Decide o que fazer com cada desistência apontada (issue #490). Cancela sozinho só quando TUDO vale:
+ * a frase é do CLIENTE, está na conversa, foi escrita DEPOIS da reserva, diz que desiste (desmarcar,
+ * cancelar, não vou mais…), com certeza alta; a reserva é a única que a frase pode querer dizer; ele
+ * não voltou atrás depois e a equipe não marcou "Agendado/Atualizado ☑️" nem mexeu na reserva depois; não
+ * é pergunta, mudança de dia, só uma de várias passagens nem encomenda; e a reserva não foi paga
+ * (reembolso é com a equipe). Com o "Atualizado ☑️" da equipe, certeza média basta. O resto com
+ * prova na conversa vira pendência; sem prova, é descartado.
+ */
+export function decidirCancelamentos(
+  pedidos: PedidoDeCancelamento[],
+  ctx: {
+    reservas: ReservaRevisada[];
+    conversa: string;
+    falas: FalaDaRevisao[];
+    pagas?: string[];
+    confirmadoPelaEquipe?: boolean;
+    /** por reserva, a última vez que uma PESSOA mexeu nela: o que ela fez depois da frase vence (issue #389) */
+    mexidaPelaEquipe?: Record<string, string>;
+  },
+): { cancelar: { reserva_id: string; evidencia: string }[]; pendencias: string[] } {
+  const cancelar: { reserva_id: string; evidencia: string }[] = [];
+  const pendencias: string[] = [];
+  const vistos = new Set<string>();
+  for (const p of pedidos ?? []) {
+    if (vistos.has(p.reserva_id)) continue;
+    vistos.add(p.reserva_id);
+    const r = ctx.reservas.find((x) => x.id === p.reserva_id);
+    if (!r || !evidenciaNaConversa(p.evidencia, ctx.conversa)) continue;
+    const quando = `${r.direcao === "ida" ? "Ida" : "Volta"} ${r.data.split("-").reverse().slice(0, 2).join("/")}`;
+    const pendencia = (motivo: string) =>
+      pendencias.push(`O cliente parece ter desistido da ${quando}: "${p.evidencia}" — ${motivo}. Confira e cancele pela Agenda.`);
+    const parte = partesDaEvidencia(p.evidencia).at(-1) ?? "";
+    const falaDele = [...ctx.falas]
+      .filter((f) => f.quem === "cliente" && ` ${normalizarTexto(f.texto)} `.includes(parte))
+      .sort((a, b) => b.em.localeCompare(a.em))[0];
+    if (!falaDele) {
+      pendencia("a frase não é do cliente");
+      continue;
+    }
+    if (!(Date.parse(falaDele.em) > Date.parse(r.criada_em))) {
+      pendencia("a frase é de antes da reserva");
+      continue;
+    }
+    if (!RE_DESISTENCIA.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia("a frase não diz que ele desiste");
+      continue;
+    }
+    if (falaDele.texto.includes("?") || RE_PERGUNTA.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia("é uma pergunta");
+      continue;
+    }
+    if (RE_MUDANCA.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia("parece mudança de dia, não desistência");
+      continue;
+    }
+    if (RE_TERCEIRO.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia("parece que quem não vai é outra pessoa");
+      continue;
+    }
+    if (r.quantidade > 1 && !RE_TODAS.test(` ${normalizarTexto(falaDele.texto)} `)) {
+      pendencia(`a reserva tem ${r.quantidade} passagens e a frase não diz que são todas`);
+      continue;
+    }
+    if (r.tipo === "encomenda") {
+      pendencia("é encomenda");
+      continue;
+    }
+    const mexida = ctx.mexidaPelaEquipe?.[r.id];
+    if (mexida && Date.parse(mexida) > Date.parse(falaDele.em)) {
+      pendencia("a equipe mexeu na reserva depois");
+      continue;
+    }
+    if (!(p.certeza === "alta" || (ctx.confirmadoPelaEquipe && p.certeza === "media"))) {
+      pendencia(`certeza ${p.certeza}`);
+      continue;
+    }
+    const depois = ctx.falas.filter((f) => Date.parse(f.em) > Date.parse(falaDele.em));
+    if (depois.some((f) => f.quem === "cliente" && RE_VOLTOU_ATRAS.test(` ${normalizarTexto(f.texto)} `))) {
+      pendencia("depois ele parece ter voltado atrás");
+      continue;
+    }
+    if (!ctx.confirmadoPelaEquipe && depois.some((f) => f.quem === "equipe" && (ehMarcaDeAgendado(f.texto) || ehMarcaDeCorrecao(f.texto)))) {
+      pendencia("a equipe marcou a conversa depois");
+      continue;
+    }
+    if ((ctx.pagas ?? []).includes(r.id)) {
+      pendencia("a reserva está paga (ver reembolso)");
+      continue;
+    }
+    const citadas = reservasCitadas(falaDele.texto, ctx.reservas, falaDele.em);
+    if (!ctx.confirmadoPelaEquipe && (citadas.length !== 1 || citadas[0].id !== r.id)) {
+      pendencia("a frase não aponta só para esta reserva");
+      continue;
+    }
+    cancelar.push({ reserva_id: r.id, evidencia: p.evidencia });
+  }
+  return { cancelar, pendencias };
+}
+
+/** "Cancelei a passagem da Volta de segunda (23/11), como você pediu…" — nunca valor. */
+export function mensagemDeCancelamento(
+  reservas: { data: string; direcao: "ida" | "volta"; tipo: "passagem" | "encomenda"; quantidade: number }[],
+  ctx: { hoje: string; nome?: string | null },
+): string | null {
+  if (!reservas.length) return null;
+  const quando = (data: string) => {
+    const ddmm = `${data.slice(8, 10)}/${data.slice(5, 7)}`;
+    const amanha = new Date(`${ctx.hoje}T12:00:00Z`);
+    amanha.setUTCDate(amanha.getUTCDate() + 1);
+    if (data === ctx.hoje) return `de hoje (${ddmm})`;
+    if (data === amanha.toISOString().slice(0, 10)) return `de amanhã (${ddmm})`;
+    const dia = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"][new Date(`${data}T12:00:00Z`).getUTCDay()];
+    return `de ${dia} (${ddmm})`;
+  };
+  const itens = reservas.map((r) => {
+    const o = r.tipo === "encomenda" ? "a encomenda" : r.quantidade > 1 ? `as ${r.quantidade} passagens` : "a passagem";
+    return `${o} da ${r.direcao === "ida" ? "Ida" : "Volta"} ${quando(r.data)}`;
+  });
+  const lista = itens.length === 1 ? itens[0] : `${itens.slice(0, -1).join(", ")} e ${itens.at(-1)}`;
+  const primeiro = String(ctx.nome ?? "").trim().split(/\s+/)[0];
+  return `${primeiro ? `${primeiro}, c` : "C"}ancelei ${lista}, como você pediu. Se foi engano ou quiser remarcar, é só responder aqui.`;
 }

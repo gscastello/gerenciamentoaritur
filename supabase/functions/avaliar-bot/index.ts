@@ -7,6 +7,7 @@
 // responde na hora e avalia em segundo plano (alguns casos por chamada).
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
 
+import { bairroDaTabela } from "../_shared/agentePuro.ts";
 import { compararCaso, type ViagemDoCaso } from "../_shared/avaliacaoPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
@@ -21,7 +22,7 @@ function evento(nome: string, dados: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 type Linha = Record<string, any>;
 
-async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, modelo: string | null) {
+async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, modelo: string | null, memoria: boolean, bairros: { neighborhood: string }[]) {
   try {
     const r = await simularAgendado({
       conversationId: caso.conversation_id,
@@ -30,6 +31,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
       telefone: String(caso.telefone),
       marcaEm: String(caso.marca_em),
       ...(modelo ? { modelo } : {}),
+      memoria,
     });
     const planejadas = r.planejadas.map((p: Linha) => ({
       trip_date: p.trip_date,
@@ -47,6 +49,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
     const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas, {
       motivos: r.motivos,
       pendenteOk: caso.pendente_ok === true,
+      bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
     });
     await supabaseAdmin.from("bot_avaliacoes").insert({
       rodada,
@@ -85,6 +88,9 @@ Deno.serve(async (req: Request) => {
   // só os modelos que o bot usa (issue #421: comparar a primeira leitura com o modelo capaz)
   const modelo = ["claude-haiku-5-5", "claude-sonnet-5-5"].includes(corpo?.modelo) ? String(corpo.modelo) : null;
 
+  // mesmo texto já lido: usa a leitura guardada, sem gastar API; {"fresco": true} lê tudo de novo (issue #494)
+  const memoria = corpo?.fresco !== true;
+
   // erro técnico (limite da API, tempo) não conta como feito: a próxima chamada refaz
   const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada).neq("resultado", "erro");
   const jaFeitos = new Set(((feitos ?? []) as Linha[]).map((f) => f.caso_id));
@@ -93,9 +99,11 @@ Deno.serve(async (req: Request) => {
   const { data: casos } = await q.limit(1000);
   const fila = ((casos ?? []) as Linha[]).filter((c) => !jaFeitos.has(c.id)).slice(0, limite);
 
+  const { data: tabela } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood");
+  const bairros = (tabela ?? []) as { neighborhood: string }[];
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo));
+    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
     evento("avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
   })().catch((err) => evento("bot_erro", { etapa: "avaliacao", erro: String(err).slice(0, 300) }));
 

@@ -79,6 +79,18 @@ Deno.test("#467 sentinela: pergunta solta não é pedido; endereço ou pedido co
   assertEquals(clienteConcretizou([f("cliente", "Tem vaga amanhã?", 0), f("equipe", "Agendado ☑️", 1)]), true);
 });
 
+Deno.test("#472 endereço picado numa pergunta de preço não é pedido", async () => {
+  const { clienteConcretizou } = await import("./sentinelaPura.ts");
+  const f = (quem: string, texto: string, seg: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 19, 15, 0, seg)).toISOString() });
+  // caso real (fictício): o cliente perguntou quanto custa deixar num endereço
+  assertEquals(clienteConcretizou([f("cliente", "Quanto é pra me deixar nesse endereço", 0), f("cliente", "Rua das Flores - Pindaí", 5), f("cliente", "?", 9), f("equipe", "90 reais", 300)]), false);
+  assertEquals(clienteConcretizou([f("cliente", "Rua das Flores, casa 3", 0), f("cliente", "?", 4)]), false);
+  // endereço depois de "tem vaga? quanto é?" é pedido
+  assertEquals(clienteConcretizou([f("cliente", "Tem vaga amanhã? quanto é?", 0), f("cliente", "Aqui na rua da torre, casa azul", 30)]), true);
+  // a pergunta longe (mais de 2 min) não conta
+  assertEquals(clienteConcretizou([f("cliente", "Rua das Flores, casa 3", 0), f("cliente", "?", 200)]), true);
+});
+
 Deno.test("#482 pedido novo depois do 'lotado' não é pedido encerrado", () => {
   const f = (quem: string, texto: string, min: number) => ({ quem, texto, em: new Date(Date.UTC(2026, 10, 22, 18, min)).toISOString() });
   // caso real (fictício): amanhã lotado; o cliente pede terça e a equipe diz "ok"

@@ -1,5 +1,6 @@
 ---
 name: agendar
+model: sonnet
 description: Lança no app (Supabase de produção) reservas de passagem ou encomenda combinadas no WhatsApp, a pedido do dono. Use quando o dono disser "agende/reserve a passagem de <telefone ou nome>", colar uma conversa ou uma lista de reservas (estilo bloco de notas/Evernote), ou pedir para remarcar/trocar o ponto/cancelar uma reserva. Lê a conversa no banco, confere cadastro, vagas, preço e duplicidade, e cria pela rpc_create_reservation.
 ---
 

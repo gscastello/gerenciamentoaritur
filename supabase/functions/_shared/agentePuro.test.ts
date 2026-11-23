@@ -684,3 +684,19 @@ Deno.test("perguntaSemResposta: só a dúvida que faltou conhecimento entra na l
   assertEquals(perguntaSemResposta("98981874457"), null);
   assertEquals(perguntaSemResposta("x".repeat(600))?.length, 500);
 });
+
+Deno.test("#494: bairro como está na tabela", async () => {
+  const { bairroComoNaTabela } = await import("./agentePuro.ts");
+  const tabela = ["Aurora", "Cohatrac", "Novo Cohatrac", "Planalto Turu", "Turu", "Cohatrac I"].map((neighborhood) => ({ neighborhood }));
+  // o nome inteiro que o cliente escreveu fica (o preço já sai pelo da tabela)
+  assertEquals(bairroComoNaTabela("Novo Aurora", "Av. 02 casa 2", tabela), null);
+  assertEquals(bairroComoNaTabela("Jardim Turu", "Rua 1", tabela), null);
+  assertEquals(bairroComoNaTabela("Cohatrac", "Condomínio Village Reserva, Cohatrac novo", tabela), "Novo Cohatrac");
+  assertEquals(bairroComoNaTabela("Cohatrac Condomínio Marsil", null, tabela), null);
+  // já está igual, ou não está na tabela
+  assertEquals(bairroComoNaTabela("Turu", "Rua 5", tabela), null);
+  assertEquals(bairroComoNaTabela("Jardim Tal", null, tabela), null);
+  // "Turu, Planalto Vinhais" não é "Planalto Turu"
+  assertEquals(bairroComoNaTabela("Turu", "Turu, Planalto Vinhais", tabela), null);
+  assertEquals(bairroComoNaTabela(null, "Cohatrac novo", tabela), null);
+});

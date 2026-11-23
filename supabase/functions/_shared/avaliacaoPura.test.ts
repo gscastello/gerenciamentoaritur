@@ -33,3 +33,15 @@ Deno.test("#419 resumo da rodada", () => {
   const r = resumoDaRodada(["certo", "certo", "errado", "pendente"]);
   assertEquals(r, { total: 4, certos: 2, errados: 1, faltaram: 0, pendentes: 1, acerto: 50, semErroGrave: 75 });
 });
+
+Deno.test("#494: bairros que são o mesmo na tabela não são erro; de preço diferente são", () => {
+  const v = (b: string) => ({ trip_date: "2026-11-25", direction: "ida", route_point_code: "busca", quantity: 1, pickup_neighborhood: b });
+  const tabela: Record<string, string> = { "Novo Aurora": "Aurora", Aurora: "Aurora", Turu: "Turu", "Jardim Turu": "Turu", "Alto do Turu": "Alto do Turu" };
+  const bairroNaTabela = (b: string) => tabela[b] ?? null;
+  assertEquals(compararCaso([v("Aurora")], [v("Novo Aurora")], { bairroNaTabela }).resultado, "certo");
+  assertEquals(compararCaso([v("Jardim Turu")], [v("Turu")], { bairroNaTabela }).resultado, "certo");
+  assertEquals(compararCaso([v("Alto do Turu")], [v("Turu")], { bairroNaTabela }).resultado, "errado");
+  // fora da tabela, os dois: só o texto igual vale
+  assertEquals(compararCaso([v("Bairro A")], [v("Bairro B")], { bairroNaTabela }).resultado, "errado");
+  assertEquals(compararCaso([v("Aurora")], [v("Novo Aurora")]).resultado, "errado");
+});

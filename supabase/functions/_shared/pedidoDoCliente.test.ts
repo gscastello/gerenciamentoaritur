@@ -455,3 +455,33 @@ Deno.test("#486: 'espero no posto Carone' é o ponto Posto Carone (Outros se ele
   assertEquals(pontoEscrito(["espero no posto Carone"], ["busca", "rodoviaria", "retorno", "outro"]), "outro");
   assertEquals(pontoEscrito(["fico esperando no aeroporto"], ["busca", "rodoviaria", "retorno", "postocarone", "outro"]), "outro");
 });
+
+Deno.test("#494: onde DEIXAR é o destino ('buscar em casa e deixar … em Cantanhede' = Ida)", () => {
+  assertEquals(sentidoEscrito(["[áudio: quanto é pra buscar em casa e deixar aqui em casa, aqui na minha, em Cantanhede?]"]), "ida");
+  assertEquals(sentidoEscrito(["pode deixar ela em Pirapemas"]), "ida");
+  assertEquals(sentidoEscrito(["é pra deixar em casa em São Luís"]), "volta");
+  // busca e deixa no interior: esta regra não decide
+  assertEquals(sentidoEscrito(["buscar em Pirapemas e deixar na casa dela em Cantanhede"]), null);
+  // "deixar agendado/uma vaga" não é desembarque
+  assertEquals(sentidoEscrito(["pode deixar agendado em Pirapemas"]), null);
+  assertEquals(sentidoEscrito(["deixar uma vaga saindo em Cantanhede"]), null);
+});
+
+Deno.test("#494: 'mesmo endereço que me deixou hoje' = sentido contrário da última viagem", async () => {
+  const { pedeDeOndeDeixou, viagemDeOndeDeixou } = await import("./pedidoDoCliente.ts");
+  const ida = { data: "2026-11-20", direcao: "ida", desembarque: "Cantanhede" };
+  assert(pedeDeOndeDeixou(["Msm endereço q me deixou hj"]));
+  assert(pedeDeOndeDeixou(["no mesmo lugar onde vocês me deixaram"]));
+  assert(!pedeDeOndeDeixou(["o mesmo endereço de sempre"]));
+  assertEquals(viagemDeOndeDeixou(["Msm endereço q me deixou hj"], [ida], "2026-11-20"), { direcao: "volta", cidade: "cantanhede", ultima: "ida 2026-11-20" });
+  assertEquals(viagemDeOndeDeixou(["mesmo local que me deixou"], [{ ...ida, direcao: "volta", desembarque: "Rodoviária" }], "2026-11-21"), {
+    direcao: "ida",
+    cidade: null,
+    ultima: "volta 2026-11-20",
+  });
+  // foi e voltou no mesmo dia: a última é a Volta
+  assertEquals(viagemDeOndeDeixou(["mesmo lugar que me deixou"], [ida, { ...ida, direcao: "volta" }], "2026-11-20")?.direcao, "ida");
+  // viagem futura ou antiga não conta; sem a frase, nada
+  assertEquals(viagemDeOndeDeixou(["mesmo lugar que me deixou"], [{ ...ida, data: "2026-11-22" }, { ...ida, data: "2026-11-01" }], "2026-11-20"), null);
+  assertEquals(viagemDeOndeDeixou(["no mesmo endereço"], [ida], "2026-11-20"), null);
+});
