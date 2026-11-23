@@ -219,7 +219,9 @@ export async function mockSupabase(page, opts = {}) {
   );
 
   // a letra do Google não entra no teste (rede do CI)
-  await page.route("**/fonts.googleapis.com/**", (route) => route.abort());
+  await page.route("**/fonts.googleapis.com/**", (route) =>
+    route.fulfill({ contentType: "text/css", body: "" }),
+  );
 
   // realtime: nunca conecta
   await page.route("**/realtime/v1/**", (route) => route.abort());
