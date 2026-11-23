@@ -127,6 +127,8 @@ Deno.test("#501 prova: o 'sim' da prova só responde a pedido de confirmação d
   assert(pedeConfirmacao("Posso reservar assim?"));
   // a pergunta no meio, o resumo depois (caso b270f411)
   assert(pedeConfirmacao("Em Cantanhede a van passa entre 13h e 14h.\n\nQuer que eu reserve? Seria 1 passagem, descendo no Retorno, por R$ 60."));
+  // nome de rua no resumo não é pergunta de dado (caso b270f411, 2ª rodada)
+  assert(pedeConfirmacao("Quer que eu reserve para amanhã, saindo da entrada da Rua da Areia, em Cantanhede, com 1 passagem?"));
   // confirmação junto com pergunta de dado: falta o dado, não é o "sim"
   assert(!pedeConfirmacao("Posso confirmar? E qual o seu nome?"));
   // pergunta de dado: só o cliente sabe

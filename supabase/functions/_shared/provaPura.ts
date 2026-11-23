@@ -156,7 +156,8 @@ export function pedeConfirmacao(texto: string | null | undefined): boolean {
   // cada pergunta da resposta (a pergunta nem sempre é a última linha: "Quer que eu reserve? Seria 1 passagem…")
   const perguntas = String(texto ?? "").match(/[^?.!\n]*\?/g) ?? [];
   if (!perguntas.length) return false;
-  const deDado = /\b(nome|endere[cç]o|rua|bairro|quantas|quantos|qual|onde|que horas|de onde|para onde)\b/i;
+  // pergunta que PEDE um dado ("qual o seu nome?", "onde você desce?") — não o nome de rua no resumo ("Rua da Areia")
+  const deDado = /\b(qual|quais|quantas|quantos|onde|que horas)\b|\b(seu|sua|o|me diga o|manda o)\s+(nome|endere[cç]o|bairro)\b/i;
   if (perguntas.some((q) => deDado.test(q))) return false;
   const confirma =
     /\b(posso|podemos)\s+(confirmar|reservar|agendar|fechar|marcar|lan[cç]ar|garantir)|\bquer que eu\s+(reserve|confirme|marque|agende|feche|garanta)|\bconfirm(a|o|ar|amos)\b|\bpode ser\b|\bfechado\b|\btudo certo\b|\bcerto\s*\?/i;
