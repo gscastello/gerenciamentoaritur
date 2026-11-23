@@ -1,6 +1,26 @@
 import { assert, assertEquals } from "jsr:@std/assert";
 import type { MensagemDaConversa } from "./agentePuro.ts";
-import { type AcaoDaProva, compararProva, custoMensal, historicoDoTurno, MAX_TURNOS, pedeConfirmacao, terminaPerguntando, turnosDoCliente } from "./provaPura.ts";
+import {
+  type AcaoDaProva,
+  compararProva,
+  criadoAntes,
+  custoMensal,
+  historicoDoTurno,
+  MAX_TURNOS,
+  pedeConfirmacao,
+  terminaPerguntando,
+  turnosDoCliente,
+} from "./provaPura.ts";
+
+Deno.test("#504 prova: 'criado antes' compara horário, não texto (fusos diferentes)", () => {
+  // criada 36 min DEPOIS da primeira mensagem, mas como texto "22T23" < "23T02" (caso f471b58e)
+  assertEquals(criadoAntes("2026-11-22T23:41:46.911351-03:00", "2026-11-23T02:05:51.709Z"), false);
+  assertEquals(criadoAntes("2026-11-22T22:00:00-03:00", "2026-11-23T02:05:51.709Z"), true);
+  assertEquals(criadoAntes("2026-11-23T01:00:00+00:00", "2026-11-23T02:05:51.709Z"), true);
+  // sem data legível: conta como depois (não vaza para a prova)
+  assertEquals(criadoAntes(null, "2026-11-23T02:05:51.709Z"), false);
+  assertEquals(criadoAntes("ontem", "2026-11-23T02:05:51.709Z"), false);
+});
 
 const m = (quem: MensagemDaConversa["quem"], texto: string, em: string): MensagemDaConversa => ({ quem, texto, em: `2026-11-20T${em}:00.000Z` });
 

@@ -42,7 +42,7 @@ import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { lugaresContraOSentido } from "./ladoDaRota.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
-import type { AcaoDaProva } from "./provaPura.ts";
+import { type AcaoDaProva, criadoAntes } from "./provaPura.ts";
 
 /** Prova do atendente com uma conversa real (issue #501): nada é gravado; o que ele faria fica aqui. */
 export type ProvaDoAtendente = {
@@ -278,7 +278,7 @@ type Linha = any;
 /** Na prova, o cliente cadastrado depois da conversa ainda era cliente novo. */
 export async function clienteAntesDe(telefone: string, antesDe: string | null | undefined): Promise<Linha | null> {
   const cliente = await whatsappService.identifyCustomer(telefone);
-  if (cliente && antesDe && String(cliente.created_at ?? "") >= antesDe) return null;
+  if (cliente && antesDe && !criadoAntes(cliente.created_at, antesDe)) return null;
   return cliente;
 }
 
@@ -291,7 +291,7 @@ async function clienteDaConversa(ctx: ContextoDoAgente): Promise<Linha | null> {
 async function reservasDeUmCliente(cliente: Linha | null, prova: ProvaDoAtendente | undefined, daConversa: boolean): Promise<Linha[]> {
   const reais = cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [];
   if (!prova) return reais;
-  const antes = reais.filter((r) => String(r.created_at ?? "") < prova.antesDe);
+  const antes = reais.filter((r) => criadoAntes(r.created_at, prova.antesDe));
   if (!daConversa) return antes;
   const daProva = prova.acoes.flatMap((a) =>
     a.tipo === "criar" && !a.cancelada

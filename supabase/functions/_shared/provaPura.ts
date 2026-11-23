@@ -55,6 +55,17 @@ export function historicoDoTurno(turnos: Turno[], respostas: (string | null)[], 
   return out;
 }
 
+/**
+ * Foi criado antes do instante? Compara como HORÁRIO, nunca como texto: o banco devolve "…T23:41-03:00" e a
+ * prova usa "…T02:05Z"; como texto, uma reserva criada 36 min depois parecia de antes (caso f471b58e).
+ * Data que não dá para ler conta como depois (não vaza).
+ */
+export function criadoAntes(criadoEm: unknown, antesDe: string): boolean {
+  const t = Date.parse(String(criadoEm ?? ""));
+  const limite = Date.parse(antesDe);
+  return Number.isFinite(t) && Number.isFinite(limite) && t < limite;
+}
+
 /** O que o atendente FARIA (nada disso é gravado). */
 export type AcaoDaProva =
   | {
