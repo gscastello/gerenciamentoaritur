@@ -277,6 +277,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   `extra_data.complementar`) e o atendente pede o que falta numa pergunta, na mensagem que conta que reservou. Nome = o
   que o cliente escreveu, mesmo só o primeiro; nunca o do perfil do WhatsApp. Base: nos 14 dias até 23/11, 57% das
   reservas tinham nome de uma palavra, 47% das Voltas e 22% das Idas não tinham desembarque.
+  **Valor só se o cliente perguntar** (dono, 23/11): o atendente não cita preço por conta própria, nem no resumo. A
+  Volta espelha a Ida pelo DESEMBARQUE em São Luís: em casa pelo bairro; Retorno, Rodoviária, BR e Posto Carone pelo
+  ponto; aeroporto o dele (`comoCobrarAVolta`). Cliente da Volta que pergunta o valor sem dizer onde desce: o atendente
+  pergunta primeiro (`calcular_valor` devolve FALTA_DESEMBARQUE). Reserva da Volta sem desembarque entra com o valor do
+  ponto e o revisor acerta pela tabela quando o desembarque chega (`conferirPreco`).
 - **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização

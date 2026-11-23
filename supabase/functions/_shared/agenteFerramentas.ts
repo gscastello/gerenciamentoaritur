@@ -573,8 +573,15 @@ async function calcularValor(args: Linha) {
   if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
   const quantidade = Number(args.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) return { ok: false, erro: "quantidade deve ser um inteiro de 1 em diante" };
-  // sem onde desce: o valor do ponto, como a equipe cobra (cidade do caminho ou casa em São Luís pode mudar)
   const desembarque = String(args.desembarque ?? "").trim();
+  // Volta: o valor espelha a Ida pelo lugar onde ele DESCE em São Luís (dono, 23/11): sem isso não há valor
+  if (direcao === "volta" && !desembarque) {
+    return {
+      ok: false,
+      codigo: "FALTA_DESEMBARQUE",
+      erro: "Na Volta o valor depende de onde ele fica em São Luís: em casa (pelo bairro), Retorno, Rodoviária, BR, Posto Carone ou aeroporto. Pergunte onde ele desce e chame de novo.",
+    };
+  }
   const preco = await valorDoPedido(ponto, {
     bairro: String(args.bairro ?? "").trim() || null,
     endereco: String(args.endereco_embarque ?? "").trim() || null,
@@ -588,7 +595,7 @@ async function calcularValor(args: Linha) {
     preco_por_passagem: preco.preco,
     quantidade,
     total: calcularTotal(preco.preco, quantidade),
-    ...(desembarque ? {} : { observacao: "Valor do ponto, sem saber onde ele desce. Se descer numa cidade do caminho (ou em casa, em São Luís, na Volta), o valor pode mudar." }),
+    ...(desembarque ? {} : { observacao: "Valor do embarque, sem saber onde ele desce. Se descer numa cidade do caminho, o valor pode mudar." }),
   };
 }
 
@@ -693,7 +700,13 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   const complementar = [...(nome ? [] : ["nome"]), ...(pedido.desembarque ? [] : ["destino"])];
   const faltaCompletar = complementar.length
     ? {
-        falta_completar: complementar.map((c) => (c === "nome" ? "o nome do passageiro" : "a cidade onde ele desce (e o lugar, se quiser dizer)")),
+        falta_completar: complementar.map((c) =>
+          c === "nome"
+            ? "o nome do passageiro"
+            : pedido.direcao === "volta"
+              ? "onde ele desce em São Luís (em casa — o bairro —, Retorno, Rodoviária, BR, Posto Carone ou aeroporto) ou numa cidade do caminho"
+              : "a cidade onde ele desce (Pirapemas, Cantanhede ou cidade do caminho)"
+        ),
         proximo_passo: "A reserva está feita. Conte isso ao cliente e, na mesma mensagem, peça o que falta em UMA pergunta. Não diga que a reserva depende disso.",
       }
     : {};
@@ -875,6 +888,15 @@ async function remarcarReserva(args: Linha, ctx: ContextoDoAgente) {
         daProva.route_point_name = ponto.name ?? null;
       }
       if (novoDesembarque) daProva.dropoff_location = novoDesembarque;
+      // o revisor acerta o preço do bot pela tabela quando o desembarque chega: a prova faz o mesmo
+      if (novoDesembarque || novoPonto) {
+        const pontos = (await whatsappService.listRoutePoints(daProva.direction as "ida" | "volta")) ?? [];
+        const ponto = acharPonto(pontos, daProva.route_point_code);
+        const valor = ponto
+          ? await valorDoPedido(ponto, { bairro: daProva.pickup_neighborhood, endereco: daProva.pickup_detail, desembarque: daProva.dropoff_location ?? "" })
+          : null;
+        if (valor?.ok) daProva.unit_price = valor.preco;
+      }
     }
     anotarNaProva(ctx, { tipo: "remarcar", reserva_id: reserva.id, da_prova: !!daProva, detalhe: { novaData, novoPonto, novoDesembarque }, turno: ctx.prova.turno });
     ctx.escrita.alterou = true;

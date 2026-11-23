@@ -899,12 +899,14 @@ export function precoDoBairroCadastrado(
  */
 export function comoCobrarAVolta(
   desembarque: string | null | undefined,
-): { tipo: "ponto"; code: "rodoviaria" | "retorno" } | { tipo: "outro" } | { tipo: "bairro"; texto: string } | null {
+): { tipo: "ponto"; code: "rodoviaria" | "retorno" | "postocarone" } | { tipo: "outro" } | { tipo: "bairro"; texto: string } | null {
   const bruto = String(desembarque ?? "").replace(/em casa \(bairro\)/gi, " ").trim();
   const t = ` ${normalizar(bruto)} `;
   if (!t.trim()) return null;
   if (t.includes(" rodoviaria ")) return { tipo: "ponto", code: "rodoviaria" };
   if (t.includes(" retorno ")) return { tipo: "ponto", code: "retorno" };
+  // a Volta espelha a Ida no desembarque (dono, 23/11): Posto Carone tem o valor do ponto dele
+  if (t.includes(" carone ")) return { tipo: "ponto", code: "postocarone" };
   if (/ (aeroporto|br|beira da estrada|rodovia) /.test(t)) return { tipo: "outro" };
   const resto = t.replace(/ (sao luis|sao luiz|slz|ma|em casa|casa|bairro|deixar|deixa|no|na|em|de|do|da) /g, " ").trim();
   return resto ? { tipo: "bairro", texto: bruto } : null;

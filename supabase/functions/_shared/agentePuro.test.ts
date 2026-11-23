@@ -685,6 +685,7 @@ Deno.test("#349: a Volta cobra pelo lugar onde deixamos o cliente", async () => 
   assertEquals(comoCobrarAVolta("Rodoviária"), { tipo: "ponto", code: "rodoviaria" });
   assertEquals(comoCobrarAVolta("Rodoviária, São Luís"), { tipo: "ponto", code: "rodoviaria" });
   assertEquals(comoCobrarAVolta("no retorno"), { tipo: "ponto", code: "retorno" });
+  assertEquals(comoCobrarAVolta("Posto Carone"), { tipo: "ponto", code: "postocarone" });
   assertEquals(comoCobrarAVolta("Aeroporto de São Luís"), { tipo: "outro" });
   assertEquals(comoCobrarAVolta("na BR, Maracanã"), { tipo: "outro" });
   assertEquals(comoCobrarAVolta("2 no Santo Antônio; 2 na Estrada da Maioba")?.tipo, "bairro");
