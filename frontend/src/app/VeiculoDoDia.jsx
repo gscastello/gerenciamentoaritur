@@ -2,7 +2,7 @@
 //
 // Veículo do dia (issue #502). A faixa no topo pergunta qual veículo roda (amanhã a partir das 14h; hoje
 // enquanto a viagem não saiu): um toque confirma os sentidos que faltam e acerta os lugares. Sem a
-// confirmação, o bot sozinho só vende até 19. Na Operação, a lista de hoje e amanhã abre e fecha as vendas.
+// confirmação, vale o veículo cadastrado. Na Operação, a lista de hoje e amanhã abre e fecha as vendas.
 
 import { Bus } from "lucide-react";
 import { useState } from "react";
@@ -75,7 +75,7 @@ export function ConfirmarVeiculoDoDia({ agora = new Date() }) {
             ))}
           </div>
           <p className="mt-2 text-xs" style={{ color: C.inkSoft }}>
-            Sem confirmar, o bot sozinho só vende até 19 lugares.
+            Sem confirmar, vale o veículo cadastrado na viagem (o padrão é o ônibus).
           </p>
           {erro && (
             <p className="mt-1 text-xs font-semibold" style={{ color: C.red }} role="alert">

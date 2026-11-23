@@ -6,7 +6,7 @@
 --      trocar o veículo pela Operação (só admin) também confirma;
 --   3) rpc_vendas_da_viagem fecha/abre as vendas do bot naquela viagem;
 --   4) fn_vagas_para_o_bot: o que o bot SOZINHO pode vender. Vendas fechadas = 0; veículo não confirmado =
---      no máximo settings.bot_autonomia.lugares_sem_confirmacao (19). A trava é no banco
+--      no máximo settings.bot_autonomia.lugares_sem_confirmacao (31: dono, 23/11 — o padrão é sempre o ônibus). A trava é no banco
 --      (trg_reservations_autonomia). A equipe e o "Agendado ☑️" não mudam.
 
 alter table public.trips add column if not exists vehicle_confirmed_at timestamptz;
@@ -15,7 +15,7 @@ alter table public.trips add column if not exists sales_closed_at timestamptz;
 alter table public.trips add column if not exists sales_closed_by uuid references public.users(id);
 
 insert into public.settings (key, value)
-select 'bot_autonomia', '{"lugares_sem_confirmacao": 19, "teto_usd_mes": 120, "grupos": []}'::jsonb
+select 'bot_autonomia', '{"lugares_sem_confirmacao": 31, "teto_usd_mes": 120, "grupos": []}'::jsonb
 where not exists (select 1 from public.settings where key = 'bot_autonomia');
 
 -- a troca de verdade (sem conferir papel): usada pelas duas RPCs
@@ -135,7 +135,7 @@ security definer
 set search_path to 'public', 'pg_temp'
 as $function$
   with lim as (
-    select coalesce(nullif((select value->>'lugares_sem_confirmacao' from settings where key = 'bot_autonomia'), '')::int, 19) n
+    select coalesce(nullif((select value->>'lugares_sem_confirmacao' from settings where key = 'bot_autonomia'), '')::int, 31) n
   ),
   v as (
     select t.capacity, o.occupied, t.vehicle_confirmed_at is not null as confirmado, t.sales_closed_at is not null as fechada
