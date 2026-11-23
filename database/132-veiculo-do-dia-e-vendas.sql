@@ -190,3 +190,6 @@ revoke all on function public.fn_trava_da_autonomia() from public, anon, authent
 drop trigger if exists trg_reservations_autonomia on public.reservations;
 create trigger trg_reservations_autonomia before insert on public.reservations
   for each row execute function public.fn_trava_da_autonomia();
+
+-- Testado ao aplicar, dentro da própria migração e desfeito: sem confirmação o bot não passa de 19; o
+-- "Agendado ☑️" passa; confirmado, vale a capacidade; vendas fechadas barram o bot; anon sem acesso.
