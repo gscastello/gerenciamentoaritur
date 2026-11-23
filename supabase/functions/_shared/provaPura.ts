@@ -153,11 +153,14 @@ export const MAX_SIM_DA_PROVA = 2;
  * Pergunta de dado (nome, endereço, quantas) não conta: aí falta o que só o cliente sabe.
  */
 export function pedeConfirmacao(texto: string | null | undefined): boolean {
-  const t = String(texto ?? "").trim();
-  if (!terminaPerguntando(t)) return false;
-  const ultima = t.split(/\n+/).filter((l) => l.trim()).pop() ?? "";
-  if (/\b(nome|endere[cç]o|rua|bairro|quantas|quantos|qual|onde|que horas|de onde|para onde)\b/i.test(ultima)) return false;
-  return /\b(posso|podemos)\s+(confirmar|reservar|agendar|fechar|marcar|lan[cç]ar|garantir)|\bconfirm(a|o|ar|amos)\b|\bpode ser\b|\bfechado\b|\btudo certo\b|\bcerto\s*\?/i.test(ultima);
+  // cada pergunta da resposta (a pergunta nem sempre é a última linha: "Quer que eu reserve? Seria 1 passagem…")
+  const perguntas = String(texto ?? "").match(/[^?.!\n]*\?/g) ?? [];
+  if (!perguntas.length) return false;
+  const deDado = /\b(nome|endere[cç]o|rua|bairro|quantas|quantos|qual|onde|que horas|de onde|para onde)\b/i;
+  if (perguntas.some((q) => deDado.test(q))) return false;
+  const confirma =
+    /\b(posso|podemos)\s+(confirmar|reservar|agendar|fechar|marcar|lan[cç]ar|garantir)|\bquer que eu\s+(reserve|confirme|marque|agende|feche|garanta)|\bconfirm(a|o|ar|amos)\b|\bpode ser\b|\bfechado\b|\btudo certo\b|\bcerto\s*\?/i;
+  return perguntas.some((q) => confirma.test(q));
 }
 
 /** A resposta faz alguma pergunta ao cliente ("?" em qualquer parte: a pergunta nem sempre vem no fim). */

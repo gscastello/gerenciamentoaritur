@@ -125,6 +125,10 @@ Deno.test("#501 prova: o 'sim' da prova só responde a pedido de confirmação d
   assert(pedeConfirmacao("Resumo: segunda (23/11), Ida da Rodoviária, 2 passagens, R$ 120. Pagamento em dinheiro, pode ser? Posso confirmar?"));
   assert(pedeConfirmacao("Ida amanhã, busca no Cohatrac, 1 passagem.\nConfirma? 😊"));
   assert(pedeConfirmacao("Posso reservar assim?"));
+  // a pergunta no meio, o resumo depois (caso b270f411)
+  assert(pedeConfirmacao("Em Cantanhede a van passa entre 13h e 14h.\n\nQuer que eu reserve? Seria 1 passagem, descendo no Retorno, por R$ 60."));
+  // confirmação junto com pergunta de dado: falta o dado, não é o "sim"
+  assert(!pedeConfirmacao("Posso confirmar? E qual o seu nome?"));
   // pergunta de dado: só o cliente sabe
   assert(!pedeConfirmacao("Certo! Qual o seu nome completo?"));
   assert(!pedeConfirmacao("Pode confirmar o endereço de embarque?"));
