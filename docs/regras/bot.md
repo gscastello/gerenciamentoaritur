@@ -255,8 +255,11 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   respondeu antes, na hora do turno. **Nada é enviado nem gravado**: com `ctx.prova` as ferramentas anotam o que fariam
   (reserva, remarcar, cancelar, espera, avisar, chamar a equipe) e o contexto vai em sombra como segunda trava.
   Cadastro, reservas e endereço de costume são os de **antes** da conversa (`rpc_endereco_de_costume(p_antes_de)`;
-  sem ela, nenhum costume) e sem a anotação do cliente, para não vazar a resposta. A lotação de hoje não vale para uma
-  viagem que passou: a prova não barra por vaga (quem decide é o banco). Resultado em `bot_avaliacoes`: certo; pendente
+  sem ela, nenhum costume) e sem a anotação do cliente, para não vazar a resposta. **Vagas da época**: os passageiros de
+  reservas criadas depois do início da conversa saem da lotação de hoje. **O "sim" da prova**: na conversa real a equipe
+  lançou sem pedir confirmação, então, se o atendente termina só pedindo a confirmação do resumo (`pedeConfirmacao`;
+  pergunta de dado não conta), a prova responde "Sim, pode confirmar." pelo cliente, até 2 vezes, com o turno marcado
+  `sintetico` — o que ele gravar é o que o resumo dizia. Resultado em `bot_avaliacoes`: certo; pendente
   (chamou a equipe, terminou perguntando, lista de espera, fora da área); faltou; **errado** = dia, sentido, ponto,
   quantidade, bairro, tipo ou **preço** diferente do que ficou, viagem não pedida, ou mexer numa reserva que já existia
   (para conferir). Respostas e ações de cada turno em `lido.turnos`/`lido.acoes`; custo em `tokens.custo_usd`

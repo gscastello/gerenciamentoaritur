@@ -318,6 +318,27 @@ async function reservasDoCliente(ctx: ContextoDoAgente, recarregar = false): Pro
   return ctx.reservasCache;
 }
 
+/**
+ * Vagas na prova: a lotação de HOJE já conta as reservas feitas depois da conversa (inclusive a do
+ * próprio caso). Devolve as vagas como eram: os passageiros de reservas criadas depois saem da conta.
+ * Cancelamento feito depois não volta (fica mais cheio, nunca mais vazio do que era).
+ */
+async function disponibilidade(data: string, direcao: "ida" | "volta", prova: ProvaDoAtendente | undefined) {
+  const disp = await whatsappService.checkAvailability(data, direcao);
+  if (!prova || !disp.trip_id || disp.available == null) return disp;
+  const { data: depois } = await supabaseAdmin
+    .from("reservations")
+    .select("id, reservation_passengers(status)")
+    .eq("trip_id", disp.trip_id)
+    .is("deleted_at", null)
+    .gte("created_at", prova.antesDe);
+  const devolver = ((depois ?? []) as Linha[]).reduce(
+    (n, r) => n + ((r.reservation_passengers ?? []) as Linha[]).filter((p) => ["confirmado", "embarcado"].includes(p.status)).length,
+    0,
+  );
+  return { ...disp, occupied: Math.max(0, Number(disp.occupied ?? 0) - devolver), available: Number(disp.available) + devolver };
+}
+
 function anotarNaProva(ctx: ContextoDoAgente, acao: AcaoDaProva) {
   ctx.prova?.acoes.push(acao);
 }
@@ -444,13 +465,13 @@ async function precoDaVoltaPeloDesembarque(
   return achado ? precoDoBairroCadastrado(achado) : null;
 }
 
-async function consultarViagem(args: Linha) {
+async function consultarViagem(args: Linha, ctx: ContextoDoAgente) {
   const data = String(args.data ?? "");
   const direcao = String(args.direcao ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || (direcao !== "ida" && direcao !== "volta")) {
     return { ok: false, erro: "informe data (AAAA-MM-DD) e direcao (ida ou volta)" };
   }
-  const disp = await whatsappService.checkAvailability(data, direcao);
+  const disp = await disponibilidade(data, direcao, ctx.prova);
   const { data: viagem } = await supabaseAdmin
     .from("trips")
     .select("status, started_at, finished_at")
@@ -676,9 +697,9 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   });
   if (!preco.ok) return { ok: false, ...preco.erro };
 
-  const disp = await whatsappService.checkAvailability(pedido.data, pedido.direcao);
-  // na prova a lotação é a de hoje, não a da época: a vaga é decidida pelo banco, não pelo atendente
-  if (!ctx.prova && disp.available != null && disp.available < pedido.quantidade) {
+  // na prova, as vagas como eram antes da conversa (a lotação de hoje conta reservas feitas depois)
+  const disp = await disponibilidade(pedido.data, pedido.direcao, ctx.prova);
+  if (disp.available != null && disp.available < pedido.quantidade) {
     return {
       ok: false,
       codigo: "SEM_VAGAS",
@@ -926,7 +947,7 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
   try {
     switch (nome) {
       case "consultar_viagem":
-        return await consultarViagem(args);
+        return await consultarViagem(args, ctx);
       case "andamento_da_viagem":
         return await andamentoDaViagem(args, ctx);
       case "listar_pontos_e_precos":

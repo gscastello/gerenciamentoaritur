@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert";
 import type { MensagemDaConversa } from "./agentePuro.ts";
-import { type AcaoDaProva, compararProva, custoMensal, historicoDoTurno, MAX_TURNOS, terminaPerguntando, turnosDoCliente } from "./provaPura.ts";
+import { type AcaoDaProva, compararProva, custoMensal, historicoDoTurno, MAX_TURNOS, pedeConfirmacao, terminaPerguntando, turnosDoCliente } from "./provaPura.ts";
 
 const m = (quem: MensagemDaConversa["quem"], texto: string, em: string): MensagemDaConversa => ({ quem, texto, em: `2026-11-20T${em}:00.000Z` });
 
@@ -97,4 +97,16 @@ Deno.test("#501 prova: custo por mês pelas conversas por dia", () => {
   assertEquals(custoMensal(3, 300), 24.6); // US$ 0,01 por conversa × 82 × 30
   assertEquals(custoMensal(3, 0), 0);
   assertEquals(custoMensal(10, 100, 100), 300);
+});
+
+Deno.test("#501 prova: o 'sim' da prova só responde a pedido de confirmação do resumo", () => {
+  assert(pedeConfirmacao("Resumo: segunda (23/11), Ida da Rodoviária, 2 passagens, R$ 120. Pagamento em dinheiro, pode ser? Posso confirmar?"));
+  assert(pedeConfirmacao("Ida amanhã, busca no Cohatrac, 1 passagem.\nConfirma? 😊"));
+  assert(pedeConfirmacao("Posso reservar assim?"));
+  // pergunta de dado: só o cliente sabe
+  assert(!pedeConfirmacao("Certo! Qual o seu nome completo?"));
+  assert(!pedeConfirmacao("Pode confirmar o endereço de embarque?"));
+  assert(!pedeConfirmacao("Quantas passagens?"));
+  assert(!pedeConfirmacao("Reserva confirmada! Até amanhã."));
+  assert(!pedeConfirmacao(null));
 });

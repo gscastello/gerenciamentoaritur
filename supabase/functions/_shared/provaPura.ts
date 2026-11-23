@@ -14,7 +14,7 @@ export const JANELA_DO_TURNO_MS = 3 * 60 * 1000;
 /** Conversa com mais turnos que isso é cortada (custo); os últimos turnos ficam, o pedido costuma estar neles. */
 export const MAX_TURNOS = 12;
 
-export type Turno = { mensagens: MensagemDaConversa[]; em: string };
+export type Turno = { mensagens: MensagemDaConversa[]; em: string; /** o "sim" da prova, não do cliente */ sintetico?: boolean };
 
 /**
  * Turnos do cliente até a marca: mensagens seguidas dele (sem resposta da equipe no meio e sem um
@@ -127,6 +127,25 @@ export function compararProva(
     }
   }
   return { resultado: errado ? "errado" : base.resultado, diferencas };
+}
+
+/** O "sim" que a prova dá no lugar do cliente quando o atendente só pede a confirmação do resumo. */
+export const SIM_DA_PROVA = "Sim, pode confirmar.";
+/** No máximo tantos "sim" da prova por conversa: depois disso, o que faltou é do atendente. */
+export const MAX_SIM_DA_PROVA = 2;
+
+/**
+ * O atendente terminou pedindo a confirmação do resumo ("Posso confirmar?", "Confirma?", "Pode ser?").
+ * Na conversa real a equipe lançou sem perguntar, então o cliente nunca respondeu a isso: a prova responde
+ * "sim" por ele, e o que o atendente gravar depois é o que o resumo dizia (se o resumo estava errado, é erro).
+ * Pergunta de dado (nome, endereço, quantas) não conta: aí falta o que só o cliente sabe.
+ */
+export function pedeConfirmacao(texto: string | null | undefined): boolean {
+  const t = String(texto ?? "").trim();
+  if (!terminaPerguntando(t)) return false;
+  const ultima = t.split(/\n+/).filter((l) => l.trim()).pop() ?? "";
+  if (/\b(nome|endere[cç]o|rua|bairro|quantas|quantos|qual|onde|que horas|de onde|para onde)\b/i.test(ultima)) return false;
+  return /\b(posso|podemos)\s+(confirmar|reservar|agendar|fechar|marcar|lan[cç]ar|garantir)|\bconfirm(a|o|ar|amos)\b|\bpode ser\b|\bfechado\b|\btudo certo\b|\bcerto\s*\?/i.test(ultima);
 }
 
 /** A última resposta termina com uma pergunta ao cliente (ele ainda ia responder). */

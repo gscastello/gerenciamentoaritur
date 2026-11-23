@@ -8,7 +8,7 @@
 
 import { converterMensagensDoChatwoot, converterObservacoes, diaCivil, type MensagemDaConversa } from "./agentePuro.ts";
 import type { AcaoDaProva } from "./provaPura.ts";
-import { historicoDoTurno, turnosDoCliente } from "./provaPura.ts";
+import { historicoDoTurno, MAX_SIM_DA_PROVA, pedeConfirmacao, SIM_DA_PROVA, turnosDoCliente } from "./provaPura.ts";
 import { montarSistema, rodarAgente } from "./agente.ts";
 import type { ContextoDoAgente, ProvaDoAtendente } from "./agenteFerramentas.ts";
 import { runWithBotContext } from "./botContext.ts";
@@ -23,6 +23,8 @@ export type TurnoDaProva = {
   ferramentas: string[];
   silencio: boolean;
   custo_usd: number;
+  /** o "sim" que a prova deu no lugar do cliente (provaPura.pedeConfirmacao) */
+  sintetico?: boolean;
 };
 
 async function mensagensAte(chatwootConversationId: number, ate: number): Promise<MensagemDaConversa[]> {
@@ -63,6 +65,7 @@ export async function simularAtendimento(c: {
   await runWithBotContext(
     { chatwootConversationId: c.chatwootConversationId, conversationId: c.conversationId ?? "", shadow: true, teste: true },
     async () => {
+      let sims = 0;
       for (let i = 0; i < turnos.length; i++) {
         // o atendente espera uns segundos para juntar as mensagens
         const agora = new Date(Date.parse(turnos[i].em) + 20_000);
@@ -95,6 +98,7 @@ export async function simularAtendimento(c: {
           ferramentas: r.ferramentasUsadas,
           silencio: ctx.silencio,
           custo_usd: r.custoUsd,
+          ...(turnos[i].sintetico ? { sintetico: true } : {}),
         });
         // sem resposta segura, no modo ia a conversa iria para a equipe
         if (!ctx.silencio && !r.resposta && !ctx.transferiu) {
@@ -102,6 +106,13 @@ export async function simularAtendimento(c: {
           ctx.transferiu = true;
         }
         if (ctx.transferiu) break;
+        // acabou a conversa real e ele só pede a confirmação do resumo: a prova diz "sim" pelo cliente
+        const criou = acoes.some((a) => a.tipo === "criar");
+        if (i === turnos.length - 1 && !criou && sims < MAX_SIM_DA_PROVA && pedeConfirmacao(resposta)) {
+          sims++;
+          const em = new Date(Date.parse(turnos[i].em) + 60_000).toISOString();
+          turnos.push({ mensagens: [{ quem: "cliente", texto: SIM_DA_PROVA, em }], em, sintetico: true });
+        }
       }
     },
   );
