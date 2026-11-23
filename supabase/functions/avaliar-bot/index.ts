@@ -6,9 +6,16 @@
 // Grava em `bot_avaliacoes`. Chamada com a chave da rotina do revisor (x-rotina), como o revisor;
 // responde na hora e avalia em segundo plano (alguns casos por chamada).
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
+//
+// `{"atendente": true}` (etapa 2 do bot autônomo, issue #501): em vez da leitura do Agendado, refaz a
+// conversa com o ATENDENTE DE IA no lugar da equipe (provaDoAtendente.ts), sem enviar nem gravar
+// nada, e compara o que ele reservaria com o que ficou, inclusive o preço (provaPura.compararProva).
+// Use uma rodada própria (ex.: "atendente-2026-11-23"); o custo de cada caso vai em `tokens.custo_usd`.
 
 import { bairroDaTabela } from "../_shared/agentePuro.ts";
 import { compararCaso, type ViagemDoCaso } from "../_shared/avaliacaoPura.ts";
+import { simularAtendimento } from "../_shared/provaDoAtendente.ts";
+import { compararProva, type EsperadaComPreco } from "../_shared/provaPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
@@ -74,6 +81,54 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
   }
 }
 
+/** As viagens que ficaram, com o preço unitário de cada uma (o caso não guarda o preço). */
+async function esperadasComPreco(esperado: ViagemDoCaso[]): Promise<EsperadaComPreco[]> {
+  const ids = (esperado as Linha[]).map((e) => e.reservation_id).filter(Boolean);
+  const { data } = ids.length
+    ? await supabaseAdmin.from("reservations").select("id, unit_price").in("id", ids)
+    : { data: [] as Linha[] };
+  const preco = new Map(((data ?? []) as Linha[]).map((r) => [r.id, r.unit_price == null ? null : Number(r.unit_price)]));
+  return (esperado as Linha[]).map((e) => ({ ...(e as ViagemDoCaso), unit_price: preco.get(e.reservation_id) ?? null }));
+}
+
+async function provarAtendente(caso: Linha, rodada: string, versao: string | null, bairros: { neighborhood: string }[]) {
+  try {
+    const r = await simularAtendimento({
+      conversationId: caso.conversation_id,
+      chatwootConversationId: Number(caso.chatwoot_conversation_id),
+      mensagemId: Number(caso.mensagem_id),
+      telefone: String(caso.telefone),
+      marcaEm: String(caso.marca_em),
+    });
+    await supabaseAdmin.from("bot_avaliacoes").delete().eq("rodada", rodada).eq("caso_id", caso.id).eq("resultado", "erro");
+    const cmp = compararProva(await esperadasComPreco((caso.esperado ?? []) as ViagemDoCaso[]), r.acoes, {
+      ultimaResposta: r.ultimaResposta,
+      pendenteOk: caso.pendente_ok === true,
+      bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
+    });
+    await supabaseAdmin.from("bot_avaliacoes").insert({
+      rodada,
+      caso_id: caso.id,
+      resultado: cmp.resultado,
+      diferencas: cmp.diferencas,
+      lido: { atendente: true, acoes: r.acoes, turnos: r.turnos },
+      releu: false,
+      tokens: { ...r.tokens, custo_usd: r.custoUsd },
+      versao,
+    });
+    return cmp.resultado;
+  } catch (err) {
+    await supabaseAdmin.from("bot_avaliacoes").insert({
+      rodada,
+      caso_id: caso.id,
+      resultado: "erro",
+      diferencas: [String(err).slice(0, 300)],
+      versao,
+    });
+    return "erro";
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Método não permitido.", { status: 405 });
   const chave = req.headers.get("x-rotina") ?? "";
@@ -90,6 +145,8 @@ Deno.serve(async (req: Request) => {
 
   // mesmo texto já lido: usa a leitura guardada, sem gastar API; {"fresco": true} lê tudo de novo (issue #494)
   const memoria = corpo?.fresco !== true;
+  // prova do atendente de IA (issue #501): conversa inteira, sem enviar nem gravar
+  const atendente = corpo?.atendente === true;
 
   // erro técnico (limite da API, tempo) não conta como feito: a próxima chamada refaz
   const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada).neq("resultado", "erro");
@@ -103,8 +160,10 @@ Deno.serve(async (req: Request) => {
   const bairros = (tabela ?? []) as { neighborhood: string }[];
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
-    evento("avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
+    for (const caso of fila) {
+      resultados.push(atendente ? await provarAtendente(caso, rodada, versao, bairros) : await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
+    }
+    evento(atendente ? "prova_atendente_rodada" : "avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
   })().catch((err) => evento("bot_erro", { etapa: "avaliacao", erro: String(err).slice(0, 300) }));
 
   // deno-lint-ignore no-explicit-any

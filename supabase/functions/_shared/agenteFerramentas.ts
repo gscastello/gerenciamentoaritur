@@ -11,6 +11,10 @@
 //
 // As ações passam pelo whatsappService (modo humano, modo sombra, auditoria e as
 // mesmas RPCs de sempre — a capacidade continua decidida pelo banco).
+//
+// Prova (etapa 2 do bot autônomo, issue #501): com `ctx.prova`, NADA é gravado nem enviado
+// (reserva, remarcar, cancelar, espera, avisar, chamar a equipe): o que ele faria vai para
+// `ctx.prova.acoes`. Cadastro, reservas e costume do cliente ficam como estavam antes da conversa.
 
 import {
   andamentoPeloHorario,
@@ -38,6 +42,17 @@ import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { lugaresContraOSentido } from "./ladoDaRota.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
+import type { AcaoDaProva } from "./provaPura.ts";
+
+/** Prova do atendente com uma conversa real (issue #501): nada é gravado; o que ele faria fica aqui. */
+export type ProvaDoAtendente = {
+  /** cadastro, reservas e costume só como estavam antes deste instante (ISO) */
+  antesDe: string;
+  /** a hora do turno na conversa real */
+  agora: Date;
+  turno: number;
+  acoes: AcaoDaProva[];
+};
 
 export type ContextoDoAgente = {
   conversationId: string;
@@ -59,6 +74,8 @@ export type ContextoDoAgente = {
   clienteCache?: { valor: any | null };
   // biome-ignore lint/suspicious/noExplicitAny: linhas do banco
   reservasCache?: any[];
+  /** prova com uma conversa real: nada é gravado nem enviado (issue #501) */
+  prova?: ProvaDoAtendente;
 };
 
 type Ferramenta = {
@@ -258,16 +275,51 @@ const fmtHora = new Intl.DateTimeFormat("pt-BR", {
 // biome-ignore lint/suspicious/noExplicitAny: linhas do banco
 type Linha = any;
 
+/** Na prova, o cliente cadastrado depois da conversa ainda era cliente novo. */
+export async function clienteAntesDe(telefone: string, antesDe: string | null | undefined): Promise<Linha | null> {
+  const cliente = await whatsappService.identifyCustomer(telefone);
+  if (cliente && antesDe && String(cliente.created_at ?? "") >= antesDe) return null;
+  return cliente;
+}
+
 async function clienteDaConversa(ctx: ContextoDoAgente): Promise<Linha | null> {
-  if (!ctx.clienteCache) ctx.clienteCache = { valor: await whatsappService.identifyCustomer(ctx.telefone) };
+  if (!ctx.clienteCache) ctx.clienteCache = { valor: await clienteAntesDe(ctx.telefone, ctx.prova?.antesDe) };
   return ctx.clienteCache.valor;
+}
+
+/** Reservas ativas do cliente; na prova, as de antes da conversa mais as que a própria prova "criou". */
+async function reservasDeUmCliente(cliente: Linha | null, prova: ProvaDoAtendente | undefined, daConversa: boolean): Promise<Linha[]> {
+  const reais = cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [];
+  if (!prova) return reais;
+  const antes = reais.filter((r) => String(r.created_at ?? "") < prova.antesDe);
+  if (!daConversa) return antes;
+  const daProva = prova.acoes.flatMap((a) =>
+    a.tipo === "criar" && !a.cancelada
+      ? [{
+          id: a.id,
+          status: a.status,
+          quantity: a.quantity,
+          total_price: a.unit_price == null ? null : a.unit_price * a.quantity,
+          dropoff_location: a.dropoff_location,
+          pickup_neighborhood: a.pickup_neighborhood,
+          pickup_detail: a.pickup_detail,
+          trip: { trip_date: a.trip_date, direction: a.direction },
+          route_point: { code: a.route_point_code, name: a.route_point_name ?? a.route_point_code },
+        }]
+      : [],
+  );
+  return [...daProva, ...antes];
 }
 
 async function reservasDoCliente(ctx: ContextoDoAgente, recarregar = false): Promise<Linha[]> {
   if (ctx.reservasCache && !recarregar) return ctx.reservasCache;
   const cliente = await clienteDaConversa(ctx);
-  ctx.reservasCache = cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [];
+  ctx.reservasCache = await reservasDeUmCliente(cliente, ctx.prova, true);
   return ctx.reservasCache;
+}
+
+function anotarNaProva(ctx: ContextoDoAgente, acao: AcaoDaProva) {
+  ctx.prova?.acoes.push(acao);
 }
 
 /** Acha o ponto por código ou nome (sem acento); devolve null se não existir naquela direção. */
@@ -423,7 +475,7 @@ async function consultarViagem(args: Linha) {
 }
 
 async function andamentoDaViagem(args: Linha, ctx: ContextoDoAgente) {
-  const agora = new Date();
+  const agora = ctx.prova?.agora ?? new Date();
   ctx.consultouReservas = true;
   const cliente = await clienteDaConversa(ctx);
   const reservas = cliente ? await reservasDoCliente(ctx, true) : [];
@@ -521,8 +573,8 @@ async function calcularValor(args: Linha) {
 async function verMinhasReservas(ctx: ContextoDoAgente) {
   ctx.consultouReservas = true;
   const cliente = await clienteDaConversa(ctx);
-  if (!cliente) return { ok: true, cliente_cadastrado: false, reservas: [] };
   const reservas = await reservasDoCliente(ctx, true);
+  if (!cliente && !reservas.length) return { ok: true, cliente_cadastrado: false, reservas: [] };
   const saida = [];
   for (const r of reservas.slice(0, 10)) {
     const pgtos = (await whatsappService.checkPaymentStatus(r.id).catch(() => [])) ?? [];
@@ -538,13 +590,18 @@ async function verMinhasReservas(ctx: ContextoDoAgente) {
       pagamento: pgtos[0] ? { forma: pgtos[0].method, status: pgtos[0].status, comprovante_recebido: !!pgtos[0].proof_received } : null,
     });
   }
-  return { ok: true, cliente_cadastrado: true, nome_cadastrado: cliente.name, reservas: saida };
+  return { ok: true, cliente_cadastrado: !!cliente, nome_cadastrado: cliente?.name ?? null, reservas: saida };
 }
 
 async function enderecoDeCostume(ctx: ContextoDoAgente) {
   const cliente = await clienteDaConversa(ctx);
   if (!cliente) return { ok: true, cliente_cadastrado: false, tem_endereco_de_costume: false };
-  const { data, error } = await supabaseAdmin.rpc("rpc_endereco_de_costume", { p_customer_id: cliente.id });
+  // na prova, o costume de antes da conversa (database/133); sem a migração, nenhum — nunca o de hoje
+  const { data, error } = await supabaseAdmin.rpc(
+    "rpc_endereco_de_costume",
+    ctx.prova ? { p_customer_id: cliente.id, p_antes_de: ctx.prova.antesDe } : { p_customer_id: cliente.id },
+  );
+  if (error && ctx.prova) return { ok: true, cliente_cadastrado: true, tem_endereco_de_costume: false };
   if (error || !data?.success) throw new Error(`rpc_endereco_de_costume: ${error?.message ?? data?.message}`);
   return costumeParaFerramenta(data);
 }
@@ -608,7 +665,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   // marcando para outra pessoa (issue #268): a reserva vai para o passageiro, não para quem conversa
   const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
   const outro = !!telPassageiro && !variantesTelefone(ctx.telefone).includes(telPassageiro);
-  const cliente = outro ? await whatsappService.identifyCustomer(telPassageiro as string) : await clienteDaConversa(ctx);
+  const cliente = outro ? await clienteAntesDe(telPassageiro as string, ctx.prova?.antesDe) : await clienteDaConversa(ctx);
   const nome = cliente?.name ?? (outro ? String(args.nome_passageiro ?? "").trim() || null : pedido.nomeCliente);
   if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Pergunte o nome completo do passageiro antes de reservar." };
 
@@ -620,7 +677,8 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   if (!preco.ok) return { ok: false, ...preco.erro };
 
   const disp = await whatsappService.checkAvailability(pedido.data, pedido.direcao);
-  if (disp.available != null && disp.available < pedido.quantidade) {
+  // na prova a lotação é a de hoje, não a da época: a vaga é decidida pelo banco, não pelo atendente
+  if (!ctx.prova && disp.available != null && disp.available < pedido.quantidade) {
     return {
       ok: false,
       codigo: "SEM_VAGAS",
@@ -632,9 +690,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
 
   // o bot é isento da checagem de duplicidade do banco (é idempotente por mensagem),
   // então a checagem do cliente com ele mesmo é feita aqui
-  const existentes = outro
-    ? (cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [])
-    : await reservasDoCliente(ctx, true);
+  const existentes = outro ? await reservasDeUmCliente(cliente, ctx.prova, false) : await reservasDoCliente(ctx, true);
   const duplicada = existentes.find(
     (r) => r.trip?.trip_date === pedido.data && r.trip?.direction === pedido.direcao && ["confirmada", "pendente"].includes(r.status),
   );
@@ -667,6 +723,41 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
   // o texto do desembarque que bate com um local cadastrado também vai como "área" (rota do motorista)
   const areas = await whatsappService.listDropoffAreas(pedido.direcao).catch(() => []);
   const dropoffArea = areaDoDesembarque(pedido.desembarque, areas);
+
+  if (ctx.prova) {
+    const id = `prova-${ctx.prova.acoes.length + 1}`;
+    anotarNaProva(ctx, {
+      tipo: "criar",
+      id,
+      trip_date: pedido.data,
+      direction: pedido.direcao,
+      route_point_code: String(ponto.code),
+      route_point_name: ponto.name ?? null,
+      quantity: pedido.quantidade,
+      pickup_neighborhood: pedido.bairro,
+      pickup_detail: pedido.enderecoEmbarque,
+      dropoff_location: pedido.desembarque,
+      unit_price: preco.preco,
+      status: fora ? "pendente" : "confirmada",
+      turno: ctx.prova.turno,
+    });
+    ctx.escrita.criou = true;
+    ctx.reservasCache = undefined;
+    const pix = pedido.formaPagamento === "pix" ? await whatsappService.getPix() : null;
+    return {
+      ok: true,
+      situacao: fora ? "pendente (fora da área padrão; a equipe confirma e avisa)" : "confirmada",
+      data: pedido.data,
+      direcao: pedido.direcao,
+      ponto: ponto.name,
+      quantidade: pedido.quantidade,
+      preco_por_passagem: preco.preco,
+      total: calcularTotal(preco.preco, pedido.quantidade),
+      forma_pagamento: pedido.formaPagamento,
+      chave_pix: pix ? { chave: pix.key, titular: pix.name ?? null } : null,
+      lembrete: pix ? "Se pagar por Pix, o cliente envia o comprovante aqui mesmo." : null,
+    };
+  }
 
   try {
     const r = await whatsappService.createReservation(ctx.conversationId, {
@@ -740,6 +831,24 @@ async function remarcarReserva(args: Linha, ctx: ContextoDoAgente) {
   const novoDesembarque = String(args.novo_desembarque ?? "").trim();
   if (!novaData && !novoPonto && !novoDesembarque) return { ok: false, erro: "Diga o que mudar: nova_data, novo_ponto ou novo_desembarque." };
   if (novaData && (!/^\d{4}-\d{2}-\d{2}$/.test(novaData) || novaData < ctx.hoje)) return { ok: false, erro: "nova_data inválida ou já passou" };
+  if (ctx.prova) {
+    const daProva = ctx.prova.acoes.find((a) => a.tipo === "criar" && a.id === reserva.id);
+    if (daProva && daProva.tipo === "criar") {
+      if (novaData) daProva.trip_date = novaData;
+      if (novoPonto) {
+        const pontos = (await whatsappService.listRoutePoints(daProva.direction as "ida" | "volta")) ?? [];
+        const ponto = acharPonto(pontos, novoPonto);
+        if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
+        daProva.route_point_code = String(ponto.code);
+        daProva.route_point_name = ponto.name ?? null;
+      }
+      if (novoDesembarque) daProva.dropoff_location = novoDesembarque;
+    }
+    anotarNaProva(ctx, { tipo: "remarcar", reserva_id: reserva.id, da_prova: !!daProva, detalhe: { novaData, novoPonto, novoDesembarque }, turno: ctx.prova.turno });
+    ctx.escrita.alterou = true;
+    ctx.reservasCache = undefined;
+    return { ok: true, remarcada: true };
+  }
 
   try {
     if (novaData || novoPonto) {
@@ -767,6 +876,14 @@ async function cancelarReserva(args: Linha, ctx: ContextoDoAgente) {
   if (args.cliente_confirmou !== true) return { ok: false, codigo: "FALTA_CONFIRMACAO", erro: "O cliente ainda não confirmou o cancelamento." };
   const reserva = await acharReservaDoCliente(ctx, args.reserva_id);
   if (!reserva) return { ok: false, codigo: "RESERVA_NAO_E_DESTE_CLIENTE", erro: "Reserva não encontrada entre as reservas ativas deste cliente." };
+  if (ctx.prova) {
+    const daProva = ctx.prova.acoes.find((a) => a.tipo === "criar" && a.id === reserva.id);
+    if (daProva && daProva.tipo === "criar") daProva.cancelada = true;
+    anotarNaProva(ctx, { tipo: "cancelar", reserva_id: reserva.id, da_prova: !!daProva, turno: ctx.prova.turno });
+    ctx.escrita.cancelou = true;
+    ctx.reservasCache = undefined;
+    return { ok: true, cancelada: true };
+  }
   await whatsappService.cancelReservation(ctx.conversationId, reserva.id);
   ctx.escrita.cancelou = true;
   ctx.reservasCache = undefined;
@@ -783,6 +900,11 @@ async function entrarNaListaDeEspera(args: Linha, ctx: ContextoDoAgente) {
   const cliente = await clienteDaConversa(ctx);
   const nome = cliente?.name ?? String(args.nome_cliente ?? "").trim();
   if (!nome) return { ok: false, codigo: "FALTA_NOME", erro: "Cliente novo: pergunte o nome completo." };
+  if (ctx.prova) {
+    anotarNaProva(ctx, { tipo: "espera", trip_date: data, direction: direcao, quantity: quantidade, turno: ctx.prova.turno });
+    ctx.escrita.esperou = true;
+    return { ok: true, na_lista_de_espera: true };
+  }
   await whatsappService.createReservation(ctx.conversationId, {
     tripDate: data,
     direction: direcao,
@@ -826,9 +948,18 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
       case "entrar_na_lista_de_espera":
         return await entrarNaListaDeEspera(args, ctx);
       case "avisar_equipe":
+        if (ctx.prova) {
+          anotarNaProva(ctx, { tipo: "avisar_equipe", texto: `${String(args.assunto ?? "").trim()}: ${String(args.detalhe ?? "").trim()}`.slice(0, 500), turno: ctx.prova.turno });
+          return { ok: true, equipe_avisada: true };
+        }
         await whatsappService.avisarEquipe(ctx.conversationId, `${String(args.assunto ?? "").trim()}: ${String(args.detalhe ?? "").trim()}`);
         return { ok: true, equipe_avisada: true };
       case "chamar_atendente":
+        if (ctx.prova) {
+          anotarNaProva(ctx, { tipo: "chamar_atendente", texto: `${String(args.motivo ?? "").trim()} — ${String(args.resumo_para_equipe ?? "").trim()}`.slice(0, 500), turno: ctx.prova.turno });
+          ctx.transferiu = true;
+          return { ok: true, transferido: true, proximo_passo: "Avise o cliente, em uma frase, que a equipe vai assumir." };
+        }
         await whatsappService.transferToHuman(
           ctx.conversationId,
           `${String(args.motivo ?? "").trim()} — ${String(args.resumo_para_equipe ?? "").trim()}`.slice(0, 900),

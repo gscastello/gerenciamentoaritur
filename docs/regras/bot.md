@@ -248,6 +248,19 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
   `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+- **Prova do atendente de IA** (etapa 2 do bot autônomo — issue #501, `provaDoAtendente.ts`, `provaPura.ts`,
+  `database/133`): `avaliar-bot` com `{"atendente": true, "rodada": "atendente-…"}` refaz cada caso de `bot_casos` com o
+  ATENDENTE (modo `ia`) no lugar da equipe. As mensagens do cliente até a marca entram em turnos (seguidas, sem a equipe
+  no meio e até 3 min entre elas; no máximo os 12 últimos); a cada turno ele lê o que o cliente escreveu e o que ELE
+  respondeu antes, na hora do turno. **Nada é enviado nem gravado**: com `ctx.prova` as ferramentas anotam o que fariam
+  (reserva, remarcar, cancelar, espera, avisar, chamar a equipe) e o contexto vai em sombra como segunda trava.
+  Cadastro, reservas e endereço de costume são os de **antes** da conversa (`rpc_endereco_de_costume(p_antes_de)`;
+  sem ela, nenhum costume) e sem a anotação do cliente, para não vazar a resposta. A lotação de hoje não vale para uma
+  viagem que passou: a prova não barra por vaga (quem decide é o banco). Resultado em `bot_avaliacoes`: certo; pendente
+  (chamou a equipe, terminou perguntando, lista de espera, fora da área); faltou; **errado** = dia, sentido, ponto,
+  quantidade, bairro, tipo ou **preço** diferente do que ficou, viagem não pedida, ou mexer numa reserva que já existia
+  (para conferir). Respostas e ações de cada turno em `lido.turnos`/`lido.acoes`; custo em `tokens.custo_usd`
+  (`custoMensal`: média por conversa × 82/dia × 30; teto do dono US$ 120/mês). Meta para a etapa 3: zero errado.
 - **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização

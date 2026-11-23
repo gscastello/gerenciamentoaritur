@@ -31,7 +31,8 @@ import {
   ultimaFoiDoCliente,
   USO_ZERADO,
 } from "./agentePuro.ts";
-import { type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
+import { clienteAntesDe, type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
+import { custoUsd } from "./assistentePuro.ts";
 import { montarFatos } from "./botAnswer.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 import { getBotContext } from "./botContext.ts";
@@ -155,11 +156,19 @@ async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promis
   }
 }
 
-async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
+/**
+ * As instruções do atendente. `antesDe` (prova, issue #501): cadastro de antes da conversa e sem a
+ * anotação do cliente, que pode ter aprendido com a própria conversa da prova.
+ */
+export async function montarSistema(
+  agora: Date,
+  telefone: string,
+  opcoes: { antesDe?: string } = {},
+): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
   const linguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
-  const nota = await blocoDoClienteAtual();
-  const cliente = await whatsappService.identifyCustomer(telefone);
+  const nota = opcoes.antesDe ? "" : await blocoDoClienteAtual();
+  const cliente = await clienteAntesDe(telefone, opcoes.antesDe);
   const calendario = calendarioParaOPrompt(agora);
   const { data: areas } = await supabaseAdmin
     .from("dropoff_areas")
@@ -229,6 +238,79 @@ async function carregarConversa(
   }
 }
 
+/**
+ * O laço do atendente: lê a conversa, chama ferramentas e escreve a resposta, que só sai se a trava
+ * de números (problemasDaResposta) deixar. Usado pela conversa real e pela prova (issue #501).
+ */
+export async function rodarAgente(
+  system: BlocoDoSistema[],
+  fontesBase: string[],
+  historico: MensagemDaConversa[],
+  ctx: ContextoDoAgente,
+  conversa: number,
+): Promise<{ resposta: string; ferramentasUsadas: string[]; uso: typeof USO_ZERADO; correcoes: number; custoUsd: number }> {
+  const textoDoHistorico = formatarHistorico(historico);
+  const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
+  const ferramentasUsadas: string[] = [];
+  let uso = USO_ZERADO;
+  let correcoes = 0;
+  let custo = 0;
+
+  const messages: Bloco[] = [
+    {
+      role: "user",
+      content: `CONVERSA (da mais antiga para a mais recente; a última linha é a mensagem a responder):\n${textoDoHistorico}\n\nEscreva agora a próxima mensagem do atendente para o cliente (ou use uma ferramenta, se precisar de dados ou for fazer algo).`,
+    },
+  ];
+
+  let resposta = "";
+  for (let volta = 0; volta < MAX_VOLTAS; volta++) {
+    const res = await chamarModelo(system, messages);
+    uso = somarUso(uso, res.usage);
+    custo += custoUsd(MODELO, res.usage);
+    messages.push({ role: "assistant", content: res.content });
+
+    const usos = res.content.filter((c) => c.type === "tool_use");
+    if (usos.length > 0) {
+      const resultados: Bloco[] = [];
+      for (const uso of usos) {
+        ferramentasUsadas.push(uso.name);
+        const resultado = await executarFerramenta(uso.name, uso.input ?? {}, ctx);
+        const json = JSON.stringify(resultado);
+        fontes.push(json);
+        resultados.push({ type: "tool_result", tool_use_id: uso.id, content: json });
+      }
+      messages.push({ role: "user", content: resultados });
+      // nao_responder encerra aqui: outra chamada pagaria por um texto que seria descartado
+      if (ctx.parar || ctx.silencio) break;
+      continue;
+    }
+
+    const texto = res.content
+      .filter((c) => c.type === "text")
+      .map((c) => String(c.text))
+      .join("\n")
+      .trim();
+    if (!texto) {
+      messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
+      continue;
+    }
+    const problemas = problemasDaResposta(texto, fontes, {
+      mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
+      consultouReservas: ctx.consultouReservas,
+    });
+    if (problemas.length === 0) {
+      resposta = texto;
+      break;
+    }
+    evento("bot_agente_barrado", { conversa, correcao: correcoes, problemas });
+    if (correcoes >= MAX_CORRECOES) break;
+    correcoes++;
+    messages.push({ role: "user", content: `[SISTEMA] Sua resposta NÃO foi enviada. ${problemas.join(" ")} Reescreva a mensagem.` });
+  }
+  return { resposta, ferramentasUsadas, uso, correcoes, custoUsd: Math.round(custo * 100000) / 100000 };
+}
+
 export async function responderComAgente(
   entrada: { conversationId: string; telefone: string; waMessageId: string },
   opcoes: { teste?: { pergunta: string | null } } = {},
@@ -281,63 +363,7 @@ export async function responderComAgente(
 
   try {
     const { system, fontes: fontesBase } = await montarSistema(agora, entrada.telefone);
-    const textoDoHistorico = formatarHistorico(historico);
-    const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
-    const ferramentasUsadas: string[] = [];
-    let uso = USO_ZERADO;
-    let correcoes = 0;
-
-    const messages: Bloco[] = [
-      {
-        role: "user",
-        content: `CONVERSA (da mais antiga para a mais recente; a última linha é a mensagem a responder):\n${textoDoHistorico}\n\nEscreva agora a próxima mensagem do atendente para o cliente (ou use uma ferramenta, se precisar de dados ou for fazer algo).`,
-      },
-    ];
-
-    let resposta = "";
-    for (let volta = 0; volta < MAX_VOLTAS; volta++) {
-      const res = await chamarModelo(system, messages);
-      uso = somarUso(uso, res.usage);
-      messages.push({ role: "assistant", content: res.content });
-
-      const usos = res.content.filter((c) => c.type === "tool_use");
-      if (usos.length > 0) {
-        const resultados: Bloco[] = [];
-        for (const uso of usos) {
-          ferramentasUsadas.push(uso.name);
-          const resultado = await executarFerramenta(uso.name, uso.input ?? {}, ctx);
-          const json = JSON.stringify(resultado);
-          fontes.push(json);
-          resultados.push({ type: "tool_result", tool_use_id: uso.id, content: json });
-        }
-        messages.push({ role: "user", content: resultados });
-        // nao_responder encerra aqui: outra chamada pagaria por um texto que seria descartado
-        if (ctx.parar || ctx.silencio) break;
-        continue;
-      }
-
-      const texto = res.content
-        .filter((c) => c.type === "text")
-        .map((c) => String(c.text))
-        .join("\n")
-        .trim();
-      if (!texto) {
-        messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
-        continue;
-      }
-      const problemas = problemasDaResposta(texto, fontes, {
-        mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
-        consultouReservas: ctx.consultouReservas,
-      });
-      if (problemas.length === 0) {
-        resposta = texto;
-        break;
-      }
-      evento("bot_agente_barrado", { conversa: bot.chatwootConversationId, correcao: correcoes, problemas });
-      if (correcoes >= MAX_CORRECOES) break;
-      correcoes++;
-      messages.push({ role: "user", content: `[SISTEMA] Sua resposta NÃO foi enviada. ${problemas.join(" ")} Reescreva a mensagem.` });
-    }
+    const { resposta, ferramentasUsadas, uso, correcoes } = await rodarAgente(system, fontesBase, historico, ctx, bot.chatwootConversationId);
 
     if (ctx.parar) {
       evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "conversa passou para a equipe" });
