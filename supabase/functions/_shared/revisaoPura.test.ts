@@ -441,3 +441,21 @@ Deno.test("#490 desistência: cancela sozinho só quando é claro; qualquer dúv
   );
   assertEquals(mensagemDeCancelamento([], { hoje: "2026-11-22" }), null);
 });
+
+Deno.test("#497: Volta sem desembarque não é pendência; lugar escrito pelo cliente continua", async () => {
+  const { soFaltaDesembarqueDaVolta } = await import("./revisaoPura.ts");
+  const reserva = (direcao: "ida" | "volta", desembarque: string | null) => ({
+    id: "r1", data: "2026-11-28", direcao, trip_id: "t", ponto: "pirapemas", bairro: null, embarque: "Rua A", desembarque,
+    quantidade: 1, valor: 60, tipo: "passagem" as const, status: "confirmada", criada_pelo_bot: true, criada_em: "2026-11-22T16:43:00Z",
+  });
+  const achado = (valor: string | null) => ({
+    reserva_id: "r1", campo: "desembarque" as const, valor_atual: null, valor_correto: valor, evidencia: "meu irmão vai no sábado",
+    quem_errou: "desconhecido" as const, certeza: "media" as const, explicacao: "",
+  });
+  assertEquals(soFaltaDesembarqueDaVolta(achado(null), reserva("volta", null)), true);
+  assertEquals(soFaltaDesembarqueDaVolta(achado("São Luís"), reserva("volta", "")), true);
+  // o cliente disse o lugar, a reserva tem outro, ou é Ida: continua valendo
+  assertEquals(soFaltaDesembarqueDaVolta(achado("Terminal do Maracanã"), reserva("volta", null)), false);
+  assertEquals(soFaltaDesembarqueDaVolta(achado("São Luís"), reserva("volta", "Rodoviária")), false);
+  assertEquals(soFaltaDesembarqueDaVolta(achado(null), reserva("ida", null)), false);
+});

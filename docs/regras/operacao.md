@@ -35,3 +35,6 @@
   e contas quitadas; `domain/fechamentoDoMes.js` monta o DRE (com o DAS estimado de `simplesNacional.js`) e os avisos
   (cobertura das reservas, meses sem receita no DAS, despesa sem nota). Baixa em PDF, planilha e .zip das fotos; todo
   dia 1 às 08:00 o sino avisa (`fechamento`, só admin/financeiro veem).
+- **Poucas vagas e dia sem ônibus** (dono, 23/11 — issue #497): clientes recorrentes têm prioridade; a equipe pode passar
+  os outros para outra van por logística (cancelamento no app que não é erro). Sem o ônibus, o veículo do dia é
+  **Van + carro** (19 lugares, Operação); abastecimento e manutenção vão na Van reserva.

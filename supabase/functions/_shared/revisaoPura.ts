@@ -203,6 +203,16 @@ export function campoVazio(v: string | null | undefined): boolean {
 }
 
 /**
+ * Volta sem desembarque não é pendência: é em São Luís (dono, 23/11 — issue #497). Vale quando a reserva
+ * está vazia e o achado não traz lugar nenhum (ou só "São Luís"); lugar que o cliente escreveu continua.
+ */
+export function soFaltaDesembarqueDaVolta(a: Achado, reserva: ReservaRevisada | undefined): boolean {
+  if (a.campo !== "desembarque" || reserva?.direcao !== "volta" || !campoVazio(reserva.desembarque)) return false;
+  const lugar = normalizarTexto(a.valor_correto ?? "");
+  return campoVazio(a.valor_correto) || /^(em )?(sao luis|slz|sao luis ma|nao informado|nao informada)$/.test(lugar);
+}
+
+/**
  * Decide o destino de cada achado: corrigir sozinho, pendência para a equipe ou descartar.
  * Achados da mesma reserva viram UMA correção (dia + sentido + ponto juntos).
  */
@@ -394,7 +404,11 @@ export function decidirRevisao(
       });
     }
   }
-  return { correcoes: finais, pendencias, descartados };
+  return {
+    correcoes: finais,
+    pendencias: pendencias.filter((a) => !soFaltaDesembarqueDaVolta(a, ctx.reservas.find((r) => r.id === a.reserva_id))),
+    descartados,
+  };
 }
 
 /**
@@ -462,6 +476,7 @@ O que conferir em cada reserva:
 - ponto de embarque (códigos abaixo), bairro (busca em casa), embarque (rua/referência), desembarque, quantidade, tipo (passagem/encomenda).
 - endereço trocado de lugar: rua/referência da cidade de embarque gravada como desembarque (na Volta, rua de Cantanhede/Pirapemas no desembarque), ou o NOME do passageiro lido como lugar ("De Cantanhede pra Luís / Maria Souza / Rua X perto do banco": "Luís" = São Luís, "Maria Souza" = nome, a rua = embarque). Confira cada parte do que o cliente escreveu e onde ela foi parar. Rua com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a rua, não a cidade do caminho.
 - quantidade: é o número que o cliente PEDIU. Frase de costume ("eu e minhas filhas viajamos sempre com vocês") não pede mais vagas: não aponte. N passagens com desembarques diferentes na mesma viagem formam UMA reserva de N (todas têm de estar reservadas).
+- Volta SEM desembarque não é erro nem dúvida: é em São Luís. Não aponte, não ponha em observacoes e não peça ação da equipe só por isso. Aponte só se o cliente ESCREVEU onde desce e a reserva não tem esse lugar (ou tem outro).
 - apartamento/bloco/casa mandados depois são complemento: o endereço tem de manter a rua e o condomínio.
 - DESISTÊNCIA: o CLIENTE escreveu, depois da reserva, que desmarca/cancela/não vai mais nesta viagem ("estou desmarcando minha passagem", "não vou mais") → ponha em cancelamentos (reserva_id + trecho LITERAL do cliente + certeza), não em achados nem em observacoes. Remarcar ("passa pra quarta") é mudança de dia, não desistência. Se ele voltou atrás depois, se só perguntou ("posso cancelar?") ou se não dá para saber de qual reserva fala, certeza "baixa".
 - reserva repetida; pedido da conversa que ficou sem reserva (não aponte como achado: só explique em observacoes).
