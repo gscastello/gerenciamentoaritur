@@ -68,7 +68,7 @@ test("Vencimentos: DAS estimado, vencido em destaque, quitar e cadastrar", async
         id: "ipva",
         titulo: "IPVA do ônibus",
         categoria: "veiculo",
-        vence_em: dia(-3),
+        vence_em: dia(-45), // antes de qualquer DAS do mês (dia 20)
         valor: 1250,
         recorrencia: "anual",
         avisar_dias: 30,
@@ -98,7 +98,7 @@ test("Vencimentos: DAS estimado, vencido em destaque, quitar e cadastrar", async
   const lista = page.getByTestId("lista-de-vencimentos");
   const nomes = await lista.locator(".text-sm.font-medium").allInnerTexts();
   expect(nomes[0]).toBe("IPVA do ônibus"); // o vencido vem primeiro
-  await expect(lista.getByText("Venceu há 3 dias")).toBeVisible();
+  await expect(lista.getByText("Venceu há 45 dias")).toBeVisible();
 
   await page.getByRole("button", { name: "Quitar IPVA do ônibus" }).click();
   await expect.poll(() => chamadas.quitados).toEqual(["ipva"]);

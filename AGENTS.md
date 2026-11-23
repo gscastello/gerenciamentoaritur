@@ -579,7 +579,14 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   das instruções** (issues #488 e #491, `partesDaLeitura`, `sistemaComCache`): as REGRAS da leitura e do revisor vão
   na frente com cache de 1 h; o resto vem depois, na MESMA ordem de sempre (pôr as listas antes do calendário piorou a
   leitura na avaliação). Nada que muda por conversa ou por hora entra na parte fixa;
-  senão o cache não pega e o custo volta (confira `cache_lido` nos registros). Nome de
+  senão o cache não pega e o custo volta (confira `cache_lido` nos registros). **Leitura guardada na
+  avaliação** (issue #494, `database/131`, `bot_leituras_memo`): mesmo texto = não chama o modelo, então mudança só de
+  código é avaliada de graça e sem variação; mudou uma palavra das instruções, lê tudo de novo (`{"fresco": true}` força).
+  Rodada completa = 1 caso por chamada, ondas de até 80; confira `feitos = ativos`. Diferença → repetir o caso 5 vezes na
+  versão nova e na antiga antes de chamar de variação. **Regras de código do leitor** (#494): "mesmo endereço que me
+  deixou hoje" = sentido contrário da última viagem (`viagemDeOndeDeixou`); "buscar em casa e deixar em Cantanhede" = Ida;
+  bairro gravado como está na tabela (`bairroComoNaTabela`). A sentinela confere a conversa antes do modelo; o revisor
+  não relê por cortesia nem por "ok" logo depois da confirmação (`fn_mensagem_sem_novidade`). Nome de
   parada escrito errado ("entrocamento") é corrigido antes de achar a origem (`paradasCorrigidas`). **IA fora do ar**
   (#462): Agendado que falhou por erro do serviço (`falhaDoServicoDaIa`) é tentado de novo pelo revisor, de 5 em 5 min,
   até 5 vezes em 6 h; chave recusada ou serviço caído abre UMA pendência "IA fora do ar", que fecha na próxima leitura

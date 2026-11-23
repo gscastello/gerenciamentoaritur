@@ -7,13 +7,15 @@ import { createRoot } from "react-dom/client";
 import App from "./app/App.jsx";
 import { AuthGate } from "./auth/AuthGate.jsx";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
-import { initObservability, reportError } from "./observability/index.js";
+import { carregarFonte } from "./lib/fonte.js";
 import { applyMotion } from "./lib/motion.js";
+import { initObservability, reportError } from "./observability/index.js";
 import { PWAUpdatePrompt } from "./pwa/PWAUpdatePrompt.jsx";
 
 // Resolve a preferência de movimento antes do primeiro paint (evita
 // piscar animação para quem tem "reduzir movimento" no sistema).
 applyMotion();
+carregarFonte();
 
 initObservability();
 
