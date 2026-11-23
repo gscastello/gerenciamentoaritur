@@ -594,13 +594,13 @@ export async function conversar(historico: MensagemDoChat[], ctx: Contexto, opco
     role: m.papel === "usuario" ? "user" : "assistant",
     content: i === historico.length - 1 ? `HOJE (São Luís):\n${calendarioParaOPrompt(new Date())}\n\nPEDIDO:\n${m.texto}` : m.texto,
   }));
-  const uso: Required<Uso> = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+  const uso: Required<Omit<Uso, "cache_creation">> = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
   let custo = 0;
   let resposta: Linha = {};
   for (let volta = 0; volta < 8; volta++) {
     resposta = await chamarModelo(modelo, system, messages);
     const u = (resposta.usage ?? {}) as Uso;
-    for (const k of Object.keys(uso) as (keyof Uso)[]) uso[k] += Number(u[k] ?? 0);
+    for (const k of Object.keys(uso) as (keyof typeof uso)[]) uso[k] += Number(u[k] ?? 0);
     custo += custoUsd(String(resposta.model ?? modelo), u);
     if (resposta.stop_reason !== "tool_use") break;
     messages.push({ role: "assistant", content: resposta.content });
@@ -840,7 +840,7 @@ export async function gastoDoMes(): Promise<{ gasto: number; teto: number }> {
   return { gasto: Math.round(gasto * 100) / 100, teto };
 }
 
-export async function registrarUso(userId: string, modelo: string, uso: Required<Uso>, custo: number) {
+export async function registrarUso(userId: string, modelo: string, uso: Required<Omit<Uso, "cache_creation">>, custo: number) {
   const { error } = await supabaseAdmin.from("assistente_uso").insert({
     user_id: userId,
     modelo,

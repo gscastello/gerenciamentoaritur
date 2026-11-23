@@ -294,3 +294,12 @@ Deno.test("#328: costume do passageiro (embarque varia) e instrução da equipe"
   assertEquals(validarInstrucaoDoCliente({ cliente_id: "c1", texto: "oi" }).ok, false);
   assertStringIncludes(instrucoesDoAssistente({ pontos: "-", desembarques: "-" }), "propor_costume");
 });
+
+Deno.test("#488: gravação no cache de 1 h custa 2x a entrada", () => {
+  // 1M gravados no cache de 1 h no Sonnet = US$ 4; no de 5 min = US$ 2,50
+  assertEquals(
+    custoUsd(MODELOS.capaz, { cache_creation_input_tokens: 1_000_000, cache_creation: { ephemeral_1h_input_tokens: 1_000_000 } }),
+    4,
+  );
+  assertEquals(custoUsd(MODELOS.capaz, { cache_creation_input_tokens: 1_000_000 }), 2.5);
+});

@@ -27,17 +27,21 @@ export type Uso = {
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  /** quanto da gravação foi no cache de 1 h (custa 2x a entrada; o de 5 min, 1,25x) — issue #488 */
+  cache_creation?: { ephemeral_1h_input_tokens?: number; ephemeral_5m_input_tokens?: number };
 };
 
 /** Custo em dólares de uma chamada, pelo uso que a API devolveu. */
 export function custoUsd(modelo: string, uso: Uso | null | undefined): number {
   const p = PRECOS[modelo] ?? PRECOS[MODELOS.capaz];
   if (!uso) return 0;
+  const umaHora = Math.min(uso.cache_creation?.ephemeral_1h_input_tokens ?? 0, uso.cache_creation_input_tokens ?? 0);
   const usd =
     ((uso.input_tokens ?? 0) * p.entrada +
       (uso.output_tokens ?? 0) * p.saida +
       (uso.cache_read_input_tokens ?? 0) * p.cacheLeitura +
-      (uso.cache_creation_input_tokens ?? 0) * p.cacheEscrita) /
+      ((uso.cache_creation_input_tokens ?? 0) - umaHora) * p.cacheEscrita +
+      umaHora * p.entrada * 2) /
     1_000_000;
   return Math.round(usd * 100000) / 100000;
 }

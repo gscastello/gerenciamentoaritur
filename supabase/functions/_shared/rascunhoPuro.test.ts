@@ -1225,3 +1225,18 @@ Deno.test("#486: Posto Carone é ponto próprio (Outros · Posto Carone vira o p
   assert(semPonto.ok);
   if (semPonto.ok) assertEquals(semPonto.rascunho.route_point_code, "outro");
 });
+
+Deno.test("#488: a parte fixa da leitura não muda com o dia nem com o passageiro (cache)", async () => {
+  const { partesDaLeitura, sistemaComCache } = await import("./rascunhoPuro.ts");
+  const base = { pontos: "busca = Buscar em Casa", desembarques: "-", bairrosSaoLuis: "Anil, Cohatrac" };
+  const a = partesDaLeitura({ ...base, calendario: "Hoje: segunda (2026-11-23)", costume: "Ida: Rodoviária" });
+  const b = partesDaLeitura({ ...base, calendario: "Hoje: terça (2026-11-24)", instrucoesDoCliente: "perguntar o bairro" });
+  assertEquals(a.fixa, b.fixa);
+  assert(a.fixa.includes("BAIRROS DE SÃO LUÍS: Anil, Cohatrac"));
+  assert(!a.fixa.includes("2026-11-23") && a.variavel.includes("2026-11-23"));
+  assert(a.variavel.includes("Ida: Rodoviária") && b.variavel.includes("perguntar o bairro"));
+  const blocos = sistemaComCache(a.fixa, a.variavel);
+  assertEquals(blocos[0].cache_control, { type: "ephemeral", ttl: "1h" });
+  assertEquals(blocos.length, 2);
+  assertEquals(sistemaComCache(a.fixa, "").length, 1);
+});
