@@ -121,7 +121,7 @@ test("Atendimento: resolve uma pendência direto do painel", async ({ page }) =>
   await abrirAtendimento(page, "pendencias");
 
   await expect(page.getByText("Cliente pediu atendente no WhatsApp")).toBeVisible();
-  await page.getByRole("button", { name: "Resolver", exact: true }).click();
+  await page.getByRole("button", { name: "Já resolvi", exact: true }).click();
   await expect(page.getByText("Cliente pediu atendente no WhatsApp")).toHaveCount(0);
 });
 

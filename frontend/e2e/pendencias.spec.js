@@ -41,7 +41,7 @@ test("Pendências: lista, abre manual e resolve", async ({ page }) => {
   await page
     .locator("div")
     .filter({ hasText: /^Ligar para o Sr\. José/ })
-    .getByRole("button", { name: "Resolver" })
+    .getByRole("button", { name: "Já resolvi" })
     .first()
     .click();
   await expect(page.getByText("Ligar para o Sr. José")).toHaveCount(0);

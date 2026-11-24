@@ -37,6 +37,7 @@ import {
   validarMudanca,
   validarLicao,
   validarLugar,
+  validarCorrecao,
   validarCostume,
   validarInstrucaoDoCliente,
 } from "./assistentePuro.ts";
@@ -59,6 +60,8 @@ export type Contexto = {
   areas: { ida: { code: string; label: string }[]; volta: { code: string; label: string }[] };
   nomesDosPontos: Record<string, string>;
   acoes: Acao[];
+  /** erros registrados nesta resposta para o Claude corrigir (issue #516) */
+  correcoes: { id: string; o_que_errou: string; o_certo: string }[];
   /** lido como servidor (Siri): as RPCs não veem auth.uid(), a autoria vai em p_actor/p_created_by */
   servidor: boolean;
   /** o que o assistente sabe da empresa (issue #295) */
@@ -111,6 +114,7 @@ export async function montarContexto(db: SupabaseClient, userId: string, papel: 
     },
     nomesDosPontos: nomes,
     acoes: [],
+    correcoes: [],
     servidor: db === supabaseAdmin,
     conhecimento,
   };
@@ -502,6 +506,19 @@ async function executarFerramenta(nome: string, a: Linha, ctx: Contexto): Promis
       ctx.acoes.push(acao);
       return { ok: true, proposta: descreverAcao(acao, ctx.nomesDosPontos) };
     }
+    case "registrar_correcao": {
+      const v = validarCorrecao(a);
+      if (!v.ok) return { ok: false, erro: v.erro };
+      const { data, error } = await ctx.db
+        .from("bot_correcoes")
+        .insert({ ...v.correcao, created_by: ctx.userId })
+        .select("id")
+        .single();
+      if (error) return { ok: false, erro: error.message.slice(0, 200) };
+      ctx.correcoes.push({ id: String(data.id), o_que_errou: v.correcao.o_que_errou, o_certo: v.correcao.o_certo });
+      evento("assistente_correcao", { area: v.correcao.area, reserva: !!v.correcao.reserva_id });
+      return { ok: true, registrada: true };
+    }
     case "propor_resolver_pendencia": {
       const { data: p } = await ctx.db
         .from("v_pendencias_atendimento")
@@ -624,6 +641,7 @@ export async function conversar(historico: MensagemDoChat[], ctx: Contexto, opco
   return {
     texto,
     acoes: ctx.acoes.map((a) => ({ ...a, descricao: descreverAcao(a, ctx.nomesDosPontos) })),
+    correcoes: ctx.correcoes,
     modelo,
     uso,
     custo: Math.round(custo * 100000) / 100000,
