@@ -855,6 +855,31 @@ export function passagensComCrianca(
   return { total: adultos + criancas - noColo, adultos, criancas, noColo };
 }
 
+// palavras de verdade com "pass"; o resto é a quantidade estragada pela transcrição ("despassar" = "duas passagens")
+const PALAVRAS_COM_PASS = new Set([
+  "passa", "passar", "passo", "passou", "passei", "passamos", "passando", "passaram", "passe", "passem", "passara",
+  "passagem", "passagens", "passageiro", "passageiros", "passageira", "passageiras", "passada", "passado", "passados",
+  "repassar", "repassa", "ultrapassar", "passaporte", "passarela", "passeio", "passear", "passeando", "compasso", "impasse",
+]);
+
+/**
+ * O cliente FALOU a quantidade num áudio, mas a transcrição a estragou (issue #504, caso 6a90bb67: "eu quero
+ * despassar daqui de Pirapemas pra Miranda" = duas passagens). Uma palavra com "pass" que não existe, dentro de
+ * "[áudio: …]", sem nenhuma quantidade legível: não dá para saber quantas — o bot pergunta (dono, 24/11: sem
+ * certeza, pergunta; nunca assume 1 nem tira do costume).
+ */
+export function quantidadeIncerta(textos: string[]): boolean {
+  if (quantidadeEscrita(textos) != null) return false;
+  const estragado = (t: string) => {
+    const audio = String(t ?? "").match(/\[áudio:([^\]]*)\]?/i)?.[1];
+    return !!audio && normalizarTexto(audio).split(/\s+/).some((p) => p.includes("pass") && !PALAVRAS_COM_PASS.has(p));
+  };
+  const i = textos.findLastIndex(estragado);
+  if (i === -1) return false;
+  // respondeu depois só com o número ("duas", "2", "são 2"): a dúvida acabou
+  return !textos.slice(i + 1).some((t) => /^(sao |e |somos )?(\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis)( (pessoas?|passagens?|passageiros?|vagas?))?$/.test(normalizarTexto(t).trim()));
+}
+
 // ---------------------------------------------------------------------------
 // Ponto de embarque (Ida) e bairro
 // ---------------------------------------------------------------------------

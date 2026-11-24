@@ -102,6 +102,7 @@ import {
   pedeDeOndeDeixou,
   sentidoEscrito,
   embarqueNoInteriorEscrito,
+  quantidadeIncerta,
   viagemDeOndeDeixou,
   segundaViagemEhAOutra,
   origemDoPedido,
@@ -991,6 +992,11 @@ async function lerEGravar(
       evento("bot_lugar_contra_o_sentido", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe });
       r.notes = [r.notes, `O lugar não combina com o sentido: ${contraOSentido}.`].filter(Boolean).join(" ").slice(0, 300);
       if (opcoes.confirmadoPelaEquipe) pendencia ??= { motivo: contraOSentido, codigo: "onde_embarca" };
+    }
+    // a quantidade foi falada num áudio, mas veio estragada ("despassar"): não lança com 1 — pergunta (issue #504)
+    if (opcoes.confirmadoPelaEquipe && (r.type ?? "passagem") !== "encomenda" && quantidadeIncerta(textosDoCliente)) {
+      evento("bot_quantidade_incerta", { conversa: entrada.chatwootConversationId });
+      pendencia ??= { motivo: "o cliente falou a quantidade num áudio, mas a transcrição não deixou entender quantas passagens", codigo: "quantidade" };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
     // desfazer o que o cliente escreveu sem ninguém ver (issue #309)

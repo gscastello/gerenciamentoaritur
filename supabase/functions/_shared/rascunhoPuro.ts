@@ -1307,6 +1307,8 @@ export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
   onde_embarca: "você vai embarcar em São Luís (Ida) ou aí em Pirapemas/Cantanhede (Volta, para São Luís)?",
   cidade: "você embarca em Pirapemas ou em Cantanhede?",
   sem_data: "qual o dia da sua viagem?",
+  // a quantidade foi falada num áudio e a transcrição estragou (issue #504): pergunta, nunca assume 1
+  quantidade: "quantas passagens são?",
 };
 
 /**

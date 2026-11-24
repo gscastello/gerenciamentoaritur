@@ -7,6 +7,7 @@ import {
   pontoEscrito,
   quantidadeEscrita,
   embarqueNoInteriorEscrito,
+  quantidadeIncerta,
   sentidoEscrito,
 } from "./pedidoDoCliente.ts";
 
@@ -548,4 +549,20 @@ Deno.test("#506: 2 adultos e criança de 3 anos lança 2 e não trava", async ()
   const reserva: any = { type: "passagem", trip_date: "2026-11-30", direction: "volta", route_point_code: "pirapemas", quantity: 2 };
   // deno-lint-ignore no-explicit-any
   assertEquals(conferenciaFinal(reserva, msgs, { hoje: "2026-11-23", pedidosLidos: 1 } as any), []);
+});
+
+Deno.test("#504 quantidade falada no áudio e estragada pela transcrição: pergunta", () => {
+  // caso 6a90bb67: "duas passagens" virou "despassar"
+  assertEquals(quantidadeIncerta(["[áudio: Bom dia, eu quero despassar daqui de Pirapemba Miranda, viu? Aqui perto do Bar do Pepe]"]), true);
+  assertEquals(quantidadeIncerta(["[áudio: quero duspassagem pra amanhã]"]), true);
+  // palavras de verdade com "pass" e quantidade legível não são dúvida
+  assertEquals(quantidadeIncerta(["[áudio: vou passar aí amanhã cedo]"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero duas passagens pra amanhã]"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar]", "são 2 passagens"]), false);
+  // fora de áudio, o cliente escreveu: não é erro de transcrição
+  assertEquals(quantidadeIncerta(["quero despassar"]), false);
+  // respondeu a pergunta só com o número: resolvido
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "Duas"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "são 2"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "ok obrigada"]), true);
 });

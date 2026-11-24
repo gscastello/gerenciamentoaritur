@@ -306,6 +306,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   senão o cache não pega e o custo volta (confira `cache_lido` nos registros). **Leitura guardada na
   avaliação** (issue #494, `database/131`, `bot_leituras_memo`): mesmo texto = não chama o modelo, então mudança só de
   código é avaliada de graça e sem variação; mudou uma palavra das instruções, lê tudo de novo (`{"fresco": true}` força).
+  **Sem certeza, pergunta ao cliente** (dono, 24/11 — issue #504): vale para quantidade, dia, sentido, embarque e todo
+  o resto. Nunca tirar do costume o que o cliente não disse, exceto o recorrente com embarque e desembarque FIXOS
+  (ex.: sempre buscado em casa num lugar e deixado sempre no mesmo ponto na Volta), que manda só "vou amanhã" — esse
+  vai pelo endereço de costume, como já é. Quantidade falada num áudio e estragada pela transcrição ("despassar" =
+  duas passagens; `quantidadeIncerta`) não vira 1: o Agendado deixa a pendência `quantidade` e pergunta "quantas
+  passagens são?"; a resposta só com o número resolve.
   **Mudança depois da marca** (dono, 24/11 — issue #504, caso 8bfa7860): o esperado do caso é o da HORA do
   Agendado. Se a reserva mudou depois de uma nova mensagem do cliente, o `avaliar-bot` decide sozinho quem mudou
   (`mudancaDepoisDaMarca.quemMudou`, pelo que o cliente escreveu): escreveu um valor antes e o outro depois (ou
