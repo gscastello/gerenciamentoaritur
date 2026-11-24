@@ -117,6 +117,7 @@ import {
   pontoEscrito,
   falasDoDia,
   semPedidosPassados,
+  cidadeNaRespostaDoEndereco,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
@@ -557,6 +558,7 @@ async function lerEGravar(
   const falasDoPedido = recentes
     .filter((m) => m.quem === "cliente" || m.quem === "equipe")
     .map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
+  const cidadeDoEndereco = cidadeNaRespostaDoEndereco(falasDoPedido);
   const recusadas = sugestoesRecusadas(falasDoPedido);
   // "A ida é sábado, certo?" → "Isso": vale como dito pelo cliente (issue #335)
   const confirmadas = [...datasConfirmadas(falasDoPedido), ...(dadosMarca.data ? [dadosMarca.data] : [])];
@@ -760,6 +762,15 @@ async function lerEGravar(
         qualViagem.add(p);
       }
       if (decisao) evento("bot_proxima_viagem_pelo_lugar", { conversa: entrada.chatwootConversationId, decisao });
+    }
+    // a cidade que o cliente escreveu ao responder onde buscar vence a lida (issue #514)
+    if (
+      cidadeDoEndereco && pedidos.length === 1 && !dadosMarca.cidade && (p.tipo ?? "passagem") !== "encomenda" &&
+      p.direcao === "volta" && cidadeDaVolta(p.cidade_dita) !== cidadeDoEndereco
+    ) {
+      evento("bot_cidade_do_endereco", { conversa: entrada.chatwootConversationId, lida: p.cidade_dita ?? null, cidade: cidadeDoEndereco });
+      p.cidade_dita = cidadeDoEndereco;
+      p.ponto = null;
     }
     // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
     // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
