@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   completarLugares,
+  enderecoQueFaltou,
   desembarqueCopiaDoEmbarque,
   desembarqueDaIdaEscrito,
   desembarqueDaVoltaEscrito,
@@ -81,21 +82,29 @@ Deno.test("#523: endereço da Volta pela resposta, pela equipe ou pelo que o cli
 });
 
 Deno.test("#523: no pedido lido, completa o que falta e tira o que é cópia", () => {
-  const ctx = { pontos: { ida: ["busca", "retorno"], volta: ["pirapemas", "cantanhede"] }, bairros: ["Cohatrac"], sentidos: ["volta"], temCostume: false };
-  const p = { direcao: null, cidade_dita: "pirapemas", endereco: null, desembarque: "Casa do Exemplo Pintor (São Luís)" };
-  completarLugares(p, [c("duas passagens em pirapemas"), e("Buscar na casa do exemplo pintor certo")], ctx);
-  assertEquals([p.endereco, p.desembarque], ["casa do exemplo pintor", null] as unknown as null[]);
-  const q = { direcao: "volta", cidade_dita: "pirapemas", endereco: null as string | null, desembarque: null };
-  completarLugares(q, [c("Vou ficar aq na provisória, rua da exemplo"), e("Pra lhe buscar na provisória certo?")], ctx);
-  assertEquals(q.endereco, "provisória, rua da exemplo");
+  const ctx = { pontos: { ida: ["busca", "retorno"], volta: ["pirapemas", "cantanhede"] }, bairros: ["Cohatrac"], sentidos: ["volta"] };
   const i = { direcao: "ida", ponto: "retorno", desembarque: "Em casa (bairro)" };
   completarLugares(i, [c("Vou pegar lá no retorno pra pirapemas")], { ...ctx, sentidos: ["ida"] });
   assertEquals(i.desembarque, "Pirapemas");
-  // o que o leitor achou não é trocado; com Ida na mesma leitura, o endereço não é completado
+  // o que o leitor achou não é trocado
   const k = { direcao: "volta", endereco: "Rua do Exemplo", desembarque: "Cohatrac" };
   completarLugares(k, [e("Qual o endereço?"), c("Rua da Outra")], ctx);
   assertEquals([k.endereco, k.desembarque], ["Rua do Exemplo", "Cohatrac"]);
-  const d = { direcao: "volta", endereco: null, desembarque: null };
-  completarLugares(d, [e("Qual o endereço?"), c("Rua da Outra")], { ...ctx, sentidos: ["ida", "volta"] });
-  assertEquals(d.endereco, null);
+  const v = { direcao: "volta", endereco: "Rua do Exemplo, 10", desembarque: "Rua do Exemplo (São Luís)" };
+  completarLugares(v, [], ctx);
+  assertEquals(v.desembarque, null as unknown as string);
+});
+
+Deno.test("#523: o endereço que faltou na Volta, com a cidade já decidida", () => {
+  const ctx = { direcao: "volta", bairros: ["Cohatrac"], sentidos: ["volta"], temCostume: false, desembarque: null };
+  const x = [c("duas passagens em pirapemas"), e("Buscar na casa do exemplo pintor certo")];
+  assertEquals(enderecoQueFaltou(x, { ...ctx, desembarque: "Casa do Exemplo Pintor (São Luís)" }), { endereco: "casa do exemplo pintor", desembarqueEraEmbarque: true });
+  assertEquals(
+    enderecoQueFaltou([c("Vou ficar aq na provisória, rua da exemplo"), e("Pra lhe buscar na provisória certo?")], ctx)?.endereco,
+    "provisória, rua da exemplo",
+  );
+  // com Ida na mesma leitura, ou frase solta de quem tem costume, não completa
+  assertEquals(enderecoQueFaltou([e("Qual o endereço?"), c("Rua da Outra")], { ...ctx, sentidos: ["ida", "volta"] }), null);
+  assertEquals(enderecoQueFaltou([c("moro na rua da exemplo")], { ...ctx, temCostume: true }), null);
+  assertEquals(enderecoQueFaltou([c("moro na rua da exemplo")], { ...ctx, direcao: "ida" }), null);
 });
