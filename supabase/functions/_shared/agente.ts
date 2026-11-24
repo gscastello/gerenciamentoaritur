@@ -28,10 +28,12 @@ import {
   numerosPorExtenso,
   problemasDaResposta,
   somarUso,
+  soCortesiaSemPergunta,
   ultimaFoiDoCliente,
   USO_ZERADO,
 } from "./agentePuro.ts";
-import { type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
+import { clienteAntesDe, type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
+import { custoUsd } from "./assistentePuro.ts";
 import { montarFatos } from "./botAnswer.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 import { getBotContext } from "./botContext.ts";
@@ -42,7 +44,10 @@ import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 
-const MODELO = "claude-sonnet-5";
+// Sonnet 5.5 (issue #504): mesmo preço do Sonnet 5, com a leitura do cache pela metade; esforço médio,
+// como o assistente. Recusa por engano do classificador cai num modelo de reserva (fallback do servidor).
+const MODELO = "claude-sonnet-5-5";
+const ESFORCO = "medium";
 const MAX_VOLTAS = 8;
 const MAX_CORRECOES = 2;
 const ESPERA_PARA_JUNTAR_MS = Number(Deno.env.get("BOT_ESPERA_MS") ?? "5000");
@@ -73,8 +78,8 @@ NO RITMO DO CLIENTE (o mais importante)
 - Faça UMA pergunta por mensagem, a que faz mais sentido agora. Nunca liste o que falta ("preciso de 3 coisinhas") nem mande modelo para preencher.
 - Se ele perguntar algo no meio do pedido, responda primeiro e depois retome de onde parou.
 - Se ele mandar vários dados juntos ou em mensagens seguidas, aproveite tudo. Ex.: "gostaria de uma vaga para amanhã" e logo depois o endereço: você já tem a data e o embarque, então pergunte só o que ainda falta.
-- O valor depende de onde ele sobe e de onde desce. Se perguntar o valor sem ter dito os dois, pergunte o que faltar, um de cada vez; com os dois, diga o valor.
-- Exemplo do ritmo: "bom dia" → "Bom dia! Como posso te ajudar?". "Quero marcar uma passagem para amanhã" → pergunte o local de embarque. "Qual o valor?" → pergunte onde ele vai descer e, sabendo, diga o valor. E assim por diante.
+- VALOR SÓ SE O CLIENTE PERGUNTAR (dono, 23/11): não fale de preço por conta própria, nem no resumo. Quando ele perguntar: na Ida, o valor sai de onde ele sobe (busca em casa pelo bairro; Rodoviária, Retorno, BR, Posto Carone e aeroporto, cada um o seu valor da tabela) e do trecho, se ele desce numa cidade do caminho; na Volta, é o MESMO quadro, mas pelo lugar onde ele DESCE em São Luís (em casa pelo bairro, Retorno, Rodoviária, BR, Posto Carone, aeroporto). Sem saber esse lugar, pergunte primeiro onde ele vai descer e então responda (calcular_valor). Nunca dê o valor da Volta sem saber onde ele desce.
+- Exemplo do ritmo: "bom dia" → "Bom dia! Como posso te ajudar?". "Quero marcar uma passagem para amanhã" → pergunte o local de embarque. "Qual o valor?" → na Ida, com o embarque, diga o valor; na Volta, pergunte onde ele desce e então diga. E assim por diante.
 - Se alguma lição aprendida abaixo sugerir pedir tudo de uma vez ou seguir uma ordem fixa, siga esta seção.
 
 ANDAMENTO DA VIAGEM (só estimativa pelo horário)
@@ -92,16 +97,17 @@ ANDAMENTO DA VIAGEM (só estimativa pelo horário)
 - Para horário de passagem e chegada vale o cronograma nas INFORMAÇÕES, mesmo que o horário do ponto seja outro. Onde esperar, plataforma ou parada: use COMO A VIAGEM FUNCIONA NA PRÁTICA.
 
 RESERVAS
-- Para fechar uma reserva você vai precisar saber: data, direção, ponto de embarque, quantidade, local de desembarque, forma de pagamento (dinheiro, Pix ou cartão) e, se o cliente ainda não é cadastrado, o nome completo (nunca use o nome do perfil do WhatsApp: pergunte). Busca em casa: bairro e endereço/referência. Esses dados surgem aos poucos na conversa; deixe nome e pagamento para o fim. Não peça telefone: é o desta conversa.
+- O QUE É PRECISO PARA RESERVAR (dono, 23/11 — o objetivo é não deixar nenhum agendamento para trás): só o ESSENCIAL trava a reserva: o dia, o sentido, onde ele embarca (na Volta, a cidade, Pirapemas ou Cantanhede, e a rua ou referência; na busca em casa, o endereço ou o bairro) e quantas passagens (se ele não disse, é 1: escreva "1 passagem" no resumo para ele corrigir; não pergunte "quantas passagens?"). O telefone é o desta conversa: não peça.
+- Todo o resto é COMPLEMENTAR: o nome, onde ele desce (a cidade e o lugar exato) e a forma de pagamento. É bom ter, mas não segura a reserva. Não pergunte nada disso antes de reservar: com o essencial, mande o resumo e reserve depois do "sim"; criar_reserva devolve falta_completar, e aí, na mensagem que conta que reservou, peça o que falta em UMA pergunta (ex.: "Reservado! Você desce em Pirapemas ou em Cantanhede?"). Nome: use o que o cliente escreveu, mesmo que só o primeiro ("nome de Geovana" = Geovana); nunca o do perfil do WhatsApp. Onde ele desce já dito na conversa ("vaga pra São Luís", "vou pra Cantanhede") vale como desembarque.
 - COMO INTERPRETAR O PEDIDO (aprendido com a equipe): o cliente costuma mandar os dados picados, em várias mensagens e fora de ordem (nome, data, quantidade, telefone, endereço de embarque e de desembarque). Junte tudo o que ele já disse na conversa e não pergunte de novo o que ele já respondeu.
   · Sentido: embarque em São Luís = Ida; embarque em Cantanhede ou Pirapemas (ou "vaga pra São Luís") = Volta. O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11): a Ida vai São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas; a Volta faz o caminho contrário, saindo de Pirapemas. Destino DEPOIS da origem nessa ordem = IDA; ANTES = VOLTA. Pense como o motorista: "de Pirapemas pra Cantanhede" é Volta; "de Cantanhede pra Pirapemas" é IDA (a Volta já passou por Cantanhede vinda de Pirapemas, não tem como ir a Pirapemas); saindo de São Luís é sempre Ida; saindo de Pirapemas é sempre Volta. "Madrugada", "cedinho" ou "5h" = Ida da manhã, e a Ida com endereço residencial em São Luís é Buscar em Casa (bairro + referência; confira o bairro na tabela de preços).
   · ${REGRA_DO_LUGAR} Ex.: "aguardo vcs no retorno" é Ida no Retorno; "Rua X, Pirapemas" como embarque é Volta; "vou ficar no Cohatrac" é Volta (desce em São Luís).
   · Ponto: na Ida só existem Buscar em Casa, Rodoviária, Retorno, Posto Carone e Outros. Rodoviária, Retorno ou Posto Carone ditos pelo cliente: use-os (Posto Carone = código "postocarone", sem endereço). Qualquer outro local de embarque (BR, aeroporto, beira da estrada…) é o ponto Outros (código "outro"), com o local que ele disse no endereço de embarque. Trechos da BR (Estiva, Pedrinhas, Oleama, Maracanã, Vila Itamar — os locais de Outros): a empresa NÃO busca em casa ali; o cliente espera na BR e a van para (ponto Outros com o local). Na Volta o ponto é a cidade de onde ele sai (Cantanhede ou Pirapemas) e a rua/referência são o endereço de embarque. Há ruas com o mesmo nome nas duas cidades (ex.: Lister Caldas): ao pedir o endereço da Volta, pergunte junto a cidade ("Qual o seu endereço e a cidade, Pirapemas ou Cantanhede?") e nunca deduza a cidade pela rua ou pela referência. Sem a cidade dita pelo cliente (ou o endereço de costume), não reserve: pergunte. Cliente que dá só um ponto de referência ("perto da choperia do Riba", "casa do Erasmo", "atrás do fórum") ou uma rua que existe nas duas cidades: chame onde_fica e confirme com ele usando o que a base sabe ("É a choperia do Riba, na Lister Caldas, em Pirapemas?"); só conta a cidade que ele confirmar. Se criar_reserva devolver CIDADE_A_CONFIRMAR (o lugar que conhecemos fica na outra cidade), pergunte ao cliente se o embarque é mesmo naquela cidade e só então chame de novo com cidade_confirmada=true (ou troque o ponto).
   · RETORNO DO AEROPORTO ≠ AEROPORTO (atenção, os clientes confundem): "retorno do aeroporto", "no retorno", "retorno perto do aeroporto" é o ponto Retorno (Retorno das Vans). Embarque DENTRO do aeroporto ("no aeroporto", "no terminal", "no saguão", "tô chegando de voo/avião", "desembarco no aeroporto e vou direto") é Outros, endereço de embarque "Aeroporto de São Luís", com preço próprio (calcular_valor já usa). Se a mensagem não deixa claro qual dos dois, pergunte: "É no Retorno do aeroporto ou dentro do aeroporto?"
-  · Desembarque: use o local cadastrado que mais se parece com o que ele escreveu (ex.: "Retorno do Aeroporto" é o Retorno) e mantenha o texto dele como detalhe. Endereço de desembarque que não existe na lista também vale.
+  · Desembarque (complementar): use o local cadastrado que mais se parece com o que ele escreveu (ex.: "Retorno do Aeroporto" é o Retorno) e mantenha o texto dele como detalhe. Endereço de desembarque que não existe na lista também vale; só a cidade também vale.
   · Nome: se o cadastro tem só um nome ou apelido e ele deu o nome completo, use o nome completo.
   · Forma de pagamento não informada: proponha dinheiro no resumo e deixe o cliente trocar para Pix ou cartão.
-- Antes de gravar: confira a viagem (consultar_viagem — há vaga?) e o valor (calcular_valor) e SEMPRE mande ao cliente um resumo para ele conferir, com: nome, dia da semana e data, sentido e horário, ponto e endereço de embarque, local de desembarque, quantidade, forma de pagamento e valor total (exceto no agendamento rápido com endereço de costume, que não cita valor); termine perguntando "Posso confirmar?". Só depois de um "sim" claro chame criar_reserva com cliente_confirmou=true. Se ele corrigir algo, ajuste e confirme de novo. Nunca crie a reserva só porque ele mandou todos os dados.
+- Antes de gravar: confira a viagem (consultar_viagem — há vaga?) e SEMPRE mande ao cliente um resumo para ele conferir, com o essencial: dia da semana e data, sentido e horário, ponto e endereço de embarque e quantidade; nome e desembarque entram só se já souber; o valor só se ele perguntou; termine perguntando "Posso confirmar?". Só depois de um "sim" claro chame criar_reserva com cliente_confirmou=true. Se ele corrigir algo, ajuste e confirme de novo. Nunca crie a reserva só porque ele mandou todos os dados.
 - CLIENTE RECORRENTE (endereço de costume): quando o cliente quer passagem e já é cadastrado, chame endereco_de_costume ANTES de perguntar o local. Se houver costume no sentido da viagem, não pergunte ponto, bairro nem desembarque: proponha o pedido pronto, no mesmo resumo de sempre, e peça só o que faltar (normalmente a data). Ex.: "Oi, Adriely! Ida amanhã (ter, 03/11), saindo de Prime Calhau, Quadra 3, e descendo em Pirapemas, 1 passagem, no dinheiro. Posso confirmar?".
   · Sentido: use o que o cliente disser; se não disser, o sentido_provavel (oposto da última viagem) e deixe claro no resumo para ele corrigir. Se o costume é do outro sentido ou não existe, volte ao fluxo normal.
   · NÃO cite o valor nesse resumo e não fale de preço a menos que o cliente pergunte (confira o valor em calcular_valor só para garantir que existe na tabela). Quantidade: 1, se ele não disser, escrita no resumo. Data: nunca presuma; se ele não falou, pergunte.
@@ -113,11 +119,11 @@ RESERVAS
 - Sem vaga: diga quantas restam, ofereça outro dia ou a lista de espera.
 - Cliente que já tem reserva na mesma viagem: mostre a que existe (ver_minhas_reservas) e pergunte o que prefere.
 - Remarcar ou cancelar: confira a reserva em ver_minhas_reservas, diga o que será feito, espere o "sim" e só então use a ferramenta.
-- Depois de criar, remarcar ou cancelar, conte o resultado exatamente como a ferramenta devolveu (inclusive "pendente" quando for trecho curto de cidade intermediária em dia cheio: a equipe confirma e avisa). Se for Pix, passe a chave e peça o comprovante aqui mesmo.
+- Depois de criar, remarcar ou cancelar, conte o resultado exatamente como a ferramenta devolveu (sem valor, a menos que ele tenha perguntado) (inclusive "pendente" quando for trecho curto de cidade intermediária em dia cheio: a equipe confirma e avisa). Se for Pix, passe a chave e peça o comprovante aqui mesmo.
 - Nunca diga que fez algo numa reserva sem a ferramenta ter dado certo. Se der erro, explique em uma frase e ofereça o próximo passo.
 
 LIMITES
-- Valor: na Volta o preço é o do lugar onde deixamos o cliente em São Luís (Rodoviária, Retorno, bairro de casa), como na Ida pelo lugar onde buscamos: pergunte onde ele vai ficar. Use calcular_valor com o embarque e o desembarque, que ele compara os dois na tabela de trechos e bairros. Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque válidos (rua com nome de cidade, como "Rua Santa Rita", é só a rua): na Volta, quem embarca nelas vai no ponto cantanhede com a cidade no embarque (Campestre: ponto pirapemas); na Ida, no ponto outro com a cidade no embarque. O valor é o do trecho. Só trecho abaixo de R$ 50 em dia cheio fica pendente para a equipe — o criar_reserva decide e devolve. Se voltar TRECHO_SEM_VALOR, não diga valor e chame o atendente.
+- Valor (só quando ele perguntar): na Volta o preço é o do lugar onde deixamos o cliente em São Luís, espelhando a Ida (em casa pelo bairro, Retorno, Rodoviária, BR, Posto Carone, aeroporto); na Ida, pelo lugar onde buscamos. Use calcular_valor com o embarque e o desembarque (ele compara os dois na tabela de trechos e bairros); na Volta sem desembarque ele devolve FALTA_DESEMBARQUE: pergunte onde ele desce. Cidades do caminho (Campestre, Matões, Miranda, Entroncamento, Colombo, Santa Rita, Bacabeira) são embarque e desembarque válidos (rua com nome de cidade, como "Rua Santa Rita", é só a rua): na Volta, quem embarca nelas vai no ponto cantanhede com a cidade no embarque (Campestre: ponto pirapemas); na Ida, no ponto outro com a cidade no embarque. O valor é o do trecho. Só trecho abaixo de R$ 50 em dia cheio fica pendente para a equipe — o criar_reserva decide e devolve. Se voltar TRECHO_SEM_VALOR, não diga valor e chame o atendente.
 - Nunca indique van ou motorista de outro transportador: quem decide isso é a equipe (chame o atendente).
 - Encomenda ou frete: reúna o que é, quem entrega, quem recebe, o endereço de entrega e a data, e chame o atendente. NUNCA informe valor de encomenda.
 - Chame o atendente (chamar_atendente) para: reclamação, reembolso, negociação de preço, mais de 10 passagens, trajeto fora da área que você não consegue resolver, algo que o app não mostra (objeto esquecido), assunto que você não sabe responder ou quando o cliente pedir uma pessoa. Avise o cliente em uma frase.
@@ -128,20 +134,30 @@ LIMITES
 
 type Bloco = Record<string, any>;
 
-async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco }> {
+async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promise<{ content: Bloco[]; usage?: Bloco; model?: string; stop_reason?: string; stop_details?: Bloco | null }> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Falta ANTHROPIC_API_KEY nos secrets da função.");
   for (let tentativa = 0; ; tentativa++) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+      },
       body: JSON.stringify({
         model: MODELO,
-        max_tokens: 1500,
+        max_tokens: 4000,
         system,
         tools: FERRAMENTAS,
         tool_choice: { type: "auto" },
         messages,
+        // a conversa e os resultados das ferramentas também ficam no cache: cada volta de ferramenta
+        // do mesmo turno relia tudo isso sem cache (issue #504); 5 min, depois das instruções de 1 h
+        cache_control: { type: "ephemeral" },
+        output_config: { effort: ESFORCO },
+        fallbacks: "default",
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -155,11 +171,19 @@ async function chamarModelo(system: BlocoDoSistema[], messages: Bloco[]): Promis
   }
 }
 
-async function montarSistema(agora: Date, telefone: string): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
+/**
+ * As instruções do atendente. `antesDe` (prova, issue #501): cadastro de antes da conversa e sem a
+ * anotação do cliente, que pode ter aprendido com a própria conversa da prova.
+ */
+export async function montarSistema(
+  agora: Date,
+  telefone: string,
+  opcoes: { antesDe?: string } = {},
+): Promise<{ system: BlocoDoSistema[]; fontes: string[] }> {
   const { fatos, estilo } = await montarFatos();
   const linguagem = await blocoDasLicoes(["linguagem_cliente", "dito_pelo_cliente"]);
-  const nota = await blocoDoClienteAtual();
-  const cliente = await whatsappService.identifyCustomer(telefone);
+  const nota = opcoes.antesDe ? "" : await blocoDoClienteAtual();
+  const cliente = await clienteAntesDe(telefone, opcoes.antesDe);
   const calendario = calendarioParaOPrompt(agora);
   const { data: areas } = await supabaseAdmin
     .from("dropoff_areas")
@@ -179,7 +203,7 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: B
     .join("\n");
   const sobreOCliente = cliente
     ? `CLIENTE DESTA CONVERSA: cadastrado como "${cliente.name}" (trate pelo primeiro nome, com naturalidade; o telefone dele já é o da conversa).`
-    : "CLIENTE DESTA CONVERSA: ainda NÃO cadastrado. Antes de reservar, peça o nome completo (o nome do perfil do WhatsApp costuma ser apelido e não vale).";
+    : "CLIENTE DESTA CONVERSA: ainda NÃO cadastrado. O nome é complementar: use o que ele escrever na conversa (mesmo só o primeiro); sem nome, reserve assim mesmo e peça depois. O nome do perfil do WhatsApp não vale.";
   // ordem importa para o cache de prompt: nada que mude por hora ou por cliente antes do ponto de cache
   const system = blocosDoSistema(
     [
@@ -227,6 +251,90 @@ async function carregarConversa(
       cedeu: historico.some((m) => m.quem === "cliente" && (m.id ?? 0) > mensagemId),
     };
   }
+}
+
+/**
+ * O laço do atendente: lê a conversa, chama ferramentas e escreve a resposta, que só sai se a trava
+ * de números (problemasDaResposta) deixar. Usado pela conversa real e pela prova (issue #501).
+ */
+export async function rodarAgente(
+  system: BlocoDoSistema[],
+  fontesBase: string[],
+  historico: MensagemDaConversa[],
+  ctx: ContextoDoAgente,
+  conversa: number,
+): Promise<{ resposta: string; ferramentasUsadas: string[]; uso: typeof USO_ZERADO; correcoes: number; custoUsd: number }> {
+  // só "ok"/"obrigado"/👍 e nada perguntado: silêncio sem chamar o modelo (issue #504)
+  if (soCortesiaSemPergunta(historico)) {
+    ctx.silencio = true;
+    return { resposta: "", ferramentasUsadas: [], uso: USO_ZERADO, correcoes: 0, custoUsd: 0 };
+  }
+  const textoDoHistorico = formatarHistorico(historico);
+  const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
+  const ferramentasUsadas: string[] = [];
+  let uso = USO_ZERADO;
+  let correcoes = 0;
+  let custo = 0;
+
+  const messages: Bloco[] = [
+    {
+      role: "user",
+      content: `CONVERSA (da mais antiga para a mais recente; a última linha é a mensagem a responder):\n${textoDoHistorico}\n\nEscreva agora a próxima mensagem do atendente para o cliente (ou use uma ferramenta, se precisar de dados ou for fazer algo).`,
+    },
+  ];
+
+  let resposta = "";
+  for (let volta = 0; volta < MAX_VOLTAS; volta++) {
+    const res = await chamarModelo(system, messages);
+    uso = somarUso(uso, res.usage);
+    // o fallback pode ter respondido com outro modelo: o preço é o de quem respondeu
+    custo += custoUsd(String(res.model ?? MODELO), res.usage);
+    // recusa (sem modelo de reserva que aceite): sem resposta segura, a equipe assume
+    if (res.stop_reason === "refusal") {
+      evento("bot_agente_recusa", { conversa, categoria: res.stop_details?.category ?? null });
+      break;
+    }
+    messages.push({ role: "assistant", content: res.content });
+
+    const usos = res.content.filter((c) => c.type === "tool_use");
+    if (usos.length > 0) {
+      const resultados: Bloco[] = [];
+      for (const uso of usos) {
+        ferramentasUsadas.push(uso.name);
+        const resultado = await executarFerramenta(uso.name, uso.input ?? {}, ctx);
+        const json = JSON.stringify(resultado);
+        fontes.push(json);
+        resultados.push({ type: "tool_result", tool_use_id: uso.id, content: json });
+      }
+      messages.push({ role: "user", content: resultados });
+      // nao_responder encerra aqui: outra chamada pagaria por um texto que seria descartado
+      if (ctx.parar || ctx.silencio) break;
+      continue;
+    }
+
+    const texto = res.content
+      .filter((c) => c.type === "text")
+      .map((c) => String(c.text))
+      .join("\n")
+      .trim();
+    if (!texto) {
+      messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
+      continue;
+    }
+    const problemas = problemasDaResposta(texto, fontes, {
+      mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
+      consultouReservas: ctx.consultouReservas,
+    });
+    if (problemas.length === 0) {
+      resposta = texto;
+      break;
+    }
+    evento("bot_agente_barrado", { conversa, correcao: correcoes, problemas });
+    if (correcoes >= MAX_CORRECOES) break;
+    correcoes++;
+    messages.push({ role: "user", content: `[SISTEMA] Sua resposta NÃO foi enviada. ${problemas.join(" ")} Reescreva a mensagem.` });
+  }
+  return { resposta, ferramentasUsadas, uso, correcoes, custoUsd: Math.round(custo * 100000) / 100000 };
 }
 
 export async function responderComAgente(
@@ -281,63 +389,7 @@ export async function responderComAgente(
 
   try {
     const { system, fontes: fontesBase } = await montarSistema(agora, entrada.telefone);
-    const textoDoHistorico = formatarHistorico(historico);
-    const fontes = [...fontesBase, ...historico.map((m) => m.texto), numerosPorExtenso(historico.map((m) => m.texto).join(" "))];
-    const ferramentasUsadas: string[] = [];
-    let uso = USO_ZERADO;
-    let correcoes = 0;
-
-    const messages: Bloco[] = [
-      {
-        role: "user",
-        content: `CONVERSA (da mais antiga para a mais recente; a última linha é a mensagem a responder):\n${textoDoHistorico}\n\nEscreva agora a próxima mensagem do atendente para o cliente (ou use uma ferramenta, se precisar de dados ou for fazer algo).`,
-      },
-    ];
-
-    let resposta = "";
-    for (let volta = 0; volta < MAX_VOLTAS; volta++) {
-      const res = await chamarModelo(system, messages);
-      uso = somarUso(uso, res.usage);
-      messages.push({ role: "assistant", content: res.content });
-
-      const usos = res.content.filter((c) => c.type === "tool_use");
-      if (usos.length > 0) {
-        const resultados: Bloco[] = [];
-        for (const uso of usos) {
-          ferramentasUsadas.push(uso.name);
-          const resultado = await executarFerramenta(uso.name, uso.input ?? {}, ctx);
-          const json = JSON.stringify(resultado);
-          fontes.push(json);
-          resultados.push({ type: "tool_result", tool_use_id: uso.id, content: json });
-        }
-        messages.push({ role: "user", content: resultados });
-        // nao_responder encerra aqui: outra chamada pagaria por um texto que seria descartado
-        if (ctx.parar || ctx.silencio) break;
-        continue;
-      }
-
-      const texto = res.content
-        .filter((c) => c.type === "text")
-        .map((c) => String(c.text))
-        .join("\n")
-        .trim();
-      if (!texto) {
-        messages.push({ role: "user", content: "[SISTEMA] Sua resposta veio vazia. Escreva a mensagem para o cliente ou use nao_responder." });
-        continue;
-      }
-      const problemas = problemasDaResposta(texto, fontes, {
-        mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
-        consultouReservas: ctx.consultouReservas,
-      });
-      if (problemas.length === 0) {
-        resposta = texto;
-        break;
-      }
-      evento("bot_agente_barrado", { conversa: bot.chatwootConversationId, correcao: correcoes, problemas });
-      if (correcoes >= MAX_CORRECOES) break;
-      correcoes++;
-      messages.push({ role: "user", content: `[SISTEMA] Sua resposta NÃO foi enviada. ${problemas.join(" ")} Reescreva a mensagem.` });
-    }
+    const { resposta, ferramentasUsadas, uso, correcoes } = await rodarAgente(system, fontesBase, historico, ctx, bot.chatwootConversationId);
 
     if (ctx.parar) {
       evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "conversa passou para a equipe" });

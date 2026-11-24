@@ -10,6 +10,11 @@
 //   faltou   — deixaria de lançar uma viagem pedida (sem nem pendência)
 //   pendente — não lançaria por dúvida (fica pendência ou pergunta): seguro, mas não automático
 //   certo    — lançaria exatamente as viagens que ficaram
+//
+// Caso em que a reserva MUDOU depois de uma nova mensagem do cliente posterior à marca e que
+// ninguém conferiu (issue #508, `bot_casos.mudou_depois`): o esperado pode ser a mudança do cliente,
+// não o pedido da marca. Diferença nele vira "pendente" com o motivo MUDOU_DEPOIS — nunca errado
+// nem certo calado — até o dono conferir na aba Sistema → Bot.
 
 import { normalizarTexto } from "./grafia.ts";
 
@@ -28,6 +33,9 @@ export type ResultadoDoCaso = {
   resultado: "certo" | "pendente" | "faltou" | "errado";
   diferencas: string[];
 };
+
+/** Motivo da diferença num caso que mudou depois da marca e ainda não foi conferido (issue #508). */
+export const MUDOU_DEPOIS = "mudou depois da marca: conferir";
 
 const ddmm = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
 const rotulo = (v: ViagemDoCaso) => `${v.direction === "volta" ? "Volta" : "Ida"} ${ddmm(v.trip_date)}`;
@@ -69,6 +77,8 @@ export function compararCaso(
     pendenteOk?: boolean;
     /** nome do bairro na tabela de preços (null = não está nela) */
     bairroNaTabela?: (bairro: string) => string | null;
+    /** a reserva mudou depois de uma nova mensagem do cliente e ninguém conferiu o caso (issue #508) */
+    mudouDepois?: boolean;
   } = {},
 ): ResultadoDoCaso {
   const diferencas: string[] = [];
@@ -115,6 +125,10 @@ export function compararCaso(
     errado = true;
     diferencas.push(`lançaria ${rotulo(p)} que não foi pedida`);
   });
+  if (opcoes.mudouDepois && diferencas.length) {
+    // o esperado pode ser a mudança do cliente: quem decide é uma pessoa, não a conta
+    return { resultado: "pendente", diferencas: [MUDOU_DEPOIS, ...diferencas] };
+  }
   const resultado = errado ? "errado" : faltou ? "faltou" : pendente && !opcoes.pendenteOk ? "pendente" : "certo";
   return { resultado, diferencas };
 }

@@ -19,6 +19,7 @@ import { Presence, Skeleton, fadeScale } from "../../ui/motion/index.js";
 import { C, Card, ErrorBanner, Field, TextArea, TextInput } from "../tabShared.jsx";
 import SistemaBotAcerto from "./SistemaBotAcerto.jsx";
 import SistemaBotAprendizado from "./SistemaBotAprendizado.jsx";
+import SistemaBotCasos from "./SistemaBotCasos.jsx";
 
 // Duração da saída antes de tirar o item da lista de verdade — precisa
 // bater com o `duration` do Presence (AGENTS.md §5).
@@ -382,6 +383,8 @@ export default function SistemaBot() {
       </Card>
 
       <SistemaBotAcerto />
+
+      <SistemaBotCasos />
 
       <SistemaBotAprendizado />
     </div>

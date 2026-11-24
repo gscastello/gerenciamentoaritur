@@ -600,7 +600,7 @@ const RE_PERGUNTA = / (tem como|teria como|posso|podemos|da pra|da para|daria|se
 const RE_TERCEIRO =
   / (comigo|ele|ela|eles|elas|menin[oa]s?|rapaz|moc[oa]|amig[oa]s?|mae|pai|filh[oa]s?|espos[oa]|marido|mulher|irma|irmao|sobrinh[oa]s?|net[oa]s?|prim[oa]s?|ti[oa]|avo) (\w+ ){0,6}(nao (vai|vao|ira|irao|pode|podera|quer)|desist\w*|cancel\w*|desmarc\w*) /;
 /** Desistência da reserva inteira quando ela tem mais de uma passagem. */
-const RE_TODAS = / (todas|todos|toda|tudo|nossas? (passagens?|vagas?|viagem|reserva)|minhas (passagens|vagas)|as passagens|as vagas|ninguem (vai|mais)|nao vamos) /;
+const RE_TODAS = / (todas|todos|toda|tudo|nossas? (passage(?:m|ns)|vagas?|viagem|reserva)|minhas (passagens|vagas)|as passagens|as vagas|ninguem (vai|mais)|nao vamos) /;
 const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
 
 /**

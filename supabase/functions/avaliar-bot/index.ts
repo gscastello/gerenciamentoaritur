@@ -6,9 +6,17 @@
 // Grava em `bot_avaliacoes`. Chamada com a chave da rotina do revisor (x-rotina), como o revisor;
 // responde na hora e avalia em segundo plano (alguns casos por chamada).
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
+//
+// `{"atendente": true}` (etapa 2 do bot autônomo, issue #501): em vez da leitura do Agendado, refaz a
+// conversa com o ATENDENTE DE IA no lugar da equipe (provaDoAtendente.ts), sem enviar nem gravar
+// nada, e compara o que ele reservaria com o que ficou, inclusive o preço (provaPura.compararProva).
+// Use uma rodada própria (ex.: "atendente-2026-11-23"); o custo de cada caso vai em `tokens.custo_usd`.
 
 import { bairroDaTabela } from "../_shared/agentePuro.ts";
 import { compararCaso, type ViagemDoCaso } from "../_shared/avaliacaoPura.ts";
+import { type CampoDaReserva, esperadoNaHoraDaMarca, type MudancaDoCampo, quemMudou } from "../_shared/mudancaDepoisDaMarca.ts";
+import { simularAtendimento } from "../_shared/provaDoAtendente.ts";
+import { compararProva, type EsperadaComPreco } from "../_shared/provaPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
@@ -49,6 +57,8 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
     const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas, {
       motivos: r.motivos,
       pendenteOk: caso.pendente_ok === true,
+      // a reserva mudou depois de uma nova mensagem do cliente e ninguém conferiu (issue #508)
+      mudouDepois: caso.mudou_depois != null && caso.verificado !== true,
       bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
     });
     await supabaseAdmin.from("bot_avaliacoes").insert({
@@ -74,6 +84,156 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
   }
 }
 
+/** As viagens que ficaram, com o preço unitário de cada uma (o caso não guarda o preço). */
+async function esperadasComPreco(esperado: ViagemDoCaso[]): Promise<EsperadaComPreco[]> {
+  const ids = (esperado as Linha[]).map((e) => e.reservation_id).filter(Boolean);
+  const { data } = ids.length
+    ? await supabaseAdmin.from("reservations").select("id, unit_price").in("id", ids)
+    : { data: [] as Linha[] };
+  const preco = new Map(((data ?? []) as Linha[]).map((r) => [r.id, r.unit_price == null ? null : Number(r.unit_price)]));
+  return (esperado as Linha[]).map((e) => ({ ...(e as ViagemDoCaso), unit_price: preco.get(e.reservation_id) ?? null }));
+}
+
+async function provarAtendente(caso: Linha, rodada: string, versao: string | null, bairros: { neighborhood: string }[]) {
+  try {
+    const r = await simularAtendimento({
+      conversationId: caso.conversation_id,
+      chatwootConversationId: Number(caso.chatwoot_conversation_id),
+      mensagemId: Number(caso.mensagem_id),
+      telefone: String(caso.telefone),
+      marcaEm: String(caso.marca_em),
+    });
+    await supabaseAdmin.from("bot_avaliacoes").delete().eq("rodada", rodada).eq("caso_id", caso.id).eq("resultado", "erro");
+    const cmp = compararProva(await esperadasComPreco((caso.esperado ?? []) as ViagemDoCaso[]), r.acoes, {
+      ultimaResposta: r.ultimaResposta,
+      pendenteOk: caso.pendente_ok === true,
+      mudouDepois: caso.mudou_depois != null && caso.verificado !== true,
+      bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
+    });
+    await supabaseAdmin.from("bot_avaliacoes").insert({
+      rodada,
+      caso_id: caso.id,
+      resultado: cmp.resultado,
+      diferencas: cmp.diferencas,
+      lido: { atendente: true, acoes: r.acoes, turnos: r.turnos },
+      releu: false,
+      tokens: { ...r.tokens, custo_usd: r.custoUsd },
+      versao,
+    });
+    return cmp.resultado;
+  } catch (err) {
+    await supabaseAdmin.from("bot_avaliacoes").insert({
+      rodada,
+      caso_id: caso.id,
+      resultado: "erro",
+      diferencas: [String(err).slice(0, 300)],
+      versao,
+    });
+    return "erro";
+  }
+}
+
+/** "outro" (Outros · Posto Carone) e "postocarone" são o mesmo lugar: o ponto foi separado em 22/11 (issue #486). */
+const mesmoLugarRenomeado = (a: string, b: string) => [a, b].sort().join("|") === "outro|postocarone";
+
+/**
+ * A reserva do caso mudou depois de uma nova mensagem do cliente (issue #504, caso 8bfa7860)? O bot diz
+ * quem mudou (mudancaDepoisDaMarca.quemMudou) e SUGERE o esperado da hora do Agendado: onde o cliente mudou
+ * de ideia, volta o valor de antes; erro de leitura fica o de agora; sem prova, incerto. Não mexe em
+ * `esperado`: a sugestão vai para `mudou_depois.sugestao` e o dono confere na aba Sistema → Bot
+ * (issue #508, opção 2 do dono). O placar das conferências decide quando o ajuste automático pode ligar.
+ * Só no caso marcado pelo banco (`mudou_depois`), não conferido e ainda sem sugestão.
+ */
+async function sugerirPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Linha> {
+  if (caso.verificado || caso.mudou_depois == null || caso.mudou_depois.sugestao !== undefined) return caso;
+  const esperado = (caso.esperado ?? []) as Linha[];
+  const ids = esperado.map((e) => e.reservation_id).filter(Boolean) as string[];
+  if (!ids.length) return caso;
+  const marca = Date.parse(String(caso.marca_em));
+  const { data: obs } = await supabaseAdmin
+    .from("bot_observations")
+    .select("content, created_at")
+    .eq("chatwoot_conversation_id", caso.chatwoot_conversation_id)
+    .eq("author", "cliente")
+    .gte("created_at", new Date(marca - 3 * 86_400_000).toISOString())
+    .order("created_at")
+    .limit(400);
+  const msgs = ((obs ?? []) as Linha[]).map((o) => ({ texto: String(o.content ?? ""), em: String(o.created_at) }));
+  const antesDaMarca = msgs.filter((m) => Date.parse(m.em) <= marca + 30_000);
+  const primeiraDepois = msgs.find((m) => Date.parse(m.em) > marca + 30_000);
+  if (!primeiraDepois) return caso;
+  const { data: logs } = await supabaseAdmin
+    .from("audit_logs")
+    .select("entity_id, before_data, after_data, performed_at")
+    .eq("entity_table", "reservations")
+    .eq("action", "update")
+    .in("entity_id", ids)
+    .gt("performed_at", primeiraDepois.em)
+    .order("performed_at");
+  if (!logs?.length) return caso;
+
+  const pontos = new Map<string, string>();
+  const viagens = new Map<string, { trip_date: string; direction: string }>();
+  const idsPonto = [...new Set((logs as Linha[]).map((l) => l.before_data?.route_point_id).filter(Boolean))];
+  const idsViagem = [...new Set((logs as Linha[]).map((l) => l.before_data?.trip_id).filter(Boolean))];
+  if (idsPonto.length) {
+    const { data } = await supabaseAdmin.from("route_points").select("id, code").in("id", idsPonto);
+    for (const p of (data ?? []) as Linha[]) pontos.set(p.id, p.code);
+  }
+  if (idsViagem.length) {
+    const { data } = await supabaseAdmin.from("trips").select("id, trip_date, direction").in("id", idsViagem);
+    for (const t of (data ?? []) as Linha[]) viagens.set(t.id, { trip_date: t.trip_date, direction: t.direction });
+  }
+
+  const mudancas: MudancaDoCampo[] = [];
+  const vistos = new Set<string>();
+  for (const l of logs as Linha[]) {
+    const e = esperado.find((x) => x.reservation_id === String(l.entity_id));
+    if (!e) continue;
+    const antes = l.before_data ?? {};
+    const depois = l.after_data ?? {};
+    const campos: [CampoDaReserva, unknown, unknown][] = [];
+    if (antes.route_point_id && antes.route_point_id !== depois.route_point_id) campos.push(["ponto", pontos.get(antes.route_point_id) ?? null, e.route_point_code]);
+    if (antes.quantity != null && Number(antes.quantity) !== Number(depois.quantity)) campos.push(["quantidade", Number(antes.quantity), Number(e.quantity)]);
+    if (antes.trip_id && antes.trip_id !== depois.trip_id) {
+      const v = viagens.get(antes.trip_id);
+      if (v && v.trip_date !== e.trip_date) campos.push(["dia", v.trip_date, e.trip_date]);
+      if (v && v.direction !== e.direction) campos.push(["sentido", v.direction, e.direction]);
+    }
+    const depoisDaMarca = msgs.filter((m) => Date.parse(m.em) > marca + 30_000 && Date.parse(m.em) <= Date.parse(String(l.performed_at)));
+    for (const [campo, valorAntes, valorDepois] of campos) {
+      const chave = `${e.reservation_id}:${campo}`;
+      if (vistos.has(chave) || valorAntes == null) continue; // vale a primeira mudança de cada campo
+      vistos.add(chave);
+      // editou e voltou ao mesmo valor: não houve mudança; "Outros · Posto Carone" virou o ponto próprio (#486)
+      if (String(valorAntes) === String(valorDepois) || mesmoLugarRenomeado(String(valorAntes), String(valorDepois))) continue;
+      const quem = quemMudou({
+        campo,
+        antes: valorAntes as string | number,
+        depois: valorDepois as string | number,
+        antesDaMarca,
+        depoisDaMarca,
+        direcao: e.direction === "volta" ? "volta" : "ida",
+        pontosIda,
+      });
+      mudancas.push({ reservation_id: e.reservation_id, campo, antes: valorAntes as string | number, depois: valorDepois as string | number, quem });
+    }
+  }
+  const r = esperadoNaHoraDaMarca(esperado, mudancas);
+  const notas = mudancas.length
+    ? [
+      ...r.ajustes,
+      ...mudancas.filter((m) => m.quem === "erro_de_leitura").map((m) => `${m.campo}: ${m.antes} → ${m.depois} (erro de leitura do bot: fica o de agora)`),
+      ...(r.incertos.length ? [`sem prova no texto: ${r.incertos.join("; ")}`] : []),
+    ]
+    : ["sem mudança de verdade (editou e voltou ao mesmo valor, ou o Posto Carone renomeado): fica o de agora"];
+  const sugestao = { esperado: r.esperado, notas, incerto: r.incertos.length > 0, mudancas, por: "avaliar-bot", em: new Date().toISOString() };
+  const mudouDepois = { ...caso.mudou_depois, sugestao };
+  await supabaseAdmin.from("bot_casos").update({ mudou_depois: mudouDepois }).eq("id", caso.id).eq("verificado", false);
+  evento("caso_sugestao_pela_mudanca", { caso: caso.id, ajustes: r.ajustes.length, incertos: r.incertos.length });
+  return { ...caso, mudou_depois: mudouDepois };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Método não permitido.", { status: 405 });
   const chave = req.headers.get("x-rotina") ?? "";
@@ -90,6 +250,8 @@ Deno.serve(async (req: Request) => {
 
   // mesmo texto já lido: usa a leitura guardada, sem gastar API; {"fresco": true} lê tudo de novo (issue #494)
   const memoria = corpo?.fresco !== true;
+  // prova do atendente de IA (issue #501): conversa inteira, sem enviar nem gravar
+  const atendente = corpo?.atendente === true;
 
   // erro técnico (limite da API, tempo) não conta como feito: a próxima chamada refaz
   const { data: feitos } = await supabaseAdmin.from("bot_avaliacoes").select("caso_id").eq("rodada", rodada).neq("resultado", "erro");
@@ -101,10 +263,19 @@ Deno.serve(async (req: Request) => {
 
   const { data: tabela } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood");
   const bairros = (tabela ?? []) as { neighborhood: string }[];
+  const { data: daIda } = await supabaseAdmin.from("route_points").select("code").eq("direction", "ida").is("deleted_at", null);
+  const pontosIda = ((daIda ?? []) as Linha[]).map((p) => String(p.code));
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) resultados.push(await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
-    evento("avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
+    for (const original of fila) {
+      // o cliente pode ter mudado depois do Agendado: o bot sugere, o dono confere (issues #504 e #508)
+      const caso = await sugerirPelaMudanca(original, pontosIda).catch((err) => {
+        evento("bot_aviso", { aviso: "sugestao_pela_mudanca_falhou", caso: original.id, erro: String(err).slice(0, 200) });
+        return original;
+      });
+      resultados.push(atendente ? await provarAtendente(caso, rodada, versao, bairros) : await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
+    }
+    evento(atendente ? "prova_atendente_rodada" : "avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
   })().catch((err) => evento("bot_erro", { etapa: "avaliacao", erro: String(err).slice(0, 300) }));
 
   // deno-lint-ignore no-explicit-any
