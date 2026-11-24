@@ -436,8 +436,9 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
   return null;
 }
 
-const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate|no|na) (sao luis|slz|s luis|sao luiz) /;
-const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate) (pirapemas|cantanhede) /;
+// "vaga pra ir sao Luís", sem preposição, também é ir PARA São Luís (issue #514)
+const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo)(?: (?:em|pra|pro|para|a|ate|no|na))? (sao luis|slz|s luis|sao luiz) /;
+const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo)(?: (?:em|pra|pro|para|a|ate))? (pirapemas|cantanhede) /;
 
 /**
  * "Quanto é pra buscar em casa e deixar aqui em casa, aqui na minha, em Cantanhede?" (issue #494):

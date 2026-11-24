@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert";
 import { areaDoDesembarque } from "./agentePuro.ts";
 import { povoadoDoCaminho } from "./grafia.ts";
 import { paradaDoInterior } from "./ladoDaRota.ts";
-import { origemEscrita, pedidosPelaOrigem, pontoDaVoltaPelaOrigem, sentidoDoTrecho } from "./pedidoDoCliente.ts";
+import { origemEscrita, pedidosPelaOrigem, pontoDaVoltaPelaOrigem, sentidoDoTrecho, sentidoEscrito } from "./pedidoDoCliente.ts";
 import { cidadeDaVoltaPelasPistas, cidadeDoCaminhoNoTexto, idaPeloEmbarqueEmSaoLuis } from "./rascunhoPuro.ts";
 
 const chave = (t: string, campo = false) => povoadoDoCaminho(t, campo)?.chave ?? null;
@@ -84,4 +84,11 @@ Deno.test("#515: Periz é parada (antes de Bacabeira), não Pirapemas", () => {
   // deno-lint-ignore no-explicit-any
   const [p] = pedidosPelaOrigem([lido as any], origemEscrita("De periz pra pirapemas?")) as any[];
   assertEquals([p.direcao, p.ponto, p.endereco, p.desembarque], ["ida", "outro", "Periz", "Pirapemas"]);
+});
+
+Deno.test("#514: 'pra ir sao Luís' é a Volta; 'ir Pirapemas' é a Ida", () => {
+  assertEquals(sentidoEscrito(["Ainda tem vaga pra ir sao Luís?"]), "volta");
+  assertEquals(sentidoEscrito(["vou Pirapemas amanhã"]), "ida");
+  assertEquals(sentidoEscrito(["quero ir pra São Luís"]), "volta");
+  assertEquals(sentidoEscrito(["vaga pra ir amanhã"]), "ida");
 });
