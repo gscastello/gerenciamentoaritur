@@ -86,6 +86,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
   pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
   vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
+- **Palmeiral e Povoado Sozinho** (issue #512, dono 24/11): entre Cantanhede e Matões do Norte, embarque e desembarque
+  válidos. Volta no ponto Cantanhede com o povoado no embarque; mesmo valor de e para São Luís, sem revisão. Trecho só no
+  interior fica sem valor (equipe). `povoadoDoCaminho`: "sozinho" só é lugar com "povoado"/preposição antes (ou no começo
+  do campo de endereço); fora de `intermediate_cities` e da base de lugares de propósito. Nada mudou nas instruções do leitor.
 - **Criança** (issue #506, dito pela equipe aos clientes em 10, 16 e 17/11): até 5 anos vai no colo, sem passagem e sem
   vaga; a partir dos 6 paga inteira e ocupa vaga. Em código (`passagensComCrianca`): "2 adultos e uma criança" + "3 anos"
   = 2. Sem idade, com idades misturadas ou com passagens/lugar pedidos, vale a conferência de antes.

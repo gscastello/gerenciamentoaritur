@@ -482,7 +482,7 @@ O que conferir em cada reserva:
 - DESISTÊNCIA: o CLIENTE escreveu, depois da reserva, que desmarca/cancela/não vai mais nesta viagem ("estou desmarcando minha passagem", "não vou mais") → ponha em cancelamentos (reserva_id + trecho LITERAL do cliente + certeza), não em achados nem em observacoes. Remarcar ("passa pra quarta") é mudança de dia, não desistência. Se ele voltou atrás depois, se só perguntou ("posso cancelar?") ou se não dá para saber de qual reserva fala, certeza "baixa".
 - reserva repetida; pedido da conversa que ficou sem reserva (não aponte como achado: só explique em observacoes).
 - CUIDADO com pedidos antigos: a conversa traz pedidos de viagens JÁ FEITAS (listadas em VIAGENS PASSADAS). Mensagem que pediu uma viagem passada não vale para as futuras. Cada reserva futura corresponde ao pedido mais recente antes dela.
-- A resposta do cliente vale para o que a equipe perguntou ("Te buscamos aonde?" → embarque). Sugestão da equipe que o cliente negou não vale. "Parada das vans" = ponto retorno. Campestre na Volta = ponto pirapemas; outras cidades do caminho na Volta = ponto cantanhede.
+- A resposta do cliente vale para o que a equipe perguntou ("Te buscamos aonde?" → embarque). Sugestão da equipe que o cliente negou não vale. "Parada das vans" = ponto retorno. Campestre na Volta = ponto pirapemas; outras cidades do caminho na Volta, e os povoados Palmeiral e Sozinho (entre Cantanhede e Matões do Norte), = ponto cantanhede.
 
 REGRAS DURAS
 - Só aponte um achado se a CONVERSA prova o erro. Em "evidencia", copie LITERALMENTE o trecho da conversa (cliente ou equipe) que mostra o valor certo. Sem trecho, não aponte.

@@ -271,8 +271,8 @@ de operação combinada com o dono entra em `docs/regras/bot.md` e em `CONHECIME
   Preço vazio nunca vira R$ 0; encomenda nunca recebe valor; número que não veio de ferramenta barra a resposta.
 - **Nunca cadastra o nome do perfil do WhatsApp** nem expõe dados de outro passageiro.
 - **Sentido pela ordem das paradas**: Ida = São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões →
-  Cantanhede → Campestre → Pirapemas; Volta = o contrário. A cidade da Volta só vale se dita (ou costume): nunca sai do
-  nome da rua, que se repete. "Hoje" nunca vira amanhã calado.
+  Povoado Sozinho/Palmeiral → Cantanhede → Campestre → Pirapemas; Volta = o contrário. A cidade da Volta só vale se dita
+  (ou costume): nunca sai do nome da rua, que se repete. "Hoje" nunca vira amanhã calado.
 - **Correção sozinha só com prova literal** na conversa; o que uma pessoa mudou à mão vence a conversa anterior. O
   revisor só cancela com todas as travas de `decidirCancelamentos`. Dúvida vira pendência ou pergunta, nunca reserva.
 - **Mensagem ao cliente fora do modo `ia`**: só a confirmação do Agendado, a atualização/cancelamento do revisor, a
