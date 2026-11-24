@@ -120,3 +120,67 @@ export async function simularAtendimento(c: {
   const ultimaResposta = [...respostas].reverse().find((r) => r) ?? null;
   return { acoes, turnos: saida, ultimaResposta, custoUsd: Math.round(custo * 100000) / 100000, tokens };
 }
+
+export type RespostaDoTurno = {
+  cw: number;
+  em: string;
+  cliente: string[];
+  equipe_respondeu: string[];
+  resposta: string | null;
+  silencio: boolean;
+  ferramentas: string[];
+  acoes: AcaoDaProva[];
+  custo_usd: number;
+};
+
+/**
+ * Um turno só de uma conversa real (issue #524): a conversa como ela estava (com o que a equipe respondeu
+ * antes), e a resposta que o atendente daria à mensagem do cliente. Nada é enviado nem gravado.
+ */
+export async function responderTurno(t: { conversationId: string | null; cw: number; mensagemId: number; telefone: string }): Promise<RespostaDoTurno> {
+  const todas = await mensagensAte(t.cw, Date.now());
+  const i = todas.findIndex((m) => m.id === t.mensagemId);
+  if (i < 0) throw new Error("mensagem não encontrada na conversa");
+  // o atendente junta as mensagens seguidas do cliente antes de responder
+  let fim = i;
+  while (todas[fim + 1]?.quem === "cliente" && Date.parse(todas[fim + 1].em) - Date.parse(todas[fim].em) <= 60_000) fim++;
+  let inicio = i;
+  while (inicio > 0 && todas[inicio - 1].quem === "cliente" && Date.parse(todas[inicio].em) - Date.parse(todas[inicio - 1].em) <= 180_000) inicio--;
+  const em = todas[fim].em;
+  const agora = new Date(Date.parse(em) + 20_000);
+  const historico = todas.slice(0, fim + 1);
+  const equipe: string[] = [];
+  for (const m of todas.slice(fim + 1)) {
+    if (m.quem === "cliente" && equipe.length) break;
+    if (m.quem !== "cliente" && Date.parse(m.em) - Date.parse(em) <= 60 * 60_000) equipe.push(m.texto.slice(0, 200));
+  }
+  const acoes: AcaoDaProva[] = [];
+  const prova: ProvaDoAtendente = { antesDe: em, agora, turno: 0, acoes };
+  const ctx: ContextoDoAgente = {
+    conversationId: t.conversationId ?? "",
+    telefone: t.telefone,
+    mensagemId: t.mensagemId,
+    hoje: diaCivil(agora),
+    escrita: { criou: false, alterou: false, cancelou: false, esperou: false },
+    consultouReservas: false,
+    transferiu: false,
+    silencio: false,
+    parar: false,
+    prova,
+  };
+  return await runWithBotContext({ chatwootConversationId: t.cw, conversationId: t.conversationId ?? "", shadow: true, teste: true }, async () => {
+    const { system, fontes } = await montarSistema(agora, t.telefone, { antesDe: em });
+    const r = await rodarAgente(system, fontes, historico, ctx, t.cw);
+    return {
+      cw: t.cw,
+      em,
+      cliente: todas.slice(inicio, fim + 1).map((m) => m.texto.slice(0, 300)),
+      equipe_respondeu: equipe.slice(0, 5),
+      resposta: ctx.silencio ? null : r.resposta || null,
+      silencio: ctx.silencio,
+      ferramentas: r.ferramentasUsadas,
+      acoes,
+      custo_usd: r.custoUsd,
+    };
+  });
+}

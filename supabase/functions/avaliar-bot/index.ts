@@ -15,7 +15,7 @@
 import { bairroDaTabela } from "../_shared/agentePuro.ts";
 import { compararCaso, type ViagemDoCaso } from "../_shared/avaliacaoPura.ts";
 import { type CampoDaReserva, esperadoNaHoraDaMarca, type MudancaDoCampo, quemMudou } from "../_shared/mudancaDepoisDaMarca.ts";
-import { simularAtendimento } from "../_shared/provaDoAtendente.ts";
+import { responderTurno, simularAtendimento } from "../_shared/provaDoAtendente.ts";
 import { compararProva, type EsperadaComPreco } from "../_shared/provaPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
@@ -236,6 +236,19 @@ Deno.serve(async (req: Request) => {
   if (!chave || autorizada !== true) return json({ success: false, message: "Não autorizado." }, 401);
 
   const corpo = await req.json().catch(() => ({}));
+  // prova de turnos soltos (issue #524): a resposta do atendente a mensagens reais, sem enviar nem gravar
+  if (Array.isArray(corpo?.turnos)) {
+    const respostas = await Promise.all(
+      corpo.turnos.slice(0, 3).map((t: Linha) =>
+        responderTurno({ conversationId: t.conversation_id ?? null, cw: Number(t.cw), mensagemId: Number(t.mensagem_id), telefone: String(t.telefone) }).catch((err) => ({
+          cw: t.cw,
+          erro: String(err).slice(0, 300),
+        }))
+      ),
+    );
+    evento("prova_turnos", { quantos: respostas.length });
+    return json({ success: true, respostas });
+  }
   const rodada = String(corpo?.rodada ?? "").trim();
   if (!rodada) return json({ success: false, message: "Informe a rodada." }, 400);
   const limite = Math.min(Math.max(Number(corpo?.limite) || 6, 1), 15);
