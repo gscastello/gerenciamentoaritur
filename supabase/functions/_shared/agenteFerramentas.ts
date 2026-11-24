@@ -36,6 +36,7 @@ import {
   comoCobrarAVolta,
   perguntaSemResposta,
 } from "./agentePuro.ts";
+import { lotadaPelaEquipe, viagensLotadasPelaEquipe } from "./recusaPura.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
 import { ehPostoCarone, type LugarNasCidades, lugarDeOutraCidade, PONTO_POSTO_CARONE, telefoneDoPassageiro } from "./rascunhoPuro.ts";
@@ -351,6 +352,46 @@ async function reservasDoCliente(ctx: ContextoDoAgente, recarregar = false): Pro
  * Cancelamento feito depois não volta (fica mais cheio, nunca mais vazio do que era).
  */
 async function disponibilidade(data: string, direcao: "ida" | "volta", prova: ProvaDoAtendente | undefined) {
+  const disp = await vagasNoApp(data, direcao, prova);
+  if (!(Number(disp.available ?? 0) > 0) || !(await equipeDisseLotado(data, direcao, prova?.agora ?? new Date()))) return disp;
+  console.log(JSON.stringify({ evento: "bot_lotado_pela_equipe", data, direcao, vagas_no_app: disp.available }));
+  return { ...disp, available: 0, lotado_pela_equipe: true };
+}
+
+/**
+ * A equipe já recusou alguém para esta viagem (issue #527)? O app pode mostrar o veículo maior do que o que
+ * vai sair. Na falha da consulta, vale o app.
+ */
+async function equipeDisseLotado(data: string, direcao: "ida" | "volta", agora: Date): Promise<boolean> {
+  try {
+    const desde = new Date(agora.getTime() - 36 * 3600_000).toISOString();
+    const { data: recusas } = await supabaseAdmin
+      .from("bot_observations")
+      .select("chatwoot_conversation_id")
+      .eq("author", "equipe")
+      .gte("created_at", desde)
+      .lte("created_at", agora.toISOString())
+      .or("content.ilike.%vaga%,content.ilike.%lotad%,content.ilike.%lotou%,content.ilike.%temos sim%,content.ilike.%tem sim%")
+      .limit(300);
+    const conversas = [...new Set(((recusas ?? []) as Linha[]).map((r) => r.chatwoot_conversation_id))];
+    if (!conversas.length) return false;
+    const { data: obs } = await supabaseAdmin
+      .from("bot_observations")
+      .select("chatwoot_conversation_id, author, content, created_at")
+      .in("chatwoot_conversation_id", conversas)
+      .in("author", ["cliente", "equipe"])
+      .gte("created_at", desde)
+      .lte("created_at", agora.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    const falas = ((obs ?? []) as Linha[]).map((o) => ({ cw: Number(o.chatwoot_conversation_id), quem: o.author, texto: String(o.content ?? ""), em: new Date(o.created_at).toISOString() }));
+    return lotadaPelaEquipe(viagensLotadasPelaEquipe(falas), data, direcao);
+  } catch {
+    return false;
+  }
+}
+
+async function vagasNoApp(data: string, direcao: "ida" | "volta", prova: ProvaDoAtendente | undefined) {
   const disp = await whatsappService.checkAvailability(data, direcao);
   if (!prova || !disp.trip_id || disp.available == null) return disp;
   const { data: depois } = await supabaseAdmin
@@ -535,6 +576,9 @@ async function consultarViagem(args: Linha, ctx: ContextoDoAgente) {
     capacidade: disp.capacity,
     passageiros_confirmados: disp.occupied,
     vagas_disponiveis: disp.available,
+    ...(disp.lotado_pela_equipe
+      ? { aviso: "A equipe já disse a outros clientes que esta viagem está lotada. Diga que está lotada; ofereça a lista de espera ou outro dia." }
+      : {}),
     passagens_extras_fora_das_vagas: disp.extras ?? 0,
     // a equipe quase nunca marca a saída no app: "agendada" não quer dizer que a van não saiu
     status_no_app: viagem?.started_at || viagem?.finished_at ? viagem.status : "sem_registro",

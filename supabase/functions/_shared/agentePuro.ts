@@ -274,7 +274,7 @@ const RE_AFIRMA_RESERVA =
  * reserva que deu certo neste turno. Ter só consultado as reservas não basta (issue #524).
  */
 const RE_FEZ_AGORA =
-  /(?<!\bn[ãa]o )\b(?:cancelei|desmarquei|remarquei|reservei|agendei|registrei|deixei (?:reservad|cancelad|agendad)[oa]|alterei (?:a|sua) reserva|mudei (?:a|sua) (?:reserva|passagem|viagem))\b|\b(?:ficou|est[áa] agora) (?:j[áa] )?(?:desmarcad|cancelad|remarcad|reservad|agendad)[oa]s?\b/i;
+  /(?<!\bn[ãa]o )\b(?:cancelei|desmarquei|consegui (?:uma|sua|a sua|duas) vagas?|remarquei|reservei|agendei|registrei|deixei (?:reservad|cancelad|agendad)[oa]|alterei (?:a|sua) reserva|mudei (?:a|sua) (?:reserva|passagem|viagem))\b|\b(?:ficou|est[áa] agora) (?:j[áa] )?(?:desmarcad|cancelad|remarcad|reservad|agendad)[oa]s?\b/i;
 
 /** "já avisei/chamei a equipe": só se avisou mesmo. */
 const RE_AVISOU_EQUIPE =

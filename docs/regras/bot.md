@@ -93,6 +93,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o lugar que a equipe repetiu ou o "moro na…", **depois** de decidida a cidade (esse lugar nunca decide Pirapemas ou
   Cantanhede); desembarque igual ao embarque, na Volta, sai. A avaliação compara dia, sentido, ponto, bairro e quantidade:
   embarque e desembarque se conferem à parte (`lido.planejadas`).
+- **Lotado pela equipe** (issue #527, `recusaPura`): se a última palavra da equipe sobre aquele dia e sentido (36 h) foi "não
+  temos mais vaga", o atendente vê 0 vagas (o app pode mostrar o veículo maior): lista de espera ou outro dia.
+- **Disse que fez, tem de ter feito** (issue #524): "cancelei", "reservei", "ficou desmarcada" e "consegui sua vaga" só passam
+  com a ferramenta de reserva no mesmo turno; "avisei a equipe", só com `avisar_equipe`/`chamar_atendente`.
 - **Valor incerto não mexe em valor gravado** (issue #525): desembarque da Volta num bairro fora da tabela (ou achado só na
   internet) devolve `incerto`; o revisor não troca o valor e o atendente não o diz (`VALOR_A_CONFIRMAR`).
 - **Dia só perguntado** (issue #521): "Tem vaga pra hoje?" → "Só amanhã" → "Marca pra amanhã" não é pedido que faltou
