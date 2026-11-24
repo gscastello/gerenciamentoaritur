@@ -209,7 +209,12 @@ export function enderecoDaVoltaDito(falas: FalaDaConversa[], bairrosDeSaoLuis: s
   }
   const juntar = (l: string[]) => [...new Set(l.map(limpo).filter(Boolean))].slice(0, 3).join(", ").slice(0, 160);
   if (respostas.length) return { endereco: juntar([...respostas, ...ditos]), como: "resposta" };
-  if (daEquipe) return { endereco: juntar([daEquipe]), como: "equipe" };
+  if (daEquipe) {
+    // "Vou ficar na provisória, rua da paz" → "Pra lhe buscar na provisória certo?": vale o que o cliente escreveu, mais completo
+    const palavras = nucleo(daEquipe);
+    const completo = ditos.find((d) => palavras.every((p) => nucleo(d).includes(p)));
+    return { endereco: juntar([completo ?? daEquipe]), como: "equipe" };
+  }
   if (ditos.length) return { endereco: juntar(ditos), como: "dito" };
   return null;
 }
@@ -229,7 +234,7 @@ export type PedidoComLugares = {
 };
 
 /** "Em casa (bairro)" é desembarque de São Luís: na Ida não diz nada. */
-const GENERICO_DA_IDA = /^em casa|^sao luis$/;
+const GENERICO_DA_IDA = /^em casa( |$)|^sao luis$/;
 
 /** Completa (no próprio pedido) o embarque e o desembarque escritos. Devolve o que mudou, para as notas. */
 export function completarLugares(
@@ -239,7 +244,7 @@ export function completarLugares(
 ): string[] {
   if ((p.tipo ?? "passagem") === "encomenda") return [];
   const ponto = String(p.ponto ?? "").toLowerCase();
-  const direcao = p.direcao === "ida" || p.direcao === "volta" ? p.direcao : ctx.pontos.ida.includes(ponto) ? "ida" : ctx.pontos.volta.includes(ponto) ? "volta" : null;
+  const direcao = p.direcao === "ida" || p.direcao === "volta" ? p.direcao : ctx.pontos.ida.includes(ponto) ? "ida" : ctx.pontos.volta.includes(ponto) || p.cidade_dita ? "volta" : null;
   const doCliente = falas.filter((f) => f.quem === "cliente").map((f) => semAudio(f.texto));
   const vazio = (t: string | null | undefined) => !String(t ?? "").trim();
   const feito: string[] = [];
@@ -261,6 +266,10 @@ export function completarLugares(
   if (ctx.sentidos.some((s) => s !== "volta")) return feito;
   if (vazio(p.endereco) && vazio(p.bairro)) {
     const e = enderecoDaVoltaDito(falas, ctx.bairros);
+    if (e && !vazio(p.desembarque) && desembarqueCopiaDoEmbarque(p.desembarque, e.endereco, ctx.bairros)) {
+      feito.push(`"${p.desembarque}" é o embarque, não o desembarque.`);
+      p.desembarque = null;
+    }
     // sem pergunta nem confirmação da equipe, o costume do passageiro vale mais que uma frase solta
     if (e && (e.como !== "dito" || !ctx.temCostume)) {
       p.endereco = e.endereco;
