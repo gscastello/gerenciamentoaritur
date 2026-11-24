@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  completarLugares,
   desembarqueCopiaDoEmbarque,
   desembarqueDaIdaEscrito,
   desembarqueDaVoltaEscrito,
@@ -77,4 +78,24 @@ Deno.test("#523: endereço da Volta pela resposta, pela equipe ou pelo que o cli
   assertEquals(enderecoDaVoltaDito([c("vou ficar na rodoviária")]), null);
   assertEquals(enderecoDaVoltaDito([c("vou ficar na rua 2 do Cohatrac")], ["Cohatrac"]), null);
   assertEquals(enderecoDaVoltaDito([e("Qual o endereço"), c("Bom dia"), c("ok"), c("que horas passa?")]), null);
+});
+
+Deno.test("#523: no pedido lido, completa o que falta e tira o que é cópia", () => {
+  const ctx = { pontos: { ida: ["busca", "retorno"], volta: ["pirapemas", "cantanhede"] }, bairros: ["Cohatrac"], sentidos: ["volta"], temCostume: false };
+  const p = { direcao: null, cidade_dita: "pirapemas", endereco: null, desembarque: "Casa do Exemplo Pintor (São Luís)" };
+  completarLugares(p, [c("duas passagens em pirapemas"), e("Buscar na casa do exemplo pintor certo")], ctx);
+  assertEquals([p.endereco, p.desembarque], ["casa do exemplo pintor", null] as unknown as null[]);
+  const q = { direcao: "volta", cidade_dita: "pirapemas", endereco: null as string | null, desembarque: null };
+  completarLugares(q, [c("Vou ficar aq na provisória, rua da exemplo"), e("Pra lhe buscar na provisória certo?")], ctx);
+  assertEquals(q.endereco, "provisória, rua da exemplo");
+  const i = { direcao: "ida", ponto: "retorno", desembarque: "Em casa (bairro)" };
+  completarLugares(i, [c("Vou pegar lá no retorno pra pirapemas")], { ...ctx, sentidos: ["ida"] });
+  assertEquals(i.desembarque, "Pirapemas");
+  // o que o leitor achou não é trocado; com Ida na mesma leitura, o endereço não é completado
+  const k = { direcao: "volta", endereco: "Rua do Exemplo", desembarque: "Cohatrac" };
+  completarLugares(k, [e("Qual o endereço?"), c("Rua da Outra")], ctx);
+  assertEquals([k.endereco, k.desembarque], ["Rua do Exemplo", "Cohatrac"]);
+  const d = { direcao: "volta", endereco: null, desembarque: null };
+  completarLugares(d, [e("Qual o endereço?"), c("Rua da Outra")], { ...ctx, sentidos: ["ida", "volta"] });
+  assertEquals(d.endereco, null);
 });
