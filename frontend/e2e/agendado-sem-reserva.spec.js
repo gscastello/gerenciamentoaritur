@@ -42,14 +42,14 @@ test("Agendado sem reserva: faixa no topo, leva às Pendências e some ao resolv
   await expect(faixa).not.toContainText("João Teste");
 
   await faixa.getByRole("button", { name: /Resolver agora/ }).click();
-  const resolver = page.getByRole("button", { name: "Resolver", exact: true });
+  const resolver = page.getByRole("button", { name: "Já resolvi", exact: true });
   const card = page
     .locator("div")
     .filter({ hasText: "Agendado ☑️ não lançou" })
     .filter({ has: resolver })
     .last();
   await expect(card).toBeVisible();
-  await card.getByRole("button", { name: "Resolver", exact: true }).click();
+  await card.getByRole("button", { name: "Já resolvi", exact: true }).click();
   await expect(page.getByText("Agendado ☑️ não lançou")).toHaveCount(0);
   await expect(faixa).toHaveCount(0);
 });

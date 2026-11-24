@@ -190,6 +190,6 @@ test("Pendências: Limpar todas resolve as abertas", async ({ page }) => {
   await abrirTela(page, "pendencias");
   await expect(page.getByText("Pendência um")).toBeVisible();
 
-  await page.getByRole("button", { name: /Limpar todas \(2\)/ }).click();
+  await page.getByRole("button", { name: /Tirar todas da lista \(2\)/ }).click();
   await expect(page.getByText("Nenhuma pendência aberta.")).toBeVisible();
 });

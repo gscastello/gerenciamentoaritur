@@ -48,7 +48,7 @@ test("Assistente: propõe a reserva e só grava depois do Confirmar", async ({ p
   });
 
   await abrirAssistente(page);
-  await expect(page.getByText("Exemplos")).toBeVisible();
+  await expect(page.getByText("Pendente hoje")).toBeVisible();
 
   await page
     .getByLabel("Pedido para o assistente")

@@ -39,7 +39,10 @@ import { useVehicles } from "../hooks/useVehicles.js";
 
 import { AvisoListaCortada } from "../ui/AvisoListaCortada.jsx";
 import { AvisoAgendadoSemReserva } from "./AvisoAgendadoSemReserva.jsx";
+import { pedidoDaPendencia } from "../domain/assistente.js";
 import { ConfirmarVeiculoDoDia } from "./VeiculoDoDia.jsx";
+import { Assistente } from "./assistente/Assistente.jsx";
+import { AssistenteProvider, useAbrirAssistente } from "./assistente/contexto.jsx";
 import { AvisoSemInternet } from "../ui/AvisoSemInternet.jsx";
 import { FolhaDeBaixo } from "../ui/FolhaDeBaixo.jsx";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
@@ -48,7 +51,6 @@ import { TabSkeleton } from "../ui/skeletons/TabSkeleton.jsx";
 import { SubAbas, grupoDaTela } from "./SubAbas.jsx";
 
 const PendenciasTab = React.lazy(() => import("./tabs/PendenciasTab.jsx"));
-const AssistenteTab = React.lazy(() => import("./tabs/AssistenteTab.jsx"));
 const PassageirosTab = React.lazy(() => import("./tabs/PassageirosTab.jsx"));
 const ListaTab = React.lazy(() => import("./tabs/ListaTab.jsx"));
 const OperacaoTab = React.lazy(() => import("./tabs/OperacaoTab.jsx"));
@@ -1138,6 +1140,7 @@ function abaInicial() {
 function AppInner() {
   // A fonte (Inter) é carregada no index.html — vale também para a tela de login.
   const { profile, signOut } = useAuth();
+  const { abrir: abrirAssistente } = useAbrirAssistente();
   const role = profile?.role ?? null;
   // o app abre na Agenda (dono, 12/11 — issue #353); depois de "puxar para
   // atualizar", volta na aba em que estava
@@ -1263,6 +1266,11 @@ function AppInner() {
   };
   // Troca de aba pela navegação normal: descarta qualquer deep-link pendente.
   const mudarAba = (id) => {
+    // o assistente é uma folha por cima de qualquer tela (issue #516), não uma tela
+    if (id === "assistente") {
+      abrirAssistente();
+      return;
+    }
     setTab(id);
     setDeepLink(null);
   };
@@ -1350,6 +1358,16 @@ function AppInner() {
                   aria="Nova reserva"
                   soCelular
                   onClick={() => setAgendarAberto(true)}
+                />
+              )}
+              {TELAS.includes("assistente") && (
+                <Assistente
+                  nome={profile?.name}
+                  pendencias={pend}
+                  noInicio={noInicio}
+                  onIrPendencias={
+                    TELAS.includes("pendencias") ? () => mudarAba("pendencias") : null
+                  }
                 />
               )}
               {tab === "financeiro" && (
@@ -1731,8 +1749,17 @@ function AppInner() {
                           onAgendar={podeAgendar ? () => setAgendarAberto(true) : null}
                         />
                       )}
-                      {tab === "pendencias" && <PendenciasTab pend={pend} deepLink={deepLink} />}
-                      {tab === "assistente" && <AssistenteTab />}
+                      {tab === "pendencias" && (
+                        <PendenciasTab
+                          pend={pend}
+                          deepLink={deepLink}
+                          onAssistente={
+                            TELAS.includes("assistente")
+                              ? (p) => abrirAssistente(pedidoDaPendencia(p))
+                              : null
+                          }
+                        />
+                      )}
                       {tab === "passageiros" && (
                         <PassageirosTab
                           trips={trips}
@@ -1794,7 +1821,9 @@ function AppInner() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AppInner />
+      <AssistenteProvider>
+        <AppInner />
+      </AssistenteProvider>
     </ErrorBoundary>
   );
 }

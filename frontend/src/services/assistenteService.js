@@ -34,7 +34,41 @@ export const assistenteService = {
   /** @param {{papel: "usuario"|"assistente", texto: string}[]} mensagens */
   async conversar(mensagens) {
     const data = await chamar({ modo: "conversar", mensagens });
-    return { texto: data.texto ?? "", acoes: data.acoes ?? [] };
+    return { texto: data.texto ?? "", acoes: data.acoes ?? [], correcoes: data.correcoes ?? [] };
+  },
+
+  /** Fala gravada no aparelho → texto (issue #516). */
+  async transcrever({ base64, tipo, segundos }) {
+    const data = await chamar({ modo: "transcrever", audio: base64, tipo, segundos });
+    return data.texto ?? "";
+  },
+
+  /** Fila de correções para o Claude: as abertas primeiro, as 40 mais novas. */
+  async listarCorrecoes() {
+    const { data, error } = await supabase
+      .from("bot_correcoes")
+      .select(
+        "id, o_que_errou, o_certo, area, telefone, status, nota_do_claude, created_at, resolvida_em",
+      )
+      .neq("status", "descartada")
+      .order("status")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .limit(40);
+    if (error)
+      throw new ServiceError(`assistente.listarCorrecoes: ${error.message}`, { cause: error });
+    return data ?? [];
+  },
+
+  /** Tira da fila uma correção registrada por engano. */
+  async descartarCorrecao(id) {
+    const { error } = await supabase
+      .from("bot_correcoes")
+      .update({ status: "descartada", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("status", "aberta");
+    if (error)
+      throw new ServiceError(`assistente.descartarCorrecao: ${error.message}`, { cause: error });
   },
 
   /** Chaves pessoais do atalho da Siri (issue #290) de quem está logado. */

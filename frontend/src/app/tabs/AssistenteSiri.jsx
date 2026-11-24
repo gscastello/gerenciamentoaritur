@@ -46,10 +46,7 @@ function Copiar({ texto, rotulo }) {
 
 function Campo({ titulo, valor, rotulo }) {
   return (
-    <div
-      className="flex items-center gap-2 rounded-lg px-2.5 py-2"
-      style={{ background: C.panel2 }}
-    >
+    <div className="flex items-center gap-2 rounded-lg px-2.5 py-2" style={{ background: C.panel }}>
       <div className="min-w-0 flex-1">
         <div className="text-[12px]" style={{ color: C.inkFaint }}>
           {titulo}
@@ -78,16 +75,16 @@ export function AssistenteSiri() {
   const s = useChavesDoAssistente({ enabled: aberto });
 
   return (
-    <div className="rounded-xl border" style={{ background: C.panel, borderColor: C.border }}>
+    <div className="rounded-2xl" style={{ background: C.panel2 }}>
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
-        className="btn-press w-full flex items-center justify-between gap-2 px-4 py-3 text-sm font-semibold"
+        className="btn-press w-full flex items-center justify-between gap-2 px-4 min-h-[52px] text-[15px] font-semibold"
         style={{ color: C.ink }}
       >
         <span className="flex items-center gap-2">
-          <Mic size={16} /> Usar pela Siri (iPhone)
+          <Mic size={18} style={{ color: C.inkSoft }} /> Usar pela Siri (iPhone)
         </span>
         <ChevronDown
           size={16}
@@ -116,7 +113,7 @@ export function AssistenteSiri() {
                 <FadeIn
                   key={c.id}
                   className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs"
-                  style={{ background: C.panel2, color: C.inkSoft }}
+                  style={{ background: C.panel, color: C.inkSoft }}
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <KeyRound size={14} />
@@ -156,7 +153,7 @@ export function AssistenteSiri() {
                   type="button"
                   onClick={s.esconderNovaChave}
                   className="btn-press self-start rounded-lg px-3 py-1.5 text-xs"
-                  style={{ background: C.panel2, color: C.inkSoft }}
+                  style={{ background: C.panel, color: C.inkSoft }}
                 >
                   Já copiei
                 </button>
@@ -168,7 +165,7 @@ export function AssistenteSiri() {
                   onChange={(e) => setNome(e.target.value)}
                   aria-label="Nome do aparelho"
                   className="rounded-lg px-3 py-1.5 text-sm outline-none w-36"
-                  style={{ background: C.panel2, color: C.ink }}
+                  style={{ background: C.panel, color: C.ink }}
                 />
                 <button
                   type="button"

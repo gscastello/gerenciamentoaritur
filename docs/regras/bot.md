@@ -343,3 +343,10 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Liga/desliga em `settings.lembrete_viagem.ativo` (autorizado pelo dono em 14/11; ligado em 17/11, modelo `aviso_horario` aprovado na Meta).
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
+- **Correções para o Claude** (issue #516): o que a equipe explica ao Assistente ("o bot leu errado, o certo é…") vira linha
+  em `bot_correcoes` pela ferramenta `registrar_correcao`, na hora e sem Confirmar (não muda reserva). O Claude lê a fila
+  com a skill `corrigir-bot`, corrige em lote e marca `corrigida`. A pessoa pode tirar da fila o que registrou por engano.
+- **Pendência com o assistente** (issue #516): "Resolver com o assistente" abre a conversa com o detalhe, o telefone e o id;
+  ele lê a conversa e propõe o que resolve. "Já resolvi" só tira da lista. A pendência nunca é fechada sem solução.
+- **Voz no app** (issue #516): o app grava e o servidor transcreve (`modo: transcrever`, `transcreverFala`, com as ruas no
+  vocabulário); o reconhecimento do navegador não serve no iPhone. Falar "sim" só confirma se houver UMA proposta aberta.

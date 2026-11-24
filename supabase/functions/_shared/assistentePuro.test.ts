@@ -303,3 +303,20 @@ Deno.test("#488: gravação no cache de 1 h custa 2x a entrada", () => {
   );
   assertEquals(custoUsd(MODELOS.capaz, { cache_creation_input_tokens: 1_000_000 }), 2.5);
 });
+
+Deno.test("#516: correção para o Claude — o que errou e o certo; telefone limpo; ids só se forem uuid", async () => {
+  const { validarCorrecao, FERRAMENTAS_DO_ASSISTENTE } = await import("./assistentePuro.ts");
+  const v = validarCorrecao({
+    o_que_errou: "Leu  Peris como Pirapemas", o_certo: "Ida de Periz", area: "leitura_agendado",
+    telefone: "+55 98 99999-0000", reserva_id: "não sei", pendencia_id: "00000000-0000-4000-8000-000000000009",
+  });
+  if (!v.ok) throw new Error(v.erro);
+  assertEquals(v.correcao.o_que_errou, "Leu Peris como Pirapemas");
+  assertEquals(v.correcao.telefone, "98999990000");
+  assertEquals(v.correcao.reserva_id, null);
+  assertEquals(v.correcao.pendencia_id, "00000000-0000-4000-8000-000000000009");
+  const semArea = validarCorrecao({ o_que_errou: "errou", o_certo: "certo", area: "inventada" });
+  assertEquals(semArea.ok && semArea.correcao.area, "outro");
+  assertEquals(validarCorrecao({ o_que_errou: "errou", o_certo: "" }).ok, false);
+  assertEquals(FERRAMENTAS_DO_ASSISTENTE.some((f) => f.name === "registrar_correcao"), true);
+});
