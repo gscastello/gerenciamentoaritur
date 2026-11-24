@@ -6,7 +6,7 @@
 // responderia. Nada é enviado nem gravado. Aqui: montar os turnos e o histórico de cada um, comparar
 // o que ele faria com as viagens que ficaram (inclusive o preço) e estimar o custo por mês.
 
-import { compararCaso, type ResultadoDoCaso, type ViagemDoCaso, type ViagemPlanejada } from "./avaliacaoPura.ts";
+import { compararCaso, MUDOU_DEPOIS, type ResultadoDoCaso, type ViagemDoCaso, type ViagemPlanejada } from "./avaliacaoPura.ts";
 import type { MensagemDaConversa } from "./agentePuro.ts";
 
 /** Mensagens seguidas do cliente com até este intervalo entre elas são um turno só (o bot junta). */
@@ -99,7 +99,13 @@ export type EsperadaComPreco = ViagemDoCaso & { unit_price?: number | null };
 export function compararProva(
   esperadas: EsperadaComPreco[],
   acoes: AcaoDaProva[],
-  opcoes: { ultimaResposta?: string | null; pendenteOk?: boolean; bairroNaTabela?: (b: string) => string | null } = {},
+  opcoes: {
+    ultimaResposta?: string | null;
+    pendenteOk?: boolean;
+    bairroNaTabela?: (b: string) => string | null;
+    /** a reserva mudou depois de uma nova mensagem do cliente e ninguém conferiu o caso (issue #508) */
+    mudouDepois?: boolean;
+  } = {},
 ): ResultadoDoCaso {
   const criadas = acoes.filter((a): a is Extract<AcaoDaProva, { tipo: "criar" }> => a.tipo === "criar" && !a.cancelada);
   const planejadas: ViagemPlanejada[] = criadas.map((c) => ({
@@ -120,6 +126,7 @@ export function compararProva(
     motivos,
     pendenteOk: opcoes.pendenteOk,
     bairroNaTabela: opcoes.bairroNaTabela,
+    mudouDepois: opcoes.mudouDepois,
   });
 
   const diferencas = [...base.diferencas];
@@ -128,6 +135,12 @@ export function compararProva(
     const e = esperadas.find((x) => x.trip_date === c.trip_date && x.direction === c.direction);
     if (!e || e.unit_price == null || c.unit_price == null) continue;
     if (Math.abs(Number(e.unit_price) - Number(c.unit_price)) >= 0.01) {
+      // o preço segue o ponto e o bairro: num caso que mudou depois da marca, também fica para conferir
+      if (opcoes.mudouDepois) {
+        if (!diferencas.includes(MUDOU_DEPOIS)) diferencas.unshift(MUDOU_DEPOIS);
+        diferencas.push(`preço: ${c.unit_price} ≠ ${e.unit_price} (${c.direction} ${c.trip_date})`);
+        continue;
+      }
       errado = true;
       diferencas.push(`preço: ${c.unit_price} ≠ ${e.unit_price} (${c.direction} ${c.trip_date})`);
     }
@@ -138,7 +151,9 @@ export function compararProva(
       diferencas.push(`${a.tipo === "cancelar" ? "cancelaria" : "remarcaria"} a reserva ${a.reserva_id}, que já existia: conferir`);
     }
   }
-  return { resultado: errado ? "errado" : base.resultado, diferencas };
+  // remarcar/cancelar uma reserva que já existia é erro mesmo num caso que mudou depois da marca
+  const resultado = errado ? "errado" : diferencas[0] === MUDOU_DEPOIS ? "pendente" : base.resultado;
+  return { resultado, diferencas };
 }
 
 /** O "sim" que a prova dá no lugar do cliente quando o atendente só pede a confirmação do resumo. */

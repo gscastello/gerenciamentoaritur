@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  chaveDoEsperado,
   diferencasDoCaso,
   mensagensDoCaso,
   mudancasDoCaso,
   rotuloDaViagemDoCaso,
+  sugestaoDoCaso,
+  textoDoPlacar,
 } from "../botCasos.js";
 
 const de = {
@@ -89,5 +92,64 @@ describe("mensagensDoCaso e diferencasDoCaso", () => {
     };
     expect(diferencasDoCaso(caso)).toEqual(["Ida 24/11 errada: ponto: a ≠ b"]);
     expect(diferencasDoCaso({})).toEqual([]);
+  });
+});
+
+describe("sugestaoDoCaso", () => {
+  const agora = { ...de, route_point_code: "retorno" };
+  const md = { esperado_da_marca: [de], esperado_de_agora: [agora] };
+  it("diz qual botão a sugestão do bot escolhe", () => {
+    const caso = (esperado, incerto = false) => ({
+      mudou_depois: {
+        ...md,
+        sugestao: { esperado, incerto, notas: ["ponto: retorno → rodoviaria", " "] },
+      },
+    });
+    expect(sugestaoDoCaso(caso([de]))).toEqual({
+      vale: "marca",
+      incerto: false,
+      notas: ["ponto: retorno → rodoviaria"],
+    });
+    expect(sugestaoDoCaso(caso([agora])).vale).toBe("agora");
+    expect(sugestaoDoCaso(caso([{ ...de, quantity: 2 }])).vale).toBe("outro");
+    expect(sugestaoDoCaso(caso([de], true))).toEqual({
+      vale: null,
+      incerto: true,
+      notas: ["ponto: retorno → rodoviaria"],
+    });
+  });
+  it("sem sugestão ou torta: null", () => {
+    expect(sugestaoDoCaso({})).toBeNull();
+    expect(sugestaoDoCaso({ mudou_depois: { sugestao: { esperado: "x" } } })).toBeNull();
+    expect(sugestaoDoCaso({ mudou_depois: { sugestao: { esperado: [] } } }).incerto).toBe(true);
+    expect(
+      sugestaoDoCaso({ mudou_depois: { sugestao: { esperado: [], incerto: false, notas: "x" } } }),
+    ).toEqual({
+      vale: "marca",
+      incerto: false,
+      notas: [],
+    });
+  });
+});
+
+describe("chaveDoEsperado e textoDoPlacar", () => {
+  it("compara só o que a avaliação compara, em ordem estável", () => {
+    const a = { ...de, pickup_neighborhood: "Cohatrac", reservation_id: "x" };
+    const b = { ...de, trip_date: "2026-11-25", direction: "volta", quantity: "x" };
+    expect(chaveDoEsperado([a, b])).toBe(
+      chaveDoEsperado([b, { ...a, pickup_neighborhood: "COHATRAC", type: "y" }]),
+    );
+    expect(chaveDoEsperado([b])).toBe("2026-11-25|volta|rodoviaria|1|");
+    expect(chaveDoEsperado([{}])).toBe("|||1|");
+    expect(chaveDoEsperado([null])).toBe("");
+    expect(chaveDoEsperado(null)).toBe("");
+  });
+  it("placar", () => {
+    expect(textoDoPlacar(null)).toBeNull();
+    expect(textoDoPlacar({ concordou: 0, discordou: 0 })).toBeNull();
+    expect(textoDoPlacar({ concordou: 7, discordou: 2 })).toBe(
+      "A sugestão do bot bateu com a sua em 7 de 9 conferência(s) (78%).",
+    );
+    expect(textoDoPlacar({ discordou: 1 })).toContain("0 de 1");
   });
 });

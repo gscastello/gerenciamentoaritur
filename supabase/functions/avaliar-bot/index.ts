@@ -107,6 +107,7 @@ async function provarAtendente(caso: Linha, rodada: string, versao: string | nul
     const cmp = compararProva(await esperadasComPreco((caso.esperado ?? []) as ViagemDoCaso[]), r.acoes, {
       ultimaResposta: r.ultimaResposta,
       pendenteOk: caso.pendente_ok === true,
+      mudouDepois: caso.mudou_depois != null && caso.verificado !== true,
       bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
     });
     await supabaseAdmin.from("bot_avaliacoes").insert({
@@ -132,19 +133,19 @@ async function provarAtendente(caso: Linha, rodada: string, versao: string | nul
   }
 }
 
-const MARCA_DO_AJUSTE = "[mudança depois da marca]";
-
 /** "outro" (Outros · Posto Carone) e "postocarone" são o mesmo lugar: o ponto foi separado em 22/11 (issue #486). */
 const mesmoLugarRenomeado = (a: string, b: string) => [a, b].sort().join("|") === "outro|postocarone";
 
 /**
- * A reserva do caso mudou depois de uma nova mensagem do cliente (issue #504, caso 8bfa7860)? O bot decide
- * sozinho quem mudou (mudancaDepoisDaMarca.quemMudou) e acerta o esperado para a HORA DO AGENDADO: onde o
- * cliente mudou de ideia, volta o valor de antes; erro de leitura fica o de agora; sem prova, só anota para
- * conferir. Caso conferido à mão (verificado) ou já ajustado não é mexido. Tudo fica escrito na observação.
+ * A reserva do caso mudou depois de uma nova mensagem do cliente (issue #504, caso 8bfa7860)? O bot diz
+ * quem mudou (mudancaDepoisDaMarca.quemMudou) e SUGERE o esperado da hora do Agendado: onde o cliente mudou
+ * de ideia, volta o valor de antes; erro de leitura fica o de agora; sem prova, incerto. Não mexe em
+ * `esperado`: a sugestão vai para `mudou_depois.sugestao` e o dono confere na aba Sistema → Bot
+ * (issue #508, opção 2 do dono). O placar das conferências decide quando o ajuste automático pode ligar.
+ * Só no caso marcado pelo banco (`mudou_depois`), não conferido e ainda sem sugestão.
  */
-async function ajustarPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Linha> {
-  if (caso.verificado || String(caso.observacao ?? "").includes(MARCA_DO_AJUSTE)) return caso;
+async function sugerirPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Linha> {
+  if (caso.verificado || caso.mudou_depois == null || caso.mudou_depois.sugestao !== undefined) return caso;
   const esperado = (caso.esperado ?? []) as Linha[];
   const ids = esperado.map((e) => e.reservation_id).filter(Boolean) as string[];
   if (!ids.length) return caso;
@@ -218,17 +219,19 @@ async function ajustarPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Lin
       mudancas.push({ reservation_id: e.reservation_id, campo, antes: valorAntes as string | number, depois: valorDepois as string | number, quem });
     }
   }
-  if (!mudancas.length) return caso;
   const r = esperadoNaHoraDaMarca(esperado, mudancas);
-  const notas = [
-    ...r.ajustes,
-    ...mudancas.filter((m) => m.quem === "erro_de_leitura").map((m) => `${m.campo}: ${m.antes} → ${m.depois} (erro de leitura do bot: fica o de agora)`),
-    ...(r.incertos.length ? [`conferir: ${r.incertos.join("; ")}`] : []),
-  ];
-  const observacao = [caso.observacao, `${MARCA_DO_AJUSTE} ${notas.join("; ")}`].filter(Boolean).join(" ").slice(0, 900);
-  await supabaseAdmin.from("bot_casos").update({ esperado: r.esperado, observacao }).eq("id", caso.id);
-  evento("caso_ajustado_pela_mudanca", { caso: caso.id, ajustes: r.ajustes.length, incertos: r.incertos.length });
-  return { ...caso, esperado: r.esperado, observacao };
+  const notas = mudancas.length
+    ? [
+      ...r.ajustes,
+      ...mudancas.filter((m) => m.quem === "erro_de_leitura").map((m) => `${m.campo}: ${m.antes} → ${m.depois} (erro de leitura do bot: fica o de agora)`),
+      ...(r.incertos.length ? [`sem prova no texto: ${r.incertos.join("; ")}`] : []),
+    ]
+    : ["sem mudança de verdade (editou e voltou ao mesmo valor, ou o Posto Carone renomeado): fica o de agora"];
+  const sugestao = { esperado: r.esperado, notas, incerto: r.incertos.length > 0, mudancas, por: "avaliar-bot", em: new Date().toISOString() };
+  const mudouDepois = { ...caso.mudou_depois, sugestao };
+  await supabaseAdmin.from("bot_casos").update({ mudou_depois: mudouDepois }).eq("id", caso.id).eq("verificado", false);
+  evento("caso_sugestao_pela_mudanca", { caso: caso.id, ajustes: r.ajustes.length, incertos: r.incertos.length });
+  return { ...caso, mudou_depois: mudouDepois };
 }
 
 Deno.serve(async (req: Request) => {
@@ -265,9 +268,9 @@ Deno.serve(async (req: Request) => {
   const trabalho = (async () => {
     const resultados: string[] = [];
     for (const original of fila) {
-      // o esperado da hora do Agendado: o cliente pode ter mudado depois (issue #504)
-      const caso = await ajustarPelaMudanca(original, pontosIda).catch((err) => {
-        evento("bot_aviso", { aviso: "ajuste_pela_mudanca_falhou", caso: original.id, erro: String(err).slice(0, 200) });
+      // o cliente pode ter mudado depois do Agendado: o bot sugere, o dono confere (issues #504 e #508)
+      const caso = await sugerirPelaMudanca(original, pontosIda).catch((err) => {
+        evento("bot_aviso", { aviso: "sugestao_pela_mudanca_falhou", caso: original.id, erro: String(err).slice(0, 200) });
         return original;
       });
       resultados.push(atendente ? await provarAtendente(caso, rodada, versao, bairros) : await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));

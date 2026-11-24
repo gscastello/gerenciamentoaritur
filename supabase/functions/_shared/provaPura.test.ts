@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert";
 import type { MensagemDaConversa } from "./agentePuro.ts";
+import { MUDOU_DEPOIS } from "./avaliacaoPura.ts";
 import {
   type AcaoDaProva,
   compararProva,
@@ -137,4 +138,20 @@ Deno.test("#501 prova: o 'sim' da prova só responde a pedido de confirmação d
   assert(!pedeConfirmacao("Quantas passagens?"));
   assert(!pedeConfirmacao("Reserva confirmada! Até amanhã."));
   assert(!pedeConfirmacao(null));
+});
+
+Deno.test("#508: prova do atendente num caso que mudou depois da marca fica para conferir", () => {
+  const e = { trip_date: "2026-11-24", direction: "ida", route_point_code: "retorno", quantity: 3, unit_price: 50 };
+  const criada = { tipo: "criar" as const, trip_date: "2026-11-24", direction: "ida", route_point_code: "rodoviaria", quantity: 3, pickup_neighborhood: null, unit_price: 45 };
+  // deno-lint-ignore no-explicit-any
+  const acoes = [criada] as any;
+  const r = compararProva([e], acoes, { mudouDepois: true });
+  assertEquals(r.resultado, "pendente");
+  assertEquals(r.diferencas[0], MUDOU_DEPOIS);
+  // só o preço diferente também fica para conferir
+  const soPreco = compararProva([{ ...e, route_point_code: "rodoviaria" }], acoes, { mudouDepois: true });
+  assertEquals(soPreco.resultado, "pendente");
+  assertEquals(soPreco.diferencas, [MUDOU_DEPOIS, "preço: 45 ≠ 50 (ida 2026-11-24)"]);
+  // sem a marca: errado, como sempre
+  assertEquals(compararProva([e], acoes).resultado, "errado");
 });

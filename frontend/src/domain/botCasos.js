@@ -48,3 +48,52 @@ export function diferencasDoCaso(caso, aviso = "mudou depois da marca: conferir"
   const d = caso?.avaliacao?.diferencas;
   return Array.isArray(d) ? d.filter((t) => typeof t === "string" && t !== aviso) : [];
 }
+
+/** Chave do que a avaliação compara (igual a `fn_chave_do_esperado` do banco): dia, sentido, ponto, quantidade, bairro. */
+export function chaveDoEsperado(esperado) {
+  if (!Array.isArray(esperado)) return "";
+  return esperado
+    .filter((e) => e && typeof e === "object")
+    .map((e) =>
+      [
+        e.trip_date ?? "",
+        e.direction ?? "",
+        e.route_point_code ?? "",
+        String(Number.parseInt(e.quantity, 10) || 1),
+        String(e.pickup_neighborhood ?? "").toLowerCase(),
+      ].join("|"),
+    )
+    .sort()
+    .join(";");
+}
+
+/**
+ * Sugestão do bot para o caso (issues #504 e #508): o que ele acha que vale, com as notas. `vale` é
+ * "marca" ou "agora" quando a sugestão é igual a um dos dois botões; "outro" quando mistura (um campo
+ * do da marca, outro do de agora). Incerta = sem prova no texto do cliente: não sugere nada.
+ */
+export function sugestaoDoCaso(caso) {
+  const md = caso?.mudou_depois;
+  const s = md?.sugestao;
+  if (!s || typeof s !== "object" || !Array.isArray(s.esperado)) return null;
+  const notas = Array.isArray(s.notas)
+    ? s.notas.filter((n) => typeof n === "string" && n.trim())
+    : [];
+  if (s.incerto !== false) return { vale: null, incerto: true, notas };
+  const chave = chaveDoEsperado(s.esperado);
+  const vale =
+    chave === chaveDoEsperado(md.esperado_da_marca)
+      ? "marca"
+      : chave === chaveDoEsperado(md.esperado_de_agora)
+        ? "agora"
+        : "outro";
+  return { vale, incerto: false, notas };
+}
+
+/** "O bot acertou 7 de 9 conferências (78%)." — ou null sem conferência ainda. */
+export function textoDoPlacar(placar) {
+  const certo = Number(placar?.concordou) || 0;
+  const total = certo + (Number(placar?.discordou) || 0);
+  if (!total) return null;
+  return `A sugestão do bot bateu com a sua em ${certo} de ${total} conferência(s) (${Math.round((certo / total) * 100)}%).`;
+}

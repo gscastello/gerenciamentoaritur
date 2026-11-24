@@ -1,6 +1,12 @@
 import { ClipboardCheck } from "lucide-react";
 import { useState } from "react";
-import { diferencasDoCaso, mensagensDoCaso, mudancasDoCaso } from "../../domain/botCasos.js";
+import {
+  diferencasDoCaso,
+  mensagensDoCaso,
+  mudancasDoCaso,
+  sugestaoDoCaso,
+  textoDoPlacar,
+} from "../../domain/botCasos.js";
 import { useBotCasosAConferir } from "../../hooks/useBotCasosAConferir.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { FadeIn, Presence, Skeleton, Spinner, fadeScale } from "../../ui/motion/index.js";
@@ -8,7 +14,14 @@ import { C, Card, ErrorBanner } from "../tabShared.jsx";
 
 // Issue #508: casos do banco de casos em que a reserva mudou depois de uma nova mensagem do
 // cliente. A avaliação não conta "errado" neles até o dono dizer qual vale: o da marca (o cliente
-// mudou depois) ou o de agora (a reserva lançada no Agendado estava errada).
+// mudou depois) ou o de agora (a reserva lançada no Agendado estava errada). O bot sugere qual vale pelo
+// que o cliente escreveu (issue #504); o placar das conferências diz quando dá para ele decidir sozinho.
+
+const TEXTO_DA_SUGESTAO = {
+  marca: "o cliente mudou depois: vale o da marca",
+  agora: "a marca estava errada: vale o de agora",
+  outro: "parte do da marca, parte do de agora",
+};
 
 const SAIDA_MS = 200;
 
@@ -27,6 +40,7 @@ function Caso({ caso, salvando, onConferir }) {
   const mudancas = mudancasDoCaso(caso);
   const mensagens = mensagensDoCaso(caso);
   const diferencas = diferencasDoCaso(caso);
+  const sugestao = sugestaoDoCaso(caso);
   const ocupado = salvando !== null;
   const botao = (vale, texto, principal) => (
     <button
@@ -89,8 +103,23 @@ function Caso({ caso, salvando, onConferir }) {
         </div>
       )}
 
+      {sugestao && (
+        <div className="mt-2 rounded-md px-2 py-1.5 break-words" style={{ background: C.panel }}>
+          <div className="font-medium" style={{ color: C.ink }}>
+            Sugestão do bot:{" "}
+            {sugestao.incerto
+              ? "sem prova no que o cliente escreveu"
+              : TEXTO_DA_SUGESTAO[sugestao.vale]}
+          </div>
+          {sugestao.notas.length > 0 && (
+            <div style={{ color: C.inkSoft }}>{sugestao.notas.join("; ")}</div>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap gap-2">
-        {botao("marca", "Cliente mudou depois: vale o da marca", true)}
+        {sugestao?.vale === "outro" && botao("sugestao", "Concordo com o bot", true)}
+        {botao("marca", "Cliente mudou depois: vale o da marca", sugestao?.vale !== "outro")}
         {botao("agora", "A marca estava errada: vale o de agora", false)}
       </div>
     </div>
@@ -98,7 +127,8 @@ function Caso({ caso, salvando, onConferir }) {
 }
 
 export default function SistemaBotCasos() {
-  const { casos, carregando, erro, recarregar, conferir } = useBotCasosAConferir();
+  const { casos, placar, carregando, erro, recarregar, conferir } = useBotCasosAConferir();
+  const placarTexto = textoDoPlacar(placar);
   const [salvando, setSalvando] = useState({});
   const [saindo, setSaindo] = useState(() => new Set());
   const [erroSalvar, setErroSalvar] = useState("");
@@ -127,8 +157,13 @@ export default function SistemaBotCasos() {
       <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
         A reserva mudou depois que o cliente escreveu de novo, então a avaliação não sabe se o bot
         errou. Até você conferir, esses casos ficam como pendentes, sem contar como erro nem como
-        acerto.
+        acerto. O bot sugere qual vale; a sua escolha é a que fica.
       </p>
+      {placarTexto && (
+        <p className="text-xs mb-3" style={{ color: C.ink }}>
+          {placarTexto}
+        </p>
+      )}
 
       {erro && (
         <ErrorBanner onRetry={recarregar} className="mb-3">

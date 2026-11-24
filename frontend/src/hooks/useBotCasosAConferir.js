@@ -8,7 +8,8 @@ import { useSupabaseQuery } from "./useSupabaseQuery";
 export function useBotCasosAConferir() {
   const query = useSupabaseQuery(() => botCasosService.aConferir(), []);
   return {
-    casos: query.data ?? [],
+    casos: query.data?.casos ?? [],
+    placar: query.data?.placar ?? null,
     carregando: query.loading,
     erro: query.error,
     recarregar: query.refetch,
