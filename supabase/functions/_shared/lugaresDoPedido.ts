@@ -240,7 +240,7 @@ const GENERICO_DA_IDA = /^em casa( |$)|^sao luis$/;
 export function completarLugares(
   p: PedidoComLugares,
   falas: FalaDaConversa[],
-  ctx: { pontos: { ida: string[]; volta: string[] }; bairros: string[]; sentidos: (string | null)[]; temCostume: boolean },
+  ctx: { pontos: { ida: string[]; volta: string[] }; bairros: string[]; sentidos: (string | null)[] },
 ): string[] {
   if ((p.tipo ?? "passagem") === "encomenda") return [];
   const ponto = String(p.ponto ?? "").toLowerCase();
@@ -262,20 +262,8 @@ export function completarLugares(
     feito.push(`"${p.desembarque}" é o embarque, não o desembarque.`);
     p.desembarque = null;
   }
-  // com Ida na mesma leitura, a resposta ou o "vou ficar" podem ser da Ida
+  // com Ida na mesma leitura, o "vou ficar" pode ser da Ida
   if (ctx.sentidos.some((s) => s !== "volta")) return feito;
-  if (vazio(p.endereco) && vazio(p.bairro)) {
-    const e = enderecoDaVoltaDito(falas, ctx.bairros);
-    if (e && !vazio(p.desembarque) && desembarqueCopiaDoEmbarque(p.desembarque, e.endereco, ctx.bairros)) {
-      feito.push(`"${p.desembarque}" é o embarque, não o desembarque.`);
-      p.desembarque = null;
-    }
-    // sem pergunta nem confirmação da equipe, o costume do passageiro vale mais que uma frase solta
-    if (e && (e.como !== "dito" || !ctx.temCostume)) {
-      p.endereco = e.endereco;
-      feito.push(e.como === "equipe" ? "Embarque repetido pela equipe." : "Embarque escrito pelo cliente.");
-    }
-  }
   const semLugar = vazio(p.desembarque) || /^sao luis$/.test(normalizarTexto(p.desembarque));
   if (semLugar) {
     const d = desembarqueDaVoltaNoCaminho(doCliente, normalizarTexto(p.cidade_dita ?? ponto) || null) ?? desembarqueDaVoltaEscrito(doCliente);
@@ -285,4 +273,19 @@ export function completarLugares(
     }
   }
   return feito;
+}
+
+/**
+ * Reserva da Volta pronta, sem endereço: o que o cliente ou a equipe escreveu. Vem DEPOIS de decidida a cidade:
+ * o lugar escrito aqui nunca decide Pirapemas ou Cantanhede (issue #523, caso bedd50d3).
+ */
+export function enderecoQueFaltou(
+  falas: FalaDaConversa[],
+  ctx: { direcao: string; bairros: string[]; sentidos: (string | null)[]; temCostume: boolean; desembarque: string | null },
+): { endereco: string; desembarqueEraEmbarque: boolean } | null {
+  if (ctx.direcao !== "volta" || ctx.sentidos.some((s) => s === "ida")) return null;
+  const e = enderecoDaVoltaDito(falas, ctx.bairros);
+  // sem pergunta nem confirmação da equipe, o costume do passageiro vale mais que uma frase solta
+  if (!e || (e.como === "dito" && ctx.temCostume)) return null;
+  return { endereco: e.endereco, desembarqueEraEmbarque: desembarqueCopiaDoEmbarque(ctx.desembarque, e.endereco, ctx.bairros) };
 }

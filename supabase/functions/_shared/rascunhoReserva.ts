@@ -86,6 +86,7 @@ import {
   outroPodeSerBusca,
   bairroTemProva,
   bairroForaDoNomeComposto,
+  A_CONFIRMAR,
 } from "./rascunhoPuro.ts";
 import { horarioDoEmbarque, mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -118,7 +119,7 @@ import {
   diasSoPerguntados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
-import { completarLugares } from "./lugaresDoPedido.ts";
+import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -725,7 +726,6 @@ async function lerEGravar(
       pontos: ctx.pontos,
       bairros: ctx.bairrosTabela.map((b) => b.neighborhood),
       sentidos: pedidos.map((x) => x.direcao ?? null),
-      temCostume: !!costume?.volta?.route_point_code,
     });
     if (lugares523.length) {
       p.duvida = [...lugares523, p.duvida].filter(Boolean).join(" ");
@@ -840,6 +840,29 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
+    // a Volta ficou sem endereço, mas ele foi escrito na conversa (issue #523); a cidade já está decidida
+    if (r.type === "passagem" && v.aConfirmar.includes("endereco") && String(r.pickup_detail ?? "").startsWith(A_CONFIRMAR.endereco)) {
+      const faltou = enderecoQueFaltou(falasDoPedido, {
+        direcao: r.direction,
+        bairros: ctx.bairrosTabela.map((b) => b.neighborhood),
+        sentidos: pedidos.map((x) => x.direcao ?? null),
+        temCostume: !!costume?.volta?.route_point_code,
+        desembarque: r.dropoff_location,
+      });
+      if (faltou) {
+        r.pickup_detail = String(r.pickup_detail).replace(A_CONFIRMAR.endereco, faltou.endereco);
+        v.aConfirmar.splice(v.aConfirmar.indexOf("endereco"), 1);
+        if (faltou.desembarqueEraEmbarque) {
+          r.dropoff_location = null;
+          r.dropoff_area = null;
+        }
+        r.notes = ["Embarque escrito na conversa.", String(r.notes ?? "").replace("Reservada sem endereço (Agendado ☑️): o cliente ainda confirma onde embarca.", "")]
+          .join(" ")
+          .trim()
+          .slice(0, 300);
+        evento("bot_endereco_completado", { conversa: entrada.chatwootConversationId });
+      }
+    }
     let pendencia: { motivo: string; codigo: string } | null = null;
     // busca em casa com o bairro escrito errado ("cohatrc"): o da tabela, com aviso (issue #276)
     const parecido = r.route_point_code === "busca" ? bairroParecido(r.pickup_neighborhood, ctx.bairrosTabela) : null;
