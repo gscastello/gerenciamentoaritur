@@ -250,7 +250,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   dos casos: busca em casa num endereço de Pirapemas/Cantanhede é Volta (escrito ou só conhecido lá; com algo de São
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
-  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já tinha saído quando ele pediu, é a de amanhã com "Conferir dia" — dono, 24/11, issue #504; antes, #452, ficava pendente); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro. **Pendências do Agendado** (dono, 23/11 — issue #504): o pedido feito
+  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã: o bot pergunta o dia — issue #452, reafirmado pelo dono em 24/11: "o dia da viagem precisa estar definido com clareza"; caso 1a6a7143); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro. **Pendências do Agendado** (dono, 23/11 — issue #504): o pedido feito
   DEPOIS da viagem anterior daquele sentido (ontem, depois da saída) com o Agendado hoje antes da viagem sair também é
   a de hoje; o endereço de onde ele sai no interior ("Cantanhede rua do cajueiro…", "aqui em Pirapemas";
   `embarqueNoInteriorEscrito`) é sentido escrito (Volta); a mensagem que o bot não leu não trava o dia que veio dessa

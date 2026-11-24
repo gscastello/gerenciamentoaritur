@@ -1134,17 +1134,12 @@ Deno.test("#452: sem dia escrito, o Agendado da equipe no dia do pedido, antes d
   assertEquals(viagemDeHojePeloAgendado({ ponto: "cantanhede" }, base), "2026-11-17");
   // sem a marca da equipe, o bot não decide o dia: pergunta (issue #419)
   assertEquals(viagemDeHojePeloAgendado({ direcao: "volta" }, { ...base, agendado: false }), null);
-  // a viagem daquele sentido já tinha saído quando ele pediu: a de AMANHÃ, com "Conferir dia" (dono, 24/11 —
-  // issue #504; antes ficava pendente). O pedido é das 09:21, depois da Ida de hoje (até 07:00)
+  // a viagem daquele sentido já saiu: NÃO vira amanhã — o bot pergunta o dia (dono, 24/11; caso 1a6a7143:
+  // "guarde uma pra mim" na sexta às 19h era para domingo)
   const ida = { ...base, sentidoEscrito: "ida" as const };
   assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "05:10" }), "2026-11-17");
-  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "19:12" }), "2026-11-18");
-  assertEquals(viagemDeHojePeloAgendado({ ponto: "outro" }, { ...ida, horaAgora: "17:58" }), "2026-11-18");
-  // pediu ANTES da viagem de hoje sair e a equipe marcou depois: podia ser a de hoje — o dia fica em aberto
-  assertEquals(
-    viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "17:58", mensagensDoCliente: [{ em: "2026-11-17T08:30:00Z" }] }),
-    null,
-  );
+  assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...ida, horaAgora: "19:12" }), null);
+  assertEquals(viagemDeHojePeloAgendado({ ponto: "outro" }, { ...ida, horaAgora: "17:58" }), null);
   // sentido só lido pelo modelo (ninguém escreveu) ou contrário ao escrito: o dia não esconde o chute
   assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, { ...base, sentidoEscrito: null }), null);
   assertEquals(viagemDeHojePeloAgendado({ direcao: "ida" }, base), null);

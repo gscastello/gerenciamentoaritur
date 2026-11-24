@@ -614,12 +614,7 @@ async function lerEGravar(
       });
       if (proxima) {
         if (p.data !== proxima) {
-          p.duvida = [
-            p.duvida,
-            proxima === hoje
-              ? `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a viagem de hoje, que ainda não tinha saído.`
-              : `Conferir dia: ninguém escreveu o dia e a viagem de hoje já tinha saído quando o cliente pediu: considerei a de amanhã (${proxima.split("-").reverse().slice(0, 2).join("/")}).`,
-          ]
+          p.duvida = [p.duvida, `Ninguém escreveu o dia; a equipe marcou o Agendado no dia do pedido: considerei a viagem de hoje, que ainda não tinha saído.`]
             .filter(Boolean)
             .join(" ");
         }
