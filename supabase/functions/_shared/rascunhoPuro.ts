@@ -199,8 +199,9 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
 /**
  * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
  * e a viagem daquele sentido AINDA NÃO SAIU: é a de hoje (issue #452: "Tem vaga de Cantanhede pra
- * São Luís?" às 9h = Volta de hoje). Se já saiu, NÃO é "amanhã": "guarde uma vaga pra mim" numa
- * sexta às 19h era para domingo (caso real) — fica sem dia, a equipe vê o aviso e o bot pergunta.
+ * São Luís?" às 9h = Volta de hoje). Se a viagem de hoje já tinha saído quando o cliente pediu, é a de
+ * AMANHÃ, lançada com "Conferir dia" (dono, 24/11 — issue #504): a confirmação ao cliente mostra a data e
+ * ele corrige ("guarde uma vaga pra mim" numa sexta às 19h já foi para domingo — caso real).
  * Só com a marca da equipe (quem marcou sabe qual
  * viagem), com o sentido ESCRITO (pelo cliente, pela origem do trecho, na marca ou pelo ponto dito —
  * o sentido só lido pelo modelo pode estar errado e o dia não pode esconder isso) e igual ao lido, e
@@ -242,7 +243,14 @@ export function viagemDeHojePeloAgendado(
     return dia === ctx.hoje || (dia === ontem && horaCivil(new Date(t)) >= SAIDA_ENCERRADA[direcao]);
   });
   if (!depoisDaAnterior) return null;
-  return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? null : ctx.hoje;
+  if (!viagemDeHojeJaSaiu(direcao, ctx.horaAgora)) return ctx.hoje;
+  // a viagem de hoje já tinha saído quando o cliente pediu e a equipe marcou: a próxima é a de amanhã,
+  // lançada com "Conferir dia" (dono, 24/11 — issue #504, caso 530da78e; antes ficava pendente, #452)
+  const todoDepoisDaSaida = ctx.mensagensDoCliente.every((m) => {
+    const t = new Date(Date.parse(m.em));
+    return diaCivil(t) === ctx.hoje && horaCivil(t) >= SAIDA_ENCERRADA[direcao];
+  });
+  return todoDepoisDaSaida ? somarDias(ctx.hoje, 1) : null;
 }
 
 /** Endereço de costume do cliente num sentido (rpc_endereco_de_costume). */
