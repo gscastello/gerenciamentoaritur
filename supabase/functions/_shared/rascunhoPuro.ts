@@ -6,7 +6,7 @@
 // toque. Aqui: o filtro barato antes de chamar o modelo, o formato que o modelo
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
-import { diaCivil, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
+import { diaCivil, FUSO, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
 import { normalizarTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
@@ -186,6 +186,12 @@ export type PontosPorSentido = { ida: string[]; volta: string[] };
  */
 export const SAIDA_ENCERRADA = { ida: "07:00", volta: "14:00" } as const;
 
+const fmtHoraCivil = new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+/** "HH:MM" no horário de São Luís. */
+export function horaCivil(d: Date): string {
+  return fmtHoraCivil.format(d);
+}
+
 export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string | null | undefined): boolean {
   return !!horaAgora && /^\d{2}:\d{2}$/.test(horaAgora) && horaAgora >= SAIDA_ENCERRADA[direcao];
 }
@@ -194,7 +200,8 @@ export function viagemDeHojeJaSaiu(direcao: "ida" | "volta", horaAgora: string |
  * Ninguém escreveu o dia, mas a equipe marcou o "Agendado ☑️" no mesmo dia em que o cliente pediu
  * e a viagem daquele sentido AINDA NÃO SAIU: é a de hoje (issue #452: "Tem vaga de Cantanhede pra
  * São Luís?" às 9h = Volta de hoje). Se já saiu, NÃO é "amanhã": "guarde uma vaga pra mim" numa
- * sexta às 19h era para domingo (caso real) — fica sem dia, a equipe vê o aviso e o bot pergunta.
+ * sexta às 19h era para domingo (caso real 1a6a7143) — fica sem dia e o bot pergunta (dono, 24/11: o dia
+ * da viagem tem de estar claro).
  * Só com a marca da equipe (quem marcou sabe qual
  * viagem), com o sentido ESCRITO (pelo cliente, pela origem do trecho, na marca ou pelo ponto dito —
  * o sentido só lido pelo modelo pode estar errado e o dia não pode esconder isso) e igual ao lido, e
@@ -226,11 +233,18 @@ export function viagemDeHojePeloAgendado(
   if (!direcao || direcao !== ctx.sentidoEscrito) return null;
   if (!ctx.horaAgora || !/^\d{2}:\d{2}$/.test(ctx.horaAgora)) return null;
   if (!ctx.mensagensDoCliente.length) return null;
-  const todoHoje = ctx.mensagensDoCliente.every((m) => {
+  // todo o pedido veio DEPOIS da viagem anterior desse sentido (ontem, depois da saída) — então a de hoje é a
+  // única que ele pode querer (issue #504, caso df956d96: "qual o endereço" às 23h, resposta às 5h, Agendado às 8h)
+  const ontem = somarDias(ctx.hoje, -1);
+  const depoisDaAnterior = ctx.mensagensDoCliente.every((m) => {
     const t = Date.parse(m.em);
-    return Number.isFinite(t) && diaCivil(new Date(t)) === ctx.hoje;
+    if (!Number.isFinite(t)) return false;
+    const dia = diaCivil(new Date(t));
+    return dia === ctx.hoje || (dia === ontem && horaCivil(new Date(t)) >= SAIDA_ENCERRADA[direcao]);
   });
-  if (!todoHoje) return null;
+  if (!depoisDaAnterior) return null;
+  // já saiu: NÃO vira amanhã — o dia da viagem tem de estar claro; o bot pergunta (dono, 24/11, reafirmando
+  // o #452 depois do caso 1a6a7143: "guarde uma pra mim" na sexta às 19h era para domingo)
   return viagemDeHojeJaSaiu(direcao, ctx.horaAgora) ? null : ctx.hoje;
 }
 
@@ -318,6 +332,15 @@ export function validarPedidoExtraido(
   if (!direcao && ctx.sentidoDoHabito) {
     direcao = ctx.sentidoDoHabito;
     avisos.push(`Sentido pelo hábito do passageiro (${direcao === "ida" ? "Ida" : "Volta"}): confira.`);
+  }
+  // "quero uma passagem para hoje" sem sentido, com o Agendado da equipe, quando só UMA das viagens de hoje
+  // ainda vai sair: é essa (issue #504, caso 5bcedd9c — 07:38, a Ida já tinha saído: a Volta de hoje)
+  if (!direcao && ctx.agendado && ctx.hojeDito && data === ctx.hoje) {
+    const restantes = (["ida", "volta"] as const).filter((d) => !viagemDeHojeJaSaiu(d, ctx.horaAgora));
+    if (restantes.length === 1 && ctx.horaAgora) {
+      direcao = restantes[0];
+      avisos.push(`Pediu para hoje sem dizer o sentido; a única viagem de hoje que ainda sai é a ${direcao === "ida" ? "Ida" : "Volta"}: confira.`);
+    }
   }
   if (!direcao) return { ok: false, motivo: "sem_sentido" };
 
@@ -1284,6 +1307,8 @@ export const PERGUNTAS_AO_CLIENTE: Record<string, string> = {
   onde_embarca: "você vai embarcar em São Luís (Ida) ou aí em Pirapemas/Cantanhede (Volta, para São Luís)?",
   cidade: "você embarca em Pirapemas ou em Cantanhede?",
   sem_data: "qual o dia da sua viagem?",
+  // a quantidade foi falada num áudio e a transcrição estragou (issue #504): pergunta, nunca assume 1
+  quantidade: "quantas passagens são?",
 };
 
 /**
@@ -1521,6 +1546,10 @@ export function diaDitoPelaEquipe(datasDaEquipe: string[], dataLida: string | nu
 }
 
 /** Aviso na reserva quando o dia veio da equipe e o cliente mandou algo que o bot não leu. */
+/** Dia pela regra do Agendado com uma mensagem que o bot não leu (issue #504): a equipe viu e marcou. */
+export const AVISO_DIA_ILEGIVEL_PELO_AGENDADO =
+  "Conferir dia: o cliente não escreveu o dia e mandou uma mensagem que o bot não leu; a equipe marcou antes da viagem de hoje sair.";
+
 export const AVISO_DIA_DA_EQUIPE =
   "Dia dito pela equipe; o cliente mandou um áudio (ou mensagem) que o bot não leu: confira o dia no WhatsApp.";
 

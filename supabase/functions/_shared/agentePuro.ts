@@ -165,6 +165,28 @@ export function ultimaFoiDoCliente(mensagens: MensagemDaConversa[]): boolean {
   return ultima?.quem === "cliente";
 }
 
+// "ok", "obrigado", "valeu", "👍", "tá bom", "beleza", "show", "amém"… e nada mais (com pontuação e emoji).
+// Cumprimento ("bom dia") fica de fora: costuma abrir um pedido novo.
+const CORTESIA =
+  /^(?:(?:ok(?:ay)?|okk+|blz|beleza|valeu|vlw|obrigad[oa]s?|obg|brigad[oa]|muito obrigad[oa]|t[aá] (?:bom|certo|ok)|certo|certinho|combinado|show|perfeito|[oó]timo|top|amém|am[eé]m|deus (?:te )?aben[cç]oe|tchau|at[eé] (?:mais|logo|amanh[aã]))[\s!.,\p{Extended_Pictographic}\u{200D}\u{FE0F}\u{1F3FB}-\u{1F3FF}]*)+$/iu;
+const SO_EMOJI = /^[\p{Extended_Pictographic}\u{200D}\u{FE0F}\u{1F3FB}-\u{1F3FF}\s!.,]+$/u;
+
+/**
+ * O cliente só agradeceu ou concordou e o atendente não tinha perguntado nada (issue #504): não há o que
+ * responder, então nem chama o modelo (era o "nao_responder", pago). "Ok" depois de uma PERGUNTA é resposta
+ * (pode ser o "sim" de uma confirmação) e segue para o modelo, como mensagem sem texto, áudio ou anexo.
+ */
+export function soCortesiaSemPergunta(mensagens: MensagemDaConversa[]): boolean {
+  const ordenadas = [...mensagens].sort((a, b) => a.em.localeCompare(b.em));
+  let i = ordenadas.length - 1;
+  const doCliente: string[] = [];
+  while (i >= 0 && ordenadas[i].quem === "cliente") doCliente.unshift(ordenadas[i--].texto.trim());
+  if (!doCliente.length || i < 0) return false;
+  if (!doCliente.every((t) => t && !t.startsWith("[") && (CORTESIA.test(t) || SO_EMOJI.test(t)))) return false;
+  const antes = ordenadas[i].texto.trim();
+  return !/\?\s*[\p{Extended_Pictographic}\s]*$/u.test(antes);
+}
+
 export type PedidoDeReserva = {
   data?: unknown;
   direcao?: unknown;
@@ -186,6 +208,7 @@ export type PedidoValidado = {
   nomeCliente: string | null;
   bairro: string | null;
   enderecoEmbarque: string | null;
+  /** onde desce; "" = não disse (complementar: reserva com o valor do ponto e pergunta depois) */
   desembarque: string;
   formaPagamento: "dinheiro" | "pix" | "cartao";
 };
@@ -206,13 +229,14 @@ export function validarPedidoDeReserva(
   if (direcao !== "ida" && direcao !== "volta") erros.push("direcao deve ser ida ou volta");
   const ponto = texto(p.ponto);
   if (!ponto) erros.push("falta o ponto de embarque");
-  const quantidade = Number(p.quantidade);
+  // não disse quantas: 1, como a equipe faz (escrita no resumo para ele corrigir) — dono, 23/11
+  const quantidade = p.quantidade == null || texto(p.quantidade) === "" ? 1 : Number(p.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1) erros.push("quantidade deve ser um inteiro de 1 em diante");
   else if (quantidade > MAX_PASSAGENS_POR_PEDIDO) {
     erros.push(`mais de ${MAX_PASSAGENS_POR_PEDIDO} passagens num pedido só a equipe resolve (chame o atendente)`);
   }
-  const desembarque = texto(p.desembarque);
-  if (desembarque.length < 2) erros.push("falta o local de desembarque");
+  // onde desce é complementar (dono, 23/11 — issue #504): sem ele, reserva e pergunta depois
+  const desembarque = texto(p.desembarque).length >= 2 ? texto(p.desembarque) : "";
   const pagamento = texto(p.forma_pagamento || "dinheiro").toLowerCase();
   if (pagamento !== "dinheiro" && pagamento !== "pix" && pagamento !== "cartao") {
     erros.push("forma_pagamento deve ser dinheiro, pix ou cartao");
@@ -406,7 +430,7 @@ export function costumeParaFerramenta(r: {
   };
 }
 
-export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } };
 
 /**
  * Instruções do modelo com cache de prompt. O cache só reaproveita um início idêntico,
@@ -415,7 +439,8 @@ export type BlocoDoSistema = { type: "text"; text: string; cache_control?: { typ
  */
 export function blocosDoSistema(estavel: string[], variavel: string[]): BlocoDoSistema[] {
   const juntar = (partes: string[]) => partes.filter(Boolean).join("\n\n");
-  const blocos: BlocoDoSistema[] = [{ type: "text", text: juntar(estavel), cache_control: { type: "ephemeral" } }];
+  // 1 h (issue #504): entre uma conversa e outra passam de 5 a 60 min; com 5 min o cache era regravado a cada conversa
+  const blocos: BlocoDoSistema[] = [{ type: "text", text: juntar(estavel), cache_control: { type: "ephemeral", ttl: "1h" } }];
   const resto = juntar(variavel);
   if (resto) blocos.push({ type: "text", text: resto });
   return blocos;
@@ -874,12 +899,14 @@ export function precoDoBairroCadastrado(
  */
 export function comoCobrarAVolta(
   desembarque: string | null | undefined,
-): { tipo: "ponto"; code: "rodoviaria" | "retorno" } | { tipo: "outro" } | { tipo: "bairro"; texto: string } | null {
+): { tipo: "ponto"; code: "rodoviaria" | "retorno" | "postocarone" } | { tipo: "outro" } | { tipo: "bairro"; texto: string } | null {
   const bruto = String(desembarque ?? "").replace(/em casa \(bairro\)/gi, " ").trim();
   const t = ` ${normalizar(bruto)} `;
   if (!t.trim()) return null;
   if (t.includes(" rodoviaria ")) return { tipo: "ponto", code: "rodoviaria" };
   if (t.includes(" retorno ")) return { tipo: "ponto", code: "retorno" };
+  // a Volta espelha a Ida no desembarque (dono, 23/11): Posto Carone tem o valor do ponto dele
+  if (t.includes(" carone ")) return { tipo: "ponto", code: "postocarone" };
   if (/ (aeroporto|br|beira da estrada|rodovia) /.test(t)) return { tipo: "outro" };
   const resto = t.replace(/ (sao luis|sao luiz|slz|ma|em casa|casa|bairro|deixar|deixa|no|na|em|de|do|da) /g, " ").trim();
   return resto ? { tipo: "bairro", texto: bruto } : null;

@@ -6,6 +6,8 @@ import {
   datasEscritas,
   pontoEscrito,
   quantidadeEscrita,
+  embarqueNoInteriorEscrito,
+  quantidadeIncerta,
   sentidoEscrito,
 } from "./pedidoDoCliente.ts";
 
@@ -44,6 +46,16 @@ Deno.test("dia: conta do dia de cada mensagem; erros comuns; 'quarto' e 'Domingo
 Deno.test("quantidade: 'duas passagens', '3 pessoas'; 'um lugar perto do posto' não conta", () => {
   assertEquals(quantidadeEscrita(["gostaria de agendar duas passagens"]), 2);
   assertEquals(quantidadeEscrita(["somos 3 pessoas"]), 3);
+  // o singular "passagem" termina em M: "passagens?" não pegava (issue #504)
+  assertEquals(quantidadeEscrita(["quero uma passagem pra amanhã"]), 1);
+  assertEquals(quantidadeEscrita(["Quero uma. Passagem. Prá. A. Manhã"]), 1);
+  assertEquals(quantidadeEscrita(["1 passagem"]), 1);
+  // a correção do cliente vence o que ele disse antes (issue #504, caso a71f0cbb)
+  assertEquals(quantidadeEscrita(["Pra 3 pessoas", "Marca só uma tá", "É aqui na estrada matoes"]), 1);
+  assertEquals(quantidadeEscrita(["quero 3 passagens", "só 2 passagens"]), 2);
+  assertEquals(quantidadeEscrita(["duas passagens", "só uma"]), 1);
+  // "só uma dúvida" não é quantidade
+  assertEquals(quantidadeEscrita(["duas passagens", "só uma dúvida, que horas sai?"]), 2);
   assertEquals(quantidadeEscrita(["uma vaga por favor"]), 1);
   assertEquals(quantidadeEscrita(["é um lugar perto do posto"]), null);
   assertEquals(quantidadeEscrita(["duas passagens", "não, três pessoas"]), null); // mudou: não decide
@@ -486,6 +498,21 @@ Deno.test("#494: 'mesmo endereço que me deixou hoje' = sentido contrário da ú
   assertEquals(viagemDeOndeDeixou(["no mesmo endereço"], [ida], "2026-11-20"), null);
 });
 
+Deno.test("#504 sentido: endereço de onde ele sai no interior é Volta", () => {
+  assertEquals(embarqueNoInteriorEscrito(["Bom dia seu Ari tem vaga quero 2 Cantanhede rua do cajueiro bar nascer do sol manda a resposta"]), true);
+  assertEquals(embarqueNoInteriorEscrito(["to aqui em Pirapemas, perto da praça"]), true);
+  // quem mora lá também vai para casa (Ida); "Cantanhede no sábado" é data, não endereço
+  assertEquals(embarqueNoInteriorEscrito(["moro em Cantanhede"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["Cantanhede no sábado"]), false);
+  // destino no interior (Ida) não conta
+  assertEquals(embarqueNoInteriorEscrito(["quero ir pra Pirapemas, rua do cajueiro"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["me deixa em Cantanhede na rua da areia"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["saindo de São Luís, vou pra Cantanhede rua nova"]), false);
+  // só a cidade, sem endereço, não diz nada
+  assertEquals(embarqueNoInteriorEscrito(["Cantanhede"]), false);
+  assertEquals(embarqueNoInteriorEscrito(["tem vaga amanhã?"]), false);
+});
+
 Deno.test("#506: criança de até 5 anos vai no colo; a partir de 6 ocupa vaga", async () => {
   const { passagensComCrianca } = await import("./pedidoDoCliente.ts");
   const total = (...t: string[]) => passagensComCrianca(t)?.total ?? null;
@@ -526,4 +553,23 @@ Deno.test("#506: 2 adultos e criança de 3 anos lança 2 e não trava", async ()
   const reserva: any = { type: "passagem", trip_date: "2026-11-30", direction: "volta", route_point_code: "pirapemas", quantity: 2 };
   // deno-lint-ignore no-explicit-any
   assertEquals(conferenciaFinal(reserva, msgs, { hoje: "2026-11-23", pedidosLidos: 1 } as any), []);
+});
+
+Deno.test("#504 quantidade falada no áudio e estragada pela transcrição: pergunta", () => {
+  // caso 6a90bb67: "duas passagens" virou "despassar"
+  assertEquals(quantidadeIncerta(["[áudio: Bom dia, eu quero despassar daqui de Pirapemba Miranda, viu? Aqui perto do Bar do Pepe]"]), true);
+  assertEquals(quantidadeIncerta(["[áudio: quero duspassagem pra amanhã]"]), true);
+  // palavras de verdade com "pass" e quantidade legível não são dúvida
+  assertEquals(quantidadeIncerta(["[áudio: vou passar aí amanhã cedo]"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero duas passagens pra amanhã]"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar]", "são 2 passagens"]), false);
+  // fora de áudio, o cliente escreveu: não é erro de transcrição
+  assertEquals(quantidadeIncerta(["quero despassar"]), false);
+  // "Que hora que vocês passam aqui" é o verbo (caso 66c97996); "uma passagem" no singular é quantidade
+  assertEquals(quantidadeIncerta(["[áudio: Que hora que vocês passam aqui e quanto é?]", "Quero uma. Passagem. Prá. A. Manhã"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: que horas vocês passariam aqui?]"]), false);
+  // respondeu a pergunta só com o número: resolvido
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "Duas"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "são 2"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "ok obrigada"]), true);
 });
