@@ -576,7 +576,7 @@ Deno.test("#504 quantidade falada no áudio e estragada pela transcrição: perg
 
 Deno.test("#514: 'vindo de Pirapemas antes da entrada' é o lado da pista, não a origem", async () => {
   const { origemEscrita } = await import("./pedidoDoCliente.ts");
-  assertEquals(origemEscrita("Vindo de pirapemas  antes da entrada  da rua do escondido."), null);
+  assertEquals(origemEscrita("Vindo de pirapemas  antes da entrada  da rua das Flores."), null);
   assertEquals(origemEscrita("vindo de Cantanhede, logo depois da ponte"), null);
   // continua origem quando é a viagem
   assertEquals(origemEscrita("vindo de Pirapemas")?.de, "pirapemas");
@@ -588,7 +588,7 @@ Deno.test("#514: a cidade da resposta ao endereço decide o ponto da Volta", asy
   const { cidadeNaRespostaDoEndereco } = await import("./pedidoDoCliente.ts");
   const c = (...f: [string, string][]) => cidadeNaRespostaDoEndereco(f.map(([quem, texto]) => ({ quem, texto })));
   assertEquals(
-    c(["cliente", "Ainda tem vaga pra ir sao Luís?"], ["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Palmeira Cantanhede"], ["cliente", "Vindo de pirapemas  antes da entrada  da rua do escondido."], ["equipe", "Agendado ☑️"]),
+    c(["cliente", "Ainda tem vaga pra ir sao Luís?"], ["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Exemplo Cantanhede"], ["cliente", "Vindo de pirapemas  antes da entrada  da rua das Flores."], ["equipe", "Agendado ☑️"]),
     "cantanhede",
   );
   assertEquals(c(["equipe", "Onde te pegamos?"], ["cliente", "Rua da Areia, Pirapema"]), "pirapemas");
@@ -596,7 +596,21 @@ Deno.test("#514: a cidade da resposta ao endereço decide o ponto da Volta", asy
   assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Rua da Areia"]), null);
   assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cantanhede ou Pirapemas, tanto faz"]), null);
   assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cohab, vou pra Cantanhede"]), null);
-  assertEquals(c(["cliente", "Vila Palmeira Cantanhede"]), null);
+  assertEquals(c(["cliente", "Vila Exemplo Cantanhede"]), null);
   // a pergunta seguinte da equipe já é outro assunto
-  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Palmeira Cantanhede"], ["equipe", "Vai descer onde?"], ["cliente", "Pirapemas"]), "cantanhede");
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Exemplo Cantanhede"], ["equipe", "Vai descer onde?"], ["cliente", "Pirapemas"]), "cantanhede");
+});
+
+Deno.test("#521: dia só perguntado e trocado por outro não é pedido que faltou", async () => {
+  const { diasSoPerguntados } = await import("./pedidoDoCliente.ts");
+  const em = "2026-11-22T13:00:00Z"; // domingo
+  const d = (lidas: string[], ...t: string[]) => diasSoPerguntados(t.map((texto) => ({ texto, em })), lidas);
+  assertEquals(d(["2026-11-23"], "Tem vaga pra slz hoje ?", "Marca uma pra amanhã pra mim"), ["2026-11-22"]);
+  assertEquals(d(["2026-11-27"], "Na sexta também vem?", "No sábado tem?", "Deixa marcada duas na sexta de manhã"), ["2026-11-28"]);
+  // pedido de verdade, dois dias na mesma pergunta, ou sem pedido depois: continua contando
+  assertEquals(d(["2026-11-28"], "Gostaria de reservar uma vaga para domingo 29/11", "quero dia 28/11"), []);
+  assertEquals(d(["2026-11-27"], "Tem vaga pra sexta e domingo?", "pode marcar sexta"), []);
+  assertEquals(d(["2026-11-27"], "quero ir sexta", "E no domingo tem vaga?"), []);
+  assertEquals(d(["2026-11-27"], "quero ir domingo?", "quero sexta"), []);
+  assertEquals(d([], "Tem vaga hoje?", "amanhã"), []);
 });
