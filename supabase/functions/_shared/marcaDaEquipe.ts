@@ -53,7 +53,7 @@ export function dadosDaMarca(
   if (datas.length === 1) out.data = datas[0];
   const sentido = sentidoEscrito([n]);
   if (sentido) out.direcao = sentido;
-  const q = n.match(/(?:^| )(\d{1,2}) ?(?:p|pax|passagens?|pessoas?|vagas?)(?: |$)/);
+  const q = n.match(/(?:^| )(\d{1,2}) ?(?:p|pax|passage(?:m|ns)|pessoas?|vagas?)(?: |$)/);
   if (q && Number(q[1]) >= 1 && Number(q[1]) <= 31) out.quantidade = Number(q[1]);
   const local = localDeOutros([n], ctx.locaisDeOutros);
   if (local) {

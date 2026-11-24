@@ -254,7 +254,46 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   dos casos: busca em casa num endereço de Pirapemas/Cantanhede é Volta (escrito ou só conhecido lá; com algo de São
   Luís, pergunta `onde_embarca`); com várias viagens o trecho dito vale para a do dia dele; a viagem que desce onde a
   outra embarca é a Volta; Volta que embarca na BR de São Luís é Ida; ninguém escreveu o dia → sem dia e pergunta
-  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã — issue #452); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro.
+  `sem_data` (com o "Agendado ☑️" no dia do pedido e a viagem daquele sentido ainda por sair, é a de hoje; já saiu, não vira amanhã: o bot pergunta o dia — issue #452, reafirmado pelo dono em 24/11: "o dia da viagem precisa estar definido com clareza"; caso 1a6a7143); "agendar de novo" refaz a reserva cancelada; lugar da cidade em Outros (Pátio Norte) é busca pelo bairro. **Pendências do Agendado** (dono, 23/11 — issue #504): o pedido feito
+  DEPOIS da viagem anterior daquele sentido (ontem, depois da saída) com o Agendado hoje antes da viagem sair também é
+  a de hoje; o endereço de onde ele sai no interior ("Cantanhede rua do cajueiro…", "aqui em Pirapemas";
+  `embarqueNoInteriorEscrito`) é sentido escrito (Volta); a mensagem que o bot não leu não trava o dia que veio dessa
+  regra (a equipe viu e marcou; aviso "Conferir dia"); "para hoje" sem sentido, com o Agendado, quando só uma viagem
+  de hoje ainda sai, é essa; a correção do cliente ("marca só uma") vence a quantidade dita antes.
+- **Prova do atendente de IA** (etapa 2 do bot autônomo — issue #501, `provaDoAtendente.ts`, `provaPura.ts`,
+  `database/133`): `avaliar-bot` com `{"atendente": true, "rodada": "atendente-…"}` refaz cada caso de `bot_casos` com o
+  ATENDENTE (modo `ia`) no lugar da equipe. As mensagens do cliente até a marca entram em turnos (seguidas, sem a equipe
+  no meio e até 3 min entre elas; no máximo os 12 últimos); a cada turno ele lê o que o cliente escreveu e o que ELE
+  respondeu antes, na hora do turno. **Nada é enviado nem gravado**: com `ctx.prova` as ferramentas anotam o que fariam
+  (reserva, remarcar, cancelar, espera, avisar, chamar a equipe) e o contexto vai em sombra como segunda trava.
+  Cadastro, reservas e endereço de costume são os de **antes** da conversa (`fn_endereco_de_costume(p_customer_id, p_antes_de)`;
+  sem ela, nenhum costume) e sem a anotação do cliente, para não vazar a resposta. **Vagas da época**: os passageiros de
+  reservas criadas depois do início da conversa saem da lotação de hoje. **O "sim" da prova**: na conversa real a equipe
+  lançou sem pedir confirmação, então, se o atendente termina só pedindo a confirmação do resumo (`pedeConfirmacao`;
+  pergunta de dado não conta), a prova responde "Sim, pode confirmar." pelo cliente, até 2 vezes, com o turno marcado
+  `sintetico` — o que ele gravar é o que o resumo dizia. Resultado em `bot_avaliacoes`: certo; pendente
+  (chamou a equipe, terminou perguntando, lista de espera, fora da área); faltou; **errado** = dia, sentido, ponto,
+  quantidade, bairro, tipo ou **preço** diferente do que ficou, viagem não pedida, ou mexer numa reserva que já existia
+  (para conferir). Respostas e ações de cada turno em `lido.turnos`/`lido.acoes`; custo em `tokens.custo_usd`
+  (`custoMensal`: média por conversa × 82/dia × 30; teto do dono US$ 120/mês). Meta para a etapa 3: zero errado.
+  **Atendente mais barato** (issue #504, depois do piloto que deu US$ 0,09–0,30 por conversa): Sonnet 5.5 (mesmo preço do
+  Sonnet 5, leitura do cache pela metade) com esforço médio e fallback do servidor para recusa; instruções fixas com
+  cache de **1 h** (entre conversas passam de 5 a 60 min) e a conversa com cache de 5 min dentro do turno (cada volta de
+  ferramenta relia tudo); "ok"/"obrigado"/👍 depois de uma resposta SEM pergunta nem chama o modelo
+  (`soCortesiaSemPergunta`; "ok" depois de pergunta, número, cumprimento e áudio vão para o modelo). Recusa sem reserva →
+  a equipe assume. Toda mudança dessas passa pela prova antes de valer no `ia`.
+  **O que é preciso para reservar** (dono, 23/11 — issue #504: "não deixar nenhum agendamento para trás"): só o
+  ESSENCIAL trava a reserva do atendente — dia, sentido, onde embarca (na Volta, a cidade e a rua/referência; na busca
+  em casa, o endereço ou o bairro), quantidade (não dita = 1, escrita no resumo) e o telefone da conversa. Nome, onde
+  desce (cidade e lugar) e pagamento são COMPLEMENTARES: sem eles a reserva sai (preço do ponto, como a equipe cobra;
+  `extra_data.complementar`) e o atendente pede o que falta numa pergunta, na mensagem que conta que reservou. Nome = o
+  que o cliente escreveu, mesmo só o primeiro; nunca o do perfil do WhatsApp. Base: nos 14 dias até 23/11, 57% das
+  reservas tinham nome de uma palavra, 47% das Voltas e 22% das Idas não tinham desembarque.
+  **Valor só se o cliente perguntar** (dono, 23/11): o atendente não cita preço por conta própria, nem no resumo. A
+  Volta espelha a Ida pelo DESEMBARQUE em São Luís: em casa pelo bairro; Retorno, Rodoviária, BR e Posto Carone pelo
+  ponto; aeroporto o dele (`comoCobrarAVolta`). Cliente da Volta que pergunta o valor sem dizer onde desce: o atendente
+  pergunta primeiro (`calcular_valor` devolve FALTA_DESEMBARQUE). Reserva da Volta sem desembarque entra com o valor do
+  ponto e o revisor acerta pela tabela quando o desembarque chega (`conferirPreco`).
 - **Camadas de segurança do agendamento** (análise do dono, 18/11 — issues #460 a #465):
   **Áudio e localização** (#460): a transcrição do áudio que o Chatwoot manda (`transcribed_text`) entra no texto como
   `[áudio: …]` (sem ela, `[áudio sem transcrição — ouça no WhatsApp]`, que conta como mensagem não lida) e a localização
@@ -271,6 +310,18 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   senão o cache não pega e o custo volta (confira `cache_lido` nos registros). **Leitura guardada na
   avaliação** (issue #494, `database/131`, `bot_leituras_memo`): mesmo texto = não chama o modelo, então mudança só de
   código é avaliada de graça e sem variação; mudou uma palavra das instruções, lê tudo de novo (`{"fresco": true}` força).
+  **Sem certeza, pergunta ao cliente** (dono, 24/11 — issue #504): vale para quantidade, dia, sentido, embarque e todo
+  o resto. Nunca tirar do costume o que o cliente não disse, exceto o recorrente com embarque e desembarque FIXOS
+  (ex.: sempre buscado em casa num lugar e deixado sempre no mesmo ponto na Volta), que manda só "vou amanhã" — esse
+  vai pelo endereço de costume, como já é. Quantidade falada num áudio e estragada pela transcrição ("despassar" =
+  duas passagens; `quantidadeIncerta`) não vira 1: o Agendado deixa a pendência `quantidade` e pergunta "quantas
+  passagens são?"; a resposta só com o número resolve.
+  **Mudança depois da marca** (dono, 24/11 — issue #504, caso 8bfa7860): o esperado do caso é o da HORA do
+  Agendado. Se a reserva mudou depois de uma nova mensagem do cliente, o `avaliar-bot` decide sozinho quem mudou
+  (`mudancaDepoisDaMarca.quemMudou`, pelo que o cliente escreveu): escreveu um valor antes e o outro depois (ou
+  "na verdade", "mudei" com o valor novo) = mudou de ideia → o esperado volta o valor de antes; já tinha escrito
+  o valor que ficou (ou "eu disse", "tá errado") = erro de leitura → fica o de agora; sem prova = só anota
+  "conferir". Caso `verificado` não é mexido; o ajuste fica na `observacao` com "[mudança depois da marca]".
   Rodada completa = 1 caso por chamada, ondas de até 80; confira `feitos = ativos`. Diferença → repetir o caso 5 vezes na
   versão nova e na antiga antes de chamar de variação. **Regras de código do leitor** (#494): "mesmo endereço que me
   deixou hoje" = sentido contrário da última viagem (`viagemDeOndeDeixou`); "buscar em casa e deixar em Cantanhede" = Ida;
