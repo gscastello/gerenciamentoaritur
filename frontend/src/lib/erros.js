@@ -12,13 +12,14 @@ import { reportError } from "../observability/index.js";
 import { supabase } from "./supabaseClient.js";
 
 const POR_CODE = {
-  "23505": "Esse registro já existe.",
-  "23503": "Não dá para concluir — há dados ligados a este registro.",
-  "23514": "Algum campo está fora do valor permitido.",
+  23505: "Esse registro já existe.",
+  23503: "Não dá para concluir — há dados ligados a este registro.",
+  23514: "Algum campo está fora do valor permitido.",
   "22P02": "Algum campo está com formato inválido.",
-  "22007": "Data inválida.",
-  "42501": "Você não tem permissão para isso.",
-  "P0001": null, // regra de negócio — a própria mensagem já é amigável
+  22007: "Data inválida.",
+  25006: "Login de demonstração: nada é gravado.",
+  42501: "Você não tem permissão para isso.",
+  P0001: null, // regra de negócio — a própria mensagem já é amigável
   PGRST301: "Sua sessão expirou — entre de novo.",
 };
 

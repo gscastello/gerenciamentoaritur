@@ -43,7 +43,8 @@ Deno.serve(async (req: Request) => {
   const { data: userData } = await db.auth.getUser();
   const userId = userData?.user?.id;
   if (!userId) return json({ success: false, message: "Sessão inválida." }, 401);
-  const { data: perfil } = await db.from("users").select("role").eq("id", userId).maybeSingle();
+  const { data: perfil } = await db.from("users").select("role, somente_leitura").eq("id", userId).maybeSingle();
+  if (perfil?.somente_leitura) return json({ success: false, message: "Login de demonstração: esta ação não está disponível." }, 403);
   const papel = String(perfil?.role ?? "");
   if (!PAPEIS.includes(papel)) return json({ success: false, message: "O assistente é para a equipe (admin, atendente ou financeiro)." }, 403);
 

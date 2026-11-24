@@ -50,3 +50,7 @@
 - Cancelamento é sempre `UPDATE status`, **nunca `DELETE`**.
 - Backup diário automático no provedor + botão de backup manual (JSON) na
   aba Sistema.
+- **Login de demonstração** (issue #510): `users.somente_leitura` com papel admin. O PostgREST chama `fn_antes_do_pedido`
+  (`pgrst.db_pre_request`) e a transação vira só leitura, RPC inclusive; `trg_somente_leitura` é a segunda camada (tabela
+  nova: criar o gatilho). **Edge Function nova que age por quem está logado confere `somente_leitura` e recusa.**
+  Desativar em Equipe bloqueia no banco (`fn_current_role` exige `active`).

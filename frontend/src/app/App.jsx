@@ -1620,7 +1620,17 @@ function AppInner() {
                   texto={C.inkSoft}
                 />
                 <AvisoListaCortada cor={C.red} fundo={C.redSoft} texto={C.inkSoft} />
-                {podeAgendar && <ConfirmarVeiculoDoDia />}
+                {profile?.somente_leitura && (
+                  <div
+                    role="status"
+                    data-testid="login-de-demonstracao"
+                    className="mb-3 text-sm rounded-xl px-3 py-2"
+                    style={{ background: C.amberSoft, color: C.ink }}
+                  >
+                    Login de demonstração: você vê tudo, mas nada é gravado.
+                  </div>
+                )}
+                {podeAgendar && !profile?.somente_leitura && <ConfirmarVeiculoDoDia />}
                 {podeAgendar && (
                   <AvisoAgendadoSemReserva
                     pendencias={pend.pendencias}

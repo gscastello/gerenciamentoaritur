@@ -853,6 +853,7 @@ export async function mockSupabase(page, opts = {}) {
           phone: null,
           role,
           active: true,
+          somente_leitura: opts.somenteLeitura === true,
           deleted_at: null,
         },
         {
