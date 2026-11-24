@@ -32,7 +32,8 @@ function gravarSessao(lista) {
 
 /** Texto que vai para o modelo: a fala e, nas respostas, o que foi proposto e o que aconteceu. */
 function paraOModelo(m) {
-  if (m.papel === "usuario") return { papel: "usuario", texto: m.texto };
+  if (m.papel === "usuario")
+    return { papel: "usuario", texto: [m.texto, m.contexto].filter(Boolean).join("\n") };
   const propostas = (m.acoes ?? [])
     .map(
       (a) =>
@@ -51,12 +52,19 @@ export function useAssistente() {
   useEffect(() => gravarSessao(mensagens), [mensagens]);
 
   const enviar = useCallback(
-    async (texto) => {
+    async (
+      texto,
+      { contexto = null, pendencia = null, novaConversa = false, repetir = false } = {},
+    ) => {
       const fala = String(texto ?? "").trim();
-      if (!fala || conversa.loading) return;
+      if ((!fala && !repetir) || conversa.loading) return null;
       const minha = { id: novoId(), papel: "usuario", texto: fala };
-      const historico = [...ref.current, minha];
+      if (contexto) minha.contexto = contexto;
+      if (pendencia) minha.pendencia = pendencia;
+      const antes = novaConversa ? [] : ref.current;
+      const historico = repetir ? antes : [...antes, minha];
       setMensagens(historico);
+      ref.current = historico;
       try {
         const r = await conversa.run(historico.map(paraOModelo));
         setMensagens((prev) => [
@@ -66,10 +74,13 @@ export function useAssistente() {
             papel: "assistente",
             texto: r.texto,
             acoes: (r.acoes ?? []).map((a) => ({ ...a, estado: "proposta" })),
+            correcoes: r.correcoes ?? [],
           },
         ]);
+        return r;
       } catch {
         // o erro fica em conversa.error; a fala continua na tela para tentar de novo
+        return null;
       }
     },
     [conversa],
@@ -108,9 +119,22 @@ export function useAssistente() {
 
   const limpar = useCallback(() => setMensagens([]), []);
 
+  /** Registrou por engano: some do cartão e sai da fila do Claude. */
+  const descartarCorrecao = useCallback(async (id) => {
+    await assistenteService.descartarCorrecao(id);
+    setMensagens((prev) =>
+      prev.map((m) =>
+        m.correcoes?.some((c) => c.id === id)
+          ? { ...m, correcoes: m.correcoes.map((c) => (c.id === id ? { ...c, fora: true } : c)) }
+          : m,
+      ),
+    );
+  }, []);
+
   return {
     mensagens,
     enviar,
+    descartarCorrecao,
     confirmar,
     descartar,
     limpar,

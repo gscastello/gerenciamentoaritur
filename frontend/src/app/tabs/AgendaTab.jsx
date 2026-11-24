@@ -63,7 +63,7 @@ import { useLocaisOutros } from "../../hooks/useLocaisOutros.js";
 import { copiarTexto } from "../../lib/clipboard.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { EVENTS, emit } from "../../observability/index.js";
-import { BotaoDitado } from "../../ui/BotaoDitado.jsx";
+import { BotaoDeVoz } from "../assistente/BotaoDeVoz.jsx";
 import { FolhaDeBaixo } from "../../ui/FolhaDeBaixo.jsx";
 import { FadeIn, Presence } from "../../ui/motion/index.js";
 import {
@@ -1252,9 +1252,8 @@ function AnotacaoRapidaLinha({ onSalvar, nomePonto }) {
           className="text-xs py-1.5"
           readOnly={salvando}
         />
-        <BotaoDitado
+        <BotaoDeVoz
           rotulo={`Ditar reserva — ${nomePonto}`}
-          cores={{ ativo: C.amber, ativoTexto: C.onBrand, fundo: C.panel2, texto: C.inkSoft }}
           onErro={setErro}
           onTexto={(fala) => {
             const nova = ditadoParaAnotacao(fala);

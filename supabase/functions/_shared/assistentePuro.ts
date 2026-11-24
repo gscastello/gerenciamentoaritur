@@ -263,6 +263,42 @@ export function validarLugar(a: Record<string, unknown>): { ok: true; acao: Acao
   return { ok: true, acao: { tipo: "ensinar_lugar", cidade, nome, bairro: cidade === "sao_luis" ? bairro : null } };
 }
 
+/** Onde está o erro registrado para o Claude (issue #516, tabela bot_correcoes). */
+export const AREAS_DE_CORRECAO = ["leitura_agendado", "resposta_ao_cliente", "revisor", "transcricao", "assistente", "app", "outro"] as const;
+export type AreaDeCorrecao = (typeof AREAS_DE_CORRECAO)[number];
+export type Correcao = {
+  o_que_errou: string;
+  o_certo: string;
+  area: AreaDeCorrecao;
+  telefone: string | null;
+  reserva_id: string | null;
+  pendencia_id: string | null;
+  trecho: string | null;
+};
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function validarCorrecao(a: Record<string, unknown>): { ok: true; correcao: Correcao } | { ok: false; erro: string } {
+  const t = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  const errou = t(a.o_que_errou, 1500);
+  const certo = t(a.o_certo, 1500);
+  if (errou.length < 3 || certo.length < 2) return { ok: false, erro: "Diga o que deu errado e como seria o certo." };
+  const uuid = (v: unknown) => (RE_UUID.test(String(v ?? "")) ? String(v) : null);
+  const area = AREAS_DE_CORRECAO.find((x) => x === a.area) ?? "outro";
+  const telefone = String(a.telefone ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  return {
+    ok: true,
+    correcao: {
+      o_que_errou: errou,
+      o_certo: certo,
+      area,
+      telefone: telefone.length >= 10 && telefone.length <= 11 ? telefone : null,
+      reserva_id: uuid(a.reserva_id),
+      pendencia_id: uuid(a.pendencia_id),
+      trecho: t(a.trecho, 1500) || null,
+    },
+  };
+}
+
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const txt = (v: unknown, max = 200): string | null => {
   const s = typeof v === "string" ? v.trim().slice(0, max) : "";
@@ -431,10 +467,21 @@ O QUE VOCÊ FAZ
 - PROPÕE reservas novas, mudanças e cancelamentos com propor_reserva, propor_mudanca e propor_cancelamento. Você NUNCA grava nada: a proposta vira um cartão e quem grava é a pessoa, tocando em "Confirmar". Depois de propor, diga em uma linha o que propôs e peça para conferir o cartão. Não diga que reservou.
 - ENSINA O BOT do WhatsApp com propor_licao e propor_lugar (também só depois do "Confirmar"): veja ENSINAR O BOT.
 
+CORREÇÕES PARA O CLAUDE (quem conserta o código do bot e do app)
+- A pessoa explicou um erro do bot, do revisor, da transcrição, do app ou SEU ("o bot leu errado", "lançou na Volta e era Ida", "respondeu o preço errado", "essa tela não deixa…")? Chame registrar_correcao NA HORA, sem perguntar: o_que_errou (o que aconteceu) e o_certo (como deveria ser), com o telefone e a reserva se souber, e o trecho da conversa que prova (use ler_conversa). Um registro por erro.
+- Registrar não muda reserva nenhuma: continue e proponha a correção da reserva, se houver. Diga em uma frase que ficou registrado para o Claude corrigir.
+- Não registre mudança de ideia do cliente, desistência nem pedido comum.
+
+RESOLVER UMA PENDÊNCIA (pedido que começa por "Resolva a pendência")
+- Entenda o que falta: leia a conversa do WhatsApp pelo telefone, as reservas do cliente e as reservas prontas. Diga em UMA frase qual é o problema.
+- Proponha o que resolve de fato (lançar, mudar, cancelar, descartar a pronta). Se faltar um dado que só o cliente sabe, escreva a mensagem pronta para a pessoa mandar a ele no WhatsApp e não proponha nada no chute.
+- Junto da proposta que resolve, ou quando já estiver resolvido no app, proponha também propor_resolver_pendencia com o id informado. Nunca proponha só tirar da lista uma pendência que continua sem solução.
+- Se a pendência nasceu de um erro do bot, registre com registrar_correcao.
+
 ENSINAR O BOT (o que o sócio informa ou corrige vira aprendizado)
 - O sócio contou algo que o bot deveria saber (como a operação funciona, uma regra da empresa, uma situação e o que fazer, um jeito de o cliente falar)? Proponha propor_licao com uma frase geral, sem nome nem telefone de cliente.
 - Disse onde fica um lugar ("a descida da Inês é em Pirapemas", "o Condomínio X fica no Turu")? Proponha propor_lugar: Pirapemas/Cantanhede guardam a cidade do lugar; São Luís guarda o bairro (nome da tabela).
-- Corrigiu um erro de uma reserva lançada pelo bot (dia, sentido, cidade, bairro)? Depois de propor a correção, pergunte se quer ensinar ao bot a causa, e proponha a lição ou o lugar se ele disser que sim.
+- Corrigiu um erro de uma reserva lançada pelo bot (dia, sentido, cidade, bairro)? Registre com registrar_correcao (veja CORREÇÕES PARA O CLAUDE) e proponha a correção da reserva. Só pergunte se quer ensinar uma lição ou um lugar quando isso servir para outros passageiros.
 - Preço NUNCA vira lição: o bot usa a tabela. Se o sócio disser um preço, diga que ele muda na aba Sistema (Bairros, Trechos ou Locais).
 - Não proponha ensinar o que já está nos dados do sistema ou nas lições aprovadas.
 - Hábito de UM passageiro ("o embarque dela na Ida varia entre X e Y", "ela sempre desce no Z", "na Volta ele sai sempre de W") NÃO é lição geral: use buscar_cliente e proponha propor_costume (por sentido; embarque que varia = sem ponto, só o desembarque) e, para o que não cabe no costume (o que varia, preferências, o que perguntar), propor_instrucao_cliente. Uma proposta por sentido e uma para a instrução.
@@ -668,6 +715,24 @@ export const FERRAMENTAS_DO_ASSISTENTE = [
     name: "propor_descartar_rascunho",
     description: "Propõe descartar uma reserva pronta que não vale (repetida, desistiu…).",
     input_schema: { type: "object", properties: { rascunho_id: { type: "string" } }, required: ["rascunho_id"] },
+  },
+  {
+    name: "registrar_correcao",
+    description:
+      "Registra na fila do Claude um erro do bot, do revisor, da transcrição, do app ou do próprio assistente que a pessoa explicou, com o que seria o certo. Grava na hora, sem Confirmar. Não muda reserva.",
+    input_schema: {
+      type: "object",
+      properties: {
+        o_que_errou: { type: "string", description: "o que aconteceu de errado (até 1500 letras)" },
+        o_certo: { type: "string", description: "como deveria ser (até 1500 letras)" },
+        area: { type: "string", enum: [...AREAS_DE_CORRECAO] },
+        telefone: { type: "string", description: "telefone do cliente, se houver" },
+        reserva_id: { type: "string", description: "id da reserva, se houver" },
+        pendencia_id: { type: "string" },
+        trecho: { type: "string", description: "o trecho da conversa que prova, se houver" },
+      },
+      required: ["o_que_errou", "o_certo", "area"],
+    },
   },
   {
     name: "propor_resolver_pendencia",

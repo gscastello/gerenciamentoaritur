@@ -1,4 +1,4 @@
-import { Check, MessageCircle, PhoneCall, Plus, X } from "lucide-react";
+import { Check, MessageCircle, PhoneCall, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { mensagemAmigavel } from "../../lib/erros.js";
 import { Skeleton, useReducedMotion } from "../../ui/motion/index.js";
@@ -8,7 +8,7 @@ import { C, Card, ErrorBanner, Header, TextInput, digitos, tempoRelativo } from 
 // Atendimentos que precisam da equipe: o bot de WhatsApp transferiu, ou
 // alguém abriu à mão ("ligar de volta para o cliente X"). Cada pendência
 // nova também toca o sino (database/32).
-export default function PendenciasTab({ pend, deepLink = null }) {
+export default function PendenciasTab({ pend, deepLink = null, onAssistente = null }) {
   const [novo, setNovo] = useState({ subject: "", detail: "", phone: "" });
   // tocar num passageiro da faixa vermelha abre aqui, na pendência dele (issue #476)
   const destacada = deepLink?.kind === "pendencia" ? deepLink.id : null;
@@ -58,7 +58,7 @@ export default function PendenciasTab({ pend, deepLink = null }) {
     try {
       await pend.resolver(id);
     } catch (e) {
-      setErro(mensagemAmigavel(e, "Não foi possível resolver."));
+      setErro(mensagemAmigavel(e, "Não foi possível tirar da lista."));
     }
   };
   const fonte = (s) => (s === "whatsapp" ? "WhatsApp" : s === "sistema" ? "Sistema" : "Manual");
@@ -157,7 +157,7 @@ export default function PendenciasTab({ pend, deepLink = null }) {
               className="btn-press text-xs px-3 py-1.5 rounded-lg font-semibold"
               style={{ background: C.panel2, color: C.ink, border: `1px solid ${C.border}` }}
             >
-              Limpar todas ({pend.pendencias.length})
+              Tirar todas da lista ({pend.pendencias.length})
             </button>
           </div>
         )}
@@ -216,22 +216,33 @@ export default function PendenciasTab({ pend, deepLink = null }) {
                   <span>· {tempoRelativo(p.created_at)}</span>
                   {p.aberto_por && <span>· por {p.aberto_por}</span>}
                 </div>
+                {/* resolver de verdade é com o assistente; "Já resolvi" só tira da lista (issue #516) */}
+                {onAssistente && (
+                  <button
+                    type="button"
+                    onClick={() => onAssistente(p)}
+                    className="btn-press mt-3 w-full md:w-auto md:px-5 flex items-center justify-center gap-2 min-h-[46px] rounded-xl text-[14px] font-semibold"
+                    style={{ background: C.brand, color: C.onBrand }}
+                  >
+                    <Sparkles size={16} /> Resolver com o assistente
+                  </button>
+                )}
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
                   {tel && (
                     <a
                       href={`https://wa.me/55${tel}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                      className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[44px] rounded-xl"
                       style={{ background: C.panel2, color: C.ink }}
                     >
-                      <MessageCircle size={13} /> Abrir no WhatsApp
+                      <MessageCircle size={14} /> WhatsApp
                     </a>
                   )}
                   {tel && (
                     <a
                       href={`tel:${tel}`}
-                      className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md"
+                      className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[44px] rounded-xl"
                       style={{ background: C.panel2, color: C.inkSoft }}
                     >
                       <PhoneCall size={13} /> Ligar
@@ -240,10 +251,10 @@ export default function PendenciasTab({ pend, deepLink = null }) {
                   <button
                     type="button"
                     onClick={() => resolver(p.id)}
-                    className="btn-press flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-semibold"
+                    className="btn-press flex items-center gap-1.5 text-[13px] px-3 min-h-[44px] rounded-xl font-semibold"
                     style={{ background: C.panel, color: C.ink, border: `1px solid ${C.border}` }}
                   >
-                    <Check size={13} /> Resolver
+                    <Check size={14} /> Já resolvi
                   </button>
                 </div>
               </Card>
