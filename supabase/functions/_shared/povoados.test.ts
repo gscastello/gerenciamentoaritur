@@ -1,4 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
+import { areaDoDesembarque } from "./agentePuro.ts";
 import { povoadoDoCaminho } from "./grafia.ts";
 import { paradaDoInterior } from "./ladoDaRota.ts";
 import { origemEscrita, pontoDaVoltaPelaOrigem, sentidoDoTrecho } from "./pedidoDoCliente.ts";
@@ -58,4 +59,12 @@ Deno.test("#512: Volta que embarca no povoado não vira Ida", () => {
   const pedido = { tipo: "passagem", data: "2026-11-25", direcao: "volta", endereco: "Palmeiral, BR", desembarque: "Retorno" };
   // deno-lint-ignore no-explicit-any
   assertEquals((idaPeloEmbarqueEmSaoLuis([pedido as any], ["BR"])[0] as any).direcao, "volta");
+});
+
+Deno.test("#512: a área do desembarque reconhece os povoados", () => {
+  const areas = [{ code: "palmeiral", label: "Palmeiral" }, { code: "povoado_sozinho", label: "Povoado Sozinho" }, { code: "cantanhede", label: "Cantanhede" }];
+  assertEquals(areaDoDesembarque("Palmeiral", areas), "palmeiral");
+  assertEquals(areaDoDesembarque("Sozinho", areas), "povoado_sozinho");
+  assertEquals(areaDoDesembarque("Povoado Sozinho, escola", areas), "povoado_sozinho");
+  assertEquals(areaDoDesembarque("Vila Palmeira", areas), null);
 });
