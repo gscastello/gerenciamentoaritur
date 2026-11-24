@@ -278,7 +278,7 @@ const RE_FEZ_AGORA =
 
 /** "já avisei/chamei a equipe": só se avisou mesmo. */
 const RE_AVISOU_EQUIPE =
-  /\b(?:avisei|chamei|acionei|repassei|passei|pedi)\b[^.!?\n]{0,60}\b(?:equipe|motorista|pessoal|atendente)\b/i;
+  /\b(?:avisei|chamei|acionei|repassei|passei|pedi|vou (?:pedir|confirmar|verificar|checar|passar|avisar))\b[^.!?\n]{0,60}\b(?:equipe|motorista|pessoal|atendente)\b/i;
 
 /** A resposta diz que mexeu numa reserva? Só pode se uma ferramenta de escrita deu certo neste turno. */
 export function afirmaTerMexidoEmReserva(textoDaResposta: string): boolean {

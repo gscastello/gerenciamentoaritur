@@ -469,7 +469,7 @@ async function precoUnitario(
   }
   return {
     ok: false,
-    erro: { codigo: "SEM_PRECO_NA_TABELA", erro: "Este ponto não tem preço na tabela do sistema. Chame o atendente para combinar o valor." },
+    erro: { codigo: "SEM_PRECO_NA_TABELA", erro: "Este ponto não tem preço na tabela do sistema." },
   };
 }
 
@@ -657,6 +657,19 @@ async function listarPontosEPrecos(args: Linha) {
   };
 }
 
+const CODIGOS_SEM_VALOR = new Set(["BAIRRO_NAO_ATENDIDO", "BAIRRO_SEM_PRECO", "SEM_PRECO_NA_TABELA", "TRECHO_SEM_VALOR"]);
+/** O lugar não está na tabela nem nos trechos: falta o valor, não o pedido (dono, 24/11 — issue #528). */
+const semValorNaTabela = (erro: Record<string, unknown>) => CODIGOS_SEM_VALOR.has(String(erro.codigo ?? ""));
+
+/** Sem valor na tabela: o atendente confirma e repassa depois; vira pendência e a conversa segue. */
+function valorAConfirmar(lugar: string) {
+  return {
+    ok: false,
+    codigo: "VALOR_A_CONFIRMAR",
+    erro: `Não há valor na tabela nem nos trechos para "${lugar}". Não diga valor nem chame o atendente. Se o cliente perguntou o valor: use avisar_equipe (assunto "Confirmar valor", com o trajeto e o lugar) e diga que vai pedir para um atendente confirmar o valor e passar para ele depois. Siga com o pedido: a reserva pode ser feita sem o valor.`,
+  };
+}
+
 async function calcularValor(args: Linha) {
   const direcao = String(args.direcao ?? "");
   if (direcao !== "ida" && direcao !== "volta") return { ok: false, erro: "direcao deve ser ida ou volta" };
@@ -679,14 +692,12 @@ async function calcularValor(args: Linha) {
     endereco: String(args.endereco_embarque ?? "").trim() || null,
     desembarque,
   });
-  if (!preco.ok) return { ok: false, ...preco.erro };
-  if (preco.incerto) {
-    return {
-      ok: false,
-      codigo: "VALOR_A_CONFIRMAR",
-      erro: `O lugar "${desembarque}" não está na tabela de bairros. Não diga valor: pergunte o bairro; se já é o bairro, avise a equipe (avisar_equipe) e diga que o valor dele vai ser confirmado. A reserva pode ser feita mesmo assim.`,
-    };
+  if (!preco.ok) {
+    // busca em casa só com a rua e sem achar o bairro: primeiro pergunta o bairro
+    const faltaBairro = preco.erro.codigo === "BAIRRO_NAO_ATENDIDO" && !String(args.bairro ?? "").trim();
+    return semValorNaTabela(preco.erro) && !faltaBairro ? { ...preco.erro, ...valorAConfirmar([args.bairro, args.endereco_embarque, desembarque].filter(Boolean).join(", ")) } : { ok: false, ...preco.erro };
   }
+  if (preco.incerto) return valorAConfirmar(desembarque);
   return {
     ok: true,
     ponto: ponto.name,
@@ -815,7 +826,10 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     endereco: pedido.enderecoEmbarque,
     desembarque: pedido.desembarque,
   });
-  if (!preco.ok) return { ok: false, ...preco.erro };
+  // sem valor na tabela a reserva sai assim mesmo, com o valor a confirmar (dono, 24/11 — issue #528)
+  if (!preco.ok && !semValorNaTabela(preco.erro)) return { ok: false, ...preco.erro };
+  const valorUnitario = preco.ok ? preco.preco : 0;
+  const valorFalta = !preco.ok || preco.incerto === true;
 
   // na prova, as vagas como eram antes da conversa (a lotação de hoje conta reservas feitas depois)
   const disp = await disponibilidade(pedido.data, pedido.direcao, ctx.prova);
@@ -853,7 +867,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "intermediate_review").maybeSingle();
     const regra = regraDoTrecho(cfg?.value);
     const conferido = trechoPrecisaDeConfirmacao({
-      preco: preco.preco,
+      preco: valorUnitario,
       vagasDepois: disp.available == null ? null : disp.available - pedido.quantidade,
       ...regra,
     });
@@ -878,7 +892,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       pickup_neighborhood: pedido.bairro,
       pickup_detail: pedido.enderecoEmbarque,
       dropoff_location: pedido.desembarque || null,
-      unit_price: preco.preco,
+      unit_price: valorFalta ? null : valorUnitario,
       status: fora ? "pendente" : "confirmada",
       turno: ctx.prova.turno,
     });
@@ -892,8 +906,9 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       direcao: pedido.direcao,
       ponto: ponto.name,
       quantidade: pedido.quantidade,
-      preco_por_passagem: preco.preco,
-      total: calcularTotal(preco.preco, pedido.quantidade),
+      ...(valorFalta
+        ? { valor: "a confirmar por um atendente: não diga valor" }
+        : { preco_por_passagem: valorUnitario, total: calcularTotal(valorUnitario, pedido.quantidade) }),
       forma_pagamento: pedido.formaPagamento,
       chave_pix: pix ? { chave: pix.key, titular: pix.name ?? null } : null,
       lembrete: pix ? "Se pagar por Pix, o cliente envia o comprovante aqui mesmo." : null,
@@ -909,7 +924,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       customerPhone: outro ? telPassageiro : ctx.telefone,
       routePointCode: ponto.code,
       quantity: pedido.quantidade,
-      unitPrice: preco.preco,
+      unitPrice: valorUnitario,
       paymentMethod: pedido.formaPagamento,
       pickupNeighborhood: pedido.bairro,
       pickupDetail: pedido.enderecoEmbarque,
@@ -917,7 +932,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       dropoffArea,
       status: fora ? "pendente" : "confirmada",
       pendingReason: motivoPendente,
-      extraData: { origem: "agente", ...(complementar.length ? { complementar } : {}) },
+      extraData: { origem: "agente", ...(complementar.length ? { complementar } : {}), ...(valorFalta ? { a_confirmar: ["valor"] } : {}) },
       waMessageId: `cw-${ctx.mensagemId}-agente`,
     });
     ctx.escrita.criou = true;
@@ -945,8 +960,9 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       direcao: pedido.direcao,
       ponto: ponto.name,
       quantidade: pedido.quantidade,
-      preco_por_passagem: preco.preco,
-      total: calcularTotal(preco.preco, pedido.quantidade),
+      ...(valorFalta
+        ? { valor: "a confirmar por um atendente: não diga valor" }
+        : { preco_por_passagem: valorUnitario, total: calcularTotal(valorUnitario, pedido.quantidade) }),
       forma_pagamento: pedido.formaPagamento,
       chave_pix: pix ? { chave: pix.key, titular: pix.name ?? null } : null,
       lembrete: pix ? "Se pagar por Pix, o cliente envia o comprovante aqui mesmo." : null,

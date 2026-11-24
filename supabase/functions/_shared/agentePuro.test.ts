@@ -759,5 +759,7 @@ Deno.test("#524: dizer que cancelou ou reservou exige a ferramenta; dizer que av
   assertEquals(n("Ainda não reservei sua vaga, posso confirmar?"), 0);
   assertEquals(n("Sua reserva está confirmada para amanhã."), 0);
   assertEquals(n("Já avisei a equipe.", { ...so, avisouEquipe: false }), 1);
+  assertEquals(n("Vou pedir para um atendente confirmar o valor e te passar.", { ...so, avisouEquipe: false }), 1);
+  assertEquals(n("Vou pedir para um atendente confirmar o valor e te passar."), 0);
   assertEquals(n("Cancelei sua passagem de amanhã.", { ...so, mexeuEmReserva: true }), 0);
 });
