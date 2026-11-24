@@ -44,7 +44,8 @@ Deno.serve(async (req: Request) => {
   const { data: userData } = await asCaller.auth.getUser();
   const callerId = userData?.user?.id;
   if (!callerId) return json({ success: false, message: "Sessão inválida." }, 401);
-  const { data: perfil } = await asCaller.from("users").select("role").eq("id", callerId).maybeSingle();
+  const { data: perfil } = await asCaller.from("users").select("role, somente_leitura").eq("id", callerId).maybeSingle();
+  if (perfil?.somente_leitura) return json({ success: false, message: "Login de demonstração: esta ação não está disponível." }, 403);
   if (perfil?.role !== "admin") {
     return json({ success: false, message: "Só um admin pode redefinir senhas." }, 403);
   }

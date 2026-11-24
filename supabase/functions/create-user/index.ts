@@ -48,13 +48,14 @@ Deno.serve(async (req: Request) => {
   const { data: userData } = await asCaller.auth.getUser();
   const callerId = userData?.user?.id;
   if (!callerId) return json({ success: false, message: "Sessão inválida." }, 401);
-  const { data: perfil } = await asCaller.from("users").select("role").eq("id", callerId).maybeSingle();
+  const { data: perfil } = await asCaller.from("users").select("role, somente_leitura").eq("id", callerId).maybeSingle();
+  if (perfil?.somente_leitura) return json({ success: false, message: "Login de demonstração: esta ação não está disponível." }, 403);
   if (perfil?.role !== "admin") {
     return json({ success: false, message: "Só um admin pode criar usuários." }, 403);
   }
 
   // 2) valida a entrada
-  let payload: { email?: string; name?: string; role?: string; password?: string };
+  let payload: { email?: string; name?: string; role?: string; password?: string; somenteLeitura?: boolean };
   try {
     payload = await req.json();
   } catch {
@@ -64,6 +65,7 @@ Deno.serve(async (req: Request) => {
   const name = (payload.name ?? "").trim();
   const role = payload.role ?? "atendente";
   const password = payload.password ?? "";
+  const somenteLeitura = payload.somenteLeitura === true;
   if (!/^\S+@\S+\.\S+$/.test(email)) return json({ success: false, message: "E-mail inválido." }, 400);
   if (!name) return json({ success: false, message: "Informe o nome." }, 400);
   if (!PAPEIS.includes(role)) return json({ success: false, message: "Papel inválido." }, 400);
@@ -83,7 +85,7 @@ Deno.serve(async (req: Request) => {
 
   const { error: rowErr } = await admin
     .from("users")
-    .upsert({ id: created.user.id, name, role, active: true, created_by: callerId }, { onConflict: "id" });
+    .upsert({ id: created.user.id, name, role, active: true, somente_leitura: somenteLeitura, created_by: callerId }, { onConflict: "id" });
   if (rowErr) {
     // desfaz o auth.user para não deixar órfão
     await admin.auth.admin.deleteUser(created.user.id);

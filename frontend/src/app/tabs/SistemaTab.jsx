@@ -673,6 +673,8 @@ const PAPEIS_EQUIPE = [
   { v: "motorista", label: "Motorista" },
   { v: "financeiro", label: "Financeiro" },
 ];
+// login de demonstração: papel admin com o banco em só leitura (database/134)
+const PAPEL_DEMONSTRACAO = "demonstracao";
 const papelLabel = (v) => PAPEIS_EQUIPE.find((p) => p.v === v)?.label || v;
 
 function senhaTemporaria() {
@@ -714,8 +716,9 @@ function SistemaEquipe() {
       await equipe.createUser({
         email,
         name: novo.name.trim(),
-        role: novo.role,
+        role: novo.role === PAPEL_DEMONSTRACAO ? "admin" : novo.role,
         password: novo.password,
+        somenteLeitura: novo.role === PAPEL_DEMONSTRACAO,
       });
       setOk(
         `Login criado para ${email}. Senha temporária: ${novo.password} — passe para a pessoa; ela troca depois.`,
@@ -814,7 +817,7 @@ function SistemaEquipe() {
               value={ev.role}
               onChange={(e) => setEv({ ...ev, role: e.target.value })}
               className="text-xs"
-              disabled={euMesmo}
+              disabled={euMesmo || u.somente_leitura}
             >
               {PAPEIS_EQUIPE.map((p) => (
                 <option key={p.v} value={p.v}>
@@ -852,7 +855,9 @@ function SistemaEquipe() {
         <td className="px-2 py-1.5 text-xs" style={{ color: C.inkSoft }}>
           {u.phone || "—"}
         </td>
-        <td className="px-2 py-1.5 text-xs">{papelLabel(u.role)}</td>
+        <td className="px-2 py-1.5 text-xs">
+          {u.somente_leitura ? "Demonstração (só leitura)" : papelLabel(u.role)}
+        </td>
         <td className="px-2 py-1.5 text-center">
           <button
             type="button"
@@ -989,6 +994,7 @@ function SistemaEquipe() {
                 {p.label}
               </option>
             ))}
+            <option value={PAPEL_DEMONSTRACAO}>Demonstração (só leitura)</option>
           </Select>
           <div className="flex items-center gap-1">
             <TextInput
@@ -1018,7 +1024,8 @@ function SistemaEquipe() {
         </div>
         <p className="text-[11px] mt-2" style={{ color: C.inkFaint }}>
           A pessoa entra com esse e-mail e a senha temporária (já confirmado, sem e-mail de
-          ativação) e troca a senha depois no primeiro acesso.
+          ativação) e troca a senha depois no primeiro acesso. Demonstração abre todas as telas com
+          os dados reais, e o banco recusa qualquer alteração.
         </p>
       </div>
     </Card>
@@ -1431,10 +1438,7 @@ export default function SistemaTab({
               </div>
               {["ida", "volta"].map((dir) => (
                 <div key={dir} className="mb-4">
-                  <div
-                    className="text-[13px] font-semibold mb-2"
-                    style={{ color: C.inkSoft }}
-                  >
+                  <div className="text-[13px] font-semibold mb-2" style={{ color: C.inkSoft }}>
                     {cfg.trips[dir].nome}
                   </div>
                   <div className="space-y-2">
