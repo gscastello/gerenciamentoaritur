@@ -56,7 +56,7 @@ export function urlDoChatwoot(url: string): boolean {
   }
 }
 
-/** Manda o arquivo para a OpenAI e devolve o texto (lança em falha). Eco do vocabulário não é fala (issue #520). */
+/** Manda o arquivo para a OpenAI e devolve o texto (lança em falha). */
 async function transcreverNaOpenAI(arquivo: Blob, mime: string, chave: string): Promise<string> {
   const vocabulario = await contexto();
   const texto = await pedirTranscricao(arquivo, mime, chave, vocabulario);
@@ -84,6 +84,22 @@ async function pedirTranscricao(arquivo: Blob, mime: string, chave: string, voca
   if (!res.ok) throw new Error(`openai ${res.status} ${(await res.text()).slice(0, 200)}`);
   const corpo = await res.json();
   return String(corpo?.text ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Fala gravada no app (Assistente e anotação por voz — issue #516): com as ruas conhecidas no vocabulário. */
+export async function transcreverFala(arquivo: Blob, tipo: string | null): Promise<string | null> {
+  const chave = Deno.env.get("OPENAI_API_KEY");
+  if (!chave) return null;
+  const inicio = Date.now();
+  try {
+    const mime = (tipo || arquivo.type || "audio/webm").split(";")[0].trim().toLowerCase();
+    const texto = await transcreverNaOpenAI(arquivo, mime, chave);
+    evento("assistente_fala_transcrita", { ms: Date.now() - inicio, bytes: arquivo.size, letras: texto.length, modelo: MODELO });
+    return texto || null;
+  } catch (err) {
+    evento("bot_erro", { etapa: "fala_do_app", erro: String(err).slice(0, 300) });
+    return null;
+  }
 }
 
 /** Baixa o áudio e transcreve. null se não deu (sem chave, falha do download ou da OpenAI). */

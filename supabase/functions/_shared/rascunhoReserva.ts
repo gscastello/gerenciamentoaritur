@@ -121,6 +121,7 @@ import {
   diasSoPerguntados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { completarLugares } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -726,6 +727,17 @@ async function lerEGravar(
       p.endereco = [p.endereco, p.desembarque].filter(Boolean).join(" — ");
       p.desembarque = null;
       evento("bot_resposta_era_embarque", { conversa: entrada.chatwootConversationId });
+    }
+    // embarque e desembarque escritos na conversa que a leitura deixou vazios ou copiou (issue #523)
+    const lugares523 = completarLugares(p, falasDoPedido, {
+      pontos: ctx.pontos,
+      bairros: ctx.bairrosTabela.map((b) => b.neighborhood),
+      sentidos: pedidos.map((x) => x.direcao ?? null),
+      temCostume: !!costume?.volta?.route_point_code,
+    });
+    if (lugares523.length) {
+      p.duvida = [...lugares523, p.duvida].filter(Boolean).join(" ");
+      evento("bot_lugar_completado", { conversa: entrada.chatwootConversationId, quantos: lugares523.length });
     }
     if (conferido.completados.length || avisosDoCliente.length) {
       evento("bot_pedido_conferido", {

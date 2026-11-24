@@ -11,6 +11,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { conversar, executarAcao, gastoDoMes, montarContexto, registrarUso } from "../_shared/assistente.ts";
 import { historicoValido } from "../_shared/assistentePuro.ts";
+import { transcreverFala, transcricaoPropriaLigada } from "../_shared/transcricao.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -56,6 +57,33 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, message: "Pedido inválido." }, 400);
   }
 
+  // fala gravada no app vira texto (issue #516): funciona no iPhone, onde o reconhecimento do navegador falha
+  if (body?.modo === "transcrever") {
+    const base64 = String(body?.audio ?? "");
+    if (!transcricaoPropriaLigada()) return json({ success: false, message: "A transcrição de voz não está ligada." });
+    // ~4 MB de áudio: 60 s gravados no celular ficam bem abaixo
+    if (base64.length < 200 || base64.length > 5_600_000) return json({ success: false, message: "Não ouvi nada. Fale de novo." }, 400);
+    const { gasto, teto } = await gastoDoMes();
+    if (gasto >= teto) return json({ success: false, message: `O assistente atingiu o teto de gasto do mês (US$ ${teto}).` });
+    let bytes: Uint8Array<ArrayBuffer>;
+    try {
+      bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    } catch {
+      return json({ success: false, message: "Áudio inválido." }, 400);
+    }
+    const tipo = String(body?.tipo ?? "audio/webm").slice(0, 60);
+    const texto = await transcreverFala(new Blob([bytes], { type: tipo }), tipo);
+    const segundos = Math.min(120, Math.max(1, Number(body?.segundos) || 1));
+    await registrarUso(
+      userId,
+      "transcricao",
+      { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      Math.round(segundos * 5) / 100000, // US$ 0,003 por minuto
+    );
+    if (!texto) return json({ success: false, message: "Não entendi o áudio. Fale de novo, mais perto do celular." });
+    return json({ success: true, texto });
+  }
+
   try {
     const ctx = await montarContexto(db, userId, papel);
 
@@ -78,7 +106,7 @@ Deno.serve(async (req: Request) => {
     const r = await conversar(historico, ctx);
     await registrarUso(userId, r.modelo, r.uso, r.custo);
     evento("assistente_pedido", { papel, modelo: r.modelo, acoes: r.acoes.length, custo: r.custo, ms: Date.now() - inicio });
-    return json({ success: true, texto: r.texto, acoes: r.acoes, modelo: r.modelo });
+    return json({ success: true, texto: r.texto, acoes: r.acoes, correcoes: r.correcoes, modelo: r.modelo });
   } catch (err) {
     evento("bot_erro", { etapa: "assistente", erro: String(err).slice(0, 300) });
     return json({ success: false, message: "O assistente não conseguiu responder agora. Tente de novo em instantes." }, 500);
