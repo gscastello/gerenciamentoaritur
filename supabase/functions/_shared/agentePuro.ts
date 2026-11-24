@@ -269,6 +269,17 @@ export function calcularTotal(precoUnitario: number, quantidade: number): number
 const RE_AFIRMA_RESERVA =
   /\b(reserva|reservei|reservad[oa]s?|passagem|passagens|vaga)\b[^.!?\n]{0,60}\b(confirmad[oa]s?|garantid[oa]s?|feit[oa]s?|cancelad[oa]s?|remarcad[oa]s?|registrad[oa]s?)\b|\b(confirmei|garanti|cancelei|remarquei|registrei|fiz)\b[^.!?\n]{0,40}\b(reserva|passagem|passagens|vaga)\b/i;
 
+/**
+ * O atendente diz que FEZ algo agora ("cancelei", "reservei", "ficou desmarcada"): só com uma ferramenta de
+ * reserva que deu certo neste turno. Ter só consultado as reservas não basta (issue #524).
+ */
+const RE_FEZ_AGORA =
+  /(?<!\bn[ãa]o )\b(?:cancelei|desmarquei|remarquei|reservei|agendei|registrei|deixei (?:reservad|cancelad|agendad)[oa]|alterei (?:a|sua) reserva|mudei (?:a|sua) (?:reserva|passagem|viagem))\b|\b(?:ficou|est[áa] agora) (?:j[áa] )?(?:desmarcad|cancelad|remarcad|reservad|agendad)[oa]s?\b/i;
+
+/** "já avisei/chamei a equipe": só se avisou mesmo. */
+const RE_AVISOU_EQUIPE =
+  /\b(?:avisei|chamei|acionei|repassei|passei|pedi)\b[^.!?\n]{0,60}\b(?:equipe|motorista|pessoal|atendente)\b/i;
+
 /** A resposta diz que mexeu numa reserva? Só pode se uma ferramenta de escrita deu certo neste turno. */
 export function afirmaTerMexidoEmReserva(textoDaResposta: string): boolean {
   return RE_AFIRMA_RESERVA.test(textoDaResposta);
@@ -321,7 +332,7 @@ export function converterObservacoes(obs: ObservacaoDoBanco[]): MensagemDaConver
 export function problemasDaResposta(
   texto: string,
   fontes: string[],
-  estado: { mexeuEmReserva: boolean; consultouReservas: boolean },
+  estado: { mexeuEmReserva: boolean; consultouReservas: boolean; avisouEquipe?: boolean },
 ): string[] {
   const problemas: string[] = [];
   const invencionices = numerosNaoFundamentados(texto, fontes);
@@ -334,6 +345,14 @@ export function problemasDaResposta(
     problemas.push(
       "Você afirmou que uma reserva foi confirmada/feita/cancelada/remarcada, mas nenhuma ferramenta de reserva deu certo neste atendimento. Só afirme depois do resultado da ferramenta; se ainda falta confirmação do cliente, peça-a.",
     );
+  }
+  if (RE_FEZ_AGORA.test(texto) && !estado.mexeuEmReserva) {
+    problemas.push(
+      "Você disse que cancelou, reservou ou remarcou agora, mas nenhuma ferramenta de reserva deu certo neste atendimento. Se a reserva não apareceu, use avisar_equipe e diga que avisou a equipe; não diga que está feito.",
+    );
+  }
+  if (estado.avisouEquipe === false && RE_AVISOU_EQUIPE.test(texto)) {
+    problemas.push("Você disse que avisou a equipe, mas não usou avisar_equipe nem chamar_atendente. Use a ferramenta antes ou não diga isso.");
   }
   if (contemDadoInterno(texto)) problemas.push("Não escreva identificadores internos (códigos longos) para o cliente.");
   if (texto.length > 1500) problemas.push("Resposta longa demais para o WhatsApp: resuma em poucas frases.");

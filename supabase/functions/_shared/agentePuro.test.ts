@@ -747,3 +747,17 @@ Deno.test("#504 cortesia: pedido, número, cumprimento, áudio ou conversa nova 
   assertEquals(soCortesiaSemPergunta([fala("cliente", "ok", 1)]), false);
   assertEquals(soCortesiaSemPergunta([fala("cliente", "ok", 1), fala("bot", "Reserva confirmada!", 2)]), false);
 });
+
+Deno.test("#524: dizer que cancelou ou reservou exige a ferramenta; dizer que avisou a equipe, o aviso", async () => {
+  const { problemasDaResposta } = await import("./agentePuro.ts");
+  const so = { mexeuEmReserva: false, consultouReservas: true, avisouEquipe: true };
+  const n = (t: string, e: typeof so = so) => problemasDaResposta(t, [], e).length;
+  assertEquals(n("Tudo bem. Cancelei as passagens de amanhã."), 1);
+  assertEquals(n("Sua passagem de segunda-feira ficou desmarcada."), 1);
+  assertEquals(n("Pronto, reservei sua vaga!") >= 1, true);
+  assertEquals(n("Avisei a equipe para tirar você da lista."), 0);
+  assertEquals(n("Ainda não reservei sua vaga, posso confirmar?"), 0);
+  assertEquals(n("Sua reserva está confirmada para amanhã."), 0);
+  assertEquals(n("Já avisei a equipe.", { ...so, avisouEquipe: false }), 1);
+  assertEquals(n("Cancelei sua passagem de amanhã.", { ...so, mexeuEmReserva: true }), 0);
+});

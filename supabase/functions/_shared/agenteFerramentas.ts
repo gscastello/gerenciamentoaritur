@@ -288,11 +288,37 @@ async function clienteDaConversa(ctx: ContextoDoAgente): Promise<Linha | null> {
   return ctx.clienteCache.valor;
 }
 
+/** Na prova, as reservas como estavam: as canceladas ou viajadas depois ainda valiam (issue #524). */
+async function reservasComoEram(customerId: string, prova: ProvaDoAtendente): Promise<Linha[]> {
+  const { data } = await supabaseAdmin
+    .from("reservations")
+    .select("id, status, quantity, total_price, dropoff_location, pickup_neighborhood, pickup_detail, created_at, trip:trips(trip_date, direction), route_point:route_points(code, name)")
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .lt("created_at", prova.antesDe)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  const linhas = (data ?? []) as Linha[];
+  const canceladas = linhas.filter((r) => r.status === "cancelada").map((r) => r.id);
+  const canceladasAntes = new Set<string>();
+  if (canceladas.length) {
+    const { data: logs } = await supabaseAdmin
+      .from("audit_logs")
+      .select("entity_id, after_data")
+      .eq("entity_table", "reservations")
+      .in("entity_id", canceladas)
+      .lt("performed_at", prova.antesDe);
+    for (const l of (logs ?? []) as Linha[]) if (l.after_data?.status === "cancelada") canceladasAntes.add(l.entity_id);
+  }
+  return linhas
+    .filter((r) => !canceladasAntes.has(r.id))
+    .map((r) => ({ ...r, status: ["confirmada", "pendente", "espera"].includes(r.status) ? r.status : "confirmada" }));
+}
+
 /** Reservas ativas do cliente; na prova, as de antes da conversa mais as que a própria prova "criou". */
 async function reservasDeUmCliente(cliente: Linha | null, prova: ProvaDoAtendente | undefined, daConversa: boolean): Promise<Linha[]> {
-  const reais = cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [];
-  if (!prova) return reais;
-  const antes = reais.filter((r) => criadoAntes(r.created_at, prova.antesDe));
+  if (!prova) return cliente ? ((await whatsappService.listCustomerReservations(cliente.id)) ?? []) : [];
+  const antes = cliente ? await reservasComoEram(cliente.id, prova) : [];
   if (!daConversa) return antes;
   const daProva = prova.acoes.flatMap((a) =>
     a.tipo === "criar" && !a.cancelada
