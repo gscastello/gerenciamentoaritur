@@ -164,6 +164,9 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
   }
 }
 
+/** Locais de desembarque reconhecidos só em código (`areaDoDesembarque`), fora das instruções do leitor. */
+const AREAS_FORA_DO_TEXTO = new Set(["palmeiral", "povoado_sozinho"]);
+
 async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
     whatsappService.listRoutePoints("ida"),
@@ -180,7 +183,9 @@ async function contexto() {
     ...ativos(volta).map((p) => `- volta: ${p.code} = ${p.name}`),
   ].join("\n");
   const porSentido = (d: string) => (areas ?? []).filter((a: Bloco) => a.direction === d) as { code: string; label: string }[];
-  const desembarques = ["ida", "volta"].map((d) => `- ${d}: ${porSentido(d).map((a) => a.label).join(", ")}`).join("\n");
+  // esta lista entra nas instruções do leitor: mudá-la muda TODAS as leituras (issue #512)
+  const noTexto = (d: string) => porSentido(d).filter((a) => !AREAS_FORA_DO_TEXTO.has(a.code));
+  const desembarques = ["ida", "volta"].map((d) => `- ${d}: ${noTexto(d).map((a) => a.label).join(", ")}`).join("\n");
   return {
     pontos,
     pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
