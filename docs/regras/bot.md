@@ -306,6 +306,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   senão o cache não pega e o custo volta (confira `cache_lido` nos registros). **Leitura guardada na
   avaliação** (issue #494, `database/131`, `bot_leituras_memo`): mesmo texto = não chama o modelo, então mudança só de
   código é avaliada de graça e sem variação; mudou uma palavra das instruções, lê tudo de novo (`{"fresco": true}` força).
+  **Mudança depois da marca** (dono, 24/11 — issue #504, caso 8bfa7860): o esperado do caso é o da HORA do
+  Agendado. Se a reserva mudou depois de uma nova mensagem do cliente, o `avaliar-bot` decide sozinho quem mudou
+  (`mudancaDepoisDaMarca.quemMudou`, pelo que o cliente escreveu): escreveu um valor antes e o outro depois (ou
+  "na verdade", "mudei" com o valor novo) = mudou de ideia → o esperado volta o valor de antes; já tinha escrito
+  o valor que ficou (ou "eu disse", "tá errado") = erro de leitura → fica o de agora; sem prova = só anota
+  "conferir". Caso `verificado` não é mexido; o ajuste fica na `observacao` com "[mudança depois da marca]".
   Rodada completa = 1 caso por chamada, ondas de até 80; confira `feitos = ativos`. Diferença → repetir o caso 5 vezes na
   versão nova e na antiga antes de chamar de variação. **Regras de código do leitor** (#494): "mesmo endereço que me
   deixou hoje" = sentido contrário da última viagem (`viagemDeOndeDeixou`); "buscar em casa e deixar em Cantanhede" = Ida;

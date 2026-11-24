@@ -14,6 +14,7 @@
 
 import { bairroDaTabela } from "../_shared/agentePuro.ts";
 import { compararCaso, type ViagemDoCaso } from "../_shared/avaliacaoPura.ts";
+import { type CampoDaReserva, esperadoNaHoraDaMarca, type MudancaDoCampo, quemMudou } from "../_shared/mudancaDepoisDaMarca.ts";
 import { simularAtendimento } from "../_shared/provaDoAtendente.ts";
 import { compararProva, type EsperadaComPreco } from "../_shared/provaPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
@@ -129,6 +130,100 @@ async function provarAtendente(caso: Linha, rodada: string, versao: string | nul
   }
 }
 
+const MARCA_DO_AJUSTE = "[mudança depois da marca]";
+
+/**
+ * A reserva do caso mudou depois de uma nova mensagem do cliente (issue #504, caso 8bfa7860)? O bot decide
+ * sozinho quem mudou (mudancaDepoisDaMarca.quemMudou) e acerta o esperado para a HORA DO AGENDADO: onde o
+ * cliente mudou de ideia, volta o valor de antes; erro de leitura fica o de agora; sem prova, só anota para
+ * conferir. Caso conferido à mão (verificado) ou já ajustado não é mexido. Tudo fica escrito na observação.
+ */
+async function ajustarPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Linha> {
+  if (caso.verificado || String(caso.observacao ?? "").includes(MARCA_DO_AJUSTE)) return caso;
+  const esperado = (caso.esperado ?? []) as Linha[];
+  const ids = esperado.map((e) => e.reservation_id).filter(Boolean) as string[];
+  if (!ids.length) return caso;
+  const marca = Date.parse(String(caso.marca_em));
+  const { data: obs } = await supabaseAdmin
+    .from("bot_observations")
+    .select("content, created_at")
+    .eq("chatwoot_conversation_id", caso.chatwoot_conversation_id)
+    .eq("author", "cliente")
+    .gte("created_at", new Date(marca - 3 * 86_400_000).toISOString())
+    .order("created_at")
+    .limit(400);
+  const msgs = ((obs ?? []) as Linha[]).map((o) => ({ texto: String(o.content ?? ""), em: String(o.created_at) }));
+  const antesDaMarca = msgs.filter((m) => Date.parse(m.em) <= marca + 30_000);
+  const primeiraDepois = msgs.find((m) => Date.parse(m.em) > marca + 30_000);
+  if (!primeiraDepois) return caso;
+  const { data: logs } = await supabaseAdmin
+    .from("audit_logs")
+    .select("entity_id, before_data, after_data, performed_at")
+    .eq("entity_table", "reservations")
+    .eq("action", "update")
+    .in("entity_id", ids)
+    .gt("performed_at", primeiraDepois.em)
+    .order("performed_at");
+  if (!logs?.length) return caso;
+
+  const pontos = new Map<string, string>();
+  const viagens = new Map<string, { trip_date: string; direction: string }>();
+  const idsPonto = [...new Set((logs as Linha[]).map((l) => l.before_data?.route_point_id).filter(Boolean))];
+  const idsViagem = [...new Set((logs as Linha[]).map((l) => l.before_data?.trip_id).filter(Boolean))];
+  if (idsPonto.length) {
+    const { data } = await supabaseAdmin.from("route_points").select("id, code").in("id", idsPonto);
+    for (const p of (data ?? []) as Linha[]) pontos.set(p.id, p.code);
+  }
+  if (idsViagem.length) {
+    const { data } = await supabaseAdmin.from("trips").select("id, trip_date, direction").in("id", idsViagem);
+    for (const t of (data ?? []) as Linha[]) viagens.set(t.id, { trip_date: t.trip_date, direction: t.direction });
+  }
+
+  const mudancas: MudancaDoCampo[] = [];
+  const vistos = new Set<string>();
+  for (const l of logs as Linha[]) {
+    const e = esperado.find((x) => x.reservation_id === String(l.entity_id));
+    if (!e) continue;
+    const antes = l.before_data ?? {};
+    const depois = l.after_data ?? {};
+    const campos: [CampoDaReserva, unknown, unknown][] = [];
+    if (antes.route_point_id && antes.route_point_id !== depois.route_point_id) campos.push(["ponto", pontos.get(antes.route_point_id) ?? null, e.route_point_code]);
+    if (antes.quantity != null && Number(antes.quantity) !== Number(depois.quantity)) campos.push(["quantidade", Number(antes.quantity), Number(e.quantity)]);
+    if (antes.trip_id && antes.trip_id !== depois.trip_id) {
+      const v = viagens.get(antes.trip_id);
+      if (v && v.trip_date !== e.trip_date) campos.push(["dia", v.trip_date, e.trip_date]);
+      if (v && v.direction !== e.direction) campos.push(["sentido", v.direction, e.direction]);
+    }
+    const depoisDaMarca = msgs.filter((m) => Date.parse(m.em) > marca + 30_000 && Date.parse(m.em) <= Date.parse(String(l.performed_at)));
+    for (const [campo, valorAntes, valorDepois] of campos) {
+      const chave = `${e.reservation_id}:${campo}`;
+      if (vistos.has(chave) || valorAntes == null) continue; // vale a primeira mudança de cada campo
+      vistos.add(chave);
+      const quem = quemMudou({
+        campo,
+        antes: valorAntes as string | number,
+        depois: valorDepois as string | number,
+        antesDaMarca,
+        depoisDaMarca,
+        direcao: e.direction === "volta" ? "volta" : "ida",
+        pontosIda,
+      });
+      mudancas.push({ reservation_id: e.reservation_id, campo, antes: valorAntes as string | number, depois: valorDepois as string | number, quem });
+    }
+  }
+  if (!mudancas.length) return caso;
+  const r = esperadoNaHoraDaMarca(esperado, mudancas);
+  const notas = [
+    ...r.ajustes,
+    ...mudancas.filter((m) => m.quem === "erro_de_leitura").map((m) => `${m.campo}: ${m.antes} → ${m.depois} (erro de leitura do bot: fica o de agora)`),
+    ...(r.incertos.length ? [`conferir: ${r.incertos.join("; ")}`] : []),
+  ];
+  const observacao = [caso.observacao, `${MARCA_DO_AJUSTE} ${notas.join("; ")}`].filter(Boolean).join(" ").slice(0, 900);
+  await supabaseAdmin.from("bot_casos").update({ esperado: r.esperado, observacao }).eq("id", caso.id);
+  evento("caso_ajustado_pela_mudanca", { caso: caso.id, ajustes: r.ajustes.length, incertos: r.incertos.length });
+  return { ...caso, esperado: r.esperado, observacao };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Método não permitido.", { status: 405 });
   const chave = req.headers.get("x-rotina") ?? "";
@@ -158,9 +253,16 @@ Deno.serve(async (req: Request) => {
 
   const { data: tabela } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood");
   const bairros = (tabela ?? []) as { neighborhood: string }[];
+  const { data: daIda } = await supabaseAdmin.from("route_points").select("code").eq("direction", "ida").is("deleted_at", null);
+  const pontosIda = ((daIda ?? []) as Linha[]).map((p) => String(p.code));
   const trabalho = (async () => {
     const resultados: string[] = [];
-    for (const caso of fila) {
+    for (const original of fila) {
+      // o esperado da hora do Agendado: o cliente pode ter mudado depois (issue #504)
+      const caso = await ajustarPelaMudanca(original, pontosIda).catch((err) => {
+        evento("bot_aviso", { aviso: "ajuste_pela_mudanca_falhou", caso: original.id, erro: String(err).slice(0, 200) });
+        return original;
+      });
       resultados.push(atendente ? await provarAtendente(caso, rodada, versao, bairros) : await avaliarCaso(caso, rodada, versao, modelo, memoria, bairros));
     }
     evento(atendente ? "prova_atendente_rodada" : "avaliacao_rodada", { rodada, avaliados: fila.length, resultados });
