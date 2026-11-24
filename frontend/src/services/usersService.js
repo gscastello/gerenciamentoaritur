@@ -78,9 +78,9 @@ export const usersService = {
    * (o Auth exige service_role). O admin passa uma senha temporária; a
    * pessoa troca depois. Sem dependência de SMTP.
    */
-  async create({ email, name, role, password }) {
+  async create({ email, name, role, password, somenteLeitura = false }) {
     const { data, error } = await supabase.functions.invoke("create-user", {
-      body: { email, name, role, password },
+      body: { email, name, role, password, somenteLeitura },
     });
     if (error) {
       // erro HTTP da função — tenta extrair a mensagem do corpo
