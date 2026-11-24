@@ -132,6 +132,9 @@ async function provarAtendente(caso: Linha, rodada: string, versao: string | nul
 
 const MARCA_DO_AJUSTE = "[mudança depois da marca]";
 
+/** "outro" (Outros · Posto Carone) e "postocarone" são o mesmo lugar: o ponto foi separado em 22/11 (issue #486). */
+const mesmoLugarRenomeado = (a: string, b: string) => [a, b].sort().join("|") === "outro|postocarone";
+
 /**
  * A reserva do caso mudou depois de uma nova mensagem do cliente (issue #504, caso 8bfa7860)? O bot decide
  * sozinho quem mudou (mudancaDepoisDaMarca.quemMudou) e acerta o esperado para a HORA DO AGENDADO: onde o
@@ -199,6 +202,8 @@ async function ajustarPelaMudanca(caso: Linha, pontosIda: string[]): Promise<Lin
       const chave = `${e.reservation_id}:${campo}`;
       if (vistos.has(chave) || valorAntes == null) continue; // vale a primeira mudança de cada campo
       vistos.add(chave);
+      // editou e voltou ao mesmo valor: não houve mudança; "Outros · Posto Carone" virou o ponto próprio (#486)
+      if (String(valorAntes) === String(valorDepois) || mesmoLugarRenomeado(String(valorAntes), String(valorDepois))) continue;
       const quem = quemMudou({
         campo,
         antes: valorAntes as string | number,
