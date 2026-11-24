@@ -86,6 +86,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
   pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
   vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
+- **Criança** (issue #506, dito pela equipe aos clientes em 10, 16 e 17/11): até 5 anos vai no colo, sem passagem e sem
+  vaga; a partir dos 6 paga inteira e ocupa vaga. Em código (`passagensComCrianca`): "2 adultos e uma criança" + "3 anos"
+  = 2. Sem idade, com idades misturadas ou com passagens/lugar pedidos, vale a conferência de antes.
 - **Preço por embarque e desembarque** (issue #239): `calcular_valor` e `criar_reserva` comparam os dois na tabela de
   trechos (`route_fares`, editada em Sistema), depois no ponto/bairro. Trecho em cidade intermediária sem valor vai para
   a equipe. **Bairros e trechos evoluem:** o que o atendente diz e o que a equipe repete nas reservas vira sugestão em

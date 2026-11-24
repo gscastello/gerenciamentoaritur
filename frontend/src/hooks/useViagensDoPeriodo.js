@@ -8,6 +8,7 @@
 import { useCallback, useMemo } from "react";
 import { todayStr } from "../domain/format.js";
 import { capacidadeDaViagem, viagensForaDoPadrao } from "../domain/frota.js";
+import { EVENTS, emit } from "../observability/events.js";
 import { tripsService } from "../services/tripsService";
 import { useAsyncAction } from "./useAsyncAction";
 import { useRealtimeTable } from "./useRealtimeTable";
@@ -28,6 +29,8 @@ export function useViagensDoPeriodo(padrao, dias = 90) {
   });
   useRealtimeTable("trips", () => query.refetch());
   const trocar = useAsyncAction(tripsService.trocarVeiculo);
+  const confirmar = useAsyncAction(tripsService.confirmarVeiculo);
+  const vendas = useAsyncAction(tripsService.vendasDaViagem);
 
   const viagens = query.data ?? [];
   const capPadrao = padrao?.capacity ?? 31;
@@ -45,6 +48,18 @@ export function useViagensDoPeriodo(padrao, dias = 90) {
     capacidadeDe,
     foraDoPadrao,
     loading: query.loading,
+    confirmarVeiculo: async (data, direcao, vehicleId) => {
+      const r = await confirmar.run(data, direcao, vehicleId);
+      emit(EVENTS.VEICULO_CONFIRMADO, { data, direcao });
+      await query.refetch();
+      return r;
+    },
+    fecharVendas: async (tripId, fechar) => {
+      const r = await vendas.run(tripId, fechar);
+      emit(EVENTS.VENDAS_DA_VIAGEM, { fechar });
+      await query.refetch();
+      return r;
+    },
     trocarVeiculo: async (data, direcao, vehicleId) => {
       const r = await trocar.run(data, direcao, vehicleId);
       await query.refetch();

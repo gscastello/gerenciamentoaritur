@@ -507,3 +507,45 @@ Deno.test("#504 sentido: endereço de onde ele sai no interior é Volta", () => 
   assertEquals(embarqueNoInteriorEscrito(["Cantanhede"]), false);
   assertEquals(embarqueNoInteriorEscrito(["tem vaga amanhã?"]), false);
 });
+
+Deno.test("#506: criança de até 5 anos vai no colo; a partir de 6 ocupa vaga", async () => {
+  const { passagensComCrianca } = await import("./pedidoDoCliente.ts");
+  const total = (...t: string[]) => passagensComCrianca(t)?.total ?? null;
+  // o caso que não lançou: o áudio, o pedido e a idade respondida
+  assertEquals(
+    total("[áudio: São dois pessoas, eu, minha esposa e meu filho de três anos. Queria saber o horário]", "2 Adulto e uma criança", "Aeroporto", "Isso", "3 anos"),
+    2,
+  );
+  assertEquals(total("1 adulto e 1 criança", "5 anos"), 1);
+  assertEquals(total("1 adulto e 1 criança", "6 anos"), 2);
+  assertEquals(total("2 adultos e um bebê"), 2);
+  assertEquals(total("2 adultos e 1 criança de colo"), 2);
+  assertEquals(total("2 adultos e 2 crianças", "3 anos e 4 anos"), 2);
+  // não afirma: sem idade, idades misturadas ou faltando, mais crianças que colos, passagens ou lugar pedidos
+  assertEquals(total("2 adultos e 1 criança"), null);
+  assertEquals(total("2 adultos e 2 crianças", "3 anos e 8 anos"), null);
+  assertEquals(total("2 adultos e 2 crianças", "3 anos"), null);
+  assertEquals(total("1 adulto e 2 crianças", "2 anos e 3 anos"), null);
+  assertEquals(total("3 passageiros (uma criança de colo)", "2 adultos e 1 criança"), null);
+  assertEquals(total("1 adulto e 1 criança", "5 anos", "quero as duas"), null);
+  assertEquals(total("1 adulto e 1 criança", "5 anos", "2"), null);
+  assertEquals(total("1 adulto e 1 criança", "2 adultos e 1 criança", "5 anos"), null);
+  assertEquals(total("2 passagens"), null);
+});
+
+Deno.test("#506: 2 adultos e criança de 3 anos lança 2 e não trava", async () => {
+  const { conferirPeloCliente, conferenciaFinal } = await import("./pedidoDoCliente.ts");
+  const msgs = ["Campestre", "Dia 30", "2 Adulto e uma criança", "Aeroporto", "3 anos"].map((texto) => ({ texto, em: "2026-11-23T22:59:00Z" }));
+  const r = conferirPeloCliente(
+    { tipo: "passagem", data: "2026-11-30", direcao: "volta", ponto: "pirapemas", quantidade: 3 },
+    msgs,
+    { hoje: "2026-11-23", pontosIda: [], bairros: [], pedidosLidos: 1 },
+  );
+  assertEquals(r.pedido.quantidade, 2);
+  assertEquals(r.avisos, []);
+  assert(String((r.pedido as { duvida?: string }).duvida).includes("no colo"));
+  // deno-lint-ignore no-explicit-any
+  const reserva: any = { type: "passagem", trip_date: "2026-11-30", direction: "volta", route_point_code: "pirapemas", quantity: 2 };
+  // deno-lint-ignore no-explicit-any
+  assertEquals(conferenciaFinal(reserva, msgs, { hoje: "2026-11-23", pedidosLidos: 1 } as any), []);
+});

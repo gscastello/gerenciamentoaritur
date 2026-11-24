@@ -6,6 +6,7 @@ import { useFuelRecords, useMaintenance } from "../../hooks/useOperation.js";
 import { useDrivers, useVehicles } from "../../hooks/useVehicles.js";
 import { useViagensDoPeriodo } from "../../hooks/useViagensDoPeriodo.js";
 import { mensagemAmigavel } from "../../lib/erros.js";
+import { VendasDasViagens } from "../VeiculoDoDia.jsx";
 import {
   C,
   Card,
@@ -465,6 +466,11 @@ export default function OperacaoTab() {
             vehicles={vehicles}
             padrao={defaultVehicle}
             trocarVeiculo={escala.trocarVeiculo}
+          />
+          <VendasDasViagens
+            viagens={escala.viagens}
+            vehicles={vehicles}
+            fecharVendas={escala.fecharVendas}
           />
           <div className="text-xs mt-3" style={{ color: C.inkFaint }}>
             Toque num veículo para escolher o dia e o sentido em que ele roda (ex.: a van reserva

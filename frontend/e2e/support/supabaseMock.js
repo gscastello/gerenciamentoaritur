@@ -489,6 +489,26 @@ export async function mockSupabase(page, opts = {}) {
         return route.fulfill(json({ success: true, reservas: 1 }));
       }
       if (fn === "rpc_ensure_trips") return route.fulfill(json({ success: true, created: 0 }));
+      if (fn === "rpc_confirmar_veiculo") {
+        const b = req.postDataJSON?.() ?? {};
+        const t = tripsRows.find(
+          (x) => x.trip_date === b.p_trip_date && x.direction === b.p_direction,
+        );
+        const veiculo = vehiclesRows.find((v) => v.id === b.p_vehicle_id);
+        if (t && veiculo)
+          Object.assign(t, {
+            vehicle_id: veiculo.id,
+            capacity: veiculo.capacity,
+            vehicle_confirmed_at: new Date().toISOString(),
+          });
+        return route.fulfill(json({ success: true }));
+      }
+      if (fn === "rpc_vendas_da_viagem") {
+        const b = req.postDataJSON?.() ?? {};
+        const t = tripsRows.find((x) => x.id === b.p_trip_id);
+        if (t) t.sales_closed_at = b.p_fechar ? new Date().toISOString() : null;
+        return route.fulfill(json({ success: true, fechada: b.p_fechar }));
+      }
       if (fn === "rpc_veiculo_da_viagem") {
         const b = req.postDataJSON?.() ?? {};
         const veiculo = vehiclesRows.find((v) => v.id === b.p_vehicle_id);

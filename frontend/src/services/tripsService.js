@@ -1,10 +1,27 @@
 // src/services/tripsService.js
-import { supabase, getCurrentUserId, ServiceError } from "../lib/supabaseClient";
+import { ServiceError, getCurrentUserId, supabase } from "../lib/supabaseClient";
 
-function isNetworkish(error) { return /fetch|network|timeout/i.test(error?.message || ""); }
+function isNetworkish(error) {
+  return /fetch|network|timeout/i.test(error?.message || "");
+}
 async function handle(promise, context) {
   const { data, error } = await promise;
-  if (error) throw new ServiceError(`${context}: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+  if (error)
+    throw new ServiceError(`${context}: ${error.message}`, {
+      cause: error,
+      retryable: isNetworkish(error),
+    });
+  return data;
+}
+
+async function rpcOk(pedido, nome, falha) {
+  const { data, error } = await pedido;
+  if (error)
+    throw new ServiceError(`${nome}: ${error.message}`, {
+      cause: error,
+      retryable: isNetworkish(error),
+    });
+  if (!data?.success) throw new ServiceError(data?.message || falha, { code: data?.code });
   return data;
 }
 
@@ -12,11 +29,8 @@ export const tripsService = {
   /** Ida e Volta de um dia, já com ocupação calculada no banco (v_trip_occupancy). */
   async getDayOverview(tripDate) {
     return handle(
-      supabase
-        .from("v_trip_occupancy")
-        .select("*")
-        .eq("trip_date", tripDate),
-      "getDayOverview"
+      supabase.from("v_trip_occupancy").select("*").eq("trip_date", tripDate),
+      "getDayOverview",
     );
   },
 
@@ -38,21 +52,39 @@ export const tripsService = {
         .eq("trip_date", tripDate)
         .eq("direction", direction)
         .maybeSingle(),
-      "getAvailability"
+      "getAvailability",
     );
   },
 
   async startTrip(tripId, { km, location }) {
     const actor = await getCurrentUserId();
-    const { data, error } = await supabase.rpc("rpc_start_trip", { p_trip_id: tripId, p_km: km, p_location: location ?? null, p_actor: actor });
-    if (error) throw new ServiceError(`startTrip: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    const { data, error } = await supabase.rpc("rpc_start_trip", {
+      p_trip_id: tripId,
+      p_km: km,
+      p_location: location ?? null,
+      p_actor: actor,
+    });
+    if (error)
+      throw new ServiceError(`startTrip: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     return data;
   },
 
   async finishTrip(tripId, { km, location }) {
     const actor = await getCurrentUserId();
-    const { data, error } = await supabase.rpc("rpc_finish_trip", { p_trip_id: tripId, p_km: km, p_location: location ?? null, p_actor: actor });
-    if (error) throw new ServiceError(`finishTrip: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    const { data, error } = await supabase.rpc("rpc_finish_trip", {
+      p_trip_id: tripId,
+      p_km: km,
+      p_location: location ?? null,
+      p_actor: actor,
+    });
+    if (error)
+      throw new ServiceError(`finishTrip: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     return data;
   },
 
@@ -66,7 +98,11 @@ export const tripsService = {
    */
   async ensureUpcoming(days = 14) {
     const { data, error } = await supabase.rpc("rpc_ensure_trips", { p_days: days });
-    if (error) throw new ServiceError(`ensureUpcoming: ${error.message}`, { cause: error, retryable: isNetworkish(error) });
+    if (error)
+      throw new ServiceError(`ensureUpcoming: ${error.message}`, {
+        cause: error,
+        retryable: isNetworkish(error),
+      });
     return data;
   },
 
@@ -75,7 +111,9 @@ export const tripsService = {
     return handle(
       supabase
         .from("trips")
-        .select("id, trip_date, direction, capacity, vehicle_id, status")
+        .select(
+          "id, trip_date, direction, capacity, vehicle_id, status, vehicle_confirmed_at, sales_closed_at",
+        )
         .is("deleted_at", null)
         .gte("trip_date", de)
         .lte("trip_date", ate)
@@ -106,11 +144,38 @@ export const tripsService = {
     return data;
   },
 
+  /** Confirma (ou troca) o veículo de hoje ou dos próximos dias — admin e atendente (issue #502). */
+  async confirmarVeiculo(tripDate, direction, vehicleId) {
+    return rpcOk(
+      supabase.rpc("rpc_confirmar_veiculo", {
+        p_trip_date: tripDate,
+        p_direction: direction,
+        p_vehicle_id: vehicleId,
+      }),
+      "confirmarVeiculo",
+      "Não foi possível confirmar o veículo.",
+    );
+  },
+
+  /** Fecha ou abre as vendas do bot numa viagem (a equipe continua lançando) — issue #502. */
+  async vendasDaViagem(tripId, fechar) {
+    return rpcOk(
+      supabase.rpc("rpc_vendas_da_viagem", { p_trip_id: tripId, p_fechar: fechar }),
+      "vendasDaViagem",
+      "Não foi possível mudar as vendas.",
+    );
+  },
+
   async assignDriver(tripId, driverId) {
     const actor = await getCurrentUserId();
     return handle(
-      supabase.from("trips").update({ driver_id: driverId, updated_by: actor }).eq("id", tripId).select().single(),
-      "assignDriver"
+      supabase
+        .from("trips")
+        .update({ driver_id: driverId, updated_by: actor })
+        .eq("id", tripId)
+        .select()
+        .single(),
+      "assignDriver",
     );
   },
 };

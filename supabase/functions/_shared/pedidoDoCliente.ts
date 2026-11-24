@@ -803,6 +803,58 @@ export function quantidadeEscrita(textos: string[]): number | null {
   return unico(achados);
 }
 
+/** A partir desta idade a criança paga passagem inteira e ocupa vaga; antes, vai no colo (issue #506). */
+const IDADE_QUE_PAGA = 6;
+
+const RE_NUMERO = "\\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez";
+const RE_ADULTOS_E_CRIANCAS = new RegExp(
+  ` (${RE_NUMERO}) adultos? (?:e |mais |com )?(${RE_NUMERO}) (criancas?|bebes?|nenem|menor) `,
+);
+const valorDoNumero = (q: string) => (/^\d+$/.test(q) ? Number(q) : NUMERO[q]);
+
+/**
+ * "2 adultos e uma criança" + a idade ("3 anos", "bebê", "de colo") = quantas passagens são.
+ * null = não dá para afirmar: sem adultos ou criança, idade não dita, ou o cliente falou em passagens,
+ * vagas ou lugar para ela (aí vale o que ele escreveu).
+ */
+export function passagensComCrianca(
+  textos: string[],
+): { total: number; adultos: number; criancas: number; noColo: number } | null {
+  const ns = textos.map((t) => ` ${normalizarTexto(t)} `);
+  const pediuLugares = new RegExp(` (${RE_NUMERO}) (passagens?|vagas?|passageiros?|lugares|assentos?) `);
+  if (ns.some((n) => pediuLugares.test(n))) return null;
+  const achados = ns.map((n) => n.match(RE_ADULTOS_E_CRIANCAS));
+  const onde = achados.findIndex(Boolean);
+  const pedido = achados[onde];
+  if (!pedido) return null;
+  const adultos = valorDoNumero(pedido[1]);
+  const criancas = valorDoNumero(pedido[2]);
+  // escreveu de novo com outros números: mudou, não decide
+  if (achados.some((a) => a && (valorDoNumero(a[1]) !== adultos || valorDoNumero(a[2]) !== criancas))) return null;
+  // depois disso pediu lugar para a criança, ou respondeu só um número: quem decide é a conversa
+  const depois = ns.slice(onde + 1);
+  if (depois.some((n) => / (quero|queremos|prefiro|poltronas?|cadeiras?|assentos?|lugar|lugares|bancos?|pagar|pago) /.test(n))) return null;
+  if (depois.some((n) => new RegExp(`^ ((so|as|sao|os) )?(${RE_NUMERO}) ((mesmo|mesma|so) )?$`).test(n))) return null;
+
+  const idades: number[] = [];
+  for (const n of ns) {
+    for (const [, q, unidade] of n.matchAll(new RegExp(` (${RE_NUMERO}) (anos?|aninhos?|mes|meses|mesinhos) `, "g"))) {
+      idades.push(unidade.startsWith("mes") ? 0 : valorDoNumero(q));
+    }
+  }
+  const deColo = /bebe|nenem/.test(pedido[3]) || ns.some((n) => / de colo /.test(n));
+  // várias crianças: só com a idade de cada uma
+  if (criancas > 1 && idades.length < criancas) return null;
+  let noColo: number;
+  if (idades.length && idades.every((i) => i < IDADE_QUE_PAGA)) noColo = criancas;
+  else if (idades.length && !deColo && idades.every((i) => i >= IDADE_QUE_PAGA && i < 18)) noColo = 0;
+  else if (!idades.length && deColo && criancas === 1) noColo = 1;
+  else return null;
+  // no colo, no máximo uma por adulto
+  if (noColo > adultos) return null;
+  return { total: adultos + criancas - noColo, adultos, criancas, noColo };
+}
+
 // ---------------------------------------------------------------------------
 // Ponto de embarque (Ida) e bairro
 // ---------------------------------------------------------------------------
@@ -919,7 +971,17 @@ export function conferirPeloCliente<P extends CamposDoPedido>(
     avisos.push(`o cliente escreveu o dia ${datas.map((d) => d.split("-").reverse().slice(0, 2).join("/")).join(" ou ")}`);
   }
 
-  const q = quantidadeEscrita(textos);
+  // "2 adultos e uma criança", "3 anos": a criança vai no colo (issue #506)
+  const comCrianca = ctx.pedidosLidos === 1 ? passagensComCrianca(textos) : null;
+  if (comCrianca && pedido.quantidade !== comCrianca.total) {
+    pedido.quantidade = comCrianca.total;
+    completados.push(`${comCrianca.total} passagem(ns), ${comCrianca.noColo} criança(s) no colo`);
+  }
+  if (comCrianca?.noColo) {
+    const aviso = comCrianca.noColo === 1 ? "Com criança de até 5 anos no colo." : `Com ${comCrianca.noColo} crianças de até 5 anos no colo.`;
+    pedido.duvida = [pedido.duvida, aviso].filter(Boolean).join(" ");
+  }
+  const q = comCrianca ? null : quantidadeEscrita(textos);
   if (q != null && ctx.pedidosLidos === 1) {
     if (!pedido.quantidade) {
       pedido.quantidade = q;
@@ -1011,7 +1073,7 @@ export function conferenciaFinal(
     naoBate.push(`o cliente só pediu a ${sentidoDoDia === "volta" ? "Volta" : "Ida"}; a ${r.direction === "volta" ? "Volta" : "Ida"} não foi pedida`);
   }
 
-  const q = quantidadeEscrita(textos);
+  const q = passagensComCrianca(textos)?.total ?? quantidadeEscrita(textos);
   if (q != null && ctx.pedidosLidos === 1 && (r.quantity ?? 1) !== q) {
     naoBate.push(`o cliente escreveu ${q} passagem(ns) e a reserva ficou com ${r.quantity ?? 1}`);
   }

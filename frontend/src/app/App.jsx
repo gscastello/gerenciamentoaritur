@@ -39,6 +39,7 @@ import { useVehicles } from "../hooks/useVehicles.js";
 
 import { AvisoListaCortada } from "../ui/AvisoListaCortada.jsx";
 import { AvisoAgendadoSemReserva } from "./AvisoAgendadoSemReserva.jsx";
+import { ConfirmarVeiculoDoDia } from "./VeiculoDoDia.jsx";
 import { AvisoSemInternet } from "../ui/AvisoSemInternet.jsx";
 import { FolhaDeBaixo } from "../ui/FolhaDeBaixo.jsx";
 import { PuxarParaAtualizar } from "../ui/PuxarParaAtualizar.jsx";
@@ -1619,6 +1620,7 @@ function AppInner() {
                   texto={C.inkSoft}
                 />
                 <AvisoListaCortada cor={C.red} fundo={C.redSoft} texto={C.inkSoft} />
+                {podeAgendar && <ConfirmarVeiculoDoDia />}
                 {podeAgendar && (
                   <AvisoAgendadoSemReserva
                     pendencias={pend.pendencias}

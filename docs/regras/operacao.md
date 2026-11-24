@@ -38,3 +38,8 @@
 - **Poucas vagas e dia sem ônibus** (dono, 23/11 — issue #497): clientes recorrentes têm prioridade; a equipe pode passar
   os outros para outra van por logística (cancelamento no app que não é erro). Sem o ônibus, o veículo do dia é
   **Van + carro** (19 lugares, Operação); abastecimento e manutenção vão na Van reserva.
+- **Veículo do dia e vendas** (issue #502, `database/132`, etapa 1 da autonomia): a faixa no topo pergunta qual veículo
+  roda (amanhã a partir das 14h; hoje enquanto não saiu) e um toque confirma (`rpc_confirmar_veiculo`, admin e atendente).
+  O padrão é sempre o ônibus de 31 (dono, 23/11); `settings.bot_autonomia.lugares_sem_confirmacao` = 31. Em Operação,
+  "Fechar vendas" zera o que ele pode vender naquela viagem. A trava é no banco (`trg_reservations_autonomia`,
+  `fn_vagas_para_o_bot`); a equipe e o "Agendado ☑️" não mudam.

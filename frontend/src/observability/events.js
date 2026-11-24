@@ -14,6 +14,8 @@ export const EVENTS = {
   RESERVA_EDITADA: "reserva.editada",
   RESERVA_CANCELADA: "reserva.cancelada",
   VAGAS_CALCULADAS: "vagas.calculadas",
+  VEICULO_CONFIRMADO: "viagem.veiculo_confirmado",
+  VENDAS_DA_VIAGEM: "viagem.vendas",
   WHATSAPP_WEBHOOK: "whatsapp.webhook.recebido",
   DIAGNOSTICO_AUTOCORRECAO: "diagnostico.autocorrecao",
   VIAGEM_INICIADA: "viagem.iniciada",
