@@ -88,7 +88,7 @@ o "Agendado ☑️" já lançou. Se ficou `pronta` com "Agendado ☑️ não lan
   rua em `p_street`, referência em `p_reference_point`. Ponto com detalhe: `p_pickup_detail`.
 - **Desembarque:** texto em `p_dropoff_location` e área em `p_dropoff_area`
   (código de `dropoff_areas` do mesmo sentido: ida `pirapemas`, `cantanhede`, `campestre`,
-  `matoes`, `miranda`, `bacabeira`, `santa_rita`, `outro`; volta `rodoviaria`, `retorno`,
+  `palmeiral`, `povoado_sozinho`, `matoes`, `miranda`, `bacabeira`, `santa_rita`, `outro`; volta `rodoviaria`, `retorno`,
   `br`, `casa`, …). Se não souber onde desce, pergunte: o preço depende disso.
 - **Nome:** o do cadastro; se não houver, o nome que o cliente **escreveu** na conversa.
   **Nunca** o nome do perfil do WhatsApp (costuma ser apelido). Sem nome, pode lançar só

@@ -153,6 +153,26 @@ export function temDataNoTexto(texto: string | null | undefined): boolean {
 }
 
 /**
+ * Povoados do caminho entre Cantanhede e Matões do Norte (dono, 24/11 — issue #512): embarque e desembarque
+ * válidos, no ponto Cantanhede e com o mesmo valor. "Palmeiral" só com o nome inteiro ("Vila Palmeira" é
+ * bairro de São Luís). "Sozinho" também é palavra comum ("vou sozinho"): só conta como lugar com "povoado"
+ * ou a preposição antes ("no Sozinho", "pro Sozinho"); num CAMPO de endereço, também quando começa por ele.
+ */
+export function povoadoDoCaminho(
+  texto: string | null | undefined,
+  campo = false,
+): { chave: "palmeiral" | "povoado sozinho"; nome: string } | null {
+  const n = ` ${normalizarTexto(semLogradouros(texto))} `;
+  if (/ palmeiral /.test(n) && !/ (vila|bairro|residencial|conjunto|jardim|parque) palmeiral /.test(n)) {
+    return { chave: "palmeiral", nome: "Palmeiral" };
+  }
+  if (/ (povoado(?: d[eo])?|no|do|pro|ao|pra o|para o|ate o) sozinho /.test(n) || (campo && /^ sozinho /.test(n))) {
+    return { chave: "povoado sozinho", nome: "Povoado Sozinho" };
+  }
+  return null;
+}
+
+/**
  * Tira os nomes de logradouro do texto antes de procurar uma cidade (issue #341):
  * "Rua Santa Rita de Cássia", "Av. Colombo", "Travessa Miranda" são ruas, não as cidades do
  * caminho. Vai do tipo do logradouro até a próxima vírgula, hífen, número ou parêntese.

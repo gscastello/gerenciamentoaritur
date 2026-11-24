@@ -7,7 +7,7 @@
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
 import { diaCivil, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
-import { normalizarTexto, palavraParecida, semLogradouros, temDataNoTexto } from "./grafia.ts";
+import { normalizarTexto, palavraParecida, povoadoDoCaminho, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
 /** Até quantos dias à frente um pedido vira rascunho. */
@@ -572,7 +572,7 @@ export function idaPeloEmbarqueEmSaoLuis<P extends PedidoExtraido>(
   const out = pedidos.map((p) => {
     if ((p.tipo ?? "passagem") === "encomenda" || p.direcao !== "volta" || !p.endereco) return p;
     if (sentidoDoDia(p.data) === "volta") return p;
-    const doInterior = cidadeDaVolta(p.endereco) ||
+    const doInterior = cidadeDaVolta(p.endereco) || povoadoDoCaminho(p.endereco, true) ||
       ["campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"].some((c) => normalizarTexto(p.endereco).includes(c));
     if (doInterior) return p;
     const desceEmSaoLuis = /sao luis|slz/.test(normalizarTexto(p.desembarque ?? ""));
@@ -620,7 +620,7 @@ export function outroPodeSerBusca(
   if (localDeOutros([r.pickup_detail], locais)) return false;
   const n = ` ${normalizarTexto(r.pickup_detail)} `;
   if (/ (br|posto|aeroporto|rodovia|estrada|pista|beira|km|retorno|rodoviaria|terminal|ponte|balsa|ferry|prf) /.test(n)) return false;
-  return !CIDADES_DA_ROTA_FORA.some((c) => n.includes(` ${c} `));
+  return !CIDADES_DA_ROTA_FORA.some((c) => n.includes(` ${c} `)) && !povoadoDoCaminho(r.pickup_detail, true);
 }
 const CIDADES_DA_ROTA_FORA = ["pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
 
@@ -1335,6 +1335,9 @@ export function cidadeDoCaminhoNoTexto(
   // "Rua Santa Rita de Cássia" é rua, não a cidade (issue #341)
   const n = normalizarTexto(semLogradouros(texto));
   if (!n) return null;
+  // Palmeiral e Povoado Sozinho: ponto Cantanhede, mesmo valor (issue #512)
+  const povoado = povoadoDoCaminho(texto, true);
+  if (povoado) return { ...povoado, ponto: "cantanhede" };
   const palavras = n.split(" ").filter(Boolean);
   for (const [chave, c] of Object.entries(EMBARQUES_INTERMEDIARIOS_DA_VOLTA)) {
     const achou = chave.includes(" ") ? ` ${n} `.includes(` ${chave} `) : palavras.some((w) => palavraParecida(w, chave));
@@ -1362,9 +1365,12 @@ export function cidadeDaVoltaPelasPistas(p: {
   const intermediaria = cidadeDoCaminhoNoTexto(p.textoDoEmbarque);
   if (intermediaria) {
     const mesmoValor = intermediaria.chave === "campestre";
+    const povoado = intermediaria.chave === "palmeiral" || intermediaria.chave === "povoado sozinho";
     return {
       cidade: intermediaria.ponto,
-      aviso: mesmoValor
+      aviso: povoado
+        ? `${intermediaria.nome} fica entre Cantanhede e Matões do Norte: embarque no ponto de Cantanhede, mesmo valor.`
+        : mesmoValor
         ? `${intermediaria.nome} fica entre Pirapemas e Cantanhede: embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, mesmo valor.`
         : `${intermediaria.nome} fica no caminho da Volta (depois de Cantanhede): embarque no ponto de ${NOME_DA_CIDADE[intermediaria.ponto]}, valor do trecho.`,
     };
