@@ -349,6 +349,14 @@ const RE_DE_PARA_LUGAR = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|v
 const RE_PAR_COM_BARRA = new RegExp(` ${PARADA} qbarraq ${PARADA} `);
 const RE_SO_ORIGEM = new RegExp(` (de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} `);
 
+/**
+ * "Vindo de Pirapemas antes da entrada da rua…" explica onde fica a casa na pista (de que lado a van chega),
+ * não de onde o passageiro sai (issue #514).
+ */
+const RE_LADO_DA_PISTA = new RegExp(
+  ` (?:vindo|vem|vinda|venho|sentido) (?:de |da )?${PARADA} (?:e |fica |logo |um pouco |bem )?(?:antes|depois|passando|perto|proximo|em frente|a direita|a esquerda|do lado|lado|na entrada|no inicio|primeir[ao]|segund[ao]) `,
+);
+
 function parada(t: string): Parada | null {
   const n = t.replace(/ do norte$/, "");
   if (n === "slz") return "sao luis";
@@ -417,7 +425,7 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
   }
   // só a origem: precisa de "saindo/vindo de" ("de Pirapemas" sozinho pode ser "sou de Pirapemas")
   const so = n.match(RE_SO_ORIGEM);
-  if (so && so[1] !== "de") {
+  if (so && so[1] !== "de" && !RE_LADO_DA_PISTA.test(n)) {
     const de = parada(so[2]);
     if (de === "sao luis") return { sentido: "ida", de, para: null };
     if (de === "pirapemas" || de === "cantanhede") return { sentido: "volta", de, para: null };
@@ -553,6 +561,42 @@ export function origemDoPedido(falas: { quem: string; texto: string }[]): Origem
   }
   if (new Set(achadas.map((a) => a.sentido)).size !== 1) return null;
   return achadas.at(-1) ?? null;
+}
+
+/** A equipe perguntou onde buscar: "Qual o endereço pra lhe buscar?", "Onde te pegamos?" */
+const RE_ONDE_BUSCAR =
+  / (?:(?:qual|quau|manda|mande|me passa|envie?) (?:e )?(?:o |seu |a )?(?:endereco|localizacao)|(?:onde|aonde)(?: [a-z]+){0,4} (?:buscar|buscamos|busco|pegar|pegamos|pego|embarca|embarque)|(?:te|lhe) (?:buscamos|busco|pegamos|pego) (?:onde|aonde)) /;
+
+/**
+ * A cidade (Pirapemas ou Cantanhede) que o cliente escreveu ao RESPONDER onde buscar: "Qual o endereço pra lhe
+ * buscar?" → "Vila Palmeira Cantanhede" (issue #514). É o lugar da casa: vale sobre cidade citada de passagem
+ * ("vindo de Pirapemas, antes da entrada…"). Duas cidades na resposta, ou destino escrito, não decidem.
+ */
+export function cidadeNaRespostaDoEndereco(falas: { quem: string; texto: string }[]): "pirapemas" | "cantanhede" | null {
+  let perguntou = false;
+  let cidade: "pirapemas" | "cantanhede" | null = null;
+  const achadas = new Set<"pirapemas" | "cantanhede">();
+  for (const f of falas) {
+    const n = ` ${paradasCorrigidas(normalizarTexto(f.texto))} `;
+    if (f.quem === "equipe") {
+      if (RE_ONDE_BUSCAR.test(n)) {
+        perguntou = true;
+        achadas.clear();
+        cidade = null;
+      } else if (achadas.size) {
+        perguntou = false;
+      }
+      continue;
+    }
+    if (f.quem !== "cliente" || !perguntou) continue;
+    // destino ("pra Cantanhede", "até Pirapemas") e lado da pista não são o lugar da casa
+    const limpo = n
+      .replace(/ (?:vindo|vem|vinda|venho|sentido|saindo|indo|quem vem) (?:de |da |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
+      .replace(/ (?:pra|pro|para|ate|a) (?:pirapemas|cantanhede)(?= )/g, " ");
+    for (const c of ["pirapemas", "cantanhede"] as const) if (limpo.includes(` ${c} `)) achadas.add(c);
+    cidade = achadas.size === 1 ? [...achadas][0] : null;
+  }
+  return cidade;
 }
 
 /** Cidade de embarque da Volta (o ponto): Campestre vai no ponto Pirapemas; outra cidade do caminho, no Cantanhede (#326). */

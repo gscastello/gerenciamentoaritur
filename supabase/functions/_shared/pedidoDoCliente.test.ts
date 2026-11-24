@@ -527,3 +527,30 @@ Deno.test("#506: 2 adultos e criança de 3 anos lança 2 e não trava", async ()
   // deno-lint-ignore no-explicit-any
   assertEquals(conferenciaFinal(reserva, msgs, { hoje: "2026-11-23", pedidosLidos: 1 } as any), []);
 });
+
+Deno.test("#514: 'vindo de Pirapemas antes da entrada' é o lado da pista, não a origem", async () => {
+  const { origemEscrita } = await import("./pedidoDoCliente.ts");
+  assertEquals(origemEscrita("Vindo de pirapemas  antes da entrada  da rua do escondido."), null);
+  assertEquals(origemEscrita("vindo de Cantanhede, logo depois da ponte"), null);
+  // continua origem quando é a viagem
+  assertEquals(origemEscrita("vindo de Pirapemas")?.de, "pirapemas");
+  assertEquals(origemEscrita("vindo de Pirapemas para São Luís")?.sentido, "volta");
+  assertEquals(origemEscrita("saindo de Cantanhede amanhã")?.de, "cantanhede");
+});
+
+Deno.test("#514: a cidade da resposta ao endereço decide o ponto da Volta", async () => {
+  const { cidadeNaRespostaDoEndereco } = await import("./pedidoDoCliente.ts");
+  const c = (...f: [string, string][]) => cidadeNaRespostaDoEndereco(f.map(([quem, texto]) => ({ quem, texto })));
+  assertEquals(
+    c(["cliente", "Ainda tem vaga pra ir sao Luís?"], ["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Palmeira Cantanhede"], ["cliente", "Vindo de pirapemas  antes da entrada  da rua do escondido."], ["equipe", "Agendado ☑️"]),
+    "cantanhede",
+  );
+  assertEquals(c(["equipe", "Onde te pegamos?"], ["cliente", "Rua da Areia, Pirapema"]), "pirapemas");
+  // sem cidade na resposta, duas cidades, destino, ou sem a pergunta: não decide
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Rua da Areia"]), null);
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cantanhede ou Pirapemas, tanto faz"]), null);
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cohab, vou pra Cantanhede"]), null);
+  assertEquals(c(["cliente", "Vila Palmeira Cantanhede"]), null);
+  // a pergunta seguinte da equipe já é outro assunto
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Palmeira Cantanhede"], ["equipe", "Vai descer onde?"], ["cliente", "Pirapemas"]), "cantanhede");
+});
