@@ -46,6 +46,10 @@ Deno.test("dia: conta do dia de cada mensagem; erros comuns; 'quarto' e 'Domingo
 Deno.test("quantidade: 'duas passagens', '3 pessoas'; 'um lugar perto do posto' não conta", () => {
   assertEquals(quantidadeEscrita(["gostaria de agendar duas passagens"]), 2);
   assertEquals(quantidadeEscrita(["somos 3 pessoas"]), 3);
+  // o singular "passagem" termina em M: "passagens?" não pegava (issue #504)
+  assertEquals(quantidadeEscrita(["quero uma passagem pra amanhã"]), 1);
+  assertEquals(quantidadeEscrita(["Quero uma. Passagem. Prá. A. Manhã"]), 1);
+  assertEquals(quantidadeEscrita(["1 passagem"]), 1);
   // a correção do cliente vence o que ele disse antes (issue #504, caso a71f0cbb)
   assertEquals(quantidadeEscrita(["Pra 3 pessoas", "Marca só uma tá", "É aqui na estrada matoes"]), 1);
   assertEquals(quantidadeEscrita(["quero 3 passagens", "só 2 passagens"]), 2);
@@ -561,6 +565,9 @@ Deno.test("#504 quantidade falada no áudio e estragada pela transcrição: perg
   assertEquals(quantidadeIncerta(["[áudio: quero despassar]", "são 2 passagens"]), false);
   // fora de áudio, o cliente escreveu: não é erro de transcrição
   assertEquals(quantidadeIncerta(["quero despassar"]), false);
+  // "Que hora que vocês passam aqui" é o verbo (caso 66c97996); "uma passagem" no singular é quantidade
+  assertEquals(quantidadeIncerta(["[áudio: Que hora que vocês passam aqui e quanto é?]", "Quero uma. Passagem. Prá. A. Manhã"]), false);
+  assertEquals(quantidadeIncerta(["[áudio: que horas vocês passariam aqui?]"]), false);
   // respondeu a pergunta só com o número: resolvido
   assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "Duas"]), false);
   assertEquals(quantidadeIncerta(["[áudio: quero despassar daqui]", "são 2"]), false);

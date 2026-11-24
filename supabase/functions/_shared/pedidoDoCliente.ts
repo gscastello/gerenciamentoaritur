@@ -784,8 +784,8 @@ export function quantidadeEscrita(textos: string[]): number | null {
     // "marca só uma", "só 2 passagens", "só uma tá" — nunca "só uma dúvida"
     const correcao =
       n.match(/ (?:marca|marque|reserva|reserve|coloca|bota|deixa|agenda|agende) (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) /) ??
-      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passagens?|pessoas?|vagas?|ta|ok|mesmo|por favor)? ?$/) ??
-      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passagens?|pessoas?|vagas?) /);
+      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passage(?:m|ns)|pessoas?|vagas?|ta|ok|mesmo|por favor)? ?$/) ??
+      n.match(/ (?:so|somente|apenas) (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco) (?:passage(?:m|ns)|pessoas?|vagas?) /);
     if (correcao) {
       const q = correcao[1];
       const v = /^\d+$/.test(q) ? Number(q) : NUMERO[q];
@@ -795,7 +795,7 @@ export function quantidadeEscrita(textos: string[]): number | null {
       }
     }
     // "um lugar perto do posto" não é quantidade: só passagem, pessoa, vaga, passageiro, adulto
-    for (const [, q] of n.matchAll(/ (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez) (passagens?|pessoas?|vagas?|passageiros?|adultos?) /g)) {
+    for (const [, q] of n.matchAll(/ (\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez) (passage(?:m|ns)|pessoas?|vagas?|passageiros?|adultos?) /g)) {
       const v = /^\d+$/.test(q) ? Number(q) : NUMERO[q];
       if (v >= 1 && v <= 31) achados.push(v);
     }
@@ -821,7 +821,7 @@ export function passagensComCrianca(
   textos: string[],
 ): { total: number; adultos: number; criancas: number; noColo: number } | null {
   const ns = textos.map((t) => ` ${normalizarTexto(t)} `);
-  const pediuLugares = new RegExp(` (${RE_NUMERO}) (passagens?|vagas?|passageiros?|lugares|assentos?) `);
+  const pediuLugares = new RegExp(` (${RE_NUMERO}) (passage(?:m|ns)|vagas?|passageiros?|lugares|assentos?) `);
   if (ns.some((n) => pediuLugares.test(n))) return null;
   const achados = ns.map((n) => n.match(RE_ADULTOS_E_CRIANCAS));
   const onde = achados.findIndex(Boolean);
@@ -855,12 +855,10 @@ export function passagensComCrianca(
   return { total: adultos + criancas - noColo, adultos, criancas, noColo };
 }
 
-// palavras de verdade com "pass"; o resto é a quantidade estragada pela transcrição ("despassar" = "duas passagens")
-const PALAVRAS_COM_PASS = new Set([
-  "passa", "passar", "passo", "passou", "passei", "passamos", "passando", "passaram", "passe", "passem", "passara",
-  "passagem", "passagens", "passageiro", "passageiros", "passageira", "passageiras", "passada", "passado", "passados",
-  "repassar", "repassa", "ultrapassar", "passaporte", "passarela", "passeio", "passear", "passeando", "compasso", "impasse",
-]);
+// palavras de verdade com "pass" (o verbo passar em qualquer tempo, passagem, passageiro…); o resto é a
+// quantidade estragada pela transcrição ("despassar" = "duas passagens")
+const PALAVRA_COM_PASS =
+  /^(re|ultra)?pass(a|o|e|ei|ou|am|em|as|es|ar|ara|aram|arei|aria|ariam|aremos|asse|assem|amos|ando|ado|ada|ados|adas|agem|agens|ageiro|ageiros|ageira|ageiras|aporte|arela|eio|eios|ear|eando)$|^(compasso|impasse)$/;
 
 /**
  * O cliente FALOU a quantidade num áudio, mas a transcrição a estragou (issue #504, caso 6a90bb67: "eu quero
@@ -872,12 +870,12 @@ export function quantidadeIncerta(textos: string[]): boolean {
   if (quantidadeEscrita(textos) != null) return false;
   const estragado = (t: string) => {
     const audio = String(t ?? "").match(/\[áudio:([^\]]*)\]?/i)?.[1];
-    return !!audio && normalizarTexto(audio).split(/\s+/).some((p) => p.includes("pass") && !PALAVRAS_COM_PASS.has(p));
+    return !!audio && normalizarTexto(audio).split(/\s+/).some((p) => p.includes("pass") && !PALAVRA_COM_PASS.test(p));
   };
   const i = textos.findLastIndex(estragado);
   if (i === -1) return false;
   // respondeu depois só com o número ("duas", "2", "são 2"): a dúvida acabou
-  return !textos.slice(i + 1).some((t) => /^(sao |e |somos )?(\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis)( (pessoas?|passagens?|passageiros?|vagas?))?$/.test(normalizarTexto(t).trim()));
+  return !textos.slice(i + 1).some((t) => /^(sao |e |somos )?(\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis)( (pessoas?|passage(?:m|ns)|passageiros?|vagas?))?$/.test(normalizarTexto(t).trim()));
 }
 
 // ---------------------------------------------------------------------------
