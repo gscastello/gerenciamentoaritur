@@ -554,3 +554,17 @@ Deno.test("#514: a cidade da resposta ao endereço decide o ponto da Volta", asy
   // a pergunta seguinte da equipe já é outro assunto
   assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Exemplo Cantanhede"], ["equipe", "Vai descer onde?"], ["cliente", "Pirapemas"]), "cantanhede");
 });
+
+Deno.test("#521: dia só perguntado e trocado por outro não é pedido que faltou", async () => {
+  const { diasSoPerguntados } = await import("./pedidoDoCliente.ts");
+  const em = "2026-11-22T13:00:00Z"; // domingo
+  const d = (lidas: string[], ...t: string[]) => diasSoPerguntados(t.map((texto) => ({ texto, em })), lidas);
+  assertEquals(d(["2026-11-23"], "Tem vaga pra slz hoje ?", "Marca uma pra amanhã pra mim"), ["2026-11-22"]);
+  assertEquals(d(["2026-11-27"], "Na sexta também vem?", "No sábado tem?", "Deixa marcada duas na sexta de manhã"), ["2026-11-28"]);
+  // pedido de verdade, dois dias na mesma pergunta, ou sem pedido depois: continua contando
+  assertEquals(d(["2026-11-28"], "Gostaria de reservar uma vaga para domingo 29/11", "quero dia 28/11"), []);
+  assertEquals(d(["2026-11-27"], "Tem vaga pra sexta e domingo?", "pode marcar sexta"), []);
+  assertEquals(d(["2026-11-27"], "quero ir sexta", "E no domingo tem vaga?"), []);
+  assertEquals(d(["2026-11-27"], "quero ir domingo?", "quero sexta"), []);
+  assertEquals(d([], "Tem vaga hoje?", "amanhã"), []);
+});

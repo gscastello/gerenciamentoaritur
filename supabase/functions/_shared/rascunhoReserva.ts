@@ -115,6 +115,7 @@ import {
   falasDoDia,
   semPedidosPassados,
   cidadeNaRespostaDoEndereco,
+  diasSoPerguntados,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
@@ -1060,12 +1061,13 @@ async function lerEGravar(
     }
   }
   // dia que o cliente pediu e a leitura não trouxe nem já está reservado: pedido de fora (issue #335)
+  const soPerguntados = diasSoPerguntados(mensagensDoCliente, pedidos.map((p) => p.data));
   const diasSemPedido = datasSemPedido(
     [...datasEscritas(mensagensDoCliente), ...confirmadas],
     pedidos.map((p) => p.data),
     [...jaReservadas].map((k) => k.split("|")[0]),
     hoje,
-  );
+  ).filter((d) => !soPerguntados.includes(d));
   if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
   return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas, divergente: lidos.divergente };
 }

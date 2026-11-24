@@ -1253,3 +1253,26 @@ export function datasSemPedido(
   const cobertas = new Set([...datasDosPedidos.filter(Boolean) as string[], ...datasJaReservadas]);
   return [...new Set(datasDoCliente)].filter((d) => d >= hoje && !cobertas.has(d)).sort();
 }
+
+const RE_PEDE_RESERVA =
+  / (quero|queria|quer|preciso|marca|marque|marcar|marcada|reserva|reserve|reservar|agenda|agende|agendar|deixa|deixe|deixar|guarda|guarde|guardar|vou|vamos|iremos|passagem para|passagem pra) /;
+
+/**
+ * Dias que o cliente só PERGUNTOU e trocou por outro (issue #521): "Tem vaga pra hoje?" → "Só pra amanhã" →
+ * "Marca uma pra amanhã". Conta só quando TODAS as mensagens com aquele dia são pergunta sem pedido, nenhuma
+ * traz um dia já lido, e depois delas o cliente escreveu um dia que virou pedido.
+ */
+export function diasSoPerguntados(mensagens: MensagemDoCliente[], datasLidas: (string | null | undefined)[]): string[] {
+  const lidas = new Set(datasLidas.filter(Boolean) as string[]);
+  if (!lidas.size) return [];
+  const linhas = mensagens.map((m, i) => ({ i, datas: datasEscritas([m]), texto: String(m.texto ?? "") }));
+  const dias = [...new Set(linhas.flatMap((l) => l.datas))].filter((d) => !lidas.has(d));
+  return dias.filter((d) => {
+    const com = linhas.filter((l) => l.datas.includes(d));
+    const soPergunta = com.every(
+      (l) => l.texto.includes("?") && !RE_PEDE_RESERVA.test(` ${normalizarTexto(l.texto)} `) && !l.datas.some((x) => lidas.has(x)),
+    );
+    const ultima = com[com.length - 1].i;
+    return soPergunta && linhas.some((l) => l.i > ultima && l.datas.some((x) => lidas.has(x)));
+  });
+}
