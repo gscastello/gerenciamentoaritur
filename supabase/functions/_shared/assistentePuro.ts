@@ -20,6 +20,8 @@ type Preco = { entrada: number; saida: number; cacheLeitura: number; cacheEscrit
 const PRECOS: Record<string, Preco> = {
   "claude-haiku-5-5": { entrada: 0.1, saida: 0.5, cacheLeitura: 0.01, cacheEscrita: 0.125 },
   "claude-sonnet-5-5": { entrada: 2, saida: 10, cacheLeitura: 0.1, cacheEscrita: 2.5 },
+  // o anterior: mesmo preço, mas a leitura do cache custa o dobro (issue #504 — o atendente usava este)
+  "claude-sonnet-5": { entrada: 2, saida: 10, cacheLeitura: 0.2, cacheEscrita: 2.5 },
 };
 
 export type Uso = {

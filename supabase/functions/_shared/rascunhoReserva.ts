@@ -62,6 +62,7 @@ import {
   validarPedidoExtraido,
   sentidoPeloHabito,
   AVISO_DIA_DA_EQUIPE,
+  AVISO_DIA_ILEGIVEL_PELO_AGENDADO,
   diaDitoPelaEquipe,
   ehMensagemIlegivel,
   localDeOutros,
@@ -100,6 +101,8 @@ import {
   datasSemPedido,
   pedeDeOndeDeixou,
   sentidoEscrito,
+  embarqueNoInteriorEscrito,
+  quantidadeIncerta,
   viagemDeOndeDeixou,
   segundaViagemEhAOutra,
   origemDoPedido,
@@ -583,7 +586,11 @@ async function lerEGravar(
     dadosMarca.direcao ??
     origemUnica?.sentido ??
     sentidoEscrito(textosDoCliente) ??
-    (pontoEscrito(textosDoCliente, ctx.pontos.ida) ? "ida" : null);
+    (pontoEscrito(textosDoCliente, ctx.pontos.ida) ? "ida" : null) ??
+    // "Cantanhede rua do cajueiro…": o endereço de onde ele sai no interior (issue #504)
+    (embarqueNoInteriorEscrito(textosDoCliente) ? "volta" : null);
+  // o dia veio da regra "Agendado no dia, antes da viagem sair": a equipe viu a conversa inteira no WhatsApp
+  let diaPeloAgendado = false;
   for (const p of pedidos) {
     // confere cada informação da reserva no que o CLIENTE escreveu: completa o que ficou vazio,
     // avisa o que não bate (issue #303)
@@ -614,6 +621,7 @@ async function lerEGravar(
         }
         evento("bot_dia_pelo_agendado", { conversa: entrada.chatwootConversationId, lido: p.data ?? null });
         p.data = proxima;
+        diaPeloAgendado = true;
       } else if (p.data) {
         evento("bot_dia_nao_escrito", { conversa: entrada.chatwootConversationId, lido: p.data });
         p.data = null;
@@ -965,6 +973,11 @@ async function lerEGravar(
       if (diaDitoPelaEquipe(datasDaEquipe, r.trip_date as string | null)) {
         r.notes = [r.notes, AVISO_DIA_DA_EQUIPE].filter(Boolean).join(" ").slice(0, 300);
         evento("bot_dia_da_equipe", { conversa: entrada.chatwootConversationId });
+      } else if (diaPeloAgendado && r.trip_date === hoje) {
+        // a equipe marcou hoje, antes da viagem sair, depois de ver a mensagem que o bot não lê: a de hoje é a
+        // única possível (issue #504, caso 25e85cc1) — lança com aviso para conferir
+        r.notes = [r.notes, AVISO_DIA_ILEGIVEL_PELO_AGENDADO].filter(Boolean).join(" ").slice(0, 300);
+        evento("bot_dia_ilegivel_pelo_agendado", { conversa: entrada.chatwootConversationId });
       } else {
         pendencia ??= {
           motivo: "o cliente não escreveu o dia e mandou uma mensagem (ou um áudio sem transcrição) que o bot não conseguiu ler: confira o dia no WhatsApp",
@@ -979,6 +992,11 @@ async function lerEGravar(
       evento("bot_lugar_contra_o_sentido", { conversa: entrada.chatwootConversationId, agendado: opcoes.confirmadoPelaEquipe });
       r.notes = [r.notes, `O lugar não combina com o sentido: ${contraOSentido}.`].filter(Boolean).join(" ").slice(0, 300);
       if (opcoes.confirmadoPelaEquipe) pendencia ??= { motivo: contraOSentido, codigo: "onde_embarca" };
+    }
+    // a quantidade foi falada num áudio, mas veio estragada ("despassar"): não lança com 1 — pergunta (issue #504)
+    if (opcoes.confirmadoPelaEquipe && (r.type ?? "passagem") !== "encomenda" && quantidadeIncerta(textosDoCliente)) {
+      evento("bot_quantidade_incerta", { conversa: entrada.chatwootConversationId });
+      pendencia ??= { motivo: "o cliente falou a quantidade num áudio, mas a transcrição não deixou entender quantas passagens", codigo: "quantidade" };
     }
     // ÚLTIMA trava, com a reserva pronta: as regras acima (dia, cidade, costume) não podem
     // desfazer o que o cliente escreveu sem ninguém ver (issue #309)
