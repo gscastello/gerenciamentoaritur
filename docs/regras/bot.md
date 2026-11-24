@@ -88,7 +88,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
 - **Periz** (Peris, Perizes; issue #515): parada entre São Luís e Bacabeira. "De Periz pra Pirapemas" é Ida, ponto Outros com
   Periz no embarque, valor do trecho. Nunca Pirapemas.
-- **A cidade da resposta ao endereço** (issue #514): "Qual o endereço pra lhe buscar?" → "Vila Palmeira Cantanhede" decide o
+- **A cidade da resposta ao endereço** (issue #514): "Qual o endereço pra lhe buscar?" → "Vila Exemplo Cantanhede" decide o
   ponto da Volta (`cidadeNaRespostaDoEndereco`). "Vindo de Pirapemas, antes da entrada da rua…" é o lado da pista, não a
   origem (`RE_LADO_DA_PISTA`).
 - **Palmeiral e Povoado Sozinho** (issue #512, dono 24/11): entre Cantanhede e Matões do Norte, embarque e desembarque

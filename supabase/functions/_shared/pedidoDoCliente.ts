@@ -573,7 +573,7 @@ const RE_ONDE_BUSCAR =
 
 /**
  * A cidade (Pirapemas ou Cantanhede) que o cliente escreveu ao RESPONDER onde buscar: "Qual o endereço pra lhe
- * buscar?" → "Vila Palmeira Cantanhede" (issue #514). É o lugar da casa: vale sobre cidade citada de passagem
+ * buscar?" → "Vila Exemplo Cantanhede" (issue #514). É o lugar da casa: vale sobre cidade citada de passagem
  * ("vindo de Pirapemas, antes da entrada…"). Duas cidades na resposta, ou destino escrito, não decidem.
  */
 export function cidadeNaRespostaDoEndereco(falas: { quem: string; texto: string }[]): "pirapemas" | "cantanhede" | null {
