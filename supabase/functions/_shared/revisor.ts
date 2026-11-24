@@ -255,6 +255,8 @@ async function conferirPreco(r: ReservaRevisada, ctx: { botId: string | null }):
   const ponto = acharPonto((pontos ?? []) as Linha[], r.ponto);
   if (!ponto) return null;
   const valor = await valorDoPedido(ponto, { bairro: r.bairro, endereco: r.embarque, desembarque: r.desembarque ?? "" });
+  // bairro fora da tabela: o valor calculado é incerto e não troca um valor que já existe (issue #525)
+  if (valor.ok && valor.incerto && Number(r.valor ?? 0) > 0) return null;
   const novo = precoRevisado({
     atual: r.valor,
     tabela: valor.ok ? valor.preco : null,

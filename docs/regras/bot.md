@@ -88,6 +88,13 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
 - **Busca em casa: o bairro basta** (dono, 24/11): o taxista busca só com o bairro; reserva sem rua está completa, não é
   pendência nem alerta.
+- **Embarque e desembarque escritos** (issue #523, `lugaresDoPedido`): completam só o que o leitor deixou vazio, em código. Ida
+  sem desembarque = a única cidade escrita como destino; Volta sem endereço = a resposta a "Qual o endereço pra lhe buscar?",
+  o lugar que a equipe repetiu ou o "moro na…", **depois** de decidida a cidade (esse lugar nunca decide Pirapemas ou
+  Cantanhede); desembarque igual ao embarque, na Volta, sai. A avaliação compara dia, sentido, ponto, bairro e quantidade:
+  embarque e desembarque se conferem à parte (`lido.planejadas`).
+- **Valor incerto não mexe em valor gravado** (issue #525): desembarque da Volta num bairro fora da tabela (ou achado só na
+  internet) devolve `incerto`; o revisor não troca o valor e o atendente não o diz (`VALOR_A_CONFIRMAR`).
 - **Dia só perguntado** (issue #521): "Tem vaga pra hoje?" → "Só amanhã" → "Marca pra amanhã" não é pedido que faltou
   (`diasSoPerguntados`): era a maior causa própria de "Agendado não lançou" (11 de 36 em 7 dias, 24/11).
 - **Periz** (Peris, Perizes; issue #515): parada entre São Luís e Bacabeira. "De Periz pra Pirapemas" é Ida, ponto Outros com
