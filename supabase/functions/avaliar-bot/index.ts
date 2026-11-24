@@ -49,6 +49,8 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
     const cmp = compararCaso((caso.esperado ?? []) as ViagemDoCaso[], planejadas, {
       motivos: r.motivos,
       pendenteOk: caso.pendente_ok === true,
+      // a reserva mudou depois de uma nova mensagem do cliente e ninguém conferiu (issue #508)
+      mudouDepois: caso.mudou_depois != null && caso.verificado !== true,
       bairroNaTabela: (b) => bairroDaTabela(b, bairros)?.neighborhood ?? null,
     });
     await supabaseAdmin.from("bot_avaliacoes").insert({
