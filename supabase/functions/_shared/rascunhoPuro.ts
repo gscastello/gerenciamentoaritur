@@ -645,7 +645,7 @@ export function outroPodeSerBusca(
   if (/ (br|posto|aeroporto|rodovia|estrada|pista|beira|km|retorno|rodoviaria|terminal|ponte|balsa|ferry|prf) /.test(n)) return false;
   return !CIDADES_DA_ROTA_FORA.some((c) => n.includes(` ${c} `)) && !povoadoDoCaminho(r.pickup_detail, true);
 }
-const CIDADES_DA_ROTA_FORA = ["pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
+const CIDADES_DA_ROTA_FORA = ["periz", "peris", "perizes", "pirapemas", "cantanhede", "campestre", "matoes", "miranda", "entroncamento", "santa rita", "bacabeira"];
 
 /**
  * O bairro da busca em casa tem PROVA? (issue #419: a leitura escolhia "Turu" da lista para um

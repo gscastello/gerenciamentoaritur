@@ -270,7 +270,7 @@ de operação combinada com o dono entra em `docs/regras/bot.md` e em `CONHECIME
 - **O bot não decide preço, vaga nem horário**: vêm do banco na hora (`calcular_valor`, `rpc_create_reservation`).
   Preço vazio nunca vira R$ 0; encomenda nunca recebe valor; número que não veio de ferramenta barra a resposta.
 - **Nunca cadastra o nome do perfil do WhatsApp** nem expõe dados de outro passageiro.
-- **Sentido pela ordem das paradas**: Ida = São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões →
+- **Sentido pela ordem das paradas**: Ida = São Luís → Periz → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões →
   Povoado Sozinho/Palmeiral → Cantanhede → Campestre → Pirapemas; Volta = o contrário. A cidade da Volta só vale se dita
   (ou costume): nunca sai do nome da rua, que se repete. "Hoje" nunca vira amanhã calado.
 - **Correção sozinha só com prova literal** na conversa; o que uma pessoa mudou à mão vence a conversa anterior. O
