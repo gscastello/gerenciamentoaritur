@@ -12,6 +12,7 @@
 // As ações passam pelo whatsappService (modo humano, modo sombra, auditoria e as
 // mesmas RPCs de sempre — a capacidade continua decidida pelo banco).
 
+import { povoadoDoCaminho } from "./grafia.ts";
 import {
   andamentoPeloHorario,
   areaDoDesembarque,
@@ -343,6 +344,17 @@ export async function valorDoPedido(
   const trecho = trechoDoPedido([ponto.name, ponto.code, pedido.bairro, pedido.endereco], pedido.desembarque, trechos ?? []);
   if (trecho) return { ok: true, preco: Number(trecho.price), trecho: `${trecho.origem} a ${trecho.destino}` };
 
+  // Palmeiral e Povoado Sozinho valem como Cantanhede de e para São Luís. Trecho só no interior (Volta que
+  // desce lá, Ida que sobe lá) não tem valor cadastrado: quem diz é a equipe (issue #512)
+  const naVolta = ponto.direction === "volta" || ["pirapemas", "cantanhede"].includes(String(ponto.code));
+  const povoado = povoadoDoCaminho(naVolta ? pedido.desembarque : ponto.code === "outro" ? pedido.endereco : null, true);
+  if (povoado) {
+    return {
+      ok: false,
+      erro: { codigo: "TRECHO_SEM_VALOR", erro: `Não há valor cadastrado para esse trecho (${povoado.nome}). Não diga valor: chame o atendente.` },
+    };
+  }
+
   const cidade = await whatsappService.mencionaCidadeIntermediaria([pedido.desembarque, pedido.endereco, pedido.bairro]);
   // Campestre tem o mesmo valor de Pirapemas/Cantanhede (dono, 11/11): vale o preço do ponto
   if (cidade && semAcentoMinusculo(cidade) !== "campestre") {
@@ -355,7 +367,7 @@ export async function valorDoPedido(
     };
   }
   // Volta: o valor é o do lugar onde deixamos o cliente, com a tabela da Ida (issue #349)
-  if (ponto.direction === "volta" || ["pirapemas", "cantanhede"].includes(String(ponto.code))) {
+  if (naVolta) {
     const daVolta = await precoDaVoltaPeloDesembarque(pedido.desembarque);
     if (daVolta) return daVolta;
   }

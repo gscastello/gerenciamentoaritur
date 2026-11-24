@@ -8,7 +8,7 @@
 // Entre duas cidades do interior vale a ordem das paradas (de Cantanhede pra Pirapemas é Ida).
 // Embarque/desembarque que não combinam com o sentido nunca são lançados calados.
 
-import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { normalizarTexto, povoadoDoCaminho, semLogradouros } from "./grafia.ts";
 import { ORDEM_DA_IDA, sentidoDoTrecho } from "./pedidoDoCliente.ts";
 
 export type Lado = "sao_luis" | "interior";
@@ -40,6 +40,8 @@ function paradasNoTexto(texto: string | null | undefined): Set<Parada> {
     if (ANTES_DE_NOME.test(antes)) continue;
     achadas.add(parada);
   }
+  const povoado = povoadoDoCaminho(texto, true);
+  if (povoado) achadas.add(povoado.chave);
   return achadas;
 }
 

@@ -6,7 +6,7 @@
 // agente.ts / agenteFerramentas.ts.
 
 import { numerosNaoFundamentados } from "./botGuard.ts";
-import { nomeParecidoNoTexto, semLogradouros } from "./grafia.ts";
+import { nomeParecidoNoTexto, povoadoDoCaminho, semLogradouros } from "./grafia.ts";
 import { textoComContatos } from "./chatwootPayload.ts";
 
 export type MensagemDaConversa = {
@@ -335,7 +335,10 @@ export function areaDoDesembarque(texto: string, areas: { code: string; label: s
       }
     }
   }
-  return melhor?.code ?? null;
+  if (melhor) return melhor.code;
+  // "Sozinho" sem "povoado" no desembarque (issue #512)
+  const povoado = povoadoDoCaminho(texto, true)?.chave.replace(" ", "_");
+  return povoado && areas.some((a) => a.code === povoado) ? povoado : null;
 }
 
 /**

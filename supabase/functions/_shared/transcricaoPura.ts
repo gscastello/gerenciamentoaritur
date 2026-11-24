@@ -6,7 +6,7 @@
 const CONTEXTO =
   "Mensagem de WhatsApp de um passageiro da AriTur, vans e ônibus entre São Luís, Pirapemas e Cantanhede (Maranhão). " +
   "Palavras comuns: passagem, vaga, ida, volta, amanhã, hoje, Rodoviária, Retorno, Pirapemas, Cantanhede, São Luís, " +
-  "Bacabeira, Santa Rita, Miranda, Matões, Campestre, Seu Ari.";
+  "Bacabeira, Santa Rita, Miranda, Matões, Palmeiral, Povoado Sozinho, Campestre, Seu Ari.";
 
 /** Até `maximo` nomes de lugares, sem repetir (maiúscula e acento não contam). */
 export function contextoDaTranscricao(lugares: (string | null | undefined)[], maximo = 60): string {

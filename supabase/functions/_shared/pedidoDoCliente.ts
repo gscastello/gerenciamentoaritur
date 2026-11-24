@@ -316,14 +316,15 @@ export function segundaViagemEhAOutra<P extends PedidoDoPar>(
 /**
  * O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11 — issues #406 e #407). A Ida sai de São Luís e
  * vai até Pirapemas; a Volta sai de Pirapemas e vai até São Luís, pelo mesmo caminho:
- *   São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Cantanhede → Campestre → Pirapemas
+ *   São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Povoado Sozinho/Palmeiral → Cantanhede → Campestre → Pirapemas
  * Destino DEPOIS da origem nessa ordem = Ida; destino ANTES = Volta. "De Cantanhede pra Pirapemas" é
  * Ida (a Volta já passou por Cantanhede vinda de Pirapemas); "de Pirapemas pra Cantanhede" é Volta.
  * Só a origem: São Luís = Ida; Pirapemas/Cantanhede = Volta (o mais comum). Vale sobre o destino
  * sozinho ("pra Cantanhede" de quem sai de Pirapemas não é Ida).
  */
-export const ORDEM_DA_IDA = ["sao luis", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "cantanhede", "campestre", "pirapemas"] as const;
+export const ORDEM_DA_IDA = ["sao luis", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "povoado sozinho", "palmeiral", "cantanhede", "campestre", "pirapemas"] as const;
 type Parada = (typeof ORDEM_DA_IDA)[number];
+const ENTRE_MATOES_E_CANTANHEDE: Parada[] = ["povoado sozinho", "palmeiral"];
 
 const NOME_DA_PARADA: Record<Parada, string> = {
   "sao luis": "São Luís",
@@ -332,12 +333,14 @@ const NOME_DA_PARADA: Record<Parada, string> = {
   entroncamento: "Entroncamento",
   miranda: "Miranda do Norte",
   matoes: "Matões do Norte",
+  "povoado sozinho": "Povoado Sozinho",
+  palmeiral: "Palmeiral",
   cantanhede: "Cantanhede",
   campestre: "Campestre",
   pirapemas: "Pirapemas",
 };
 
-const PARADA = "(sao luis|slz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|cantanhede|campestre|pirapemas)";
+const PARADA = "(sao luis|slz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|povoado sozinho|palmeiral|cantanhede|campestre|pirapemas)";
 // "pra", "pro", "para", "p/", "até" (issue #415: "de Cantanhede pro Marsil")
 const PARA = "(?:pra|pro|para|p|a|ate|ir pra|ir pro|ir para)";
 const RE_DE_PARA = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} ${PARA} ${PARADA} `);
@@ -362,6 +365,8 @@ export type OrigemDoTrecho = {
 
 /** O sentido do trecho pela ordem das paradas (null = mesma parada). */
 export function sentidoDoTrecho(de: Parada, para: Parada): "ida" | "volta" | null {
+  // Palmeiral e Povoado Sozinho: os dois ficam entre Matões e Cantanhede, sem ordem certa entre si (issue #512)
+  if (ENTRE_MATOES_E_CANTANHEDE.includes(de) && ENTRE_MATOES_E_CANTANHEDE.includes(para)) return null;
   const a = ORDEM_DA_IDA.indexOf(de);
   const b = ORDEM_DA_IDA.indexOf(para);
   return a === b ? null : a < b ? "ida" : "volta";
@@ -377,8 +382,17 @@ export function paradasCorrigidas(textoNormalizado: string): string {
     .join(" ");
 }
 
+/** "do povoado Palmeiral" vira "de palmeiral"; "pro Sozinho", "pro povoado sozinho" (issue #512). */
+function comPovoados(n: string): string {
+  return n.replace(
+    / (d[eo]|no|em|pr[oa]|para|ao?|ate)(?: o| ao)?(?: povoado(?: d[eo])?)? (palmeiral|sozinho)(?= )/g,
+    (_m, prep: string, nome: string) =>
+      ` ${({ do: "de", no: "em", ao: "a" } as Record<string, string>)[prep] ?? prep} ${nome === "sozinho" ? "povoado sozinho" : nome}`,
+  );
+}
+
 export function origemEscrita(texto: string): OrigemDoTrecho | null {
-  const n = ` ${paradasCorrigidas(normalizarTexto(texto))} `;
+  const n = comPovoados(` ${paradasCorrigidas(normalizarTexto(texto))} `);
   // "Pirapemas/ São Luís", "São Luís x Cantanhede", "Cantanhede → São Luís": origem/destino (issue #419)
   const barra = ` ${normalizarTexto(String(texto ?? "").replace(/\s*(?:\/|->|→|\bx\b)\s*/gi, " qbarraq "))} `.match(RE_PAR_COM_BARRA);
   if (barra) {
@@ -548,7 +562,7 @@ export function pontoDaVoltaPelaOrigem(de: Parada): "pirapemas" | "cantanhede" |
   return "cantanhede";
 }
 
-const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "sao luis" ? "sao luis" : p);
+const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "povoado sozinho" ? "sozinho" : p);
 
 /**
  * O pedido segue o trecho dito (issue #407): sentido pela ordem das paradas, embarque na cidade de
