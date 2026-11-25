@@ -7,7 +7,7 @@
 
 import { comTranscricoesDoBot } from "./chatwootPayload.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
-import { contextoDaTranscricao } from "./transcricaoPura.ts";
+import { contextoDaTranscricao, ehEcoDoContexto } from "./transcricaoPura.ts";
 
 const MODELO = Deno.env.get("TRANSCRICAO_MODELO") ?? "gpt-4o-mini-transcribe";
 /** Ruas conhecidas (mapa, ou citadas em 2+ reservas: o que veio de um áudio só não entra), guardadas 1 h. */
@@ -58,11 +58,22 @@ export function urlDoChatwoot(url: string): boolean {
 
 /** Manda o arquivo para a OpenAI e devolve o texto (lança em falha). */
 async function transcreverNaOpenAI(arquivo: Blob, mime: string, chave: string): Promise<string> {
+  const vocabulario = await contexto();
+  const texto = await pedirTranscricao(arquivo, mime, chave, vocabulario);
+  if (!ehEcoDoContexto(texto, vocabulario)) return texto;
+  // devolveu o vocabulário: de novo sem ele; se ainda vier eco, não há fala
+  const semVocabulario = await pedirTranscricao(arquivo, mime, chave, null);
+  const eco = ehEcoDoContexto(semVocabulario, vocabulario);
+  evento("bot_transcricao_eco", { resolveu: !eco && !!semVocabulario, bytes: arquivo.size });
+  return eco ? "" : semVocabulario;
+}
+
+async function pedirTranscricao(arquivo: Blob, mime: string, chave: string, vocabulario: string | null): Promise<string> {
   const form = new FormData();
   form.append("file", new File([arquivo], `audio.${EXTENSAO[mime] ?? "ogg"}`, { type: mime }));
   form.append("model", MODELO);
   form.append("language", "pt");
-  form.append("prompt", await contexto());
+  if (vocabulario) form.append("prompt", vocabulario);
   form.append("response_format", "json");
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
