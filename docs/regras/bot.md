@@ -92,7 +92,7 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   R$ 90); Pindaí e sede de Paço R$ 100; carro auxiliar e frete só com atendente; outra van só seu Raimundo, sem vaga e se
   pedirem; sem desconto de idoso/estudante/PCD; desistência só cancela; ônibus com Wi-Fi, USB e ar. Cajuí é em Cantanhede.
 - **Pirapemas até Cantanhede é sempre extra** (issue #530, `database/138`): o banco marca `fora_lotacao` sozinho. **Em pé** só no
-  ônibus: Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões do Norte ou Miranda do Norte.
+  ônibus (no máximo 5): Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões do Norte ou Miranda do Norte.
 - **Segunda de feriado** (issue #529): sai no horário normal e, quase sempre, a terça sai 1 h mais cedo.
 - **Contatos internos** (dono, 24/11 — issue #532, `contatos_internos`): taxistas, equipe e família. O bot nunca escreve para eles
   (trava em `chatwootClient.postMessage`), não observa a conversa, não abre pendência e não aprende; o "Agendado ☑️" vale.

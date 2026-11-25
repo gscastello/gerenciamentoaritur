@@ -1184,7 +1184,7 @@ const com = (t: string) => ` ${normalizarTexto(t)} `;
 const PERGUNTA_DE_EMBARQUE =
   / (busc\w*|peg\w*|embarc\w*|aonde|onde (voce|vc|tu|a senhora|o senhor) (esta|ta|fica|mora|vai estar)|de onde) /;
 const PERGUNTA_DE_DESEMBARQUE = / (desc\w*|desembarc\w*|deix\w*|destino|pra onde|para onde) /;
-const FALA_DE_DESEMBARQUE = / (desco|desce|descer|deixa|deixar|me deixe|destino|vou pra|vou para) /;
+const FALA_DE_DESEMBARQUE = / (desco|desce|descer|deixa|deixar|me deixe|destino|desembarque|onde (?:voce |vc )?vai ficar|vou pra|vou para) /;
 const SEM_SENTIDO = new Set(["a", "o", "as", "os", "da", "de", "do", "das", "dos", "na", "no", "nas", "nos", "em", "e", "pra", "para"]);
 const nucleoDe = (t: string) =>
   normalizarTexto(t)

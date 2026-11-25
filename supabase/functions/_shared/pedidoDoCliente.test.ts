@@ -633,3 +633,13 @@ Deno.test("#531: 'pesagem' sem nada de encomenda é passagem; encomenda de verda
   assertEquals(resposta("Estrada de Cantanhede, em Pirapemas"), "pirapemas");
   assertEquals(resposta("Vila Exemplo Cantanhede"), "cantanhede");
 });
+
+Deno.test("#523: 'Onde você vai ficar' do formulário é desembarque, não resposta a onde buscar", async () => {
+  const { desembarqueEraEmbarque } = await import("./pedidoDoCliente.ts");
+  const em = "2026-11-10T12:00:00Z";
+  const conversa = [
+    { quem: "equipe", texto: "Local de embarque (Retorno/Rodoviária, Buscar em casa?)", em },
+    { quem: "cliente", texto: "Local de embarque: Rua Exemplo, 58. Onde você vai ficar: Cantanhede, Rua Outra", em },
+  ];
+  assertEquals(desembarqueEraEmbarque("Cantanhede, Rua Outra", conversa), false);
+});
