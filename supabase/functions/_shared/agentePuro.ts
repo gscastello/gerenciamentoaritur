@@ -276,6 +276,10 @@ const RE_AFIRMA_RESERVA =
 const RE_FEZ_AGORA =
   /(?<!\bn[ãa]o )\b(?:cancelei|desmarquei|consegui (?:uma|sua|a sua|duas) vagas?|remarquei|reservei|agendei|registrei|deixei (?:reservad|cancelad|agendad)[oa]|alterei (?:a|sua) reserva|mudei (?:a|sua) (?:reserva|passagem|viagem))\b|\b(?:ficou|est[áa] agora) (?:j[áa] )?(?:desmarcad|cancelad|remarcad|reservad|agendad)[oa]s?\b/i;
 
+/** Horário de um DIA ("hoje a partir das 5h", "segunda às 4:40"): só com os horários daquele dia consultados (issue #524). */
+const RE_HORA_DITA = /\b\d{1,2}(?::\d{2}|\s?h(?:\d{2})?)\b/i;
+const RE_DIA_DITO = /\b(?:hoje|amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|\d{1,2}\/\d{1,2})\b/i;
+
 /** "já avisei/chamei a equipe": só se avisou mesmo. */
 const RE_AVISOU_EQUIPE =
   /\b(?:avisei|chamei|acionei|repassei|passei|pedi|vou (?:pedir|confirmar|verificar|checar|passar|avisar))\b[^.!?\n]{0,60}\b(?:equipe|motorista|pessoal|atendente)\b/i;
@@ -332,7 +336,7 @@ export function converterObservacoes(obs: ObservacaoDoBanco[]): MensagemDaConver
 export function problemasDaResposta(
   texto: string,
   fontes: string[],
-  estado: { mexeuEmReserva: boolean; consultouReservas: boolean; avisouEquipe?: boolean },
+  estado: { mexeuEmReserva: boolean; consultouReservas: boolean; avisouEquipe?: boolean; consultouHorario?: boolean },
 ): string[] {
   const problemas: string[] = [];
   const invencionices = numerosNaoFundamentados(texto, fontes);
@@ -349,6 +353,11 @@ export function problemasDaResposta(
   if (RE_FEZ_AGORA.test(texto) && !estado.mexeuEmReserva) {
     problemas.push(
       "Você disse que cancelou, reservou ou remarcou agora, mas nenhuma ferramenta de reserva deu certo neste atendimento. Se a reserva não apareceu, use avisar_equipe e diga que avisou a equipe; não diga que está feito.",
+    );
+  }
+  if (estado.consultouHorario === false && RE_HORA_DITA.test(texto) && RE_DIA_DITO.test(texto)) {
+    problemas.push(
+      "Você disse um horário para um dia sem consultar os horários desse dia (a segunda sai mais cedo, a terça não). Use consultar_viagem ou andamento_da_viagem com a data certa e diga só o que voltar, ou tire o horário.",
     );
   }
   if (estado.avisouEquipe === false && RE_AVISOU_EQUIPE.test(texto)) {
@@ -594,7 +603,7 @@ export function cronogramaValido(salvo: unknown): Cronograma {
 }
 
 /** Na segunda-feira a ida sai mais cedo em todos os pontos; a volta não muda. */
-function pontosDoDia(c: Cronograma, direcao: "ida" | "volta", data: string, ajusteSegundaHoras: number) {
+export function pontosDoDia(c: Cronograma, direcao: "ida" | "volta", data: string, ajusteSegundaHoras: number) {
   const [a, m, d] = data.split("-").map(Number);
   const segunda = new Date(Date.UTC(a, m - 1, d, 12)).getUTCDay() === 1;
   const atraso = direcao === "ida" && segunda ? -ajusteSegundaHoras * 60 : 0;

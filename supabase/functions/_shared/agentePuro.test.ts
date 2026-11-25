@@ -763,3 +763,14 @@ Deno.test("#524: dizer que cancelou ou reservou exige a ferramenta; dizer que av
   assertEquals(n("Vou pedir para um atendente confirmar o valor e te passar."), 0);
   assertEquals(n("Cancelei sua passagem de amanhã.", { ...so, mexeuEmReserva: true }), 0);
 });
+
+Deno.test("#524: horário de um dia só com os horários daquele dia consultados", async () => {
+  const { problemasDaResposta } = await import("./agentePuro.ts");
+  const n = (t: string, consultouHorario: boolean) =>
+    problemasDaResposta(t, [t], { mexeuEmReserva: false, consultouReservas: true, consultouHorario }).length;
+  assertEquals(n("Hoje a saída da Rodoviária é a partir das 5h, porque na segunda sai mais cedo.", false), 1);
+  assertEquals(n("Amanhã, terça, passamos às 5:40.", false), 1);
+  assertEquals(n("Amanhã, terça, passamos às 5:40.", true), 0);
+  assertEquals(n("Amanhã temos vaga sim.", false), 0);
+  assertEquals(n("A van sai do Retorno a partir das 6h.", false), 0);
+});

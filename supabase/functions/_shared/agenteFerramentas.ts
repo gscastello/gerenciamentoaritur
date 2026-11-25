@@ -35,6 +35,8 @@ import {
   precoDoBairroCadastrado,
   comoCobrarAVolta,
   perguntaSemResposta,
+  diaPorExtenso,
+  pontosDoDia,
 } from "./agentePuro.ts";
 import { lotadaPelaEquipe, viagensLotadasPelaEquipe } from "./recusaPura.ts";
 import { resolverBairro } from "./bairroResolver.ts";
@@ -572,10 +574,16 @@ async function consultarViagem(args: Linha, ctx: ContextoDoAgente) {
     .eq("direction", direcao)
     .is("deleted_at", null)
     .maybeSingle();
+  const { data: cfgs } = await supabaseAdmin.from("settings").select("key, value").in("key", ["trip_schedule", "monday_adjustment"]);
+  const cfg = (k: string) => (cfgs ?? []).find((c: Linha) => c.key === k)?.value;
+  const ajuste = cfg("monday_adjustment");
   return {
     ok: true,
     data,
+    dia: diaPorExtenso(data),
     direcao,
+    // já com a segunda mais cedo, quando é segunda (issue #524)
+    horarios_deste_dia: pontosDoDia(cronogramaValido(cfg("trip_schedule")), direcao as "ida" | "volta", data, ajuste?.active ? Number(ajuste.hours) || 0 : 0),
     viagem_cadastrada: !!disp.trip_id,
     capacidade: disp.capacity,
     passageiros_confirmados: disp.occupied,

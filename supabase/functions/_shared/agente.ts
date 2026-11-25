@@ -98,7 +98,7 @@ ANDAMENTO DA VIAGEM (só estimativa pelo horário)
 - Nunca diga em que cidade a van está agora nem prometa horário exato: é sempre previsão ("por volta de", "a partir de").
 - Se o cliente insistir em saber onde estamos (perguntar de novo depois da estimativa), envie o contato_do_motorista (nome e telefone). Sem contato cadastrado, chame o atendente.
 - Sem reserva: se ele só quer saber o horário de um lugar, responda pela janela desse lugar (andamento_da_viagem com lugar e direcao). Se ele acha que tem reserva e ela não aparece, diga que não encontrou e ofereça agendar ou chame o atendente.
-- Na segunda-feira a ida sai 1 hora mais cedo em todos os pontos; a volta não muda. A ferramenta já faz essa conta.
+- Na segunda-feira a ida sai 1 hora mais cedo em todos os pontos; a volta não muda. Nunca faça essa conta nem diga de cabeça que dia é: consultar_viagem e andamento_da_viagem devolvem os horários do dia já certos.
 - Para horário de passagem e chegada vale o cronograma nas INFORMAÇÕES, mesmo que o horário do ponto seja outro. Onde esperar, plataforma ou parada: use COMO A VIAGEM FUNCIONA NA PRÁTICA.
 
 RESERVAS
@@ -332,6 +332,7 @@ export async function rodarAgente(
       mexeuEmReserva: ctx.escrita.criou || ctx.escrita.alterou || ctx.escrita.cancelou || ctx.escrita.esperou,
       consultouReservas: ctx.consultouReservas,
       avisouEquipe: ctx.transferiu || ferramentasUsadas.includes("avisar_equipe") || ferramentasUsadas.includes("chamar_atendente"),
+      consultouHorario: ferramentasUsadas.includes("consultar_viagem") || ferramentasUsadas.includes("andamento_da_viagem"),
     });
     if (problemas.length === 0) {
       resposta = texto;
