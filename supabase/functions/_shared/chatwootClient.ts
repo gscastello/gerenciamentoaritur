@@ -8,6 +8,8 @@
 //   CHATWOOT_ACCOUNT_ID  número da conta (ex.: 188239)
 //   CHATWOOT_BASE_URL    opcional; padrão https://app.chatwoot.com
 
+import { conversaInterna } from "./contatosInternos.ts";
+
 function config() {
   const token = Deno.env.get("CHATWOOT_API_TOKEN");
   const account = Deno.env.get("CHATWOOT_ACCOUNT_ID");
@@ -57,8 +59,13 @@ export type MensagemChatwoot = {
 
 export const chatwootClient = {
   /** Mensagem para o cliente, ou nota privada (só a equipe vê) com `private: true`. */
-  postMessage(conversationId: number, content: string, opts: { private?: boolean } = {}) {
-    return chamar(`/conversations/${conversationId}/messages`, {
+  async postMessage(conversationId: number, content: string, opts: { private?: boolean } = {}) {
+    // taxista, equipe ou família: nenhuma mensagem automática (issue #532)
+    if (opts.private !== true && (await conversaInterna(conversationId))) {
+      console.log(JSON.stringify({ evento: "bot_contato_interno", conversa: conversationId, nao_enviou: true }));
+      return null;
+    }
+    return await chamar(`/conversations/${conversationId}/messages`, {
       content,
       message_type: "outgoing",
       private: opts.private === true,
