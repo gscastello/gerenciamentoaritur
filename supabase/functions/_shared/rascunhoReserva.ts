@@ -120,6 +120,7 @@ import {
   semPedidosPassados,
   cidadeNaRespostaDoEndereco,
   diasSoPerguntados,
+  passagemSemProvaDeEncomenda,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
@@ -507,7 +508,10 @@ async function lerEGravar(
   const lidos = simular?.memoria ? await lerComMemoria(system, conversa, opcoes.modelo) : await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
-  const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
+  // "marcar uma pesagem" lida como encomenda, sem nada de encomenda na conversa, é passagem (issue #531)
+  const comTipo = passagemSemProvaDeEncomenda(lidos.pedidos, recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe"));
+  if (comTipo !== lidos.pedidos) evento("bot_encomenda_era_passagem", { conversa: entrada.chatwootConversationId });
+  const lidosJuntos = juntarPedidosDaMesmaViagem(comTipo);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
