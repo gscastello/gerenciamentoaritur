@@ -185,3 +185,14 @@ export function semLogradouros(texto: string | null | undefined): string {
     "$1 ",
   );
 }
+
+/**
+ * A estrada que leva à cidade não é a cidade. "Estrada de Pirapemas" é o trecho entre Cantanhede e Pirapemas, mais
+ * perto de Cantanhede (dono, 24/11 — issue #531): conta como Cantanhede. Recebe e devolve texto normalizado.
+ */
+export function estradaDaCidade(normalizado: string): string {
+  return ` ${normalizado.trim()} `
+    .replace(/ (?:estrada|rodovia|ramal) (?:de |da |do |pra |para )?pirapemas?(?= )/g, " estrada cantanhede")
+    .replace(/ (?:estrada|rodovia|ramal) (?:de |da |do |pra |para )cantanhede(?= )/g, " estrada ")
+    .replace(/ caminho (?:de |da |do |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " caminho ");
+}

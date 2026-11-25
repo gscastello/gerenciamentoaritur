@@ -627,6 +627,9 @@ Deno.test("#531: 'pesagem' sem nada de encomenda é passagem; encomenda de verda
   assertEquals(tipo("rua do exemplo"), "encomenda");
   // a estrada que leva à cidade não é a cidade
   const resposta = (t: string) => cidadeNaRespostaDoEndereco([{ quem: "equipe", texto: "Qual o endereço pra lhe buscar" }, { quem: "cliente", texto: t }]);
-  assertEquals(resposta("Av. Exemplo (estrada de pirapemas"), null);
+  // "estrada de Pirapemas" fica entre as duas, mais perto de Cantanhede (dono, 24/11)
+  assertEquals(resposta("Av. Exemplo (estrada de pirapemas"), "cantanhede");
+  assertEquals(resposta("Estrada de Pirapemas, em Pirapemas"), null);
+  assertEquals(resposta("Estrada de Cantanhede, em Pirapemas"), "pirapemas");
   assertEquals(resposta("Vila Exemplo Cantanhede"), "cantanhede");
 });
