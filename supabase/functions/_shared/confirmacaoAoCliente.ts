@@ -7,6 +7,8 @@
 // Nunca cita valor (preço é da tabela e a equipe confirma) e nunca usa o nome do
 // perfil do WhatsApp: só o do cadastro.
 
+import { horasMaisCedo } from "./feriados.ts";
+
 export type ReservaParaConfirmar = {
   tipo: "passagem" | "encomenda";
   direcao: "ida" | "volta";
@@ -38,8 +40,7 @@ export function horarioDoEmbarque(
 ): string | null {
   const m = String(baseTime ?? "").match(/^(\d{2}):(\d{2})/);
   if (!m) return null;
-  const segunda = new Date(`${data}T12:00:00Z`).getUTCDay() === 1;
-  const menos = direcao === "ida" && segunda && ajuste?.active !== false ? Number(ajuste?.hours ?? 1) : 0;
+  const menos = direcao === "ida" && ajuste?.active !== false ? horasMaisCedo(data, Number(ajuste?.hours ?? 1)) : 0;
   const h = (Number(m[1]) - menos + 24) % 24;
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }

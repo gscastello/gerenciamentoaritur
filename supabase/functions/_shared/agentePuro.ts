@@ -5,6 +5,7 @@
 // de reserva, valor total e as travas contra invenção. A parte com I/O fica em
 // agente.ts / agenteFerramentas.ts.
 
+import { horasMaisCedo } from "./feriados.ts";
 import { numerosNaoFundamentados } from "./botGuard.ts";
 import { nomeParecidoNoTexto, povoadoDoCaminho, semLogradouros } from "./grafia.ts";
 import { textoComContatos } from "./chatwootPayload.ts";
@@ -604,9 +605,7 @@ export function cronogramaValido(salvo: unknown): Cronograma {
 
 /** Na segunda-feira a ida sai mais cedo em todos os pontos; a volta não muda. */
 export function pontosDoDia(c: Cronograma, direcao: "ida" | "volta", data: string, ajusteSegundaHoras: number) {
-  const [a, m, d] = data.split("-").map(Number);
-  const segunda = new Date(Date.UTC(a, m - 1, d, 12)).getUTCDay() === 1;
-  const atraso = direcao === "ida" && segunda ? -ajusteSegundaHoras * 60 : 0;
+  const atraso = direcao === "ida" ? -horasMaisCedo(data, ajusteSegundaHoras) * 60 : 0;
   return c[direcao].map((p) => ({
     ...p,
     de: hhmmDe(minutos(p.de) + atraso),
