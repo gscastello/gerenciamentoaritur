@@ -121,6 +121,7 @@ import {
   umPassageiroSo,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { embarqueNoCaminhoDe } from "./embarqueNoCaminho.ts";
 import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -455,6 +456,16 @@ export type SimulacaoDaLeitura = { agora: Date; reservasAntesDe: string; /** usa
 
 /** settings.monday_adjustment (a Ida da segunda sai mais cedo), lido uma vez por chamada. */
 let ajusteEmCache: { active?: boolean; hours?: number } | null | undefined;
+let cronogramaEmCache: unknown;
+/** settings.trip_schedule, lido uma vez por chamada. */
+async function cronogramaDoBanco(): Promise<unknown> {
+  if (cronogramaEmCache === undefined) {
+    const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "trip_schedule").maybeSingle();
+    cronogramaEmCache = data?.value ?? null;
+  }
+  return cronogramaEmCache;
+}
+
 async function ajusteDaSegunda() {
   if (ajusteEmCache !== undefined) return ajusteEmCache;
   const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "monday_adjustment").maybeSingle();
@@ -1299,16 +1310,20 @@ export async function lancarPeloAgendado(entrada: Entrada, segundaRodada = false
       lancadas.push(res.reservation_id);
       if (res.message === "created") {
         const outraPessoa = d.phone && !variantesTelefone(entrada.telefone).includes(normalizarTelefone(d.phone));
+        // embarque numa cidade do caminho: o lugar e a hora do cronograma (issue #533)
+        const noCaminho = encomenda
+          ? null
+          : embarqueNoCaminhoDe({ direcao, ponto: ponto?.code ?? null, detalhe: d.pickup_detail }, await cronogramaDoBanco());
         paraConfirmar.push({
           tipo: encomenda ? "encomenda" : "passagem",
           direcao,
           data: d.trip_date,
           pontoCodigo: ponto?.code ?? null,
           // o horário do ponto na data, como na Agenda (issue #432)
-          horario: encomenda ? null : horarioDoEmbarque(ponto?.base_time, d.trip_date, direcao, await ajusteDaSegunda()),
-          pontoNome: ponto?.name ?? null,
+          horario: encomenda ? null : horarioDoEmbarque(noCaminho ? `${noCaminho.hora}:00` : ponto?.base_time, d.trip_date, direcao, await ajusteDaSegunda()),
+          pontoNome: noCaminho?.nome ?? ponto?.name ?? null,
           bairro: d.pickup_neighborhood,
-          detalhe: encomenda ? null : d.pickup_detail,
+          detalhe: encomenda ? null : noCaminho ? noCaminho.detalhe : d.pickup_detail,
           desembarque: d.dropoff_location,
           quantidade: d.quantity ?? 1,
           aConfirmar: falta,
