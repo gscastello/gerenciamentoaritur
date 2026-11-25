@@ -552,6 +552,11 @@ Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto cert
 Clientes e passageiros
 - Com poucas vagas, clientes RECORRENTES têm prioridade; a equipe pode passar os outros para outra van por logística (reserva cancelada no app). Não trate esse cancelamento como erro. Sem o ônibus, roda Van + carro (19 lugares): confira o veículo do dia.
 - Volta sem desembarque é São Luís: não é pendência.
+- Cajuí (rua do Cajuí, entrada do Cajuí) é em CANTANHEDE, não em São Luís.
+- Rodoviária de São Luís: embarque dentro, na plataforma 23.
+- De Pirapemas até Cantanhede é sempre passagem extra (não ocupa vaga; o banco marca sozinho). Em pé só no ônibus: Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões ou Miranda.
+- O veículo normal é o ônibus; a van sai quando ele vai para a manutenção. Idoso, estudante e PCD não têm desconto. Desistência: só cancelar.
+- Valor é só informação ao cliente (o app ainda não cobra): valor em aberto não é pendência nem erro.
 - Busca em casa (Ida): o BAIRRO basta para o taxista buscar o passageiro. Sem rua não é pendência nem erro.
 - Criança: até 5 anos vai no colo (não paga e não ocupa vaga); a partir dos 6 anos paga passagem inteira e ocupa vaga.
 - Nome: o do cadastro; senão o que o cliente escreveu; nunca o nome do perfil do WhatsApp. Sem nome, pode ir vazio.

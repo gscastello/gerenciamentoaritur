@@ -171,7 +171,7 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
 /** Locais de desembarque reconhecidos só em código (`areaDoDesembarque`), fora das instruções do leitor. */
 const AREAS_FORA_DO_TEXTO = new Set(["palmeiral", "povoado_sozinho"]);
 /** Bairros novos da tabela que o código reconhece, fora das instruções do leitor (issue #528). */
-const BAIRROS_FORA_DO_TEXTO = new Set(["Kennedy"]);
+const BAIRROS_FORA_DO_TEXTO = new Set(["Kennedy", "Pindaí"]);
 
 async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
