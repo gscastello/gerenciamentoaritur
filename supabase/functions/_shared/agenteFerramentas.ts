@@ -44,7 +44,7 @@ import { getBotContext } from "./botContext.ts";
 import { ehPostoCarone, type LugarNasCidades, lugarDeOutraCidade, PONTO_POSTO_CARONE, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
-import { lugaresContraOSentido, trechoCurto } from "./ladoDaRota.ts";
+import { cabeEmPe, lugaresContraOSentido, trechoCurto } from "./ladoDaRota.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { type AcaoDaProva, criadoAntes } from "./provaPura.ts";
 
@@ -362,6 +362,19 @@ async function disponibilidade(data: string, direcao: "ida" | "volta", prova: Pr
   if (!(Number(disp.available ?? 0) > 0) || !(await equipeDisseLotado(data, direcao, prova?.agora ?? new Date()))) return disp;
   console.log(JSON.stringify({ evento: "bot_lotado_pela_equipe", data, direcao, vagas_no_app: disp.available }));
   return { ...disp, available: 0, lotado_pela_equipe: true };
+}
+
+/** Passageiros fora das vagas (extras e em pé) já confirmados na viagem; na falha, conta como cheio. */
+async function foraDasVagas(tripId: string | null | undefined): Promise<number> {
+  if (!tripId) return 0;
+  const { data, error } = await supabaseAdmin
+    .from("reservations")
+    .select("quantity")
+    .eq("trip_id", tripId)
+    .is("deleted_at", null)
+    .in("status", ["confirmada", "pendente", "embarcado"])
+    .eq("extra_data->>fora_lotacao", "true");
+  return error ? Number.POSITIVE_INFINITY : ((data ?? []) as Linha[]).reduce((n, r) => n + Number(r.quantity ?? 1), 0);
 }
 
 /**
@@ -851,6 +864,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     disp.capacity == null ? null : Number(disp.capacity),
   );
   const semLugar = disp.available != null && disp.available < pedido.quantidade && !curto.extra;
+  if (semLugar && curto.emPe && !cabeEmPe(await foraDasVagas(disp.trip_id), pedido.quantidade)) curto.emPe = false;
   if (semLugar && curto.emPe && args.em_pe !== true) {
     return {
       ok: false,

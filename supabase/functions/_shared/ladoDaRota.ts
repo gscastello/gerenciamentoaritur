@@ -178,3 +178,11 @@ export function trechoCurto(
   const trechoEmPe = extra || ((de === "pirapemas" || de === "cantanhede") && (para === "matoes" || para === "miranda"));
   return { extra, emPe: trechoEmPe && (capacidade ?? 0) >= LUGARES_DE_ONIBUS };
 }
+
+/** Passageiros em pé no ônibus, no máximo (dono, 25/11). */
+const MAXIMO_EM_PE = 5;
+
+/** Cabe mais gente em pé? `foraDasVagas`: extras e em pé já confirmados naquela viagem. */
+export function cabeEmPe(foraDasVagas: number, quantidade: number): boolean {
+  return foraDasVagas + quantidade <= MAXIMO_EM_PE;
+}

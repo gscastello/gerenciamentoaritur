@@ -81,3 +81,8 @@ Deno.test("#530: Pirapemas até Cantanhede é extra; em pé só no ônibus e nos
   assertEquals(t("pirapemas", "São Luís"), { extra: false, emPe: false });
   assertEquals(t("busca", "Cantanhede", 31, "ida"), { extra: false, emPe: false });
 });
+
+Deno.test("#530: no máximo 5 passageiros em pé", async () => {
+  const { cabeEmPe } = await import("./ladoDaRota.ts");
+  assertEquals([cabeEmPe(0, 5), cabeEmPe(4, 1), cabeEmPe(4, 2), cabeEmPe(5, 1), cabeEmPe(Number.POSITIVE_INFINITY, 1)], [true, true, false, false, false]);
+});
