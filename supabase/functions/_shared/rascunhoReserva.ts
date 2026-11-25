@@ -684,7 +684,10 @@ async function lerEGravar(
           lugarDeSaoLuis: !!bairroPelosLugares((deSaoLuis ?? []) as LugarDeSaoLuis[]),
           sentidoEscrito: pedidos.length === 1 ? sentidoEscrito(textosDoCliente) : null,
         });
-        if (decisao === "duvida") {
+        // formulário preenchido: bairro de São Luís no embarque e cidade do interior em "Onde você vai ficar" é Ida
+        const formularioDizIda = !!paradaDoInterior(p.desembarque) && !!bairroEscrito(textosDoCliente, ctx.bairrosTabela) &&
+          textosDoCliente.some((t) => / onde (?:voce|vc) vai ficar /.test(` ${normalizarTexto(t)} `));
+        if (decisao === "duvida" && !formularioDizIda) {
           ondeEmbarca.add(p);
         } else if (decisao) {
           Object.assign(

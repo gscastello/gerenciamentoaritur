@@ -1306,12 +1306,16 @@ export function umPassageiroSo<P extends PedidoDoPar & { quantidade?: number | n
   pedidos: P[],
   textos: string[],
 ): P[] {
+  const t = textos.map((x) => ` ${normalizarTexto(x)} `);
+  const soPraOutro = quantidadeEscrita(textos) == null && !t.some((x) => MAIS_DE_UM.test(x)) && t.some((x) => / (?:pra|para|pro) (?:o |a )?(?:meu|minha) /.test(x));
+  // a mesma leitura às vezes vem como UM pedido de 2 passagens
+  if (pedidos.length === 1 && soPraOutro && Number(pedidos[0].quantidade ?? 1) === 2 && (pedidos[0].tipo ?? "passagem") === "passagem") {
+    return [{ ...pedidos[0], quantidade: 1 }];
+  }
   if (pedidos.length !== 2) return pedidos;
   const [a, b] = pedidos;
   const iguais = a.data === b.data && a.direcao === b.direcao && (a.ponto ?? null) === (b.ponto ?? null) &&
     normalizarTexto(a.endereco ?? "") === normalizarTexto(b.endereco ?? "") && (a.tipo ?? "passagem") === (b.tipo ?? "passagem") && (a.tipo ?? "passagem") === "passagem";
   if (!iguais || Number(a.quantidade ?? 1) !== 1 || Number(b.quantidade ?? 1) !== 1 || a.passageiro_telefone || b.passageiro_telefone) return pedidos;
-  const t = textos.map((x) => ` ${normalizarTexto(x)} `);
-  if (quantidadeEscrita(textos) != null || t.some((x) => MAIS_DE_UM.test(x)) || !t.some((x) => / (?:pra|para|pro) (?:o |a )?(?:meu|minha) /.test(x))) return pedidos;
-  return [b];
+  return soPraOutro ? [b] : pedidos;
 }

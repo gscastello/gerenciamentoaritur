@@ -606,5 +606,7 @@ Deno.test("#531: 'é pra meu filho' lido como duas passagens iguais é uma só",
   assertEquals(n("tem vaga amanhã?", "eu e meu filho", "uma pra meu filho"), 2);
   assertEquals(n("quero duas passagens", "uma pra meu filho"), 2);
   assertEquals(n("tem vaga amanhã?", "vou pro retorno"), 2);
+  assertEquals(umPassageiroSo([{ ...p, quantidade: 2 }], ["tem vaga amanhã?", "E pra meu filho ele vai pro retorno"])[0].quantidade, 1);
+  assertEquals(umPassageiroSo([{ ...p, quantidade: 2 }], ["quero duas, uma pra meu filho"])[0].quantidade, 2);
   assertEquals(umPassageiroSo([{ ...p }, { ...p, passageiro_telefone: "98900000000" }], ["é pra meu filho"]).length, 2);
 });
