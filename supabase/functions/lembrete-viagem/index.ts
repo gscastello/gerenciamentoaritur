@@ -8,6 +8,7 @@
 //
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
 
+import { embarqueNoCaminhoDe } from "../_shared/embarqueNoCaminho.ts";
 import { diaCivil } from "../_shared/agentePuro.ts";
 import { configDoLembrete, lembretesDevidos, type ReservaDoLembrete, textoDoLembrete, variaveisDoModelo } from "../_shared/lembretePuro.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
@@ -42,7 +43,7 @@ Deno.serve(async (req: Request) => {
   const simular = corpo?.simular === true;
 
   try {
-    const { data: cfgs } = await supabaseAdmin.from("settings").select("key, value").in("key", ["lembrete_viagem", "monday_adjustment"]);
+    const { data: cfgs } = await supabaseAdmin.from("settings").select("key, value").in("key", ["lembrete_viagem", "monday_adjustment", "trip_schedule"]);
     const valor = (k: string) => ((cfgs ?? []) as Linha[]).find((c) => c.key === k)?.value ?? null;
     const cfg = configDoLembrete(valor("lembrete_viagem"));
     // simular: mostra quem receberia agora, sem enviar nada (mesmo desligado)
@@ -76,6 +77,16 @@ Deno.serve(async (req: Request) => {
       endereco: [r.street, r.pickup_detail].map((x: unknown) => String(x ?? "").trim()).filter(Boolean).join(", ") || null,
       quantidade: Number(r.quantity ?? 1),
     }));
+
+    // quem embarca numa cidade do caminho: o lugar e a hora do cronograma, não os do ponto (issue #533)
+    for (const r of reservas) {
+      const noCaminho = embarqueNoCaminhoDe({ direcao: r.direcao, ponto: r.pontoCodigo, detalhe: r.endereco }, valor("trip_schedule"));
+      if (!noCaminho) continue;
+      r.pontoHora = `${noCaminho.hora}:00`;
+      r.pontoNome = noCaminho.nome;
+      r.endereco = noCaminho.detalhe;
+      if (r.direcao === "ida") r.endereco = [noCaminho.nome, noCaminho.detalhe].filter(Boolean).join(", ");
+    }
 
     const ids = reservas.map((r) => r.id);
     const { data: avisos } = ids.length

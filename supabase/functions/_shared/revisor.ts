@@ -11,6 +11,7 @@ import { acharPonto, valorDoPedido } from "./agenteFerramentas.ts";
 import { areaDoDesembarque, diaCivil } from "./agentePuro.ts";
 import { custoUsd, MODELOS } from "./assistentePuro.ts";
 import { chatwootClient } from "./chatwootClient.ts";
+import { embarqueNoCaminhoDe } from "./embarqueNoCaminho.ts";
 import { mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import {
   achadosValidos,
@@ -305,18 +306,23 @@ async function avisarCliente(chatwoot: number, reservas: ReservaRevisada[], nome
   if (cfg?.value?.ativo === false) return;
   const { data: pontos } = await supabaseAdmin.from("route_points").select("code, name").is("deleted_at", null);
   const nomes = Object.fromEntries(((pontos ?? []) as Linha[]).map((p) => [p.code, p.name]));
-  const lista: ReservaParaConfirmar[] = reservas.map((r) => ({
+  const { data: agenda } = await supabaseAdmin.from("settings").select("value").eq("key", "trip_schedule").maybeSingle();
+  const lista: ReservaParaConfirmar[] = reservas.map((r) => {
+    // embarque numa cidade do caminho: o nome do lugar (issue #533)
+    const noCaminho = r.tipo === "encomenda" ? null : embarqueNoCaminhoDe({ direcao: r.direcao, ponto: r.ponto, detalhe: r.embarque }, agenda?.value ?? null);
+    return {
     tipo: r.tipo,
     direcao: r.direcao,
     data: r.data,
     pontoCodigo: r.ponto,
-    pontoNome: r.ponto ? (nomes[r.ponto] ?? null) : null,
+    pontoNome: noCaminho?.nome ?? (r.ponto ? (nomes[r.ponto] ?? null) : null),
     bairro: r.bairro,
-    detalhe: r.embarque,
+    detalhe: noCaminho ? noCaminho.detalhe : r.embarque,
     desembarque: r.desembarque,
     quantidade: r.quantidade,
     aConfirmar: [],
-  }));
+    };
+  });
   const texto = mensagemDeConfirmacao(lista, { hoje, nome, atualizacao: true });
   if (!texto) return;
   await chatwootClient.postMessage(chatwoot, texto);
