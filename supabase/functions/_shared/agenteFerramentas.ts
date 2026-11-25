@@ -38,6 +38,7 @@ import {
   diaPorExtenso,
   pontosDoDia,
 } from "./agentePuro.ts";
+import { detalhesDaAlteracao, lugaresAMais, montarAlteracao, mudaOValor, type ReservaAtual } from "./alteracaoPura.ts";
 import { lotadaPelaEquipe, viagensLotadasPelaEquipe } from "./recusaPura.ts";
 import { resolverBairro } from "./bairroResolver.ts";
 import { getBotContext } from "./botContext.ts";
@@ -194,17 +195,25 @@ export const FERRAMENTAS: Ferramenta[] = [
     },
   },
   {
-    name: "remarcar_reserva",
+    name: "alterar_reserva",
     description:
-      "Muda data, ponto de embarque ou local de desembarque de uma reserva DESTE cliente (use o reserva_id de ver_minhas_reservas). Só depois do 'sim' do cliente.",
+      "Muda o que o cliente pedir numa reserva DELE (use o reserva_id de ver_minhas_reservas): dia, sentido, ponto, bairro, endereço, desembarque, quantidade de passagens (para mais ou para menos), forma de pagamento ou nome. Mande só o que muda; o resto fica como está. O sistema confere vaga, cidade, sentido e valor. Só depois do 'sim' do cliente. Nunca cancele e crie de novo para mudar uma reserva.",
     input_schema: {
       type: "object",
       properties: {
         reserva_id: { type: "string" },
         nova_data: DATA,
-        novo_ponto: { type: "string", description: "Código ou nome do novo ponto de embarque." },
-        novo_desembarque: { type: "string" },
+        nova_direcao: DIRECAO,
+        novo_ponto: { type: "string", description: "Código ou nome do novo ponto de embarque (na Volta, a cidade)." },
+        novo_bairro: { type: "string", description: "Bairro novo da busca em casa." },
+        novo_endereco: { type: "string", description: "Rua, referência ou local novo de embarque." },
+        novo_desembarque: { type: "string", description: "Onde ele desce agora." },
+        nova_quantidade: { type: "integer", description: "Total de passagens que fica na reserva (não a diferença)." },
+        nova_forma_pagamento: { type: "string", enum: ["dinheiro", "pix", "cartao"] },
+        novo_nome: { type: "string", description: "Só se o cliente corrigiu ou completou o nome do passageiro desta reserva." },
         cliente_confirmou: { type: "boolean" },
+        cidade_confirmada: { type: "boolean", description: "Só depois de um CIDADE_A_CONFIRMAR, se o cliente confirmou a cidade." },
+        sentido_confirmado: { type: "boolean", description: "Só depois de um SENTIDO_NAO_COMBINA, se o cliente confirmou." },
       },
       required: ["reserva_id", "cliente_confirmou"],
     },
@@ -334,6 +343,7 @@ async function reservasDeUmCliente(cliente: Linha | null, prova: ProvaDoAtendent
           status: a.status,
           quantity: a.quantity,
           total_price: a.unit_price == null ? null : a.unit_price * a.quantity,
+          unit_price: a.unit_price,
           dropoff_location: a.dropoff_location,
           pickup_neighborhood: a.pickup_neighborhood,
           pickup_detail: a.pickup_detail,
@@ -769,24 +779,15 @@ async function enderecoDeCostume(ctx: ContextoDoAgente) {
   return costumeParaFerramenta(data);
 }
 
-async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
-  const valido = validarPedidoDeReserva(args, ctx.hoje);
-  if (!valido.ok) return { ok: false, codigo: "PEDIDO_INCOMPLETO", problemas: valido.erros };
-  const pedido: PedidoValidado = valido.pedido;
-
-  const pontos = (await whatsappService.listRoutePoints(pedido.direcao)) ?? [];
-  let ponto = acharPonto(pontos, pedido.ponto);
-  // "Outros · Posto Carone": o posto voltou a ser ponto próprio, com o horário dele (issue #486)
-  const carone = pontos.find((p) => p.code === PONTO_POSTO_CARONE);
-  if (carone && pedido.direcao === "ida" && (!ponto || ponto.code === "outro") && ehPostoCarone(pedido.enderecoEmbarque)) {
-    ponto = carone;
-    pedido.enderecoEmbarque = null;
-  }
-  if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
-
+/** Cidade da Volta e sentido conferidos com os lugares ditos; null = tudo certo. Vale para reservar e para alterar. */
+async function conferirLugares(
+  lugar: { direcao: "ida" | "volta"; bairro: string | null; endereco: string | null; desembarque: string | null },
+  ponto: Linha,
+  args: Linha,
+): Promise<Linha | null> {
   // Volta: o lugar citado (rua, referência, casa) só é conhecido na outra cidade? confirma com o cliente (issue #274)
-  if (pedido.direcao === "volta" && pedido.enderecoEmbarque && args.cidade_confirmada !== true) {
-    const outra = lugarDeOutraCidade(await lugaresNasCidades(pedido.enderecoEmbarque), String(ponto.code));
+  if (lugar.direcao === "volta" && lugar.endereco && args.cidade_confirmada !== true) {
+    const outra = lugarDeOutraCidade(await lugaresNasCidades(lugar.endereco), String(ponto.code));
     if (outra) {
       const junto = outra.junto ? ` (junto da ${outra.junto})` : "";
       return {
@@ -805,11 +806,11 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
     ]);
     const contra = lugaresContraOSentido(
       {
-        direction: pedido.direcao,
+        direction: lugar.direcao,
         route_point_code: String(ponto.code),
-        pickup_detail: pedido.enderecoEmbarque,
-        pickup_neighborhood: pedido.bairro,
-        dropoff_location: pedido.desembarque,
+        pickup_detail: lugar.endereco,
+        pickup_neighborhood: lugar.bairro,
+        dropoff_location: lugar.desembarque,
       },
       {
         bairros: (bairrosSl ?? []) as { neighborhood: string }[],
@@ -824,6 +825,30 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       };
     }
   }
+  return null;
+}
+
+async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
+  const valido = validarPedidoDeReserva(args, ctx.hoje);
+  if (!valido.ok) return { ok: false, codigo: "PEDIDO_INCOMPLETO", problemas: valido.erros };
+  const pedido: PedidoValidado = valido.pedido;
+
+  const pontos = (await whatsappService.listRoutePoints(pedido.direcao)) ?? [];
+  let ponto = acharPonto(pontos, pedido.ponto);
+  // "Outros · Posto Carone": o posto voltou a ser ponto próprio, com o horário dele (issue #486)
+  const carone = pontos.find((p) => p.code === PONTO_POSTO_CARONE);
+  if (carone && pedido.direcao === "ida" && (!ponto || ponto.code === "outro") && ehPostoCarone(pedido.enderecoEmbarque)) {
+    ponto = carone;
+    pedido.enderecoEmbarque = null;
+  }
+  if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
+
+  const lugarErrado = await conferirLugares(
+    { direcao: pedido.direcao, bairro: pedido.bairro, endereco: pedido.enderecoEmbarque, desembarque: pedido.desembarque },
+    ponto,
+    args,
+  );
+  if (lugarErrado) return lugarErrado;
 
   // marcando para outra pessoa (issue #268): a reserva vai para o passageiro, não para quem conversa
   const telPassageiro = telefoneDoPassageiro(args.telefone_passageiro);
@@ -1022,61 +1047,190 @@ async function acharReservaDoCliente(ctx: ContextoDoAgente, id: unknown): Promis
   return reservas.find((r) => r.id === String(id ?? "")) ?? null;
 }
 
-async function remarcarReserva(args: Linha, ctx: ContextoDoAgente) {
+/** Viagem que já passou não é alterada nem cancelada pelo atendente. */
+function viagemJaPassou(reserva: Linha, ctx: ContextoDoAgente): Linha | null {
+  const dia = String(reserva.trip?.trip_date ?? "");
+  return dia && dia < ctx.hoje
+    ? { ok: false, codigo: "VIAGEM_JA_PASSOU", erro: "Essa viagem já passou. Se o cliente quer outra, é uma reserva nova." }
+    : null;
+}
+
+async function alterarReserva(args: Linha, ctx: ContextoDoAgente) {
   if (args.cliente_confirmou !== true) return { ok: false, codigo: "FALTA_CONFIRMACAO", erro: "O cliente ainda não confirmou a mudança." };
   const reserva = await acharReservaDoCliente(ctx, args.reserva_id);
   if (!reserva) return { ok: false, codigo: "RESERVA_NAO_E_DESTE_CLIENTE", erro: "Reserva não encontrada entre as reservas ativas deste cliente." };
-  const novaData = String(args.nova_data ?? "").trim();
-  const novoPonto = String(args.novo_ponto ?? "").trim();
-  const novoDesembarque = String(args.novo_desembarque ?? "").trim();
-  if (!novaData && !novoPonto && !novoDesembarque) return { ok: false, erro: "Diga o que mudar: nova_data, novo_ponto ou novo_desembarque." };
-  if (novaData && (!/^\d{4}-\d{2}-\d{2}$/.test(novaData) || novaData < ctx.hoje)) return { ok: false, erro: "nova_data inválida ou já passou" };
-  if (ctx.prova) {
-    const daProva = ctx.prova.acoes.find((a) => a.tipo === "criar" && a.id === reserva.id);
-    if (daProva && daProva.tipo === "criar") {
-      if (novaData) daProva.trip_date = novaData;
-      if (novoPonto) {
-        const pontos = (await whatsappService.listRoutePoints(daProva.direction as "ida" | "volta")) ?? [];
-        const ponto = acharPonto(pontos, novoPonto);
-        if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
-        daProva.route_point_code = String(ponto.code);
-        daProva.route_point_name = ponto.name ?? null;
-      }
-      if (novoDesembarque) daProva.dropoff_location = novoDesembarque;
-      // o revisor acerta o preço do bot pela tabela quando o desembarque chega: a prova faz o mesmo
-      if (novoDesembarque || novoPonto) {
-        const pontos = (await whatsappService.listRoutePoints(daProva.direction as "ida" | "volta")) ?? [];
-        const ponto = acharPonto(pontos, daProva.route_point_code);
-        const valor = ponto
-          ? await valorDoPedido(ponto, { bairro: daProva.pickup_neighborhood, endereco: daProva.pickup_detail, desembarque: daProva.dropoff_location ?? "" })
-          : null;
-        if (valor?.ok) daProva.unit_price = valor.preco;
-      }
-    }
-    anotarNaProva(ctx, { tipo: "remarcar", reserva_id: reserva.id, da_prova: !!daProva, detalhe: { novaData, novoPonto, novoDesembarque }, turno: ctx.prova.turno });
-    ctx.escrita.alterou = true;
-    ctx.reservasCache = undefined;
-    return { ok: true, remarcada: true };
+  const passou = viagemJaPassou(reserva, ctx);
+  if (passou) return passou;
+  if (reserva.type && reserva.type !== "passagem") {
+    return { ok: false, codigo: "NAO_E_PASSAGEM", erro: "Encomenda ou frete só a equipe muda: use chamar_atendente com o que o cliente quer." };
   }
 
-  try {
-    if (novaData || novoPonto) {
-      const direcao = reserva.trip?.direction;
-      const pontos = (await whatsappService.listRoutePoints(direcao)) ?? [];
-      const ponto = novoPonto ? acharPonto(pontos, novoPonto) : acharPonto(pontos, reserva.route_point?.code);
-      if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
-      await whatsappService.moveReservation(ctx.conversationId, reserva.id, {
-        tripDate: novaData || reserva.trip?.trip_date,
-        direction: direcao,
-        routePointCode: ponto.code,
-      });
+  const direcaoAtual = (reserva.trip?.direction === "volta" ? "volta" : "ida") as "ida" | "volta";
+  const direcaoNova = (["ida", "volta"].includes(String(args.nova_direcao)) ? args.nova_direcao : direcaoAtual) as "ida" | "volta";
+  const pontosAntigos = (await whatsappService.listRoutePoints(direcaoAtual)) ?? [];
+  const pontos = direcaoNova === direcaoAtual ? pontosAntigos : ((await whatsappService.listRoutePoints(direcaoNova)) ?? []);
+  // "Outros · Posto Carone" é ponto próprio, com o horário dele (issue #486)
+  const pedido = { ...args };
+  const pedidoPonto = pedido.novo_ponto ? acharPonto(pontos, String(pedido.novo_ponto)) : null;
+  if (
+    direcaoNova === "ida" && pedidoPonto?.code === "outro" && ehPostoCarone(String(pedido.novo_endereco ?? "")) &&
+    pontos.some((p) => p.code === PONTO_POSTO_CARONE)
+  ) {
+    pedido.novo_ponto = PONTO_POSTO_CARONE;
+    pedido.novo_endereco = "";
+  }
+  const atual: ReservaAtual = {
+    data: String(reserva.trip?.trip_date ?? ""),
+    direcao: direcaoAtual,
+    ponto: String(reserva.route_point?.code ?? ""),
+    bairro: reserva.pickup_neighborhood ?? null,
+    endereco: reserva.pickup_detail ?? null,
+    desembarque: reserva.dropoff_location ?? null,
+    quantidade: Number(reserva.quantity ?? 1),
+    pagamento: reserva.payment_method ?? null,
+  };
+  const montada = montarAlteracao(atual, pedido, ctx.hoje, (nome) => {
+    const p = acharPonto(pontos, nome);
+    return p ? String(p.code) : null;
+  });
+  if (!montada.ok) {
+    return montada.codigo === "PONTO_NAO_EXISTE"
+      ? { ok: false, codigo: montada.codigo, erro: montada.erro, pontos_validos: resumoDosPontos(pontos) }
+      : { ok: false, codigo: montada.codigo, erro: montada.erro };
+  }
+  const a = montada.alteracao;
+  const ponto = acharPonto(pontos, a.ponto);
+  if (!ponto) return { ok: false, codigo: "PONTO_NAO_EXISTE", erro: "Ponto de embarque desconhecido.", pontos_validos: resumoDosPontos(pontos) };
+
+  if (a.mudou.ponto || a.mudou.embarque || a.mudou.desembarque) {
+    const lugarErrado = await conferirLugares(a, ponto, args);
+    if (lugarErrado) return lugarErrado;
+  }
+
+  const emEspera = reserva.status === "espera";
+  if (a.mudou.viagem) {
+    const outra = (await reservasDoCliente(ctx)).find(
+      (r) => r.id !== reserva.id && r.trip?.trip_date === a.data && r.trip?.direction === a.direcao && ["confirmada", "pendente"].includes(r.status),
+    );
+    if (outra) {
+      return {
+        ok: false,
+        codigo: "JA_TEM_RESERVA",
+        erro: "O cliente já tem outra reserva ativa nessa viagem. Mostre as duas e pergunte o que ele prefere.",
+        reserva_existente: { reserva_id: outra.id, quantidade: outra.quantity, status: outra.status, ponto: outra.route_point?.name ?? null },
+      };
     }
-    if (novoDesembarque) await whatsappService.setDropoffLocation(ctx.conversationId, reserva.id, novoDesembarque);
+  }
+  const precisa = lugaresAMais(atual, a);
+  if (precisa > 0 && !emEspera && reserva.extra_data?.fora_lotacao !== true) {
+    const disp = await disponibilidade(a.data, a.direcao, ctx.prova);
+    const curto = trechoCurto(
+      { direction: a.direcao, route_point_code: a.ponto, pickup_detail: a.endereco, dropoff_location: a.desembarque },
+      disp.capacity == null ? null : Number(disp.capacity),
+    );
+    if (!curto.extra && disp.available != null && disp.available < precisa) {
+      return {
+        ok: false,
+        codigo: "SEM_VAGAS",
+        erro: "Não há vagas para essa mudança. A reserva continua como estava: diga isso ao cliente.",
+        vagas_disponiveis: Math.max(0, disp.available),
+        sugestao: "Ofereça outro dia ou a lista de espera.",
+      };
+    }
+  }
+
+  // valor: só muda quando muda o lugar, e só se o valor de agora veio da tabela (o que a equipe combinou fica)
+  const valor: { novo?: number; aConfirmar?: boolean } = {};
+  if (mudaOValor(a)) {
+    const preco = await valorDoPedido(ponto, { bairro: a.bairro, endereco: a.endereco, desembarque: a.desembarque ?? "" });
+    if (!preco.ok && !semValorNaTabela(preco.erro)) return { ok: false, ...preco.erro };
+    const pontoAntigo = acharPonto(pontosAntigos, atual.ponto);
+    const antes = pontoAntigo
+      ? await valorDoPedido(pontoAntigo, { bairro: atual.bairro, endereco: atual.endereco, desembarque: atual.desembarque ?? "" })
+      : null;
+    const gravado = Number(reserva.unit_price ?? 0);
+    const daTabela = gravado <= 0 || (antes?.ok === true && antes.preco === gravado);
+    if (daTabela) {
+      valor.aConfirmar = !preco.ok || preco.incerto === true;
+      if (preco.ok && preco.incerto !== true) valor.novo = preco.preco;
+      else if (!preco.ok) valor.novo = 0;
+    }
+  }
+
+  const mudancas = Object.entries(a.mudou).filter(([, v]) => v).map(([k]) => k);
+  const comoFicou = {
+    data: a.data,
+    direcao: a.direcao,
+    ponto: ponto.name,
+    ...(a.bairro ? { bairro: a.bairro } : {}),
+    ...(a.endereco ? { endereco: a.endereco } : {}),
+    desembarque: a.desembarque ?? "(não informado)",
+    quantidade: a.quantidade,
+    ...(valor.aConfirmar ? { valor: "a confirmar por um atendente: não diga valor" } : {}),
+    ...(valor.novo ? { preco_por_passagem: valor.novo, total: calcularTotal(valor.novo, a.quantidade) } : {}),
+  };
+
+  if (ctx.prova) {
+    const daProva = ctx.prova.acoes.find((x) => x.tipo === "criar" && x.id === reserva.id);
+    if (daProva && daProva.tipo === "criar") {
+      daProva.trip_date = a.data;
+      daProva.direction = a.direcao;
+      daProva.route_point_code = a.ponto;
+      daProva.route_point_name = ponto.name ?? null;
+      daProva.pickup_neighborhood = a.bairro;
+      daProva.pickup_detail = a.endereco;
+      daProva.dropoff_location = a.desembarque;
+      daProva.quantity = a.quantidade;
+      if (valor.novo != null) daProva.unit_price = valor.novo || null;
+    }
+    anotarNaProva(ctx, { tipo: "remarcar", reserva_id: reserva.id, da_prova: !!daProva, detalhe: { mudancas, ...comoFicou }, turno: ctx.prova.turno });
     ctx.escrita.alterou = true;
     ctx.reservasCache = undefined;
-    return { ok: true, remarcada: true, simulado: getBotContext()?.shadow === true };
+    return { ok: true, alterada: true, mudou: mudancas, como_ficou: comoFicou };
+  }
+
+  const areas = await whatsappService.listDropoffAreas(a.direcao).catch(() => []);
+  const detalhes = detalhesDaAlteracao(a, areaDoDesembarque(a.desembarque ?? "", areas) ?? null);
+  if (valor.novo != null) detalhes.unit_price = valor.novo;
+  const pendentes = ((reserva.extra_data?.a_confirmar ?? []) as string[]).filter((x) => x !== "valor");
+  try {
+    await whatsappService.alterarReserva(ctx.conversationId, reserva.id, {
+      detalhes,
+      mover: a.mudou.viagem || a.mudou.ponto ? { trip_date: a.data, direction: a.direcao, route_point_code: a.ponto } : null,
+      quantidade: a.mudou.quantidade ? a.quantidade : null,
+      extra: valor.aConfirmar == null ? null : { a_confirmar: valor.aConfirmar ? [...pendentes, "valor"] : pendentes },
+      resumo: mudancas,
+    });
+    ctx.escrita.alterou = true;
+    ctx.reservasCache = undefined;
+    if (a.mudou.nome && a.nome) {
+      const cliente = await clienteDaConversa(ctx);
+      if (cliente) {
+        await whatsappService
+          .completarNomeDoCliente(reserva.id, cliente.id, a.nome)
+          .catch((e) => console.error("Falha ao mudar o nome do cliente:", String(e).slice(0, 200)));
+      }
+    }
+    const pagos = a.mudou.quantidade || valor.novo != null
+      ? ((await whatsappService.checkPaymentStatus(reserva.id).catch(() => [])) ?? []).some((p: Linha) => p.status === "pago")
+      : false;
+    return {
+      ok: true,
+      alterada: true,
+      mudou: mudancas,
+      como_ficou: comoFicou,
+      ...(pagos ? { aviso: "Essa reserva já estava paga e a quantidade ou o lugar mudou: use avisar_equipe para conferir a diferença." } : {}),
+      simulado: getBotContext()?.shadow === true,
+    };
   } catch (err) {
-    if (err instanceof WhatsappServiceError && err.code === "MOVE_REJECTED") return { ok: false, codigo: "SEM_VAGA_NO_DESTINO", erro: err.message };
+    if (err instanceof WhatsappServiceError && err.code === "QUANTITY_REJECTED") {
+      ctx.escrita.alterou = true;
+      ctx.reservasCache = undefined;
+      return { ok: false, codigo: "QUANTIDADE_RECUSADA", erro: `A viagem foi mudada, mas a quantidade não: ${err.message} Conte as duas coisas ao cliente.`, como_ficou: { ...comoFicou, quantidade: atual.quantidade } };
+    }
+    if (err instanceof WhatsappServiceError && err.code === "MOVE_REJECTED") {
+      return { ok: false, codigo: "RECUSADA_PELO_SISTEMA", erro: `${err.message} A reserva continua como estava: diga isso ao cliente.` };
+    }
     throw err;
   }
 }
@@ -1085,6 +1239,8 @@ async function cancelarReserva(args: Linha, ctx: ContextoDoAgente) {
   if (args.cliente_confirmou !== true) return { ok: false, codigo: "FALTA_CONFIRMACAO", erro: "O cliente ainda não confirmou o cancelamento." };
   const reserva = await acharReservaDoCliente(ctx, args.reserva_id);
   if (!reserva) return { ok: false, codigo: "RESERVA_NAO_E_DESTE_CLIENTE", erro: "Reserva não encontrada entre as reservas ativas deste cliente." };
+  const passou = viagemJaPassou(reserva, ctx);
+  if (passou) return passou;
   if (ctx.prova) {
     const daProva = ctx.prova.acoes.find((a) => a.tipo === "criar" && a.id === reserva.id);
     if (daProva && daProva.tipo === "criar") daProva.cancelada = true;
@@ -1150,8 +1306,8 @@ export async function executarFerramenta(nome: string, args: Linha, ctx: Context
         return await ondeFica(args);
       case "criar_reserva":
         return await criarReserva(args, ctx);
-      case "remarcar_reserva":
-        return await remarcarReserva(args, ctx);
+      case "alterar_reserva":
+        return await alterarReserva(args, ctx);
       case "cancelar_reserva":
         return await cancelarReserva(args, ctx);
       case "entrar_na_lista_de_espera":

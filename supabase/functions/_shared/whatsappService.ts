@@ -393,6 +393,58 @@ export const whatsappService = {
   },
 
   /**
+   * Altera uma reserva inteira (issue #538): lugares, viagem, quantidade e valor. Numa chamada só o banco desfaz tudo se
+   * não couber; quando muda a viagem E a quantidade, a viagem vai primeiro (a vaga é conferida na viagem nova).
+   */
+  async alterarReserva(
+    conversationId: string,
+    reservationId: string,
+    m: {
+      detalhes: Record<string, unknown>;
+      mover: { trip_date: string; direction: string; route_point_code: string } | null;
+      quantidade: number | null;
+      extra: Record<string, unknown> | null;
+      resumo: string[];
+    },
+  ) {
+    await assertAiIsAllowedToAct(conversationId);
+    if (emSombra()) {
+      await notaSombra(`Alteraria a reserva ${reservationId}: ${m.resumo.join(", ")}.`);
+      return;
+    }
+    const botId = await getBotUserId();
+    const editar = async (quantidade: number | null, resto: boolean) => {
+      const { data, error } = await supabaseAdmin.rpc("rpc_edit_reservation", {
+        p_reservation_id: reservationId,
+        p_details: resto && Object.keys(m.detalhes).length ? m.detalhes : null,
+        p_quantity: quantidade,
+        p_contact: null,
+        p_move: resto ? m.mover : null,
+        p_paid: null,
+        p_proof: null,
+        p_extra_data: resto ? m.extra : null,
+        p_status: null,
+        p_actor: botId,
+      });
+      if (error) throw new WhatsappServiceError(`Falha ao alterar: ${error.message}`);
+      if (!data?.success) {
+        const recusa = String(data?.message ?? "Não foi possível alterar.");
+        throw new WhatsappServiceError(/CAPACIDADE/.test(recusa) ? "Não há vagas para essa mudança." : recusa, "MOVE_REJECTED");
+      }
+    };
+    if (m.mover && m.quantidade != null) {
+      await editar(null, true);
+      await editar(m.quantidade, false).catch((e) => {
+        // a viagem já mudou: quem chamou precisa contar isso, não que nada mudou
+        throw new WhatsappServiceError(String(e?.message ?? e), "QUANTITY_REJECTED");
+      });
+    } else {
+      await editar(m.quantidade, true);
+    }
+    await logAiAction("reservations", reservationId, "update", { acao: "alterada", origem: "whatsapp", mudou: m.resumo });
+  },
+
+  /**
    * O cliente deu o nome completo e o cadastro tinha só um nome/apelido: completa o
    * cadastro (pela edição da reserva, que também deixa rastro). Melhor esforço.
    */
@@ -422,7 +474,7 @@ export const whatsappService = {
   async listCustomerReservations(customerId: string) {
     const { data, error } = await supabaseAdmin
       .from("reservations")
-      .select("id, status, quantity, total_price, dropoff_location, pickup_neighborhood, pickup_detail, created_at, trip:trips(trip_date, direction), route_point:route_points(code, name)")
+      .select("id, status, quantity, total_price, unit_price, type, payment_method, extra_data, dropoff_location, pickup_neighborhood, pickup_detail, created_at, trip:trips(trip_date, direction), route_point:route_points(code, name)")
       .eq("customer_id", customerId)
       .in("status", ["confirmada", "pendente", "espera"])
       .is("deleted_at", null)
