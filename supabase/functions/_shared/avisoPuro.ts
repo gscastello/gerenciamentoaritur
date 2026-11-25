@@ -6,6 +6,7 @@
 // Sem modelo configurado ou sem conversa no Chatwoot, o passageiro fica marcado para a equipe
 // avisar pelo celular — nunca some calado.
 
+import { nomeOuSaudacao } from "./nomeParaChamar.ts";
 export type ModeloDoAviso = { nome: string; idioma: string; categoria: string };
 
 /**
@@ -46,24 +47,9 @@ export function modeloValido(v: unknown): ModeloDoAviso | null {
   return { nome, idioma, categoria };
 }
 
-const TRATAMENTOS = new Set(["dona", "dna", "seu", "sr", "sra", "senhor", "senhora", "dr", "dra", "tia", "tio"]);
-const SEM_NOME = new Set(["passageiro", "passageira", "cliente", "contato", "sem", "nome"]);
-const capitalizar = (p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-
-/**
- * Como chamar o passageiro no aviso: "Maria da Silva" → "Maria"; "Dona Maria" → "Dona Maria"
- * (tratamento + nome); "Passageiro (Belle Maiobão)" ou sem nome → "passageiro(a)".
- */
+/** Como chamar o passageiro no aviso: o nome de verdade ou, sem ele, a saudação da hora (issue #535). */
 export function primeiroNome(nome: string | null | undefined): string {
-  const partes = String(nome ?? "").replace(/[()]/g, " ").trim().split(/\s+/).filter(Boolean);
-  const p = partes[0] ?? "";
-  const limpo = p.toLowerCase().replace(/\.$/, "");
-  if (p.length < 2 || /\d/.test(p) || SEM_NOME.has(limpo)) return "passageiro(a)";
-  if (TRATAMENTOS.has(limpo)) {
-    const segundo = partes[1] ?? "";
-    return segundo.length >= 2 && !/\d/.test(segundo) ? `${capitalizar(p)} ${capitalizar(segundo)}` : "passageiro(a)";
-  }
-  return capitalizar(p);
+  return nomeOuSaudacao(nome);
 }
 
 /** Como mandar o aviso para um passageiro. */

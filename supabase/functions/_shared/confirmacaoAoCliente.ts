@@ -8,6 +8,7 @@
 // perfil do WhatsApp: só o do cadastro.
 
 import { horasMaisCedo } from "./feriados.ts";
+import { nomeParaChamar } from "./nomeParaChamar.ts";
 
 export type ReservaParaConfirmar = {
   tipo: "passagem" | "encomenda";
@@ -103,11 +104,8 @@ function linha(r: ReservaParaConfirmar, hoje: string): string {
   return `🚐 ${quem}${sentido} ${dia}: ${de ? `sai de ${de}${hora}` : "embarque a confirmar"} · ${qtd}`;
 }
 
-/** Só a primeira palavra do nome do cadastro ("Auristelia Coutinho" → "Auristelia"). */
-export function primeiroNome(nome: string | null | undefined): string | null {
-  const p = String(nome ?? "").trim().split(/\s+/)[0] ?? "";
-  return p.length >= 2 ? p : null;
-}
+/** O nome de verdade para chamar ("Auristelia Coutinho" → "Auristelia"); sem nome, null (issue #535). */
+export const primeiroNome = nomeParaChamar;
 
 /**
  * A mensagem para o cliente, ou null se não há nada a confirmar. `nome` é o do
