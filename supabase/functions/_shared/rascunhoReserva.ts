@@ -125,6 +125,7 @@ import {
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { embarqueNoCaminhoDe } from "./embarqueNoCaminho.ts";
+import { semCusto, SemLeituraGuardada } from "./semCusto.ts";
 import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -221,6 +222,7 @@ async function lerPedidos(
   conversa: string,
   modelo = MODELO,
 ): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco }> {
+  if (semCusto()) throw new SemLeituraGuardada(modelo);
   // os modelos 5.5 maiores não aceitam ferramenta forçada: pede pelo texto (tool_choice auto)
   const forcado = modelo === MODELO;
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -290,18 +292,28 @@ async function lerPedidosComConsenso(
 
 /**
  * Avaliação sem gastar API (issue #494): o mesmo texto (modelo, instruções, ferramenta e conversa) já
- * lido devolve a leitura guardada. Mudou uma palavra das instruções, lê de novo. Só na simulação da
- * avaliação: o Agendado de verdade sempre lê.
+ * lido devolve a leitura guardada. Mudou uma palavra das instruções, lê de novo. O Agendado de verdade sempre lê
+ * (`soGravar`) e deixa a leitura guardada: a avaliação da madrugada sai de graça (issue #537).
  */
-async function lerComMemoria(system: Instrucoes, conversa: string, modelo?: string): ReturnType<typeof lerPedidosComConsenso> {
+async function lerComMemoria(
+  system: Instrucoes,
+  conversa: string,
+  modelo?: string,
+  soGravar = false,
+): Promise<{ pedidos: PedidoExtraido[]; uso?: Bloco; divergente: boolean }> {
   const partes = [modelo ?? MODELO, JSON.stringify(FERRAMENTA_PEDIDOS), system.fixa, system.variavel, conversa];
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(partes)));
   const chave = [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const { data } = await supabaseAdmin.from("bot_leituras_memo").select("pedidos, divergente").eq("chave", chave).maybeSingle();
+  const { data } = soGravar
+    ? { data: null }
+    : await supabaseAdmin.from("bot_leituras_memo").select("pedidos, divergente").eq("chave", chave).maybeSingle();
   if (data) return { pedidos: data.pedidos as PedidoExtraido[], divergente: data.divergente === true };
   const lido = await lerPedidosComConsenso(system, conversa, modelo);
   // guarda antes das regras do código, que mudam os pedidos no lugar
-  await supabaseAdmin.from("bot_leituras_memo").upsert({ chave, pedidos: structuredClone(lido.pedidos), divergente: lido.divergente });
+  await supabaseAdmin
+    .from("bot_leituras_memo")
+    .upsert({ chave, pedidos: structuredClone(lido.pedidos), divergente: lido.divergente })
+    .then(() => {}, () => {});
   return lido;
 }
 
@@ -517,7 +529,11 @@ async function lerEGravar(
   const conversa = anteriores.length
     ? `CONVERSAS ANTERIORES (só para saber onde ele costuma embarcar e descer; não são o pedido atual):\n${formatarHistorico(anteriores, 40, 300)}\n\nPEDIDO ATUAL (últimos dias):\n${formatarHistorico(recentes, 60, 2000)}`
     : formatarHistorico(recentes, 60, 2000); // até 60 mensagens de até 2.000 letras (listas grandes inteiras) — issue #303
-  const lidos = simular?.memoria ? await lerComMemoria(system, conversa, opcoes.modelo) : await lerPedidosComConsenso(system, conversa, opcoes.modelo);
+  const lidos = simular?.memoria
+    ? await lerComMemoria(system, conversa, opcoes.modelo)
+    : opcoes.confirmadoPelaEquipe && !simular
+    ? await lerComMemoria(system, conversa, opcoes.modelo, true)
+    : await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
   // "marcar uma pesagem" lida como encomenda, sem nada de encomenda na conversa, é passagem (issue #531)

@@ -101,6 +101,12 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   o nome do lugar e a hora do cronograma (Campestre 13:00), nunca com os do ponto.
 - **Passageiro sem nome** (dono, 25/11 — issue #535, `nomeParaChamar`): "Passageiro (bairro)", lugar ou parentesco não é nome:
   cumprimenta sem nome ("Olá!"; no modelo da Meta, a saudação da hora).
+- **Piloto e parada automática** (dono, 25/11 — issue #537, `database/140`, `piloto.ts`): desligado até o dono mandar. Ligado, o
+  atendente responde só aos passageiros de `bot_piloto_clientes`; o resto segue em sombra. Para sozinho (pendência urgente) se
+  a IA falhar 2 vezes em 30 min, passar do teto do dia/mês, o revisor achar erro dele, a equipe corrigir 2 reservas dele em
+  24 h ou ele passar 4 de 6 conversas. A equipe para com a nota "#parar" e religa com "#religar".
+- **Teste sem custo** (dono, 25/11): `avaliar-bot` não chama IA paga nem internet sem `pago: true`, que só o dono autoriza. O
+  Agendado guarda a leitura; a busca de bairro na internet é guardada 30 dias, inclusive o "não achei".
 - **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem
   (`passagemSemProvaDeEncomenda`). "Estrada de Pirapemas" (dono) é o trecho entre as
   duas cidades, mais perto de Cantanhede: conta como Cantanhede (`estradaDaCidade`); com outra cidade escrita, fica em dúvida.

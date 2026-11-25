@@ -17,6 +17,8 @@ export type BotContext = {
   shadow: boolean;
   /** Teste do dono (nota "#testar", issue #278): resposta em nota privada de TESTE, fora do histórico e do aprendizado. */
   teste?: boolean;
+  /** Piloto do atendente de IA (issue #537): cada turno é registrado e pode parar o piloto. */
+  piloto?: boolean;
 };
 
 const storage = new AsyncLocalStorage<BotContext>();

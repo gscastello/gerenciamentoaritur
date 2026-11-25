@@ -15,6 +15,7 @@
 // Melhor esforço: falha aqui nunca derruba o atendimento.
 
 import { bairroDaTabela, bairroPelosLugares, bairroPorApelido, type LugarDeSaoLuis } from "./agentePuro.ts";
+import { semCusto } from "./semCusto.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 
 const MODELO = Deno.env.get("BOT_BAIRRO_MODELO") ?? "claude-sonnet-5-5";
@@ -130,7 +131,19 @@ export async function resolverBairro(texto: string | null | undefined, conversa?
       };
     }
 
+    // a mesma pergunta não é pesquisada de novo por 30 dias, nem quando a resposta foi "nenhum" (issue #537)
+    const chave = `bairro:${t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 200)}`;
+    const { data: guardada } = await supabaseAdmin.from("bot_leituras_memo").select("pedidos").eq("chave", chave).maybeSingle();
+    if (guardada) {
+      const g = (guardada.pedidos ?? {}) as { bairro?: string | null; evidencia?: string | null };
+      return g.bairro && bairros.includes(g.bairro) ? { bairro: g.bairro, fonte: "internet", evidencia: g.evidencia ?? null } : null;
+    }
+    if (semCusto()) return null;
     const achado = await pesquisarNaInternet(t, bairros);
+    await supabaseAdmin
+      .from("bot_leituras_memo")
+      .upsert({ chave, pedidos: { bairro: achado?.bairro ?? null, evidencia: achado?.evidencia ?? null }, divergente: false })
+      .then(() => {}, () => {});
     evento("bot_bairro_deduzido", { conversa: conversa ?? null, fonte: "internet", bairro: achado?.bairro ?? null });
     if (!achado) return null;
     // guarda o lugar descoberto (a conferir), para não pesquisar de novo; rua solta não vira memória

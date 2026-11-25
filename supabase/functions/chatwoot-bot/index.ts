@@ -36,6 +36,8 @@
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
+import { executarComandoDoPiloto, pilotoVale } from "../_shared/piloto.ts";
+import { comandoDoPiloto } from "../_shared/pilotoPuro.ts";
 import { contatoInterno } from "../_shared/contatosInternos.ts";
 import { registrarPresencaSePedida } from "../_shared/presenca.ts";
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
@@ -161,6 +163,14 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
     await testarBot(teste);
     return;
   }
+  // a equipe para ou religa o atendente de IA com uma nota privada (issue #537)
+  const comando = body?.event === "message_created" && body.private === true && body.sender?.type !== "agent_bot" ? comandoDoPiloto(body.content) : null;
+  if (comando) {
+    const resposta = await executarComandoDoPiloto(comando, String(body.sender?.name ?? "equipe").slice(0, 60));
+    evento("bot_piloto_comando", { comando });
+    await chatwootClient.postMessage(Number(body.conversation?.id), resposta, { private: true }).catch(() => {});
+    return;
+  }
   // o que o Chatwoot entrega como anexo (card de contato, issue #268): tipos e campos, sem conteúdo
   if (body?.event === "message_created" && Array.isArray(body.attachments) && body.attachments.length) {
     evento("bot_anexo_recebido", {
@@ -246,6 +256,8 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
 
   const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "attendance_mode").maybeSingle();
   const modo: string = cfg?.value?.mode ?? "ia";
+  // piloto do atendente de IA (issue #537): no modo sombra, responde SÓ aos passageiros da lista
+  const noPiloto = modo === "sombra" && atividade?.autor === "cliente" && !interno && (await pilotoVale(atividade.telefone ?? ""));
 
   // O bot OBSERVA as conversas em QUALQUER modo (ia, manual ou sombra): o que o
   // cliente escreveu, o que o atendente respondeu (pelo celular ou pelo Chatwoot)
@@ -360,7 +372,7 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
   if (modo !== "sombra") await alinharNomeDoContato(m.telefone, atividade?.contatoId, atividade?.nomeContato);
 
   await runWithBotContext(
-    { chatwootConversationId: m.chatwootConversationId, conversationId: conversation.id, shadow: modo === "sombra" },
+    { chatwootConversationId: m.chatwootConversationId, conversationId: conversation.id, shadow: modo === "sombra" && !noPiloto, piloto: noPiloto },
     () =>
       handleIncomingMessage({
         from: m.telefone,

@@ -18,6 +18,7 @@ import { type CampoDaReserva, esperadoNaHoraDaMarca, type MudancaDoCampo, quemMu
 import { responderTurno, simularAtendimento } from "../_shared/provaDoAtendente.ts";
 import { compararProva, type EsperadaComPreco } from "../_shared/provaPura.ts";
 import { simularAgendado } from "../_shared/rascunhoReserva.ts";
+import { travarCusto } from "../_shared/semCusto.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -73,6 +74,7 @@ async function avaliarCaso(caso: Linha, rodada: string, versao: string | null, m
     });
     return cmp.resultado;
   } catch (err) {
+    await supabaseAdmin.from("bot_avaliacoes").delete().eq("rodada", rodada).eq("caso_id", caso.id).eq("resultado", "erro");
     await supabaseAdmin.from("bot_avaliacoes").insert({
       rodada,
       caso_id: caso.id,
@@ -241,6 +243,12 @@ Deno.serve(async (req: Request) => {
   if (!chave || autorizada !== true) return json({ success: false, message: "Não autorizado." }, 401);
 
   const corpo = await req.json().catch(() => ({}));
+  // TESTE GRÁTIS por padrão (dono, 25/11 — issue #537): sem {"pago": true} nada chama a IA paga nem a internet
+  const pago = corpo?.pago === true;
+  travarCusto(!pago);
+  if (!pago && (corpo?.atendente === true || Array.isArray(corpo?.turnos) || corpo?.fresco === true)) {
+    return json({ success: false, message: "Este teste chama a IA paga. Só com {\"pago\": true}, autorizado pelo dono." }, 402);
+  }
   // prova de turnos soltos (issue #524): a resposta do atendente a mensagens reais, sem enviar nem gravar
   if (Array.isArray(corpo?.turnos)) {
     const respostas = await Promise.all(

@@ -41,6 +41,7 @@ import { getBotContext } from "./botContext.ts";
 import { blocoDasLicoes, blocoDoClienteAtual } from "./botLicoes.ts";
 import { chatwootClient } from "./chatwootClient.ts";
 import { mensagensComTranscricoesDoBot } from "./transcricao.ts";
+import { registrarTurno } from "./piloto.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { whatsappClient } from "./whatsappClient.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
@@ -402,7 +403,7 @@ export async function responderComAgente(
 
   try {
     const { system, fontes: fontesBase } = await montarSistema(agora, entrada.telefone);
-    const { resposta, ferramentasUsadas, uso, correcoes } = await rodarAgente(system, fontesBase, historico, ctx, bot.chatwootConversationId);
+    const { resposta, ferramentasUsadas, uso, correcoes, custoUsd: custo } = await rodarAgente(system, fontesBase, historico, ctx, bot.chatwootConversationId);
 
     if (ctx.parar) {
       evento("bot_agente_silencio", { conversa: bot.chatwootConversationId, motivo: "conversa passou para a equipe" });
@@ -430,6 +431,15 @@ export async function responderComAgente(
       await enviar("Vou chamar alguém da equipe para te ajudar com isso. 🙋");
     }
 
+    if (bot.piloto) {
+      await registrarTurno({
+        conversationId: entrada.conversationId,
+        chatwootConversationId: bot.chatwootConversationId,
+        resultado: ctx.silencio ? "silencio" : ctx.transferiu ? "transferiu" : resposta ? "respondeu" : "sem_resposta",
+        custoUsd: custo,
+        detalhe: ferramentasUsadas.join(", "),
+      });
+    }
     evento("bot_agente_resposta", {
       conversa: bot.chatwootConversationId,
       modo: bot.shadow ? "sombra" : "ia",
@@ -446,6 +456,15 @@ export async function responderComAgente(
   } catch (err) {
     if (err instanceof WhatsappServiceError && err.code === "HUMAN_MODE_ACTIVE") return;
     evento("bot_erro", { etapa: "agente", erro: String(err).slice(0, 400) });
+    if (bot.piloto) {
+      await registrarTurno({
+        conversationId: entrada.conversationId,
+        chatwootConversationId: bot.chatwootConversationId,
+        resultado: "erro",
+        custoUsd: 0,
+        detalhe: String(err),
+      });
+    }
     try {
       await whatsappService.transferToHuman(entrada.conversationId, `Erro no atendente de IA: ${String(err).slice(0, 200)}`);
       await enviar("Tive um problema para continuar — já chamei alguém da equipe para te ajudar. 🙏");
