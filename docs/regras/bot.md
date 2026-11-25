@@ -99,6 +99,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Números só no banco, nunca no GitHub.
 - **Passageiro sem nome** (dono, 25/11 — issue #535, `nomeParaChamar`): "Passageiro (bairro)", lugar ou parentesco não é nome:
   cumprimenta sem nome ("Olá!"; no modelo da Meta, a saudação da hora).
+- **Embarque no caminho** (issue #533, `embarqueNoCaminho`): Campestre, Matões, Miranda… na confirmação e no lembrete vão com
+  o nome do lugar e a hora do cronograma (Campestre 13:00), nunca com os do ponto.
 - **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem
   (`passagemSemProvaDeEncomenda`). "Estrada de Pirapemas" (dono) é o trecho entre as
   duas cidades, mais perto de Cantanhede: conta como Cantanhede (`estradaDaCidade`); com outra cidade escrita, fica em dúvida.
