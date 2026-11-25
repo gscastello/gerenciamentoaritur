@@ -105,6 +105,9 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   atendente responde só aos passageiros de `bot_piloto_clientes`; o resto segue em sombra. Para sozinho (pendência urgente) se
   a IA falhar 2 vezes em 30 min, passar do teto do dia/mês, o revisor achar erro dele, a equipe corrigir 2 reservas dele em
   24 h ou ele passar 4 de 6 conversas. A equipe para com a nota "#parar" e religa com "#religar".
+- **Menos custo** (dono, 25/11, `database/141`): o aprendizado roda 1 vez por dia; o revisor espera 6 min sem mensagem nova quando a
+  viagem sai em mais de 2 h (perto da saída, 45 s). **A lista de bairros do texto do leitor é fixa** (`bairrosDoTexto.ts`): mexer na
+  tabela de preços não muda mais as leituras. Mudar a lista pede a rodada completa.
 - **Teste sem custo** (dono, 25/11): `avaliar-bot` não chama IA paga nem internet sem `pago: true`, que só o dono autoriza. O
   Agendado guarda a leitura; a busca de bairro na internet é guardada 30 dias, inclusive o "não achei".
 - **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem

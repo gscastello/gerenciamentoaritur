@@ -25,8 +25,9 @@ import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { variantesTelefone } from "./telefone.ts";
 
 const MODEL = "claude-sonnet-5";
-const LOTE_MAX = 600;
-const JANELA_HORAS = 6;
+const LOTE_MAX = 900;
+/** Uma vez por dia (issue #537): cada rodada relê todas as lições conhecidas, e quatro por dia custavam o dobro. */
+const JANELA_HORAS = 24;
 /** Cliente com pelo menos tantas viagens conta como recorrente. */
 const VIAGENS_PARA_RECORRENTE = 2;
 
@@ -181,7 +182,7 @@ export async function executarAprendizado({ forcar = false } = {}): Promise<Resu
   const observacoes = (pend ?? []) as (Observacao & { id: string; conversation_id: string | null })[];
   if (observacoes.length === 0) return vazio;
 
-  const transcricoes = montarTranscricoes(observacoes);
+  const transcricoes = montarTranscricoes(observacoes, { maxConversas: 90, maxCharsPorConversa: 2500 });
   const idsDoLote = observacoes.map((o) => o.id);
 
   if (transcricoes.length > 0) {
@@ -228,7 +229,7 @@ export async function executarAprendizado({ forcar = false } = {}): Promise<Resu
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4000,
+        max_tokens: 8000,
         system: SYSTEM,
         tools: [TOOL],
         tool_choice: { type: "tool", name: TOOL.name },
@@ -239,7 +240,7 @@ export async function executarAprendizado({ forcar = false } = {}): Promise<Resu
           },
         ],
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(180000),
     });
     if (!res.ok) throw new Error(`Falha ao chamar o modelo do aprendizado: ${res.status} ${(await res.text()).slice(0, 300)}`);
     const data = await res.json();
