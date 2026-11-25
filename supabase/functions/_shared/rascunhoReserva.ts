@@ -126,6 +126,7 @@ import {
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
 import { embarqueNoCaminhoDe } from "./embarqueNoCaminho.ts";
 import { semCusto, SemLeituraGuardada } from "./semCusto.ts";
+import { BAIRROS_DO_TEXTO } from "./bairrosDoTexto.ts";
 import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
@@ -174,8 +175,6 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
 
 /** Locais de desembarque reconhecidos só em código (`areaDoDesembarque`), fora das instruções do leitor. */
 const AREAS_FORA_DO_TEXTO = new Set(["palmeiral", "povoado_sozinho"]);
-/** Bairros novos da tabela que o código reconhece, fora das instruções do leitor (issue #528). */
-const BAIRROS_FORA_DO_TEXTO = new Set(["Kennedy", "Pindaí"]);
 
 async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
@@ -201,7 +200,7 @@ async function contexto() {
     pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
     listaPontos,
     desembarques,
-    bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).filter((b: string) => !BAIRROS_FORA_DO_TEXTO.has(b)).join(", "),
+    bairrosSaoLuis: BAIRROS_DO_TEXTO,
     bairrosTabela: (bairros ?? []) as { neighborhood: string }[],
     locaisDeOutros: ((locais ?? []) as Bloco[]).map((l) => String(l.local)),
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
