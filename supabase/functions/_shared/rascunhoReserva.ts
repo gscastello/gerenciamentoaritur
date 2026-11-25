@@ -695,8 +695,8 @@ async function lerEGravar(
         // formulário preenchido: bairro de São Luís no embarque e cidade do interior em "Onde você vai ficar" é Ida
         const formularioDizIda = !!paradaDoInterior(p.desembarque) && !!bairroEscrito(textosDoCliente, ctx.bairrosTabela) &&
           textosDoCliente.some((t) => / onde (?:voce|vc) vai ficar /.test(` ${normalizarTexto(t)} `));
-        if (decisao === "duvida" && !formularioDizIda) {
-          ondeEmbarca.add(p);
+        if (decisao === "duvida") {
+          if (!formularioDizIda) ondeEmbarca.add(p);
         } else if (decisao) {
           Object.assign(
             p,
