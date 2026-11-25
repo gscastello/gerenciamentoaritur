@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { compararCaso, resumoDaRodada, type ViagemDoCaso } from "./avaliacaoPura.ts";
+import { MUDOU_DEPOIS, compararCaso, resumoDaRodada, type ViagemDoCaso } from "./avaliacaoPura.ts";
 
 const ida: ViagemDoCaso = { trip_date: "2026-11-16", direction: "ida", route_point_code: "busca", quantity: 1, pickup_neighborhood: "Cohatrac" };
 const volta: ViagemDoCaso = { trip_date: "2026-11-17", direction: "volta", route_point_code: "cantanhede", quantity: 1 };
@@ -44,4 +44,22 @@ Deno.test("#494: bairros que são o mesmo na tabela não são erro; de preço di
   // fora da tabela, os dois: só o texto igual vale
   assertEquals(compararCaso([v("Bairro A")], [v("Bairro B")], { bairroNaTabela }).resultado, "errado");
   assertEquals(compararCaso([v("Aurora")], [v("Novo Aurora")]).resultado, "errado");
+});
+
+Deno.test("#508: caso que mudou depois da marca e não foi conferido: diferença vira pendente com o motivo", () => {
+  // caso 8bfa7860: Agendado com Rodoviária; depois a cliente escreveu "É no retorno viu" e o revisor trocou
+  const agora: ViagemDoCaso = { trip_date: "2026-11-24", direction: "ida", route_point_code: "retorno", quantity: 3 };
+  const lida: ViagemDoCaso = { ...agora, route_point_code: "rodoviaria" };
+  const r = compararCaso([agora], [lida], { mudouDepois: true });
+  assertEquals(r.resultado, "pendente");
+  assertEquals(r.diferencas, [MUDOU_DEPOIS, "Ida 24/11 errada: ponto: rodoviaria ≠ retorno"]);
+  // nem o "pendente_ok" transforma em certo calado
+  assertEquals(compararCaso([agora], [lida], { mudouDepois: true, pendenteOk: true }).resultado, "pendente");
+  // faltou e lançaria a mais também ficam para conferir
+  assertEquals(compararCaso([agora, volta], [agora], { mudouDepois: true }).resultado, "pendente");
+  assertEquals(compararCaso([agora], [agora, volta], { mudouDepois: true }).diferencas[0], MUDOU_DEPOIS);
+  // sem diferença continua certo
+  assertEquals(compararCaso([agora], [agora], { mudouDepois: true }), { resultado: "certo", diferencas: [] });
+  // sem a marca (ou já conferido), a régua de sempre
+  assertEquals(compararCaso([agora], [lida]).resultado, "errado");
 });
