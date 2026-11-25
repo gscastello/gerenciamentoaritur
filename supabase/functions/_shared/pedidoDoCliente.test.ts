@@ -643,3 +643,14 @@ Deno.test("#523: 'Onde você vai ficar' do formulário é desembarque, não resp
   ];
   assertEquals(desembarqueEraEmbarque("Cantanhede, Rua Outra", conversa), false);
 });
+
+Deno.test("#531: 'é pra meu filho' lido como duas passagens iguais é uma só", async () => {
+  const { umPassageiroSo } = await import("./pedidoDoCliente.ts");
+  const p = { data: "2026-11-25", direcao: "ida", ponto: "retorno", quantidade: 1 };
+  const n = (...t: string[]) => umPassageiroSo([{ ...p }, { ...p }], t).length;
+  assertEquals(n("tem vaga amanhã?", "E pra meu filho ele vai pro retorno"), 1);
+  assertEquals(n("tem vaga amanhã?", "eu e meu filho", "uma pra meu filho"), 2);
+  assertEquals(n("quero duas passagens", "uma pra meu filho"), 2);
+  assertEquals(n("tem vaga amanhã?", "vou pro retorno"), 2);
+  assertEquals(umPassageiroSo([{ ...p }, { ...p, passageiro_telefone: "98900000000" }], ["é pra meu filho"]).length, 2);
+});

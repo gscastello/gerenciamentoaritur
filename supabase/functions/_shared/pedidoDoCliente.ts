@@ -1354,3 +1354,24 @@ export function passagemSemProvaDeEncomenda<P extends { tipo?: string; duvida?: 
   if (textos.some((t) => PROVA_DE_ENCOMENDA.test(t)) || !textos.some((t) => PEDE_PASSAGEM.test(t))) return pedidos;
   return pedidos.map((p) => (p.tipo === "encomenda" ? { ...p, tipo: "passagem", duvida: ["Pedido de passagem (nada de encomenda na conversa)."].join(" ") } : p));
 }
+
+const MAIS_DE_UM = / (?:eu e|nos dois|nos duas|a gente|eu tambem|tambem vou|comigo|mais (?:um|uma|duas|dois)|outra|outro|duas|dois|tres|2|3|4|5|casal|somos|vamos|iremos) /;
+
+/**
+ * "Tem vaga amanhã?" → "É pra meu filho, ele vai pro retorno" lido como DUAS passagens iguais (a de quem escreve e a
+ * do filho) é uma só (issue #531, caso 14e37153): mesma viagem e ponto, 1 passagem cada, sem telefone de outra pessoa
+ * e sem nada na conversa que diga que vai mais de um.
+ */
+export function umPassageiroSo<P extends PedidoDoPar & { quantidade?: number | null; passageiro_telefone?: string | null }>(
+  pedidos: P[],
+  textos: string[],
+): P[] {
+  if (pedidos.length !== 2) return pedidos;
+  const [a, b] = pedidos;
+  const iguais = a.data === b.data && a.direcao === b.direcao && (a.ponto ?? null) === (b.ponto ?? null) &&
+    normalizarTexto(a.endereco ?? "") === normalizarTexto(b.endereco ?? "") && (a.tipo ?? "passagem") === (b.tipo ?? "passagem") && (a.tipo ?? "passagem") === "passagem";
+  if (!iguais || Number(a.quantidade ?? 1) !== 1 || Number(b.quantidade ?? 1) !== 1 || a.passageiro_telefone || b.passageiro_telefone) return pedidos;
+  const t = textos.map((x) => ` ${normalizarTexto(x)} `);
+  if (quantidadeEscrita(textos) != null || t.some((x) => MAIS_DE_UM.test(x)) || !t.some((x) => / (?:pra|para|pro) (?:o |a )?(?:meu|minha) /.test(x))) return pedidos;
+  return [b];
+}
