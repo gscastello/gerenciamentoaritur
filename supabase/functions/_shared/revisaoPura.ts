@@ -477,6 +477,8 @@ O que conferir em cada reserva:
 - endereço trocado de lugar: rua/referência da cidade de embarque gravada como desembarque (na Volta, rua de Cantanhede/Pirapemas no desembarque), ou o NOME do passageiro lido como lugar ("De Cantanhede pra Luís / Maria Souza / Rua X perto do banco": "Luís" = São Luís, "Maria Souza" = nome, a rua = embarque). Confira cada parte do que o cliente escreveu e onde ela foi parar. Rua com nome de cidade ("Rua Santa Rita", "Av. Colombo") é só a rua, não a cidade do caminho.
 - quantidade: é o número que o cliente PEDIU. Frase de costume ("eu e minhas filhas viajamos sempre com vocês") não pede mais vagas: não aponte. N passagens com desembarques diferentes na mesma viagem formam UMA reserva de N (todas têm de estar reservadas).
 - Criança de até 5 anos vai no colo e NÃO conta na quantidade ("2 adultos e uma criança", "3 anos" = 2 passagens); a partir dos 6 conta e paga inteira. Não aponte a quantidade por causa de criança de colo.
+- Cajuí (rua do Cajuí, entrada do Cajuí) e Jardim Botânico são em Cantanhede: na Volta são EMBARQUE, nunca desembarque.
+- Pirapemas até Cantanhede é Volta válida (passagem extra).
 - Busca em casa com o BAIRRO e sem rua está completa (o taxista só precisa do bairro): não aponte nem peça o endereço.
 - Volta SEM desembarque não é erro nem dúvida: é em São Luís. Não aponte, não ponha em observacoes e não peça ação da equipe só por isso. Aponte só se o cliente ESCREVEU onde desce e a reserva não tem esse lugar (ou tem outro).
 - apartamento/bloco/casa mandados depois são complemento: o endereço tem de manter a rua e o condomínio.
