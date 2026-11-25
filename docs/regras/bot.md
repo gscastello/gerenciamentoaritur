@@ -94,6 +94,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Pirapemas até Cantanhede é sempre extra** (issue #530, `database/138`): o banco marca `fora_lotacao` sozinho. **Em pé** só no
   ônibus: Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões do Norte ou Miranda do Norte.
 - **Segunda de feriado** (issue #529): sai no horário normal e, quase sempre, a terça sai 1 h mais cedo.
+- **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem
+  (`passagemSemProvaDeEncomenda`). "Estrada de Pirapemas" no endereço não é a cidade.
 - **Embarque e desembarque escritos** (issue #523, `lugaresDoPedido`): completam só o que o leitor deixou vazio, em código. Ida
   sem desembarque = a única cidade escrita como destino; Volta sem endereço = a resposta a "Qual o endereço pra lhe buscar?",
   o lugar que a equipe repetiu ou o "moro na…", **depois** de decidida a cidade (esse lugar nunca decide Pirapemas ou

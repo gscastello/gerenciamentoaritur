@@ -568,3 +568,19 @@ Deno.test("#521: dia só perguntado e trocado por outro não é pedido que falto
   assertEquals(d(["2026-11-27"], "quero ir domingo?", "quero sexta"), []);
   assertEquals(d([], "Tem vaga hoje?", "amanhã"), []);
 });
+
+Deno.test("#531: 'pesagem' sem nada de encomenda é passagem; encomenda de verdade continua", async () => {
+  const { passagemSemProvaDeEncomenda, cidadeNaRespostaDoEndereco } = await import("./pedidoDoCliente.ts");
+  const tipo = (...t: string[]) =>
+    passagemSemProvaDeEncomenda([{ tipo: "encomenda" }], t.map((texto) => ({ quem: "cliente", texto })))[0].tipo;
+  assertEquals(tipo("quero marcar uma pesagem pra sexta dia 27", "De pirapemas pra slz", "Na casa da professora"), "passagem");
+  assertEquals(tipo("Tem vaga amanhã?", "rua do exemplo"), "passagem");
+  assertEquals(tipo("Preciso mandar um documento pra sao luis hj", "tem vaga?"), "encomenda");
+  assertEquals(tipo("quero uma passagem e levar uma caixa"), "encomenda");
+  assertEquals(tipo("pode deixar a sacola na rodoviária, tem lugar?"), "encomenda");
+  assertEquals(tipo("rua do exemplo"), "encomenda");
+  // a estrada que leva à cidade não é a cidade
+  const resposta = (t: string) => cidadeNaRespostaDoEndereco([{ quem: "equipe", texto: "Qual o endereço pra lhe buscar" }, { quem: "cliente", texto: t }]);
+  assertEquals(resposta("Av. Exemplo (estrada de pirapemas"), null);
+  assertEquals(resposta("Vila Exemplo Cantanhede"), "cantanhede");
+});

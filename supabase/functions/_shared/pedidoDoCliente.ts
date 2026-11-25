@@ -595,6 +595,8 @@ export function cidadeNaRespostaDoEndereco(falas: { quem: string; texto: string 
     if (f.quem !== "cliente" || !perguntou) continue;
     // destino ("pra Cantanhede", "até Pirapemas") e lado da pista não são o lugar da casa
     const limpo = n
+      // "Av. Exemplo (estrada de Pirapemas)" é a estrada que leva à cidade, não a cidade da casa (caso e99ceac7)
+      .replace(/ (?:estrada|rodovia|caminho|ramal) (?:de |da |do |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
       .replace(/ (?:vindo|vem|vinda|venho|sentido|saindo|indo|quem vem) (?:de |da |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
       .replace(/ (?:pra|pro|para|ate|a) (?:pirapemas|cantanhede)(?= )/g, " ");
     for (const c of ["pirapemas", "cantanhede"] as const) if (limpo.includes(` ${c} `)) achadas.add(c);
@@ -1275,4 +1277,22 @@ export function diasSoPerguntados(mensagens: MensagemDoCliente[], datasLidas: (s
     const ultima = com[com.length - 1].i;
     return soPergunta && linhas.some((l) => l.i > ultima && l.datas.some((x) => lidas.has(x)));
   });
+}
+
+const PROVA_DE_ENCOMENDA =
+  / (?:encomend[a-z]*|entreg[a-z]*|despach[a-z]*|pacotes?|caixas?|caixinhas?|documentos?|identidade|mercadorias?|fretes?|remedios?|medicac[a-z]*|medicamentos?|sacolas?|sacolinhas?|envelopes?|pecas?|volumes?|envi(?:ar|o|e|ei|ando)|(?:mandar|manda|levar|leva|leve|trazer|traz|traga|buscar|pegar|pega|deixar|deixa) (?:um|uma|uns|umas|meu|minha|esse|essa|isso|o|a|os|as)) /;
+const PEDE_PASSAGEM = / (?:passag[a-z]*|pasag[a-z]*|passaj[a-z]*|pesag[a-z]*|pessag[a-z]*|vagas?|lugar|lugares|poltronas?|viajar|vou viajar|me buscar|lhe buscar|te buscar) /;
+
+/**
+ * Encomenda lida sem nenhuma palavra de encomenda, num pedido de passagem ("marcar uma pesagem pra sexta"), é
+ * passagem (issue #531). Com qualquer sinal de encomenda na conversa, a leitura fica como está.
+ */
+export function passagemSemProvaDeEncomenda<P extends { tipo?: string; duvida?: string | null }>(
+  pedidos: P[],
+  falas: { quem: string; texto: string }[],
+): P[] {
+  if (!pedidos.some((p) => p.tipo === "encomenda")) return pedidos;
+  const textos = falas.map((f) => ` ${normalizarTexto(f.texto)} `);
+  if (textos.some((t) => PROVA_DE_ENCOMENDA.test(t)) || !textos.some((t) => PEDE_PASSAGEM.test(t))) return pedidos;
+  return pedidos.map((p) => (p.tipo === "encomenda" ? { ...p, tipo: "passagem", duvida: ["Pedido de passagem (nada de encomenda na conversa)."].join(" ") } : p));
 }
