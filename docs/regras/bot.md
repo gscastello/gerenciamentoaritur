@@ -97,6 +97,8 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
 - **Contatos internos** (dono, 24/11 — issue #532, `contatos_internos`): taxistas, equipe e família. O bot nunca escreve para eles
   (trava em `chatwootClient.postMessage`), não observa a conversa, não abre pendência e não aprende; o "Agendado ☑️" vale.
   Números só no banco, nunca no GitHub.
+- **Passageiro sem nome** (dono, 25/11 — issue #535, `nomeParaChamar`): "Passageiro (bairro)", lugar ou parentesco não é nome:
+  cumprimenta sem nome ("Olá!"; no modelo da Meta, a saudação da hora).
 - **Embarque no caminho** (issue #533, `embarqueNoCaminho`): Campestre, Matões, Miranda… na confirmação e no lembrete vão com
   o nome do lugar e a hora do cronograma (Campestre 13:00), nunca com os do ponto.
 - **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem

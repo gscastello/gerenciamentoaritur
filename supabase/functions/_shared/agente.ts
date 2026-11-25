@@ -32,6 +32,7 @@ import {
   USO_ZERADO,
 } from "./agentePuro.ts";
 import { type ContextoDoAgente, executarFerramenta, FERRAMENTAS } from "./agenteFerramentas.ts";
+import { nomeParaChamar } from "./nomeParaChamar.ts";
 import { montarFatos } from "./botAnswer.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 import { getBotContext } from "./botContext.ts";
@@ -178,7 +179,10 @@ async function montarSistema(agora: Date, telefone: string): Promise<{ system: B
     })
     .filter(Boolean)
     .join("\n");
-  const sobreOCliente = cliente
+  const chamar = nomeParaChamar(cliente?.name);
+  const sobreOCliente = cliente && !chamar
+    ? "CLIENTE DESTA CONVERSA: cadastrado, mas SEM o nome: não o chame por nome nem de \"passageiro\". Se ele disser o nome, use."
+    : cliente
     ? `CLIENTE DESTA CONVERSA: cadastrado como "${cliente.name}" (trate pelo primeiro nome, com naturalidade; o telefone dele já é o da conversa).`
     : "CLIENTE DESTA CONVERSA: ainda NÃO cadastrado. Antes de reservar, peça o nome completo (o nome do perfil do WhatsApp costuma ser apelido e não vale).";
   // ordem importa para o cache de prompt: nada que mude por hora ou por cliente antes do ponto de cache
