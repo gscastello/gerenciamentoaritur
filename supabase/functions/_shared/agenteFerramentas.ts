@@ -339,7 +339,7 @@ const semAcentoMinusculo = (t: string) => t.normalize("NFD").replace(/[\u0300-\u
 export async function valorDoPedido(
   ponto: Linha,
   pedido: { bairro: string | null; endereco: string | null; desembarque: string },
-): Promise<{ ok: true; preco: number; trecho?: string } | { ok: false; erro: Record<string, unknown> }> {
+): Promise<{ ok: true; preco: number; trecho?: string; incerto?: boolean } | { ok: false; erro: Record<string, unknown> }> {
   const { data: trechos } = await supabaseAdmin.from("route_fares").select("origem, destino, price");
   const trecho = trechoDoPedido([ponto.name, ponto.code, pedido.bairro, pedido.endereco], pedido.desembarque, trechos ?? []);
   if (trecho) return { ok: true, preco: Number(trecho.price), trecho: `${trecho.origem} a ${trecho.destino}` };
@@ -369,6 +369,11 @@ export async function valorDoPedido(
   // Volta: o valor é o do lugar onde deixamos o cliente, com a tabela da Ida (issue #349)
   if (naVolta) {
     const daVolta = await precoDaVoltaPeloDesembarque(pedido.desembarque);
+    // bairro que não está na tabela: o valor do ponto é só a base, e não vale como certo (issue #525)
+    if (daVolta === "sem_bairro") {
+      const base = await precoUnitario(ponto, pedido.bairro, pedido.endereco);
+      return base.ok ? { ...base, incerto: true } : base;
+    }
     if (daVolta) return daVolta;
   }
   return precoUnitario(ponto, pedido.bairro, pedido.endereco);
@@ -377,7 +382,7 @@ export async function valorDoPedido(
 /** Preço da Volta pelo desembarque (null = desembarque vago: fica o valor base do ponto). */
 async function precoDaVoltaPeloDesembarque(
   desembarque: string,
-): Promise<{ ok: true; preco: number } | { ok: false; erro: Record<string, unknown> } | null> {
+): Promise<{ ok: true; preco: number; incerto?: boolean } | { ok: false; erro: Record<string, unknown> } | "sem_bairro" | null> {
   const como = comoCobrarAVolta(desembarque);
   if (!como) return null;
   const { data: pontosDaIda } = await supabaseAdmin
@@ -396,12 +401,17 @@ async function precoDaVoltaPeloDesembarque(
   }
   const { data } = await supabaseAdmin.from("neighborhood_pricing").select("neighborhood, price").order("neighborhood");
   let achado = bairroDaTabela(como.texto, data ?? []) ?? bairroParecido(como.texto, data ?? [])?.bairro ?? null;
+  let incerto = false;
   if (!achado) {
     const deduzido = await resolverBairro(como.texto).catch(() => null);
+    // a pesquisa na internet acha numa hora e não acha na outra: não mexe em valor já gravado (issue #525)
+    incerto = deduzido?.fonte === "internet";
     if (deduzido) achado = (data ?? []).find((b: Linha) => b.neighborhood === deduzido.bairro) ?? null;
   }
   // lugar que não deu para ligar a um bairro: fica o valor base (a equipe confere)
-  return achado ? precoDoBairroCadastrado(achado) : null;
+  if (!achado) return "sem_bairro";
+  const preco = precoDoBairroCadastrado(achado);
+  return preco.ok && incerto ? { ...preco, incerto } : preco;
 }
 
 async function consultarViagem(args: Linha) {
@@ -520,6 +530,13 @@ async function calcularValor(args: Linha) {
     desembarque,
   });
   if (!preco.ok) return { ok: false, ...preco.erro };
+  if (preco.incerto) {
+    return {
+      ok: false,
+      codigo: "VALOR_A_CONFIRMAR",
+      erro: `O lugar "${desembarque}" não está na tabela de bairros. Não diga valor: pergunte o bairro; se já é o bairro, avise a equipe (avisar_equipe) e diga que o valor dele vai ser confirmado. A reserva pode ser feita mesmo assim.`,
+    };
+  }
   return {
     ok: true,
     ponto: ponto.name,

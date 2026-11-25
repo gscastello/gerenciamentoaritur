@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert";
 import { areaDoDesembarque } from "./agentePuro.ts";
 import { povoadoDoCaminho } from "./grafia.ts";
 import { paradaDoInterior } from "./ladoDaRota.ts";
-import { origemEscrita, pontoDaVoltaPelaOrigem, sentidoDoTrecho } from "./pedidoDoCliente.ts";
+import { origemEscrita, pedidosPelaOrigem, pontoDaVoltaPelaOrigem, sentidoDoTrecho, sentidoEscrito } from "./pedidoDoCliente.ts";
 import { cidadeDaVoltaPelasPistas, cidadeDoCaminhoNoTexto, idaPeloEmbarqueEmSaoLuis } from "./rascunhoPuro.ts";
 
 const chave = (t: string, campo = false) => povoadoDoCaminho(t, campo)?.chave ?? null;
@@ -67,4 +67,28 @@ Deno.test("#512: a área do desembarque reconhece os povoados", () => {
   assertEquals(areaDoDesembarque("Sozinho", areas), "povoado_sozinho");
   assertEquals(areaDoDesembarque("Povoado Sozinho, escola", areas), "povoado_sozinho");
   assertEquals(areaDoDesembarque("Vila Palmeira", areas), null);
+});
+
+Deno.test("#515: Periz é parada (antes de Bacabeira), não Pirapemas", () => {
+  const de = (t: string) => {
+    const o = origemEscrita(t);
+    return o ? [o.sentido, o.de, o.para] : null;
+  };
+  assertEquals(de("De periz pra pirapemas?"), ["ida", "periz", "pirapemas"]);
+  assertEquals(de("de Peris pra Pirapema"), ["ida", "periz", "pirapemas"]);
+  assertEquals(de("Pirapemas / Periz de Baixo"), ["volta", "pirapemas", "periz"]);
+  assertEquals(de("de Cantanhede para Perizes"), ["volta", "cantanhede", "periz"]);
+  assertEquals(de("de São Luís pra Periz"), ["ida", "sao luis", "periz"]);
+  // a Volta lida por engano vira a Ida em Outros, com Periz no embarque
+  const lido = { tipo: "passagem", data: "2026-11-25", direcao: "volta", cidade_dita: "pirapemas", endereco: null, desembarque: null };
+  // deno-lint-ignore no-explicit-any
+  const [p] = pedidosPelaOrigem([lido as any], origemEscrita("De periz pra pirapemas?")) as any[];
+  assertEquals([p.direcao, p.ponto, p.endereco, p.desembarque], ["ida", "outro", "Periz", "Pirapemas"]);
+});
+
+Deno.test("#514: 'pra ir sao Luís' é a Volta; 'ir Pirapemas' é a Ida", () => {
+  assertEquals(sentidoEscrito(["Ainda tem vaga pra ir sao Luís?"]), "volta");
+  assertEquals(sentidoEscrito(["vou Pirapemas amanhã"]), "ida");
+  assertEquals(sentidoEscrito(["quero ir pra São Luís"]), "volta");
+  assertEquals(sentidoEscrito(["vaga pra ir amanhã"]), "ida");
 });

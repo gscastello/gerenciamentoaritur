@@ -86,6 +86,34 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   buscamos; na Volta, o do lugar onde DEIXAMOS o cliente em São Luís, com a mesma tabela da Ida — Rodoviária e Retorno
   pelo preço desses pontos, em casa pelo bairro, aeroporto/BR como Outros, cidade do caminho pelo trecho. Desembarque
   vago ("São Luís") fica no valor do ponto. Regra única: `comoCobrarAVolta` (bot) e `precoDaVolta` (app).
+- **Busca em casa: o bairro basta** (dono, 24/11): o taxista busca só com o bairro; reserva sem rua está completa, não é
+  pendência nem alerta.
+- **Contexto do dono (24/11)**, em `bot_knowledge`: Rodoviária dentro, plataforma 23; volumes com foto; hotéis (Centro R$ 80, orla
+  R$ 90); Pindaí e sede de Paço R$ 100; carro auxiliar e frete só com atendente; outra van só seu Raimundo, sem vaga e se
+  pedirem; sem desconto de idoso/estudante/PCD; desistência só cancela; ônibus com Wi-Fi, USB e ar. Cajuí é em Cantanhede.
+- **Pirapemas até Cantanhede é sempre extra** (issue #530, `database/138`): o banco marca `fora_lotacao` sozinho. **Em pé** só no
+  ônibus (no máximo 5): Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões do Norte ou Miranda do Norte.
+- **Segunda de feriado** (issue #529): sai no horário normal e, quase sempre, a terça sai 1 h mais cedo.
+- **Contatos internos** (dono, 24/11 — issue #532, `contatos_internos`): taxistas, equipe e família. O bot nunca escreve para eles
+  (trava em `chatwootClient.postMessage`), não observa a conversa, não abre pendência e não aprende; o "Agendado ☑️" vale.
+  Números só no banco, nunca no GitHub.
+- **Encomenda precisa de prova** (issue #531): "marcar uma pesagem" sem nada de encomenda na conversa é passagem
+  (`passagemSemProvaDeEncomenda`). "Estrada de Pirapemas" (dono) é o trecho entre as
+  duas cidades, mais perto de Cantanhede: conta como Cantanhede (`estradaDaCidade`); com outra cidade escrita, fica em dúvida.
+- **Embarque e desembarque escritos** (issue #523, `lugaresDoPedido`): completam só o que o leitor deixou vazio, em código. Ida
+  sem desembarque = a única cidade escrita como destino; Volta sem endereço = a resposta a "Qual o endereço pra lhe buscar?",
+  o lugar que a equipe repetiu ou o "moro na…", **depois** de decidida a cidade (esse lugar nunca decide Pirapemas ou
+  Cantanhede); desembarque igual ao embarque, na Volta, sai. A avaliação compara dia, sentido, ponto, bairro e quantidade:
+  embarque e desembarque se conferem à parte (`lido.planejadas`).
+- **Valor incerto não mexe em valor gravado** (issue #525): desembarque da Volta num bairro fora da tabela (ou achado só na
+  internet) devolve `incerto`; o revisor não troca o valor e o atendente não o diz (`VALOR_A_CONFIRMAR`).
+- **Dia só perguntado** (issue #521): "Tem vaga pra hoje?" → "Só amanhã" → "Marca pra amanhã" não é pedido que faltou
+  (`diasSoPerguntados`): era a maior causa própria de "Agendado não lançou" (11 de 36 em 7 dias, 24/11).
+- **Periz** (Peris, Perizes; issue #515): parada entre São Luís e Bacabeira. "De Periz pra Pirapemas" é Ida, ponto Outros com
+  Periz no embarque, valor do trecho. Nunca Pirapemas.
+- **A cidade da resposta ao endereço** (issue #514): "Qual o endereço pra lhe buscar?" → "Vila Exemplo Cantanhede" decide o
+  ponto da Volta (`cidadeNaRespostaDoEndereco`). "Vindo de Pirapemas, antes da entrada da rua…" é o lado da pista, não a
+  origem (`RE_LADO_DA_PISTA`).
 - **Palmeiral e Povoado Sozinho** (issue #512, dono 24/11): entre Cantanhede e Matões do Norte, embarque e desembarque
   válidos. Volta no ponto Cantanhede com o povoado no embarque; mesmo valor de e para São Luís, sem revisão. Trecho só no
   interior fica sem valor (equipe). `povoadoDoCaminho`: "sozinho" só é lugar com "povoado"/preposição antes (ou no começo
@@ -343,10 +371,3 @@ celular); o bot é um Agent Bot (`chatwoot-bot`). Operação em `WHATSAPP.md`.
   Liga/desliga em `settings.lembrete_viagem.ativo` (autorizado pelo dono em 14/11; ligado em 17/11, modelo `aviso_horario` aprovado na Meta).
 - **Dados na marca** (issue #420, `marcaDaEquipe.ts`): "Agendado ☑️ seg Ida Estiva 2P" — dia, sentido, quantidade,
   ponto/local, bairro e cidade da Volta escritos pela equipe na marca **vencem a leitura**. A marca sozinha continua igual.
-- **Correções para o Claude** (issue #516): o que a equipe explica ao Assistente ("o bot leu errado, o certo é…") vira linha
-  em `bot_correcoes` pela ferramenta `registrar_correcao`, na hora e sem Confirmar (não muda reserva). O Claude lê a fila
-  com a skill `corrigir-bot`, corrige em lote e marca `corrigida`. A pessoa pode tirar da fila o que registrou por engano.
-- **Pendência com o assistente** (issue #516): "Resolver com o assistente" abre a conversa com o detalhe, o telefone e o id;
-  ele lê a conversa e propõe o que resolve. "Já resolvi" só tira da lista. A pendência nunca é fechada sem solução.
-- **Voz no app** (issue #516): o app grava e o servidor transcreve (`modo: transcrever`, `transcreverFala`, com as ruas no
-  vocabulário); o reconhecimento do navegador não serve no iPhone. Falar "sim" só confirma se houver UMA proposta aberta.

@@ -36,6 +36,7 @@
 // Sempre responde 200 depois de autenticar: o Chatwoot reenvia em 429/500 e
 // o timeout dele é de ~5 s, então o processamento roda em segundo plano.
 
+import { contatoInterno } from "../_shared/contatosInternos.ts";
 import { registrarPresencaSePedida } from "../_shared/presenca.ts";
 import { aprenderSePreciso } from "../_shared/aprendizadoRun.ts";
 import { runWithBotContext } from "../_shared/botContext.ts";
@@ -235,6 +236,14 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
     });
   }
 
+  // taxista, equipe ou família (issue #532): a conversa aparece para a equipe e o "Agendado ☑️" vale, mas o
+  // bot não observa, não responde, não abre pendência e não aprende com ela
+  const interno = await contatoInterno(atividade?.telefone);
+  if (interno && atividade && !(atividade.autor === "equipe" && atividade.texto && (ehMarcaDeAgendado(atividade.texto) || ehMarcaDeCorrecao(atividade.texto)))) {
+    evento("bot_contato_interno", { conversa: atividade.chatwootConversationId, autor: atividade.autor ?? null });
+    return;
+  }
+
   const { data: cfg } = await supabaseAdmin.from("settings").select("value").eq("key", "attendance_mode").maybeSingle();
   const modo: string = cfg?.value?.mode ?? "ia";
 
@@ -245,7 +254,7 @@ async function processar(body: any, opcoes: { transcricao?: boolean } = {}) {
   let observou = false;
   if (opcoes.transcricao) {
     observou = true; // a observação do áudio já foi trocada pela transcrição, no lugar
-  } else if (atividade?.autor && atividade.texto && conversaEspelhada) {
+  } else if (!interno && atividade?.autor && atividade.texto && conversaEspelhada) {
     await registrarObservacao({
       conversationId: conversaEspelhada,
       chatwootConversationId: atividade.chatwootConversationId,

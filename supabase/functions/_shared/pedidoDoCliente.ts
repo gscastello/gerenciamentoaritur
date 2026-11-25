@@ -9,7 +9,7 @@
 //     sozinho: ida e volta têm dias diferentes, duas pessoas viram dois pedidos.
 // Nunca decide preço nem vaga.
 
-import { normalizarTexto, palavraParecida } from "./grafia.ts";
+import { estradaDaCidade, normalizarTexto, palavraParecida } from "./grafia.ts";
 
 export type MensagemDoCliente = { texto: string; em: string };
 
@@ -316,18 +316,19 @@ export function segundaViagemEhAOutra<P extends PedidoDoPar>(
 /**
  * O SENTIDO SAI DA ORDEM DAS PARADAS (dono, 14/11 — issues #406 e #407). A Ida sai de São Luís e
  * vai até Pirapemas; a Volta sai de Pirapemas e vai até São Luís, pelo mesmo caminho:
- *   São Luís → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Povoado Sozinho/Palmeiral → Cantanhede → Campestre → Pirapemas
+ *   São Luís → Periz → Bacabeira → Santa Rita → Entroncamento → Miranda → Matões → Povoado Sozinho/Palmeiral → Cantanhede → Campestre → Pirapemas
  * Destino DEPOIS da origem nessa ordem = Ida; destino ANTES = Volta. "De Cantanhede pra Pirapemas" é
  * Ida (a Volta já passou por Cantanhede vinda de Pirapemas); "de Pirapemas pra Cantanhede" é Volta.
  * Só a origem: São Luís = Ida; Pirapemas/Cantanhede = Volta (o mais comum). Vale sobre o destino
  * sozinho ("pra Cantanhede" de quem sai de Pirapemas não é Ida).
  */
-export const ORDEM_DA_IDA = ["sao luis", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "povoado sozinho", "palmeiral", "cantanhede", "campestre", "pirapemas"] as const;
+export const ORDEM_DA_IDA = ["sao luis", "periz", "bacabeira", "santa rita", "entroncamento", "miranda", "matoes", "povoado sozinho", "palmeiral", "cantanhede", "campestre", "pirapemas"] as const;
 type Parada = (typeof ORDEM_DA_IDA)[number];
 const ENTRE_MATOES_E_CANTANHEDE: Parada[] = ["povoado sozinho", "palmeiral"];
 
 const NOME_DA_PARADA: Record<Parada, string> = {
   "sao luis": "São Luís",
+  periz: "Periz",
   bacabeira: "Bacabeira",
   "santa rita": "Santa Rita",
   entroncamento: "Entroncamento",
@@ -340,7 +341,7 @@ const NOME_DA_PARADA: Record<Parada, string> = {
   pirapemas: "Pirapemas",
 };
 
-const PARADA = "(sao luis|slz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|povoado sozinho|palmeiral|cantanhede|campestre|pirapemas)";
+const PARADA = "(sao luis|slz|periz|bacabeira|santa rita|entroncamento|miranda(?: do norte)?|matoes(?: do norte)?|povoado sozinho|palmeiral|cantanhede|campestre|pirapemas)";
 // "pra", "pro", "para", "p/", "até" (issue #415: "de Cantanhede pro Marsil")
 const PARA = "(?:pra|pro|para|p|a|ate|ir pra|ir pro|ir para)";
 const RE_DE_PARA = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} ${PARA} ${PARADA} `);
@@ -348,6 +349,14 @@ const RE_DE_PARA = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho d
 const RE_DE_PARA_LUGAR = new RegExp(` (?:de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} ${PARA} [a-z]`);
 const RE_PAR_COM_BARRA = new RegExp(` ${PARADA} qbarraq ${PARADA} `);
 const RE_SO_ORIGEM = new RegExp(` (de|saindo de|sair de|saio de|vindo de|venho de|daqui de) ${PARADA} `);
+
+/**
+ * "Vindo de Pirapemas antes da entrada da rua…" explica onde fica a casa na pista (de que lado a van chega),
+ * não de onde o passageiro sai (issue #514).
+ */
+const RE_LADO_DA_PISTA = new RegExp(
+  ` (?:vindo|vem|vinda|venho|sentido) (?:de |da )?${PARADA} (?:e |fica |logo |um pouco |bem )?(?:antes|depois|passando|perto|proximo|em frente|a direita|a esquerda|do lado|lado|na entrada|no inicio|primeir[ao]|segund[ao]) `,
+);
 
 function parada(t: string): Parada | null {
   const n = t.replace(/ do norte$/, "");
@@ -384,7 +393,9 @@ export function paradasCorrigidas(textoNormalizado: string): string {
 
 /** "do povoado Palmeiral" vira "de palmeiral"; "pro Sozinho", "pro povoado sozinho" (issue #512). */
 function comPovoados(n: string): string {
-  return n.replace(
+  // "Peris", "Perizes", "Periz de Baixo" (issue #515): antes de Bacabeira, não é Pirapemas
+  const comPeriz = n.replace(/ (?:periz|peris|perizes|perises)(?: de (?:baixo|cima))?(?= )/g, " periz");
+  return comPeriz.replace(
     / (d[eo]|no|em|pr[oa]|para|ao?|ate)(?: o| ao)?(?: povoado(?: d[eo])?)? (palmeiral|sozinho)(?= )/g,
     (_m, prep: string, nome: string) =>
       ` ${({ do: "de", no: "em", ao: "a" } as Record<string, string>)[prep] ?? prep} ${nome === "sozinho" ? "povoado sozinho" : nome}`,
@@ -394,7 +405,7 @@ function comPovoados(n: string): string {
 export function origemEscrita(texto: string): OrigemDoTrecho | null {
   const n = comPovoados(` ${paradasCorrigidas(normalizarTexto(texto))} `);
   // "Pirapemas/ São Luís", "São Luís x Cantanhede", "Cantanhede → São Luís": origem/destino (issue #419)
-  const barra = ` ${normalizarTexto(String(texto ?? "").replace(/\s*(?:\/|->|→|\bx\b)\s*/gi, " qbarraq "))} `.match(RE_PAR_COM_BARRA);
+  const barra = comPovoados(` ${normalizarTexto(String(texto ?? "").replace(/\s*(?:\/|->|→|\bx\b)\s*/gi, " qbarraq "))} `).match(RE_PAR_COM_BARRA);
   if (barra) {
     const de = parada(barra[1]);
     const para = parada(barra[2]);
@@ -417,7 +428,7 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
   }
   // só a origem: precisa de "saindo/vindo de" ("de Pirapemas" sozinho pode ser "sou de Pirapemas")
   const so = n.match(RE_SO_ORIGEM);
-  if (so && so[1] !== "de") {
+  if (so && so[1] !== "de" && !RE_LADO_DA_PISTA.test(n)) {
     const de = parada(so[2]);
     if (de === "sao luis") return { sentido: "ida", de, para: null };
     if (de === "pirapemas" || de === "cantanhede") return { sentido: "volta", de, para: null };
@@ -425,8 +436,9 @@ export function origemEscrita(texto: string): OrigemDoTrecho | null {
   return null;
 }
 
-const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate|no|na) (sao luis|slz|s luis|sao luiz) /;
-const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo) (em|pra|pro|para|a|ate) (pirapemas|cantanhede) /;
+// "vaga pra ir sao Luís", sem preposição, também é ir PARA São Luís (issue #514)
+const RE_IR_PARA_SAO_LUIS = / (ir|vou|vamos|indo)(?: (?:em|pra|pro|para|a|ate|no|na))? (sao luis|slz|s luis|sao luiz) /;
+const RE_IR_PARA_O_INTERIOR = / (ir|vou|vamos|indo)(?: (?:em|pra|pro|para|a|ate))? (pirapemas|cantanhede) /;
 
 /**
  * "Quanto é pra buscar em casa e deixar aqui em casa, aqui na minha, em Cantanhede?" (issue #494):
@@ -555,6 +567,42 @@ export function origemDoPedido(falas: { quem: string; texto: string }[]): Origem
   return achadas.at(-1) ?? null;
 }
 
+/** A equipe perguntou onde buscar: "Qual o endereço pra lhe buscar?", "Onde te pegamos?" */
+const RE_ONDE_BUSCAR =
+  / (?:(?:qual|quau|manda|mande|me passa|envie?) (?:e )?(?:o |seu |a )?(?:endereco|localizacao)|(?:onde|aonde)(?: [a-z]+){0,4} (?:buscar|buscamos|busco|pegar|pegamos|pego|embarca|embarque)|(?:te|lhe) (?:buscamos|busco|pegamos|pego) (?:onde|aonde)) /;
+
+/**
+ * A cidade (Pirapemas ou Cantanhede) que o cliente escreveu ao RESPONDER onde buscar: "Qual o endereço pra lhe
+ * buscar?" → "Vila Exemplo Cantanhede" (issue #514). É o lugar da casa: vale sobre cidade citada de passagem
+ * ("vindo de Pirapemas, antes da entrada…"). Duas cidades na resposta, ou destino escrito, não decidem.
+ */
+export function cidadeNaRespostaDoEndereco(falas: { quem: string; texto: string }[]): "pirapemas" | "cantanhede" | null {
+  let perguntou = false;
+  let cidade: "pirapemas" | "cantanhede" | null = null;
+  const achadas = new Set<"pirapemas" | "cantanhede">();
+  for (const f of falas) {
+    const n = ` ${paradasCorrigidas(normalizarTexto(f.texto))} `;
+    if (f.quem === "equipe") {
+      if (RE_ONDE_BUSCAR.test(n)) {
+        perguntou = true;
+        achadas.clear();
+        cidade = null;
+      } else if (achadas.size) {
+        perguntou = false;
+      }
+      continue;
+    }
+    if (f.quem !== "cliente" || !perguntou) continue;
+    // destino ("pra Cantanhede", "até Pirapemas") e lado da pista não são o lugar da casa
+    const limpo = estradaDaCidade(n)
+      .replace(/ (?:vindo|vem|vinda|venho|sentido|saindo|indo|quem vem) (?:de |da |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
+      .replace(/ (?:pra|pro|para|ate|a) (?:pirapemas|cantanhede)(?= )/g, " ");
+    for (const c of ["pirapemas", "cantanhede"] as const) if (limpo.includes(` ${c} `)) achadas.add(c);
+    cidade = achadas.size === 1 ? [...achadas][0] : null;
+  }
+  return cidade;
+}
+
 /** Cidade de embarque da Volta (o ponto): Campestre vai no ponto Pirapemas; outra cidade do caminho, no Cantanhede (#326). */
 export function pontoDaVoltaPelaOrigem(de: Parada): "pirapemas" | "cantanhede" | null {
   if (de === "pirapemas" || de === "campestre") return "pirapemas";
@@ -562,7 +610,7 @@ export function pontoDaVoltaPelaOrigem(de: Parada): "pirapemas" | "cantanhede" |
   return "cantanhede";
 }
 
-const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "povoado sozinho" ? "sozinho" : p);
+const temANome = (texto: string | null | undefined, p: Parada) => normalizarTexto(texto ?? "").includes(p === "povoado sozinho" ? "sozinho" : p === "periz" ? "peri" : p);
 
 /**
  * O pedido segue o trecho dito (issue #407): sentido pela ordem das paradas, embarque na cidade de
@@ -1076,7 +1124,7 @@ const com = (t: string) => ` ${normalizarTexto(t)} `;
 const PERGUNTA_DE_EMBARQUE =
   / (busc\w*|peg\w*|embarc\w*|aonde|onde (voce|vc|tu|a senhora|o senhor) (esta|ta|fica|mora|vai estar)|de onde) /;
 const PERGUNTA_DE_DESEMBARQUE = / (desc\w*|desembarc\w*|deix\w*|destino|pra onde|para onde) /;
-const FALA_DE_DESEMBARQUE = / (desco|desce|descer|deixa|deixar|me deixe|destino|vou pra|vou para) /;
+const FALA_DE_DESEMBARQUE = / (desco|desce|descer|deixa|deixar|me deixe|destino|desembarque|onde (?:voce |vc )?vai ficar|vou pra|vou para) /;
 const SEM_SENTIDO = new Set(["a", "o", "as", "os", "da", "de", "do", "das", "dos", "na", "no", "nas", "nos", "em", "e", "pra", "para"]);
 const nucleoDe = (t: string) =>
   normalizarTexto(t)
@@ -1204,4 +1252,76 @@ export function datasSemPedido(
 ): string[] {
   const cobertas = new Set([...datasDosPedidos.filter(Boolean) as string[], ...datasJaReservadas]);
   return [...new Set(datasDoCliente)].filter((d) => d >= hoje && !cobertas.has(d)).sort();
+}
+
+const RE_PEDE_RESERVA =
+  / (quero|queria|quer|preciso|marca|marque|marcar|marcada|reserva|reserve|reservar|agenda|agende|agendar|deixa|deixe|deixar|guarda|guarde|guardar|vou|vamos|iremos|passagem para|passagem pra) /;
+
+/**
+ * Dias que o cliente só PERGUNTOU e trocou por outro (issue #521): "Tem vaga pra hoje?" → "Só pra amanhã" →
+ * "Marca uma pra amanhã". Conta só quando TODAS as mensagens com aquele dia são pergunta sem pedido, nenhuma
+ * traz um dia já lido, e depois delas o cliente escreveu um dia que virou pedido.
+ */
+export function diasSoPerguntados(mensagens: MensagemDoCliente[], datasLidas: (string | null | undefined)[]): string[] {
+  const lidas = new Set(datasLidas.filter(Boolean) as string[]);
+  if (!lidas.size) return [];
+  const linhas = mensagens.map((m, i) => ({ i, datas: datasEscritas([m]), texto: String(m.texto ?? "") }));
+  const dias = [...new Set(linhas.flatMap((l) => l.datas))].filter((d) => !lidas.has(d));
+  return dias.filter((d) => {
+    const com = linhas.filter((l) => l.datas.includes(d));
+    const soPergunta = com.every(
+      (l) => l.texto.includes("?") && !RE_PEDE_RESERVA.test(` ${normalizarTexto(l.texto)} `) && !l.datas.some((x) => lidas.has(x)),
+    );
+    const ultima = com[com.length - 1].i;
+    return soPergunta && linhas.some((l) => l.i > ultima && l.datas.some((x) => lidas.has(x)));
+  });
+}
+
+const PROVA_DE_ENCOMENDA =
+  / (?:encomend[a-z]*|entreg[a-z]*|despach[a-z]*|pacotes?|caixas?|caixinhas?|documentos?|identidade|mercadorias?|fretes?|remedios?|medicac[a-z]*|medicamentos?|sacolas?|sacolinhas?|envelopes?|pecas?|volumes?|envi(?:ar|o|e|ei|ando)|(?:mandar|manda|levar|leva|leve|trazer|traz|traga|buscar|pegar|pega|deixar|deixa) (?:um|uma|uns|umas|meu|minha|esse|essa|isso|o|a|os|as)) /;
+const PEDE_PASSAGEM = / (?:passag[a-z]*|pasag[a-z]*|passaj[a-z]*|pesag[a-z]*|pessag[a-z]*|vagas?|lugar|lugares|poltronas?|viajar|vou viajar|me buscar|lhe buscar|te buscar) /;
+
+/**
+ * Encomenda lida sem nenhuma palavra de encomenda, num pedido de passagem ("marcar uma pesagem pra sexta"), é
+ * passagem (issue #531). Com qualquer sinal de encomenda na conversa, a leitura fica como está.
+ */
+export function passagemSemProvaDeEncomenda<P extends { tipo?: string; duvida?: string | null }>(
+  pedidos: P[],
+  falas: { quem: string; texto: string }[],
+): P[] {
+  if (!pedidos.some((p) => p.tipo === "encomenda")) return pedidos;
+  const textos = falas.map((f) => ` ${normalizarTexto(f.texto)} `);
+  if (textos.some((t) => PROVA_DE_ENCOMENDA.test(t)) || !textos.some((t) => PEDE_PASSAGEM.test(t))) return pedidos;
+  return pedidos.map((p) => (p.tipo === "encomenda" ? { ...p, tipo: "passagem", duvida: ["Pedido de passagem (nada de encomenda na conversa)."].join(" ") } : p));
+}
+
+const MAIS_DE_UM = / (?:eu e|nos dois|nos duas|a gente|eu tambem|tambem vou|comigo|mais (?:um|uma|duas|dois)|outra|outro|duas|dois|tres|2|3|4|5|casal|somos|vamos|iremos) /;
+
+/**
+ * "Tem vaga amanhã?" → "É pra meu filho, ele vai pro retorno" lido como DUAS passagens iguais (a de quem escreve e a
+ * do filho) é uma só (issue #531, caso 14e37153): mesma viagem e ponto, 1 passagem cada, sem telefone de outra pessoa
+ * e sem nada na conversa que diga que vai mais de um.
+ */
+export function umPassageiroSo<P extends PedidoDoPar & { quantidade?: number | null; passageiro_telefone?: string | null }>(
+  pedidos: P[],
+  textos: string[],
+): P[] {
+  const t = textos.map((x) => ` ${normalizarTexto(x)} `);
+  const soPraOutro = quantidadeEscrita(textos) == null && !t.some((x) => MAIS_DE_UM.test(x)) && t.some((x) => / (?:pra|para|pro) (?:o |a )?(?:meu|minha) /.test(x));
+  // a mesma leitura às vezes vem como UM pedido de 2 passagens
+  if (pedidos.length === 1 && soPraOutro && Number(pedidos[0].quantidade ?? 1) === 2 && (pedidos[0].tipo ?? "passagem") === "passagem") {
+    return [{ ...pedidos[0], quantidade: 1 }];
+  }
+  if (pedidos.length !== 2) return pedidos;
+  const [a, b] = pedidos;
+  const iguais = a.data === b.data && a.direcao === b.direcao && (a.ponto ?? null) === (b.ponto ?? null) &&
+    normalizarTexto(a.endereco ?? "") === normalizarTexto(b.endereco ?? "") && (a.tipo ?? "passagem") === (b.tipo ?? "passagem") && (a.tipo ?? "passagem") === "passagem";
+  // um deles sem embarque nenhum ("busca" sem endereço): é o de quem só perguntou
+  const semEmbarque = (x: P) => !x.endereco && !x.bairro && ["", "busca", "outro"].includes(String(x.ponto ?? ""));
+  const mesmaViagem = a.data === b.data && a.direcao === b.direcao && (a.tipo ?? "passagem") === "passagem" && (b.tipo ?? "passagem") === "passagem";
+  if (soPraOutro && mesmaViagem && !a.passageiro_telefone && !b.passageiro_telefone && semEmbarque(a) !== semEmbarque(b)) {
+    return [{ ...(semEmbarque(a) ? b : a), quantidade: 1 }];
+  }
+  if (!iguais || Number(a.quantidade ?? 1) !== 1 || Number(b.quantidade ?? 1) !== 1 || a.passageiro_telefone || b.passageiro_telefone) return pedidos;
+  return soPraOutro ? [b] : pedidos;
 }

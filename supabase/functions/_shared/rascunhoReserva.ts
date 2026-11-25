@@ -86,6 +86,7 @@ import {
   outroPodeSerBusca,
   bairroTemProva,
   bairroForaDoNomeComposto,
+  A_CONFIRMAR,
 } from "./rascunhoPuro.ts";
 import { horarioDoEmbarque, mensagemDeConfirmacao, type ReservaParaConfirmar } from "./confirmacaoAoCliente.ts";
 import { aplicarDadosDaMarca, dadosDaMarca } from "./marcaDaEquipe.ts";
@@ -114,8 +115,13 @@ import {
   pontoEscrito,
   falasDoDia,
   semPedidosPassados,
+  cidadeNaRespostaDoEndereco,
+  diasSoPerguntados,
+  passagemSemProvaDeEncomenda,
+  umPassageiroSo,
 } from "./pedidoDoCliente.ts";
 import { normalizarTexto, semLogradouros } from "./grafia.ts";
+import { completarLugares, enderecoQueFaltou } from "./lugaresDoPedido.ts";
 import { lugaresContraOSentido, paradaDoInterior } from "./ladoDaRota.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
 import { normalizarTelefone, variantesTelefone } from "./telefone.ts";
@@ -163,6 +169,8 @@ async function lerConversa(chatwootConversationId: number, mensagemId: number) {
 
 /** Locais de desembarque reconhecidos só em código (`areaDoDesembarque`), fora das instruções do leitor. */
 const AREAS_FORA_DO_TEXTO = new Set(["palmeiral", "povoado_sozinho"]);
+/** Bairros novos da tabela que o código reconhece, fora das instruções do leitor (issue #528). */
+const BAIRROS_FORA_DO_TEXTO = new Set(["Kennedy", "Pindaí"]);
 
 async function contexto() {
   const [ida, volta, { data: areas }, { data: bairros }, { data: locais }] = await Promise.all([
@@ -188,7 +196,7 @@ async function contexto() {
     pontosCompletos: { ida: ativos(ida), volta: ativos(volta) },
     listaPontos,
     desembarques,
-    bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).join(", "),
+    bairrosSaoLuis: (bairros ?? []).map((b: Bloco) => b.neighborhood).filter((b: string) => !BAIRROS_FORA_DO_TEXTO.has(b)).join(", "),
     bairrosTabela: (bairros ?? []) as { neighborhood: string }[],
     locaisDeOutros: ((locais ?? []) as Bloco[]).map((l) => String(l.local)),
     areaDe: (t: string, d: "ida" | "volta") => areaDoDesembarque(t, porSentido(d)),
@@ -498,7 +506,12 @@ async function lerEGravar(
   const lidos = simular?.memoria ? await lerComMemoria(system, conversa, opcoes.modelo) : await lerPedidosComConsenso(system, conversa, opcoes.modelo);
   const uso = lidos.uso;
   // mesma viagem do mesmo passageiro = uma reserva só, somando as passagens (issue #345)
-  const lidosJuntos = juntarPedidosDaMesmaViagem(lidos.pedidos);
+  // "marcar uma pesagem" lida como encomenda, sem nada de encomenda na conversa, é passagem (issue #531)
+  const comTipo = passagemSemProvaDeEncomenda(lidos.pedidos, recentes.filter((m) => m.quem === "cliente" || m.quem === "equipe"));
+  if (comTipo !== lidos.pedidos) evento("bot_encomenda_era_passagem", { conversa: entrada.chatwootConversationId });
+  const semRepetir = umPassageiroSo(comTipo, recentes.filter((m) => m.quem === "cliente").map((m) => m.texto));
+  if (semRepetir !== comTipo) evento("bot_um_passageiro_so", { conversa: entrada.chatwootConversationId });
+  const lidosJuntos = juntarPedidosDaMesmaViagem(semRepetir);
   // tudo o que o CLIENTE escreveu no pedido atual (para conferir a cidade da Volta que ele disse)
   const doCliente = recentes.filter((m) => m.quem === "cliente");
   const textosDoCliente = doCliente.map((m) => m.texto);
@@ -554,6 +567,7 @@ async function lerEGravar(
   const falasDoPedido = recentes
     .filter((m) => m.quem === "cliente" || m.quem === "equipe")
     .map((m) => ({ quem: m.quem, texto: m.texto, em: m.em }));
+  const cidadeDoEndereco = cidadeNaRespostaDoEndereco(falasDoPedido);
   const recusadas = sugestoesRecusadas(falasDoPedido);
   // "A ida é sábado, certo?" → "Isso": vale como dito pelo cliente (issue #335)
   const confirmadas = [...datasConfirmadas(falasDoPedido), ...(dadosMarca.data ? [dadosMarca.data] : [])];
@@ -670,8 +684,11 @@ async function lerEGravar(
           lugarDeSaoLuis: !!bairroPelosLugares((deSaoLuis ?? []) as LugarDeSaoLuis[]),
           sentidoEscrito: pedidos.length === 1 ? sentidoEscrito(textosDoCliente) : null,
         });
+        // formulário preenchido: bairro de São Luís no embarque e cidade do interior em "Onde você vai ficar" é Ida
+        const formularioDizIda = !!paradaDoInterior(p.desembarque) && !!bairroEscrito(textosDoCliente, ctx.bairrosTabela) &&
+          textosDoCliente.some((t) => / onde (?:voce|vc) vai ficar /.test(` ${normalizarTexto(t)} `));
         if (decisao === "duvida") {
-          ondeEmbarca.add(p);
+          if (!formularioDizIda) ondeEmbarca.add(p);
         } else if (decisao) {
           Object.assign(
             p,
@@ -716,6 +733,16 @@ async function lerEGravar(
       p.desembarque = null;
       evento("bot_resposta_era_embarque", { conversa: entrada.chatwootConversationId });
     }
+    // embarque e desembarque escritos na conversa que a leitura deixou vazios ou copiou (issue #523)
+    const lugares523 = completarLugares(p, falasDoPedido, {
+      pontos: ctx.pontos,
+      bairros: ctx.bairrosTabela.map((b) => b.neighborhood),
+      sentidos: pedidos.map((x) => x.direcao ?? null),
+    });
+    if (lugares523.length) {
+      p.duvida = [...lugares523, p.duvida].filter(Boolean).join(" ");
+      evento("bot_lugar_completado", { conversa: entrada.chatwootConversationId, quantos: lugares523.length });
+    }
     if (conferido.completados.length || avisosDoCliente.length) {
       evento("bot_pedido_conferido", {
         conversa: entrada.chatwootConversationId,
@@ -752,6 +779,15 @@ async function lerEGravar(
         qualViagem.add(p);
       }
       if (decisao) evento("bot_proxima_viagem_pelo_lugar", { conversa: entrada.chatwootConversationId, decisao });
+    }
+    // a cidade que o cliente escreveu ao responder onde buscar vence a lida (issue #514)
+    if (
+      cidadeDoEndereco && pedidos.length === 1 && !dadosMarca.cidade && (p.tipo ?? "passagem") !== "encomenda" &&
+      p.direcao === "volta" && cidadeDaVolta(p.cidade_dita) !== cidadeDoEndereco
+    ) {
+      evento("bot_cidade_do_endereco", { conversa: entrada.chatwootConversationId, lida: p.cidade_dita ?? null, cidade: cidadeDoEndereco });
+      p.cidade_dita = cidadeDoEndereco;
+      p.ponto = null;
     }
     // a cidade escrita pelo PRÓPRIO cliente vale como dita ("de Pirapemas a São Luís"): o leitor às vezes
     // não marca cidade_dita; uma cidade só, com erro de escrita aceito (issue #299)
@@ -816,6 +852,29 @@ async function lerEGravar(
       continue;
     }
     const r = v.rascunho;
+    // a Volta ficou sem endereço, mas ele foi escrito na conversa (issue #523); a cidade já está decidida
+    if (r.type === "passagem" && v.aConfirmar.includes("endereco") && String(r.pickup_detail ?? "").startsWith(A_CONFIRMAR.endereco)) {
+      const faltou = enderecoQueFaltou(falasDoPedido, {
+        direcao: r.direction,
+        bairros: ctx.bairrosTabela.map((b) => b.neighborhood),
+        sentidos: pedidos.map((x) => x.direcao ?? null),
+        temCostume: !!costume?.volta?.route_point_code,
+        desembarque: r.dropoff_location,
+      });
+      if (faltou) {
+        r.pickup_detail = String(r.pickup_detail).replace(A_CONFIRMAR.endereco, faltou.endereco);
+        v.aConfirmar.splice(v.aConfirmar.indexOf("endereco"), 1);
+        if (faltou.desembarqueEraEmbarque) {
+          r.dropoff_location = null;
+          r.dropoff_area = null;
+        }
+        r.notes = ["Embarque escrito na conversa.", String(r.notes ?? "").replace("Reservada sem endereço (Agendado ☑️): o cliente ainda confirma onde embarca.", "")]
+          .join(" ")
+          .trim()
+          .slice(0, 300);
+        evento("bot_endereco_completado", { conversa: entrada.chatwootConversationId });
+      }
+    }
     let pendencia: { motivo: string; codigo: string } | null = null;
     // busca em casa com o bairro escrito errado ("cohatrc"): o da tabela, com aviso (issue #276)
     const parecido = r.route_point_code === "busca" ? bairroParecido(r.pickup_neighborhood, ctx.bairrosTabela) : null;
@@ -1049,12 +1108,13 @@ async function lerEGravar(
     }
   }
   // dia que o cliente pediu e a leitura não trouxe nem já está reservado: pedido de fora (issue #335)
+  const soPerguntados = diasSoPerguntados(mensagensDoCliente, pedidos.map((p) => p.data));
   const diasSemPedido = datasSemPedido(
     [...datasEscritas(mensagensDoCliente), ...confirmadas],
     pedidos.map((p) => p.data),
     [...jaReservadas].map((k) => k.split("|")[0]),
     hoje,
-  );
+  ).filter((d) => !soPerguntados.includes(d));
   if (diasSemPedido.length) evento("bot_dia_sem_pedido", { conversa: entrada.chatwootConversationId, dias: diasSemPedido });
   return { pedidos, gravados, motivos, incertos, aConfirmar, uso, ctx, cliente, hoje, diasSemPedido, planejadas, divergente: lidos.divergente };
 }

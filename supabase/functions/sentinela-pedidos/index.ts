@@ -9,6 +9,7 @@
 //
 // Deploy: verify_jwt = false (a autenticação é a chave da rotina).
 
+import { contatoInterno } from "../_shared/contatosInternos.ts";
 import { diaCivil } from "../_shared/agentePuro.ts";
 import { chatwootClient } from "../_shared/chatwootClient.ts";
 import { anexosComTranscricao, audiosSemTexto, textoComContatos } from "../_shared/chatwootPayload.ts";
@@ -53,6 +54,11 @@ async function verificar(c: Linha, simular: boolean, quando?: Date) {
     return { conversa: c.chatwoot_conversation_id, resultado, ...detalhe };
   };
   try {
+    // taxista, equipe ou família não é pedido de passageiro (issue #532)
+    if (await contatoInterno(c.telefone)) {
+      resultado = "contato_interno";
+      return await fim();
+    }
     const { data: brutas } = await supabaseAdmin
       .from("bot_observations")
       .select("author, content, created_at")

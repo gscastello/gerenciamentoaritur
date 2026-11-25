@@ -527,3 +527,88 @@ Deno.test("#506: 2 adultos e criança de 3 anos lança 2 e não trava", async ()
   // deno-lint-ignore no-explicit-any
   assertEquals(conferenciaFinal(reserva, msgs, { hoje: "2026-11-23", pedidosLidos: 1 } as any), []);
 });
+
+Deno.test("#514: 'vindo de Pirapemas antes da entrada' é o lado da pista, não a origem", async () => {
+  const { origemEscrita } = await import("./pedidoDoCliente.ts");
+  assertEquals(origemEscrita("Vindo de pirapemas  antes da entrada  da rua das Flores."), null);
+  assertEquals(origemEscrita("vindo de Cantanhede, logo depois da ponte"), null);
+  // continua origem quando é a viagem
+  assertEquals(origemEscrita("vindo de Pirapemas")?.de, "pirapemas");
+  assertEquals(origemEscrita("vindo de Pirapemas para São Luís")?.sentido, "volta");
+  assertEquals(origemEscrita("saindo de Cantanhede amanhã")?.de, "cantanhede");
+});
+
+Deno.test("#514: a cidade da resposta ao endereço decide o ponto da Volta", async () => {
+  const { cidadeNaRespostaDoEndereco } = await import("./pedidoDoCliente.ts");
+  const c = (...f: [string, string][]) => cidadeNaRespostaDoEndereco(f.map(([quem, texto]) => ({ quem, texto })));
+  assertEquals(
+    c(["cliente", "Ainda tem vaga pra ir sao Luís?"], ["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Exemplo Cantanhede"], ["cliente", "Vindo de pirapemas  antes da entrada  da rua das Flores."], ["equipe", "Agendado ☑️"]),
+    "cantanhede",
+  );
+  assertEquals(c(["equipe", "Onde te pegamos?"], ["cliente", "Rua da Areia, Pirapema"]), "pirapemas");
+  // sem cidade na resposta, duas cidades, destino, ou sem a pergunta: não decide
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Rua da Areia"]), null);
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cantanhede ou Pirapemas, tanto faz"]), null);
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Cohab, vou pra Cantanhede"]), null);
+  assertEquals(c(["cliente", "Vila Exemplo Cantanhede"]), null);
+  // a pergunta seguinte da equipe já é outro assunto
+  assertEquals(c(["equipe", "Qual o endereço pra lhe buscar?"], ["cliente", "Vila Exemplo Cantanhede"], ["equipe", "Vai descer onde?"], ["cliente", "Pirapemas"]), "cantanhede");
+});
+
+Deno.test("#521: dia só perguntado e trocado por outro não é pedido que faltou", async () => {
+  const { diasSoPerguntados } = await import("./pedidoDoCliente.ts");
+  const em = "2026-11-22T13:00:00Z"; // domingo
+  const d = (lidas: string[], ...t: string[]) => diasSoPerguntados(t.map((texto) => ({ texto, em })), lidas);
+  assertEquals(d(["2026-11-23"], "Tem vaga pra slz hoje ?", "Marca uma pra amanhã pra mim"), ["2026-11-22"]);
+  assertEquals(d(["2026-11-27"], "Na sexta também vem?", "No sábado tem?", "Deixa marcada duas na sexta de manhã"), ["2026-11-28"]);
+  // pedido de verdade, dois dias na mesma pergunta, ou sem pedido depois: continua contando
+  assertEquals(d(["2026-11-28"], "Gostaria de reservar uma vaga para domingo 29/11", "quero dia 28/11"), []);
+  assertEquals(d(["2026-11-27"], "Tem vaga pra sexta e domingo?", "pode marcar sexta"), []);
+  assertEquals(d(["2026-11-27"], "quero ir sexta", "E no domingo tem vaga?"), []);
+  assertEquals(d(["2026-11-27"], "quero ir domingo?", "quero sexta"), []);
+  assertEquals(d([], "Tem vaga hoje?", "amanhã"), []);
+});
+
+Deno.test("#531: 'pesagem' sem nada de encomenda é passagem; encomenda de verdade continua", async () => {
+  const { passagemSemProvaDeEncomenda, cidadeNaRespostaDoEndereco } = await import("./pedidoDoCliente.ts");
+  const tipo = (...t: string[]) =>
+    passagemSemProvaDeEncomenda([{ tipo: "encomenda" }], t.map((texto) => ({ quem: "cliente", texto })))[0].tipo;
+  assertEquals(tipo("quero marcar uma pesagem pra sexta dia 27", "De pirapemas pra slz", "Na casa da professora"), "passagem");
+  assertEquals(tipo("Tem vaga amanhã?", "rua do exemplo"), "passagem");
+  assertEquals(tipo("Preciso mandar um documento pra sao luis hj", "tem vaga?"), "encomenda");
+  assertEquals(tipo("quero uma passagem e levar uma caixa"), "encomenda");
+  assertEquals(tipo("pode deixar a sacola na rodoviária, tem lugar?"), "encomenda");
+  assertEquals(tipo("rua do exemplo"), "encomenda");
+  // a estrada que leva à cidade não é a cidade
+  const resposta = (t: string) => cidadeNaRespostaDoEndereco([{ quem: "equipe", texto: "Qual o endereço pra lhe buscar" }, { quem: "cliente", texto: t }]);
+  // "estrada de Pirapemas" fica entre as duas, mais perto de Cantanhede (dono, 24/11)
+  assertEquals(resposta("Av. Exemplo (estrada de pirapemas"), "cantanhede");
+  assertEquals(resposta("Estrada de Pirapemas, em Pirapemas"), null);
+  assertEquals(resposta("Estrada de Cantanhede, em Pirapemas"), "pirapemas");
+  assertEquals(resposta("Vila Exemplo Cantanhede"), "cantanhede");
+});
+
+Deno.test("#523: 'Onde você vai ficar' do formulário é desembarque, não resposta a onde buscar", async () => {
+  const { desembarqueEraEmbarque } = await import("./pedidoDoCliente.ts");
+  const em = "2026-11-10T12:00:00Z";
+  const conversa = [
+    { quem: "equipe", texto: "Local de embarque (Retorno/Rodoviária, Buscar em casa?)", em },
+    { quem: "cliente", texto: "Local de embarque: Rua Exemplo, 58. Onde você vai ficar: Cantanhede, Rua Outra", em },
+  ];
+  assertEquals(desembarqueEraEmbarque("Cantanhede, Rua Outra", conversa), false);
+});
+
+Deno.test("#531: 'é pra meu filho' lido como duas passagens iguais é uma só", async () => {
+  const { umPassageiroSo } = await import("./pedidoDoCliente.ts");
+  const p = { data: "2026-11-25", direcao: "ida", ponto: "retorno", quantidade: 1 };
+  const n = (...t: string[]) => umPassageiroSo([{ ...p }, { ...p }], t).length;
+  assertEquals(n("tem vaga amanhã?", "E pra meu filho ele vai pro retorno"), 1);
+  assertEquals(n("tem vaga amanhã?", "eu e meu filho", "uma pra meu filho"), 2);
+  assertEquals(n("quero duas passagens", "uma pra meu filho"), 2);
+  assertEquals(n("tem vaga amanhã?", "vou pro retorno"), 2);
+  assertEquals(umPassageiroSo([{ ...p, quantidade: 2 }], ["tem vaga amanhã?", "E pra meu filho ele vai pro retorno"])[0].quantidade, 1);
+  const [unico, ...resto] = umPassageiroSo([{ ...p, ponto: "busca" }, { ...p }], ["tem vaga amanhã?", "E pra meu filho ele vai pro retorno"]);
+  assertEquals([unico.ponto, resto.length], ["retorno", 0]);
+  assertEquals(umPassageiroSo([{ ...p, quantidade: 2 }], ["quero duas, uma pra meu filho"])[0].quantidade, 2);
+  assertEquals(umPassageiroSo([{ ...p }, { ...p, passageiro_telefone: "98900000000" }], ["é pra meu filho"]).length, 2);
+});
