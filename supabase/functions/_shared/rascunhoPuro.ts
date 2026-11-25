@@ -7,7 +7,7 @@
 // devolve e a validação do que vira rascunho. Nada aqui decide preço ou vaga.
 
 import { diaCivil, type MensagemDaConversa, somarDias } from "./agentePuro.ts";
-import { normalizarTexto, palavraParecida, povoadoDoCaminho, semLogradouros, temDataNoTexto } from "./grafia.ts";
+import { estradaDaCidade, normalizarTexto, palavraParecida, povoadoDoCaminho, semLogradouros, temDataNoTexto } from "./grafia.ts";
 import { REGRA_DO_LUGAR } from "./ladoDaRota.ts";
 
 /** Até quantos dias à frente um pedido vira rascunho. */
@@ -1238,7 +1238,7 @@ export function notaDoAgendadoQueNaoLancou(aviso: { assunto: string; detalhe: st
 export function cidadeEscritaPeloCliente(textos: (string | null | undefined)[]): (typeof CIDADES_DA_VOLTA)[number] | null {
   const achadas = new Set<string>();
   for (const t of textos) {
-    const palavras = normalizarTexto(String(t ?? "")).split(" ").filter(Boolean);
+    const palavras = estradaDaCidade(normalizarTexto(String(t ?? ""))).split(" ").filter(Boolean);
     for (const c of CIDADES_DA_VOLTA) if (palavras.some((p) => palavraParecida(p, c))) achadas.add(c);
   }
   return achadas.size === 1 ? ([...achadas][0] as (typeof CIDADES_DA_VOLTA)[number]) : null;

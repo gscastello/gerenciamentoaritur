@@ -550,6 +550,7 @@ Embarque e preço (o valor sai da tabela no servidor; você escolhe o ponto cert
 Clientes e passageiros
 - Com poucas vagas, clientes RECORRENTES têm prioridade; a equipe pode passar os outros para outra van por logística (reserva cancelada no app). Não trate esse cancelamento como erro. Sem o ônibus, roda Van + carro (19 lugares): confira o veículo do dia.
 - Volta sem desembarque é São Luís: não é pendência.
+- "Estrada de Pirapemas" é o trecho entre Cantanhede e Pirapemas, mais perto de Cantanhede: em geral o embarque é CANTANHEDE.
 - Cajuí (rua do Cajuí, entrada do Cajuí) é em CANTANHEDE, não em São Luís.
 - Rodoviária de São Luís: embarque dentro, na plataforma 23.
 - De Pirapemas até Cantanhede é sempre passagem extra (não ocupa vaga; o banco marca sozinho). Em pé só no ônibus: Pirapemas até Cantanhede; Pirapemas ou Cantanhede até Matões ou Miranda.

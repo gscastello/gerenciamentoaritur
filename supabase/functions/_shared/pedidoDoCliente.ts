@@ -9,7 +9,7 @@
 //     sozinho: ida e volta têm dias diferentes, duas pessoas viram dois pedidos.
 // Nunca decide preço nem vaga.
 
-import { normalizarTexto, palavraParecida } from "./grafia.ts";
+import { estradaDaCidade, normalizarTexto, palavraParecida } from "./grafia.ts";
 
 export type MensagemDoCliente = { texto: string; em: string };
 
@@ -594,9 +594,7 @@ export function cidadeNaRespostaDoEndereco(falas: { quem: string; texto: string 
     }
     if (f.quem !== "cliente" || !perguntou) continue;
     // destino ("pra Cantanhede", "até Pirapemas") e lado da pista não são o lugar da casa
-    const limpo = n
-      // "Av. Exemplo (estrada de Pirapemas)" é a estrada que leva à cidade, não a cidade da casa (caso e99ceac7)
-      .replace(/ (?:estrada|rodovia|caminho|ramal) (?:de |da |do |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
+    const limpo = estradaDaCidade(n)
       .replace(/ (?:vindo|vem|vinda|venho|sentido|saindo|indo|quem vem) (?:de |da |pra |para )?(?:pirapemas|cantanhede)(?= )/g, " ")
       .replace(/ (?:pra|pro|para|ate|a) (?:pirapemas|cantanhede)(?= )/g, " ");
     for (const c of ["pirapemas", "cantanhede"] as const) if (limpo.includes(` ${c} `)) achadas.add(c);
