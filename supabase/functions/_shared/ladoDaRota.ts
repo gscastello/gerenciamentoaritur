@@ -158,3 +158,23 @@ export function lugaresContraOSentido(
 /** A linha de raciocínio, para os prompts (leitor, atendente, revisor, Assistente). */
 export const REGRA_DO_LUGAR =
   "O LUGAR DIZ O SENTIDO: embarque em São Luís (Retorno das Vans, Rodoviária, aeroporto, trecho da BR, qualquer bairro de São Luís) só existe na IDA; embarque em Pirapemas, Cantanhede ou numa cidade do caminho, indo para São Luís, só na VOLTA. O desembarque é o contrário (Ida desce no interior; Volta desce em São Luís). Entre duas cidades do interior vale a ordem das paradas (de Cantanhede pra Pirapemas é Ida). Se o embarque ou o desembarque que o cliente disse não combinam com o sentido, NÃO marque: pergunte ao cliente.";
+
+/** Lugares de um ônibus: abaixo disso é van, e na van ninguém viaja em pé. */
+const LUGARES_DE_ONIBUS = 25;
+
+/**
+ * Trechos curtos da Volta (dono, 24/11 — issue #530): de Pirapemas até Cantanhede é sempre extra (não ocupa
+ * vaga); em pé, só no ônibus, de Pirapemas até Cantanhede e de Pirapemas ou Cantanhede até Matões ou Miranda.
+ */
+export function trechoCurto(
+  v: { direction: string; route_point_code: string | null; pickup_detail?: string | null; dropoff_location?: string | null },
+  capacidade: number | null,
+): { extra: boolean; emPe: boolean } {
+  const ponto = v.route_point_code;
+  if (v.direction !== "volta" || (ponto !== "pirapemas" && ponto !== "cantanhede")) return { extra: false, emPe: false };
+  const de = paradaDoInterior(v.pickup_detail) ?? (ponto as Parada);
+  const para = paradaDoInterior(v.dropoff_location);
+  const extra = ponto === "pirapemas" && para === "cantanhede";
+  const trechoEmPe = extra || ((de === "pirapemas" || de === "cantanhede") && (para === "matoes" || para === "miranda"));
+  return { extra, emPe: trechoEmPe && (capacidade ?? 0) >= LUGARES_DE_ONIBUS };
+}

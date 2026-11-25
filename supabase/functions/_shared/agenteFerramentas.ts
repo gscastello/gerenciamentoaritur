@@ -42,7 +42,7 @@ import { getBotContext } from "./botContext.ts";
 import { ehPostoCarone, type LugarNasCidades, lugarDeOutraCidade, PONTO_POSTO_CARONE, telefoneDoPassageiro } from "./rascunhoPuro.ts";
 import { variantesTelefone } from "./telefone.ts";
 import { supabaseAdmin } from "./supabaseAdmin.ts";
-import { lugaresContraOSentido } from "./ladoDaRota.ts";
+import { lugaresContraOSentido, trechoCurto } from "./ladoDaRota.ts";
 import { whatsappService, WhatsappServiceError } from "./whatsappService.ts";
 import { type AcaoDaProva, criadoAntes } from "./provaPura.ts";
 
@@ -178,6 +178,10 @@ export const FERRAMENTAS: Ferramenta[] = [
         cidade_confirmada: {
           type: "boolean",
           description: "Só depois de um CIDADE_A_CONFIRMAR: true se o cliente confirmou a cidade de embarque da Volta.",
+        },
+        em_pe: {
+          type: "boolean",
+          description: "Só depois de um SO_EM_PE: true se o cliente aceitou viajar em pé no ônibus.",
         },
         sentido_confirmado: {
           type: "boolean",
@@ -833,7 +837,21 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
 
   // na prova, as vagas como eram antes da conversa (a lotação de hoje conta reservas feitas depois)
   const disp = await disponibilidade(pedido.data, pedido.direcao, ctx.prova);
-  if (disp.available != null && disp.available < pedido.quantidade) {
+  // trecho curto: Pirapemas → Cantanhede não ocupa vaga; Matões e Miranda podem ir em pé no ônibus (issue #530)
+  const curto = trechoCurto(
+    { direction: pedido.direcao, route_point_code: String(ponto.code), pickup_detail: pedido.enderecoEmbarque, dropoff_location: pedido.desembarque },
+    disp.capacity == null ? null : Number(disp.capacity),
+  );
+  const semLugar = disp.available != null && disp.available < pedido.quantidade && !curto.extra;
+  if (semLugar && curto.emPe && args.em_pe !== true) {
+    return {
+      ok: false,
+      codigo: "SO_EM_PE",
+      erro: "Não há lugar sentado, mas nesse trecho dá para ir em pé no ônibus. Pergunte se ele aceita e, com o sim, chame de novo com em_pe=true; senão, ofereça outro dia ou a lista de espera.",
+    };
+  }
+  const vaiEmPe = semLugar && curto.emPe;
+  if (semLugar && !vaiEmPe) {
     return {
       ok: false,
       codigo: "SEM_VAGAS",
@@ -932,7 +950,7 @@ async function criarReserva(args: Linha, ctx: ContextoDoAgente) {
       dropoffArea,
       status: fora ? "pendente" : "confirmada",
       pendingReason: motivoPendente,
-      extraData: { origem: "agente", ...(complementar.length ? { complementar } : {}), ...(valorFalta ? { a_confirmar: ["valor"] } : {}) },
+      extraData: { origem: "agente", ...(complementar.length ? { complementar } : {}), ...(valorFalta ? { a_confirmar: ["valor"] } : {}), ...(vaiEmPe ? { fora_lotacao: true, em_pe: true } : {}) },
       waMessageId: `cw-${ctx.mensagemId}-agente`,
     });
     ctx.escrita.criou = true;

@@ -68,3 +68,16 @@ Deno.test("#426 'Jardim Araçagy, Cohatrac': o bairro é o pedaço escrito, não
   // nome composto sem outro bairro: não mexe
   assertEquals(bairroForaDoNomeComposto("Turu", ["Jardim Turu, Rua N, casa 32"], tabela), null);
 });
+
+Deno.test("#530: Pirapemas até Cantanhede é extra; em pé só no ônibus e nos trechos curtos", async () => {
+  const { trechoCurto } = await import("./ladoDaRota.ts");
+  const t = (ponto: string, para: string, cap: number | null = 31, direction = "volta") =>
+    trechoCurto({ direction, route_point_code: ponto, pickup_detail: "Rua do Exemplo", dropoff_location: para }, cap);
+  assertEquals(t("pirapemas", "Cantanhede, na praça"), { extra: true, emPe: true });
+  assertEquals(t("pirapemas", "Cantanhede", 15), { extra: true, emPe: false });
+  assertEquals(t("cantanhede", "Miranda do Norte"), { extra: false, emPe: true });
+  assertEquals(t("pirapemas", "Matões do Norte", 15), { extra: false, emPe: false });
+  assertEquals(t("pirapemas", "Entroncamento"), { extra: false, emPe: false });
+  assertEquals(t("pirapemas", "São Luís"), { extra: false, emPe: false });
+  assertEquals(t("busca", "Cantanhede", 31, "ida"), { extra: false, emPe: false });
+});
