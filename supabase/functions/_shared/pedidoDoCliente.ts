@@ -1376,6 +1376,12 @@ export function umPassageiroSo<P extends PedidoDoPar & { quantidade?: number | n
   const [a, b] = pedidos;
   const iguais = a.data === b.data && a.direcao === b.direcao && (a.ponto ?? null) === (b.ponto ?? null) &&
     normalizarTexto(a.endereco ?? "") === normalizarTexto(b.endereco ?? "") && (a.tipo ?? "passagem") === (b.tipo ?? "passagem") && (a.tipo ?? "passagem") === "passagem";
+  // um deles sem embarque nenhum ("busca" sem endereço): é o de quem só perguntou
+  const semEmbarque = (x: P) => !x.endereco && !x.bairro && ["", "busca", "outro"].includes(String(x.ponto ?? ""));
+  const mesmaViagem = a.data === b.data && a.direcao === b.direcao && (a.tipo ?? "passagem") === "passagem" && (b.tipo ?? "passagem") === "passagem";
+  if (soPraOutro && mesmaViagem && !a.passageiro_telefone && !b.passageiro_telefone && semEmbarque(a) !== semEmbarque(b)) {
+    return [{ ...(semEmbarque(a) ? b : a), quantidade: 1 }];
+  }
   if (!iguais || Number(a.quantidade ?? 1) !== 1 || Number(b.quantidade ?? 1) !== 1 || a.passageiro_telefone || b.passageiro_telefone) return pedidos;
   return soPraOutro ? [b] : pedidos;
 }
